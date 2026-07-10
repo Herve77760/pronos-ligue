@@ -170,9 +170,21 @@ function viewHome(){
       <button class="btn sm" onclick="resume()">Reprendre</button></div></div>`:""}`;
 }
 function go(v){
-  if(v==="join"){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} joinLeague(c); return; }
+  if(v==="join"){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} S.joinCode=c; S.view="join"; render(); return; }
   S.view=v; render();
 }
+function viewJoin(){
+  return `<button class="btn ghost sm" onclick="S.view='home';render()">← Retour</button>
+   <div class="box">
+     <h2 style="margin-top:0">Rejoindre une ligue</h2>
+     <label>Code de la ligue</label><input id="jCode" value="${esc(S.joinCode||'')}" maxlength="5" style="text-transform:uppercase">
+     <label>Ton prénom</label><input id="jName" placeholder="Marc">
+     <div style="height:12px"></div>
+     <button class="btn" onclick="doJoin()">Rejoindre →</button>
+   </div>`;
+}
+function doJoin(){ const c=($("jCode").value||"").toUpperCase().trim(); const n=($("jName").value||"").trim();
+  if(c.length<3){showErr("Code invalide.");return;} if(!n){showErr("Entre ton prénom.");return;} joinLeague(c,n); }
 function resume(){ const s=loadSession(); if(!s)return; S.leagueId=s.leagueId; S.myId=s.myId; S.code=s.code; S.view="game"; startPoll(); refresh(); }
 
 /* ============ CREATE ============ */
@@ -204,17 +216,17 @@ async function createLeague(){
 }
 
 /* ============ JOIN ============ */
-async function joinLeague(code){
-  if(busy)return; busy=true; showErr("");
+async function joinLeague(code,name){
+  if(busy)return; const nm=(name||"").trim(); if(!nm){showErr("Entre ton prénom.");return;}
+  busy=true; showErr("");
   try{
     const lg=await q(db.from("leagues").select("*").eq("code",code).single());
     if(lg.status!=="lobby"){ showErr("Cette ligue a déjà démarré."); busy=false; return; }
     const ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
     const humans=ps.filter(p=>!p.is_ai);
     if(humans.length>=lg.num_participants){ showErr("La ligue est complète."); busy=false; return; }
-    const name=prompt("Ton prénom ?"); if(!name){ busy=false; return; }
     const ord=humans.length;
-    const pl=await q(db.from("players").insert({league_id:lg.id,name:name.trim(),emoji:EMOJIS[ord]||"🎮",join_order:ord}).select().single());
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:nm,emoji:EMOJIS[ord]||"🎮",join_order:ord}).select().single());
     S.leagueId=lg.id; S.myId=pl.id; S.code=code; S.view="game"; saveSession();
     startPoll(); await refresh();
   }catch(e){ showErr("Impossible de rejoindre : "+e.message); }
@@ -478,10 +490,11 @@ function viewEnd(){
 
 /* ============ render / poll ============ */
 function render(){
-  $("leaveBtn").classList.toggle("hide", S.view==="home"||S.view==="create");
+  $("leaveBtn").classList.toggle("hide", S.view==="home"||S.view==="create"||S.view==="join");
   let html="";
   if(S.view==="home") html=viewHome();
   else if(S.view==="create") html=viewCreate();
+  else if(S.view==="join") html=viewJoin();
   else if(S.view==="standings") html=viewStandings();
   else html=viewGame();
   $("root").innerHTML=html;
