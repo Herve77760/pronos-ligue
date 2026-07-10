@@ -43,8 +43,14 @@
   .gauge{height:8px;border-radius:6px;background:#232a35;overflow:hidden;margin-top:6px;}
   .gauge>i{display:block;height:100%;background:var(--green);}
   .gauge.over>i{background:var(--red);}
-  .cap-tog{font-size:11px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;cursor:pointer;color:var(--muted);}
-  .cap-tog.on{background:rgba(250,204,21,.16);border-color:var(--gold);color:var(--gold);}
+  .tog{font-size:11px;border:1px solid var(--border);border-radius:8px;padding:5px 8px;cursor:pointer;color:var(--muted);}
+  .tog.cap.on{background:rgba(250,204,21,.16);border-color:var(--gold);color:var(--gold);}
+  .tog.tgt.on{background:rgba(96,165,250,.16);border-color:var(--blue);color:var(--blue);}
+  .cards{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+  .cardchip{border:1px solid var(--border);background:var(--panel2);border-radius:10px;padding:8px 10px;
+    font-size:12px;cursor:pointer;text-align:center;min-width:74px;}
+  .cardchip.on{border-color:var(--blue);background:rgba(96,165,250,.14);color:#a9cbff;}
+  .cardchip .em{font-size:18px;display:block;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th,td{padding:8px 6px;border-bottom:1px solid var(--border);text-align:left;}
   th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase;}
@@ -58,6 +64,7 @@
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--panel2);
     border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:50;}
   a{color:var(--blue);}
+  .big{font-size:26px;font-weight:800;letter-spacing:-.5px;}
 </style>
 </head>
 <body>
@@ -68,7 +75,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v0.3</div>
+  <div class="foot">Prototype de test · données sportives simulées · v0.4</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -87,9 +94,30 @@ const SPORTS=[
  {ic:"🏀",draw:false,t:["Lakers","Celtics","Warriors","Bucks","Nuggets","Heat","Suns","Mavs"]},
 ];
 const GAGES=["Le plongeon givré 🩲","Karaoké imposé 🎤","Rando déguisé en poulet 🐔","Serveur d'un soir 🍽️","Danse TikTok publique 💃"];
+const CARDS={
+ assurance:{e:"🛡",n:"Assurance",t:true,  d:"Un pari choisi : s'il perd, mise remboursée."},
+ double:   {e:"🚀",n:"Double Mise",t:true, d:"Un pari choisi : s'il gagne, gain doublé."},
+ miroir:   {e:"🪞",n:"Miroir",t:false,     d:"Le meilleur pari gagnant des deux joueurs est échangé."},
+ gourmand: {e:"🍽️",n:"Gourmand",t:false,   d:"Adversaire positif → tu récupères 20 % de son bénéfice."},
+ face:     {e:"😏",n:"Dans ta face",t:false,d:"Un pari gagnant adverse (au hasard) réduit de moitié."},
+ serge:    {e:"💰",n:"Serge Benamou",t:false,d:"10 % du plus gros gain du jour redistribué aux autres."},
+ cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:false,d:"Un pari adverse (au hasard) est inversé."},
+ sniper:   {e:"🎯",n:"Sniper",t:true,      d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
+ invest:   {e:"📈",n:"Investisseur",t:false,d:"Plafond de mise porté à 70 % du capital ce jour."},
+ roi:      {e:"👑",n:"Roi de la cote",t:false,d:"Un pari gagné à cote > 4,00 → +5 % capital."},
+ tout:     {e:"🔥",n:"Tout ou Rien",t:true, d:"Un pari choisi : gain ×3, perte ×2."},
+};
+const COMMON=["assurance","double"];
+const RANDOM_POOL=["miroir","gourmand","face","serge","cadeau","sniper","invest","roi","tout"];
+function handSize(d){ if(d>=18)return 8; if(d>=15)return 6; if(d>=12)return 5; if(d>=9)return 4; if(d>=6)return 3; return 2; }
+function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2); const hand=[];
+  for(let i=0;i<nc;i++) hand.push(COMMON[i%COMMON.length]);
+  const pool=[...RANDOM_POOL]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+  for(let i=0;i<size-nc;i++) hand.push(pool[i%pool.length]); return hand; }
+function randomCard(){ return RANDOM_POOL[Math.floor(Math.random()*RANDOM_POOL.length)]; }
 
 /* ============ STATE ============ */
-let S={ view:"home", leagueId:null, myId:null, code:null };
+let S={ view:"home", leagueId:null, myId:null, code:null, joinCode:"", recap:false, dispDay:0 };
 let L=null, players=[], duels=[], bets=[];
 let poll=null, busy=false, resolving=false;
 
@@ -104,49 +132,40 @@ function toast(m){ const t=document.createElement("div"); t.className="toast"; t
 function saveSession(){ localStorage.setItem("pl_session", JSON.stringify({leagueId:S.leagueId,myId:S.myId,code:S.code})); }
 function loadSession(){ try{return JSON.parse(localStorage.getItem("pl_session"));}catch(e){return null;} }
 function clearSession(){ localStorage.removeItem("pl_session"); }
+function getSeen(){ return +(localStorage.getItem("pl_seen_"+S.leagueId)||0); }
+function setSeen(v){ localStorage.setItem("pl_seen_"+S.leagueId, v); }
 async function q(p){ const {data,error}=await p; if(error) throw new Error(error.message); return data; }
 function genCode(){ let s=""; const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; for(let i=0;i<5;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; }
 
-/* ============ schedule (double round robin, circle method) ============ */
-function makeSchedule(n){
-  let arr=[...Array(n).keys()]; const rounds=[];
-  for(let r=0;r<n-1;r++){
-    const pairs=[];
-    for(let i=0;i<n/2;i++){ let a=arr[i],b=arr[n-1-i];
-      if((r+i)%2===0) pairs.push([a,b]); else pairs.push([b,a]); }
-    rounds.push(pairs);
-    arr=[arr[0],arr[n-1],...arr.slice(1,n-1)];
-  }
-  const ret=rounds.map(rd=>rd.map(p=>[p[1],p[0]]));
-  return [...rounds,...ret];
-}
+/* ============ schedule ============ */
+function makeSchedule(n){ let arr=[...Array(n).keys()]; const rounds=[];
+  for(let r=0;r<n-1;r++){ const pairs=[];
+    for(let i=0;i<n/2;i++){ let a=arr[i],b=arr[n-1-i]; if((r+i)%2===0) pairs.push([a,b]); else pairs.push([b,a]); }
+    rounds.push(pairs); arr=[arr[0],arr[n-1],...arr.slice(1,n-1)]; }
+  const ret=rounds.map(rd=>rd.map(p=>[p[1],p[0]])); return [...rounds,...ret]; }
 
 /* ============ fixtures ============ */
-function genFixture(){
-  const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t); while(b===a) b=pick(s.t);
+function genFixture(){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t); while(b===a) b=pick(s.t);
   const f={sport:s.ic,draw:s.draw,home:a,away:b,oh:+rnd(1.4,3.2).toFixed(2),oa:+rnd(1.5,3.6).toFixed(2)};
-  if(s.draw) f.od=+rnd(3.0,3.9).toFixed(2);
-  return f;
-}
+  if(s.draw) f.od=+rnd(3.0,3.9).toFixed(2); return f; }
 function genPool(k){ return Array.from({length:k},genFixture); }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
-function simResult(f){
-  const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1",f.oh],["2",f.oa]];
+function simResult(f){ const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1",f.oh],["2",f.oa]];
   const inv=outs.map(o=>1/o[1]); const sum=inv.reduce((a,b)=>a+b,0);
-  let r=Math.random(); for(let i=0;i<outs.length;i++){ r-=inv[i]/sum; if(r<=0) return outs[i][0]; }
-  return outs[outs.length-1][0];
-}
+  let r=Math.random(); for(let i=0;i<outs.length;i++){ r-=inv[i]/sum; if(r<=0) return outs[i][0]; } return outs[outs.length-1][0]; }
 
-/* ============ data loading ============ */
+/* ============ data ============ */
 async function refresh(){
   if(!S.leagueId) return;
   try{
     L = await q(db.from("leagues").select("*").eq("id",S.leagueId).single());
     players = await q(db.from("players").select("*").eq("league_id",S.leagueId).order("join_order"));
-    duels = await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",L.current_day));
-    bets = await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",L.current_day));
-    showErr("");
-    render();
+    S.recap = L.status!=="lobby" && (L.current_day>getSeen()) && (L.current_day>=1);
+    const dispDay = S.recap ? L.current_day-1 : Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
+    S.dispDay = dispDay;
+    duels = await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",dispDay));
+    bets  = await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",dispDay));
+    showErr(""); render();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
 function me(){ return players.find(p=>p.id===S.myId); }
@@ -154,71 +173,49 @@ function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId);
 function myBet(){ return bets.find(b=>b.player_id===S.myId); }
 function pById(id){ return players.find(p=>p.id===id); }
 
-/* ============ HOME ============ */
+/* ============ HOME / CREATE / JOIN ============ */
 function viewHome(){
   const sess=loadSession();
-  return `<div class="box">
-      <button class="btn" onclick="go('create')">➕ Créer une ligue</button>
-    </div>
-    <div class="box">
-      <label>Rejoindre avec un code</label>
+  return `<div class="box"><button class="btn" onclick="go('create')">➕ Créer une ligue</button></div>
+    <div class="box"><label>Rejoindre avec un code</label>
       <input id="joinCode" placeholder="Ex : 7XK2P" maxlength="5" style="text-transform:uppercase">
-      <div style="height:8px"></div>
-      <button class="btn ghost" onclick="go('join')">Rejoindre →</button>
-    </div>
+      <div style="height:8px"></div><button class="btn ghost" onclick="go('join')">Rejoindre →</button></div>
     ${sess?`<div class="box mini"><div class="row"><span class="muted">Reprendre ta partie (${esc(sess.code)})</span>
       <button class="btn sm" onclick="resume()">Reprendre</button></div></div>`:""}`;
 }
-function go(v){
-  if(v==="join"){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} S.joinCode=c; S.view="join"; render(); return; }
-  S.view=v; render();
-}
-function viewJoin(){
-  return `<button class="btn ghost sm" onclick="S.view='home';render()">← Retour</button>
-   <div class="box">
-     <h2 style="margin-top:0">Rejoindre une ligue</h2>
-     <label>Code de la ligue</label><input id="jCode" value="${esc(S.joinCode||'')}" maxlength="5" style="text-transform:uppercase">
-     <label>Ton prénom</label><input id="jName" placeholder="Marc">
-     <div style="height:12px"></div>
-     <button class="btn" onclick="doJoin()">Rejoindre →</button>
-   </div>`;
-}
-function doJoin(){ const c=($("jCode").value||"").toUpperCase().trim(); const n=($("jName").value||"").trim();
-  if(c.length<3){showErr("Code invalide.");return;} if(!n){showErr("Entre ton prénom.");return;} joinLeague(c,n); }
+function go(v){ if(v==="join"){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} S.joinCode=c; S.view="join"; render(); return; } S.view=v; render(); }
 function resume(){ const s=loadSession(); if(!s)return; S.leagueId=s.leagueId; S.myId=s.myId; S.code=s.code; S.view="game"; startPoll(); refresh(); }
-
-/* ============ CREATE ============ */
 function viewCreate(){
   return `<button class="btn ghost sm" onclick="S.view='home';render()">← Retour</button>
-   <div class="box">
-     <h2 style="margin-top:0">Créer la ligue</h2>
+   <div class="box"><h2 style="margin-top:0">Créer la ligue</h2>
      <label>Ton prénom</label><input id="cName" placeholder="Hervé">
      <label>Nombre de joueurs humains (toi inclus)</label>
      <select id="cN">${[2,3,4,5,6,7,8].map(n=>`<option value="${n}">${n} joueurs</option>`).join("")}</select>
      <div class="mini muted" style="margin-top:8px">Si le total est impair, un 🤖 joueur IA est ajouté (il ne subit pas le gage).</div>
-     <div style="height:12px"></div>
-     <button class="btn" onclick="createLeague()">Créer et obtenir le code →</button>
-   </div>`;
+     <div style="height:12px"></div><button class="btn" onclick="createLeague()">Créer et obtenir le code →</button></div>`;
 }
 async function createLeague(){
   if(busy)return; const name=($("cName").value||"").trim(); const nH=+$("cN").value;
-  if(!name){showErr("Entre ton prénom.");return;}
-  busy=true; showErr("");
+  if(!name){showErr("Entre ton prénom.");return;} busy=true; showErr("");
   try{
-    const nP = nH%2===1 ? nH+1 : nH; // participants (with AI if odd)
-    const code=genCode();
+    const nP = nH%2===1 ? nH+1 : nH; const code=genCode();
     const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+name,status:"lobby",num_participants:nH,num_days:2*(nP-1),gage:pick(GAGES)}).select().single());
     const pl=await q(db.from("players").insert({league_id:lg.id,name,emoji:EMOJIS[0],is_organizer:true,join_order:0}).select().single());
-    S.leagueId=lg.id; S.myId=pl.id; S.code=code; S.view="game"; saveSession();
+    S.leagueId=lg.id; S.myId=pl.id; S.code=code; S.view="game"; saveSession(); setSeen(0);
     startPoll(); await refresh();
-  }catch(e){ showErr("Création : "+e.message); }
-  busy=false;
+  }catch(e){ showErr("Création : "+e.message); } busy=false;
 }
-
-/* ============ JOIN ============ */
+function viewJoin(){
+  return `<button class="btn ghost sm" onclick="S.view='home';render()">← Retour</button>
+   <div class="box"><h2 style="margin-top:0">Rejoindre une ligue</h2>
+     <label>Code de la ligue</label><input id="jCode" value="${esc(S.joinCode||'')}" maxlength="5" style="text-transform:uppercase">
+     <label>Ton prénom</label><input id="jName" placeholder="Marc">
+     <div style="height:12px"></div><button class="btn" onclick="doJoin()">Rejoindre →</button></div>`;
+}
+function doJoin(){ const c=($("jCode").value||"").toUpperCase().trim(); const n=($("jName").value||"").trim();
+  if(c.length<3){showErr("Code invalide.");return;} if(!n){showErr("Entre ton prénom.");return;} joinLeague(c,n); }
 async function joinLeague(code,name){
-  if(busy)return; const nm=(name||"").trim(); if(!nm){showErr("Entre ton prénom.");return;}
-  busy=true; showErr("");
+  if(busy)return; const nm=(name||"").trim(); if(!nm){showErr("Entre ton prénom.");return;} busy=true; showErr("");
   try{
     const lg=await q(db.from("leagues").select("*").eq("code",code).single());
     if(lg.status!=="lobby"){ showErr("Cette ligue a déjà démarré."); busy=false; return; }
@@ -227,32 +224,26 @@ async function joinLeague(code,name){
     if(humans.length>=lg.num_participants){ showErr("La ligue est complète."); busy=false; return; }
     const ord=humans.length;
     const pl=await q(db.from("players").insert({league_id:lg.id,name:nm,emoji:EMOJIS[ord]||"🎮",join_order:ord}).select().single());
-    S.leagueId=lg.id; S.myId=pl.id; S.code=code; S.view="game"; saveSession();
+    S.leagueId=lg.id; S.myId=pl.id; S.code=code; S.view="game"; saveSession(); setSeen(0);
     startPoll(); await refresh();
-  }catch(e){ showErr("Impossible de rejoindre : "+e.message); }
-  busy=false;
+  }catch(e){ showErr("Impossible de rejoindre : "+e.message); } busy=false;
 }
 
-/* ============ LOBBY + GAME dispatch ============ */
+/* ============ GAME dispatch ============ */
 function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
   if(L.status==="lobby") return viewLobby();
-  if(L.status==="done")  return viewEnd();
+  if(S.recap) return viewRecap(S.dispDay);
+  if(L.status==="done") return viewEnd();
   return viewDay();
 }
 function viewLobby(){
-  const humans=players.filter(p=>!p.is_ai);
-  const full=humans.length>=L.num_participants;
-  const org=me() && me().is_organizer;
-  return `<div class="box" style="text-align:center">
-      <div class="mini muted">CODE D'INVITATION</div><div class="code">${esc(L.code)}</div>
-      <div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">📋 Copier le code</button></div>
-    </div>
+  const humans=players.filter(p=>!p.is_ai); const full=humans.length>=L.num_participants; const org=me()&&me().is_organizer;
+  return `<div class="box" style="text-align:center"><div class="mini muted">CODE D'INVITATION</div><div class="code">${esc(L.code)}</div>
+      <div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">📋 Copier le code</button></div></div>
     <h2>Joueurs · ${humans.length} / ${L.num_participants}</h2>
-    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px">
-        <span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
-        ${p.is_organizer?'<span class="tag">organisateur</span>':''}${p.is_ai?'<span class="tag">IA</span>':''}
-        ${p.id===S.myId?'<span class="chip b">toi</span>':''}</div>
+    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
+        ${p.is_organizer?'<span class="tag">organisateur</span>':''}${p.is_ai?'<span class="tag">IA</span>':''}${p.id===S.myId?'<span class="chip b">toi</span>':''}</div>
         <span class="chip g">Prêt</span></div>`).join("")}
     ${(L.num_participants%2===1)?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><b>Joueur IA</b></div><span class="chip b">au lancement</span></div>`:""}
     <div style="height:8px"></div>
@@ -260,46 +251,34 @@ function viewLobby(){
         :`<div class="box mini muted" style="text-align:center">En attente que l'organisateur lance le championnat…</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast("Code copié : "+L.code); }
-
 async function startLeague(){
   if(busy)return; busy=true;
   try{
-    // add AI if odd
     let ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
-    if(ps.length%2===1){
-      await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"🤖",is_ai:true,join_order:ps.length}));
-      ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
-    }
-    const n=ps.length; const sched=makeSchedule(n);
-    const rows=[];
+    if(ps.length%2===1){ await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"🤖",is_ai:true,join_order:ps.length}));
+      ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order")); }
+    const n=ps.length; const sched=makeSchedule(n); const rows=[];
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
+    for(const p of ps){ await q(db.from("players").update({hand:dealHand(sched.length)}).eq("id",p.id)); }
     await q(db.from("leagues").update({status:"running",num_days:sched.length,current_day:0}).eq("id",L.id));
-    await refresh();
-  }catch(e){ showErr("Lancement : "+e.message); }
-  busy=false;
+    setSeen(0); await refresh();
+  }catch(e){ showErr("Lancement : "+e.message); } busy=false;
 }
 
 /* ============ DAY ============ */
 function viewDay(){
-  const d=myDuel();
-  const dayLbl=`Journée ${L.current_day+1} / ${L.num_days}`;
-  if(!d) return `<div class="box">${dayLbl}<br><span class="muted mini">Aucun duel trouvé pour toi (repos).</span></div>${standingsBtn()}`;
-  const iAmHome=d.home_id===S.myId;
-  const opp=pById(iAmHome?d.away_id:d.home_id);
-  // 1) home must pick fixtures
-  if(!d.fixtures){
-    if(iAmHome) return viewSelect(d,dayLbl,opp);
-    return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">En attente que <b>${esc(opp.name)}</b> (à domicile) choisisse les 5 matchs…</div></div>${standingsBtn()}`;
-  }
-  // 2) my bet
+  const d=myDuel(); const dayLbl=`Journée ${L.current_day+1} / ${L.num_days}`;
+  if(!d) return `<div class="box">${dayLbl}<br><span class="muted mini">Aucun duel (repos).</span></div>${standingsBtn()}`;
+  const iAmHome=d.home_id===S.myId; const opp=pById(iAmHome?d.away_id:d.home_id);
+  if(!d.fixtures){ if(iAmHome) return viewSelect(d,dayLbl,opp);
+    return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">En attente que <b>${esc(opp.name)}</b> (à domicile) choisisse les 5 matchs…</div></div>${standingsBtn()}`; }
   if(!myBet()) return viewBet(d,dayLbl,opp,iAmHome);
-  // 3) waiting / resolve
   return viewWait(dayLbl);
 }
 function standingsBtn(){ return `<div style="height:8px"></div><button class="btn ghost" onclick="S.view='standings';render()">Voir le classement</button>`; }
 
-/* --- selection (home) --- */
+/* --- selection --- */
 let selPool=null, selChosen=[];
 function viewSelect(d,dayLbl,opp){
   if(!selPool){ selPool=genPool(9); selChosen=[]; }
@@ -307,182 +286,211 @@ function viewSelect(d,dayLbl,opp){
      <div class="mini muted" style="margin-top:6px">Choisis 5 rencontres (${selChosen.length}/5) — imposées à ${esc(opp.name)}.</div></div>
      ${selPool.map((f,i)=>{const on=selChosen.includes(i);return `<div class="box row" onclick="toggleSel(${i})" style="cursor:pointer;${on?'border-color:var(--green)':''}">
        <div class="row" style="gap:9px"><span class="sport">${f.sport}</span><div><b>${esc(f.home)} – ${esc(f.away)}</b>
-       <div class="mini muted">${f.oh}${f.draw?' / '+f.od:''} / ${f.oa}</div></div></div>
-       <span class="chip ${on?'g':''}">${on?'✓':'+'}</span></div>`;}).join("")}
-     <div style="height:8px"></div>
-     <button class="btn" ${selChosen.length===5?'':'disabled'} onclick="saveSelection()">Valider les 5 rencontres →</button>`;
+       <div class="mini muted">${f.oh}${f.draw?' / '+f.od:''} / ${f.oa}</div></div></div><span class="chip ${on?'g':''}">${on?'✓':'+'}</span></div>`;}).join("")}
+     <div style="height:8px"></div><button class="btn" ${selChosen.length===5?'':'disabled'} onclick="saveSelection()">Valider les 5 rencontres →</button>`;
 }
 function toggleSel(i){ const k=selChosen.indexOf(i); if(k>=0)selChosen.splice(k,1); else{ if(selChosen.length>=5)return; selChosen.push(i);} render(); }
-async function saveSelection(){
-  if(busy)return; busy=true;
-  try{
-    const fx=selChosen.map(i=>selPool[i]);
-    const d=myDuel();
-    await q(db.from("duels").update({fixtures:fx}).eq("id",d.id));
-    selPool=null; selChosen=[];
-    await refresh();
-  }catch(e){ showErr("Sauvegarde matchs : "+e.message); }
-  busy=false;
-}
+async function saveSelection(){ if(busy)return; busy=true;
+  try{ const fx=selChosen.map(i=>selPool[i]); const d=myDuel(); await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); selPool=null; selChosen=[]; await refresh(); }
+  catch(e){ showErr("Sauvegarde matchs : "+e.message); } busy=false; }
 
 /* --- betting --- */
-let bet={picks:null,captain:-1};
+let bet={picks:null,captain:-1}, myCard=null;
 function viewBet(d,dayLbl,opp,iAmHome){
   const fx=d.fixtures;
-  if(!bet.picks || bet.picks.length!==fx.length){ bet={picks:fx.map(f=>({sel:"1",stake:0})),captain:-1}; }
-  const cap=me().capital, max=cap*0.5, tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0);
-  const pct=Math.min(100, max>0?tot/max*100:0), over=tot>max+0.001;
-  const ok = tot>0 && !over && bet.captain>=0;
+  if(!bet.picks || bet.picks.length!==fx.length){ bet={picks:fx.map(()=>({sel:"1",stake:0})),captain:-1}; myCard=null; }
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=cap*(invest?0.7:0.5);
+  const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const pct=Math.min(100,max>0?tot/max*100:0); const over=tot>max+0.001;
+  const targetCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].t;
+  const needTarget = targetCard && (myCard.target==null);
+  const ok = tot>0 && !over && bet.captain>=0 && !needTarget;
+  const hand = meP.hand||[];
   return `<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?'🏠 Domicile':'✈️ Extérieur'}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">Duel vs <b>${esc(opp.name)}</b></span><span class="muted">Capital <b>${Math.round(cap)}</b> €</span></div>
-    <div class="row mini" style="margin-top:6px"><span class="muted">Misé <b id="tot">${Math.round(tot)}</b> € / ${Math.round(max)} € max</span><span class="muted">👑 = Capitaine ×2</span></div>
+    <div class="row mini" style="margin-top:6px"><span class="muted">Misé <b id="tot">${Math.round(tot)}</b> € / ${Math.round(max)} € max${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">👑 Capitaine ×2</span></div>
     <div class="gauge ${over?'over':''}"><i style="width:${pct}%"></i></div></div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${oddOf(f,v)}</b></div>`;
+      const tgt = targetCard ? `<span class="tog tgt ${myCard.target===i?'on':''}" onclick="setTarget(${i})">🎯</span>` : '';
       return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
-        <span class="cap-tog ${bet.captain===i?'on':''}" onclick="setCap(${i})">👑</span></div>
+        <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
         <div class="row" style="margin-top:9px"><span class="mini muted">Mise (€)</span>
           <input type="number" min="0" step="5" value="${b.stake}" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
-    <button class="btn" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?'Choisis ton Capitaine 👑':(over?'Mise trop élevée':'Valider mes pronostics →')}</button>`;
+    <div class="box"><div class="row"><b class="mini">🃏 Carte bonus (1 max/jour)</b>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">✕ retirer</span>`:'<span class="mini muted">optionnel</span>'}</div>
+      ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div>
+        ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(CARDS[myCard.id].d)}${needTarget?' <b class="blue">→ touche le 🎯 du pari ciblé.</b>':''}</div>`:''}`
+        :'<div class="mini muted" style="margin-top:6px">Plus de cartes en main.</div>'}</div>
+    <button class="btn" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?'Choisis ton Capitaine 👑':(over?'Mise trop élevée':(needTarget?'Choisis la cible 🎯':'Valider mes pronostics →'))}</button>`;
 }
 function setSel(i,v){ bet.picks[i].sel=v; render(); }
-function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0); const d=myDuel(); const max=me().capital*0.5; const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0);
-  const t=$("tot"); if(t){t.textContent=Math.round(tot); const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
-  // enable/disable button without full re-render to keep input focus
-  const btn=document.querySelector("#root .btn:last-of-type"); if(btn){ const over=tot>max+0.001; const ok=tot>0&&!over&&bet.captain>=0; btn.disabled=!ok; btn.textContent=bet.captain<0?'Choisis ton Capitaine 👑':(over?'Mise trop élevée':'Valider mes pronostics →'); }
+function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=meP.capital*(invest?0.7:0.5);
+  const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const t=$("tot"); if(t){t.textContent=Math.round(tot);
+    const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
+  const targetCard=myCard&&CARDS[myCard.id].t; const needTarget=targetCard&&myCard.target==null;
+  const btn=document.querySelector("#root > button.btn:last-of-type")||document.querySelector("#root .btn:last-of-type");
+  if(btn){ const over=tot>max+0.001; const ok=tot>0&&!over&&bet.captain>=0&&!needTarget; btn.disabled=!ok; }
 }
 function setCap(i){ bet.captain=bet.captain===i?-1:i; render(); }
+function setTarget(i){ if(myCard) myCard.target=i; render(); }
+function selCard(id){ if(myCard&&myCard.id===id){ myCard=null; } else { myCard={id, target:null}; } render(); }
 async function submitBet(){
   if(busy)return; busy=true;
-  try{
-    const d=myDuel();
+  try{ const d=myDuel();
     await q(db.from("bets").upsert({league_id:L.id,day:L.current_day,player_id:S.myId,duel_id:d.id,
-      picks:bet.picks,captain:bet.captain,submitted:true},{onConflict:"player_id,day"}));
-    bet={picks:null,captain:-1};
-    await refresh();
-  }catch(e){ showErr("Validation : "+e.message); }
-  busy=false;
+      picks:bet.picks,captain:bet.captain,card:myCard,submitted:true},{onConflict:"player_id,day"}));
+    bet={picks:null,captain:-1}; myCard=null; await refresh();
+  }catch(e){ showErr("Validation : "+e.message); } busy=false;
 }
 
 /* --- waiting / resolve --- */
-function humansToSubmit(){
-  // players (non-AI) of current day who haven't submitted
-  const need=players.filter(p=>!p.is_ai);
-  return need.filter(p=>!bets.find(b=>b.player_id===p.id));
-}
+function humansToSubmit(){ return players.filter(p=>!p.is_ai).filter(p=>!bets.find(b=>b.player_id===p.id)); }
 function viewWait(dayLbl){
-  const waiting=humansToSubmit();
-  const org=me()&&me().is_organizer;
-  const list=players.filter(p=>!p.is_ai).map(p=>{
-    const done=!!bets.find(b=>b.player_id===p.id);
+  const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
+  const list=players.filter(p=>!p.is_ai).map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
     return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}</div>
       <span class="chip ${done?'g':''}">${done?'✓ validé':'en cours'}</span></div>`;}).join("");
   const canResolve = waiting.length===0;
-  return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div></div>
-    ${list}
-    ${canResolve?
-      (org?`<button class="btn" onclick="resolveDay()">Résoudre la journée →</button>`
+  return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div></div>${list}
+    ${canResolve?(org?`<button class="btn" onclick="resolveDay()">Résoudre la journée →</button>`
           :`<div class="box mini muted" style="text-align:center">Tous les pronos sont validés — l'organisateur va lancer les résultats.</div>`)
-      :`<div class="box mini muted" style="text-align:center">En attente de ${waiting.length} joueur(s).</div>`}
-    ${standingsBtn()}`;
+      :`<div class="box mini muted" style="text-align:center">En attente de ${waiting.length} joueur(s).</div>`}${standingsBtn()}`;
 }
 
-/* ============ RESOLUTION (host = organizer clicks) ============ */
-function settle(fx,picks,captain){
-  let net=0,bestOdd=0;
-  picks.forEach((b,i)=>{ const f=fx[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel);
-    let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===captain) g*=2;
-    if(win&&odd>bestOdd) bestOdd=odd; net+=g; });
-  return {net,bestOdd};
-}
-function aiPicks(cap,fx){
+/* ============ RESOLUTION (cards engine) ============ */
+function aiPlay(cap,fx,hand){
   const budget=cap*0.5*rnd(0.6,1); const ws=fx.map(()=>rnd(0.5,1.5)); const sw=ws.reduce((a,b)=>a+b,0);
-  const picks=fx.map((f,i)=>{ const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1",f.oh],["2",f.oa]];
-    outs.sort((a,b)=>a[1]-b[1]); const sel=Math.random()<0.7?outs[0][0]:pick(outs)[0];
-    return {sel,stake:Math.round(budget*ws[i]/sw)}; });
-  return {picks,captain:Math.floor(Math.random()*fx.length)};
+  const picks=fx.map((f,i)=>{ const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1",f.oh],["2",f.oa]]; outs.sort((a,b)=>a[1]-b[1]);
+    const sel=Math.random()<0.7?outs[0][0]:pick(outs)[0]; return {sel,stake:Math.round(budget*ws[i]/sw)}; });
+  const captain=Math.floor(Math.random()*fx.length);
+  let card=null; if(hand&&hand.length&&Math.random()<0.4){ const id=pick(hand); card={id,target:CARDS[id].t?Math.floor(Math.random()*fx.length):null}; }
+  return {picks,captain,card};
 }
 async function resolveDay(){
   if(resolving)return; resolving=true; showErr("");
   try{
     const D=L.current_day;
-    // fresh guard
     const fresh=await q(db.from("leagues").select("*").eq("id",L.id).single());
-    if(fresh.current_day!==D || fresh.status!=="running"){ resolving=false; await refresh(); return; }
+    if(fresh.current_day!==D||fresh.status!=="running"){ resolving=false; await refresh(); return; }
     const ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
     const dz=await q(db.from("duels").select("*").eq("league_id",L.id).eq("day",D));
     const bz=await q(db.from("bets").select("*").eq("league_id",L.id).eq("day",D));
-    const N=ps.length;
-    const capOf={}; ps.forEach(p=>capOf[p.id]=p.capital);
-    const dayNet={}, dayBest={}, betRows=[];
-    for(const d of dz){
-      // ensure fixtures + AI home selection
-      let fx=d.fixtures; if(!fx){ fx=genPool(5); }
-      fx.forEach(f=>{ if(!f.res) f.res=simResult(f); });
-      await q(db.from("duels").update({fixtures:fx,resolved:true}).eq("id",d.id));
-      for(const pid of [d.home_id,d.away_id]){
-        let bt=bz.find(b=>b.player_id===pid);
-        if(!bt){ const ai=aiPicks(capOf[pid],fx); bt={player_id:pid,picks:ai.picks,captain:ai.captain};
-          betRows.push({league_id:L.id,day:D,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,submitted:true}); }
-        const s=settle(fx,bt.picks,bt.captain);
-        dayNet[pid]=s.net; dayBest[pid]=s.bestOdd;
-      }
-    }
-    if(betRows.length) await q(db.from("bets").upsert(betRows,{onConflict:"player_id,day"}));
-    // apply nets to bets rows (net column)
+    const N=ps.length; const pmap={}; ps.forEach(p=>pmap[p.id]=p);
+    const capStart={}; ps.forEach(p=>capStart[p.id]=p.capital);
+    const PD={}; const aiInserts=[];
+    for(const d of dz){ let fx=d.fixtures||genPool(5); fx.forEach(f=>{if(!f.res)f.res=simResult(f);}); d.fixtures=fx;
+      for(const pid of [d.home_id,d.away_id]){ let bt=bz.find(b=>b.player_id===pid);
+        if(!bt){ const ai=aiPlay(capStart[pid],fx,pmap[pid].hand||[]); bt={player_id:pid,picks:ai.picks,captain:ai.captain,card:ai.card};
+          aiInserts.push({league_id:L.id,day:D,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,card:ai.card,submitted:true}); }
+        PD[pid]={picks:bt.picks.map(x=>({...x})),captain:bt.captain,card:bt.card||null,duelId:d.id,oppId:(pid===d.home_id?d.away_id:d.home_id),fx}; } }
+    // Phase 1: Chérie c'est cadeau (invert one random opponent bet)
+    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"){ const opp=PD[pd.oppId];
+      if(opp){ const i=Math.floor(Math.random()*opp.picks.length); if(opp.picks[i].sel==="1")opp.picks[i].sel="2"; else if(opp.picks[i].sel==="2")opp.picks[i].sel="1"; } } }
+    // Phase 2: settle
+    const G={};
+    for(const pid in PD){ const pd=PD[pid]; const perBet=[]; let net=0,bestOdd=0;
+      pd.picks.forEach((b,i)=>{ const f=pd.fx[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel);
+        let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===pd.captain) g*=2;
+        if(pd.card&&pd.card.target===i){ if(pd.card.id==="double"&&win)g*=2; if(pd.card.id==="tout")g*=(win?3:2); if(pd.card.id==="assurance"&&!win)g=0; }
+        if(win&&odd>bestOdd) bestOdd=odd; perBet.push({gain:g,win,odd}); net+=g; });
+      G[pid]={perBet,net,bestOdd,bonus:0}; }
+    // Phase 3: face then miroir
+    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="face"){ const opp=G[pd.oppId];
+      if(opp){ const wi=opp.perBet.map((b,i)=>b.win?i:-1).filter(i=>i>=0);
+        if(wi.length){ const k=wi[Math.floor(Math.random()*wi.length)]; const cut=opp.perBet[k].gain/2; opp.perBet[k].gain-=cut; opp.net-=cut; } } } }
+    for(const d of dz){ const a=d.home_id,b=d.away_id; const useM=(PD[a].card&&PD[a].card.id==="miroir")||(PD[b].card&&PD[b].card.id==="miroir");
+      if(useM){ const best=g=>{let bi=-1,bv=0; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); return {bi,bv};};
+        const ba=best(G[a]), bb=best(G[b]); const va=ba.bv, vb=bb.bv;
+        if(ba.bi>=0){ G[a].perBet[ba.bi].gain+=(vb-va); G[a].net+=(vb-va); }
+        if(bb.bi>=0){ G[b].perBet[bb.bi].gain+=(va-vb); G[b].net+=(va-vb); } } }
+    // Phase 4: sniper, roi
+    for(const pid in PD){ const pd=PD[pid]; const g=G[pid];
+      if(pd.card&&pd.card.id==="sniper"&&pd.card.target!=null){ let bi=-1,bv=-1e9; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); if(bi===pd.card.target&&g.perBet[bi].gain>0) g.bonus+=capStart[pid]*0.10; }
+      if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>4.0)) g.bonus+=capStart[pid]*0.05; } }
+    // Phase 5: gourmand, serge
+    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
+    { let mp=null,mv=-1e9; for(const pid in G){ const v=G[pid].net+G[pid].bonus; if(v>mv){mv=v;mp=pid;} }
+      const anySerge=Object.keys(PD).some(pid=>PD[pid].card&&PD[pid].card.id==="serge");
+      if(anySerge&&mv>0&&N>1){ const pot=0.1*mv; G[mp].bonus-=pot; const sh=pot/(N-1); for(const pid in G){ if(pid!==mp) G[pid].bonus+=sh; } } }
+    // finalize
+    const dayNet={},dayBest={}; for(const pid in G){ dayNet[pid]=G[pid].net+G[pid].bonus; dayBest[pid]=G[pid].bestOdd; }
+    for(const d of dz){ await q(db.from("duels").update({fixtures:d.fixtures,resolved:true}).eq("id",d.id)); }
+    if(aiInserts.length) await q(db.from("bets").upsert(aiInserts,{onConflict:"player_id,day"}));
     for(const pid in dayNet){ await q(db.from("bets").update({net:dayNet[pid]}).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }
-    // ranking points
     const order=[...ps].sort((a,b)=>(dayNet[b.id]||0)-(dayNet[a.id]||0));
-    const addPts={}; order.forEach((p,i)=>addPts[p.id]=N-i);
-    // duel bonus + streaks
-    const upd={}; ps.forEach(p=>upd[p.id]={points:p.points+addPts[p.id],
-      capital:Math.max(0,p.capital+(dayNet[p.id]||0)), streak_w:p.streak_w, streak_l:p.streak_l,
-      duel_wins:p.duel_wins, best_day:Math.max(p.best_day,dayNet[p.id]||0), best_odd:Math.max(p.best_odd,dayBest[p.id]||0)});
-    for(const d of dz){ const nh=dayNet[d.home_id]||0, na=dayNet[d.away_id]||0;
-      let win=null,lose=null; if(nh>na){win=d.home_id;lose=d.away_id;} else if(na>nh){win=d.away_id;lose=d.home_id;}
-      if(win){ upd[win].points+=1; upd[win].duel_wins+=1; upd[win].streak_w+=1; upd[win].streak_l=0;
-        if(upd[win].streak_w===3) upd[win].capital*=1.02;
-        upd[lose].streak_l+=1; upd[lose].streak_w=0; } }
-    // persist players
-    for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,
-      streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd}).eq("id",p.id)); }
-    // advance
+    const upd={}; ps.forEach(p=>{ upd[p.id]={points:p.points,capital:Math.max(0,capStart[p.id]+(dayNet[p.id]||0)),
+      streak_w:p.streak_w,streak_l:p.streak_l,duel_wins:p.duel_wins,best_day:Math.max(p.best_day,dayNet[p.id]||0),
+      best_odd:Math.max(p.best_odd,dayBest[p.id]||0),hand:(p.hand||[]).slice(),cards_used:(p.cards_used||[]).slice()}; });
+    order.forEach((p,i)=>{ upd[p.id].points += (N-i); });
+    for(const d of dz){ const nh=dayNet[d.home_id]||0,na=dayNet[d.away_id]||0; let w=null,l=null;
+      if(nh>na){w=d.home_id;l=d.away_id;} else if(na>nh){w=d.away_id;l=d.home_id;}
+      if(w){ upd[w].points+=1; upd[w].duel_wins+=1; upd[w].streak_w+=1; upd[w].streak_l=0;
+        if(upd[w].streak_w===3) upd[w].capital*=1.02;
+        if(upd[w].streak_w===5) upd[w].hand.push(randomCard());
+        upd[l].streak_l+=1; upd[l].streak_w=0; if(upd[l].streak_l===4) upd[l].hand.push("assurance"); } }
+    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id){ const h=upd[pid].hand; const idx=h.indexOf(pd.card.id); if(idx>=0){ h.splice(idx,1); upd[pid].cards_used.push(pd.card.id); } } }
+    for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
     const next=D+1; const done=next>=fresh.num_days;
-    await q(db.from("leagues").update({current_day:done?D:next,status:done?"done":"running"}).eq("id",L.id));
-    resolving=false; await refresh();
-    toast("Journée résolue ✓");
+    await q(db.from("leagues").update({current_day:next,status:done?"done":"running"}).eq("id",L.id));
+    resolving=false; await refresh(); toast("Journée résolue ✓");
   }catch(e){ showErr("Résolution : "+e.message); resolving=false; }
 }
+
+/* ============ RECAP ============ */
+function viewRecap(D){
+  const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
+  const ord=[...players].sort((a,b)=>(netMap[b.id]||0)-(netMap[a.id]||0));
+  const dpts={}; ord.forEach((p,i)=>dpts[p.id]=players.length-i);
+  duels.forEach(d=>{ const nh=netMap[d.home_id]||0,na=netMap[d.away_id]||0; if(nh>na)dpts[d.home_id]+=1; else if(na>nh)dpts[d.away_id]+=1; });
+  const meB=bets.find(b=>b.player_id===S.myId); const myD=duels.find(d=>d.home_id===S.myId||d.away_id===S.myId);
+  const myNet=netMap[S.myId]||0; const oppId=myD?(myD.home_id===S.myId?myD.away_id:myD.home_id):null;
+  const oppNet=oppId!=null?(netMap[oppId]||0):0; const won=myNet>oppNet, tie=myNet===oppNet;
+  const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
+  let detail="";
+  if(meB&&myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const b=meB.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel);
+      let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===meB.captain)g*=2; const capi=(i===meB.captain);
+      return `<div class="box row" style="padding:9px 12px"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span>
+        <div><b>${esc(f.home)} – ${esc(f.away)}</b> ${capi?'<span class="chip gold">👑</span>':''}<div class="mini muted">pari ${b.sel} · ${b.stake}€ @${odd} · rés. ${f.res}</div></div></div>
+        <b class="${g>=0?'green':'red'}">${fmt(g)} €</b></div>`; }).join(""); }
+  return `<div class="box" style="background:linear-gradient(135deg,${myNet>=0?'#12251a':'#251215'},#0e1117);border-color:${won?'#2b6b45':(tie?'#3a3f4a':'#6b2b2b')}">
+      <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — TON GAIN</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
+      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(pById(oppId).name)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +1 pt':(tie?'Égalité':'Perdu')}</b>`:''}
+        <div class="mini muted">Ta carte : ${cardTxt(meB&&meB.card)}</div></div></div></div>
+    ${detail?`<h2>Tes 5 paris</h2>${detail}`:''}
+    <h2>Résultats de la journée</h2>
+    <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Pts jour</th><th>Carte</th></tr>
+      ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}</td>
+        <td class="num ${(netMap[p.id]||0)>=0?'green':'red'}">${fmt(netMap[p.id]||0)}€</td><td class="num"><b>${dpts[p.id]}</b></td>
+        <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`).join("")}</table></div>
+    <button class="btn" onclick="ackRecap()">Continuer →</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="S.view='standings';render()">Voir le classement général</button>`;
+}
+function ackRecap(){ setSeen(L.current_day); refresh(); }
 
 /* ============ STANDINGS ============ */
 function cmp(a,b){ return b.points-a.points || b.capital-a.capital || b.duel_wins-a.duel_wins || b.best_day-a.best_day || b.best_odd-a.best_odd; }
 function viewStandings(){
-  const ord=[...players].sort(cmp);
-  const humans=ord.filter(p=>!p.is_ai); const lastH=humans[humans.length-1];
+  const ord=[...players].sort(cmp); const humans=ord.filter(p=>!p.is_ai); const lastH=humans[humans.length-1];
+  const meP=me(); const hand=meP&&meP.hand?meP.hand:[];
   return `<button class="btn ghost sm" onclick="S.view='game';render()">← Retour au jeu</button>
-    <h2>Classement · J${Math.min(L.current_day+1,L.num_days)}/${L.num_days}</h2>
-    <div class="box" style="padding:4px 10px"><table>
-      <tr><th>#</th><th>Joueur</th><th style="text-align:right">Pts</th><th style="text-align:right">Capital</th><th style="text-align:right">Série</th></tr>
+    <h2>Classement · J${Math.min(L.current_day+ (L.status==='done'?0:1),L.num_days)}/${L.num_days}</h2>
+    <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Pts</th><th style="text-align:right">Capital</th><th style="text-align:right">Série</th></tr>
       ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:'–');
         return `<tr><td>${p.is_ai?'🤖':i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${p.is_ai?' <span class="tag">hors gage</span>':''}</td>
-        <td class="num"><b>${p.points}</b></td><td class="num muted">${Math.round(p.capital)}€</td><td class="num">${s}</td></tr>`;}).join("")}
-    </table></div>
+        <td class="num"><b>${p.points}</b></td><td class="num muted">${Math.round(p.capital)}€</td><td class="num">${s}</td></tr>`;}).join("")}</table></div>
+    ${hand.length?`<div class="box"><div class="mini muted">🃏 Tes cartes restantes</div><div class="cards">${hand.map(id=>`<div class="cardchip"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div></div>`:''}
     <div class="box mini"><span class="muted">🎭 Gage (au dernier humain) :</span> <b>${esc(L.gage)}</b> → ${lastH.emoji} ${esc(lastH.name)}</div>`;
 }
 
 /* ============ END ============ */
 function viewEnd(){
-  const ord=[...players].sort(cmp); const champ=ord[0];
-  const humans=ord.filter(p=>!p.is_ai); const last=humans[humans.length-1];
+  const ord=[...players].sort(cmp); const champ=ord[0]; const humans=ord.filter(p=>!p.is_ai); const last=humans[humans.length-1];
   return `<div style="text-align:center;margin:10px 0"><div style="font-size:46px">🏆</div>
      <div style="font-size:24px;font-weight:800" class="gold">${champ.emoji} ${esc(champ.name)}, Champion !</div>
      <div class="mini muted">${champ.points} pts · ${Math.round(champ.capital)} €</div></div>
-   <div class="box" style="padding:4px 10px"><table>
-     <tr><th>#</th><th>Joueur</th><th style="text-align:right">Pts</th><th style="text-align:right">Capital</th></tr>
-     ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.is_ai?' <span class="tag">hors gage</span>':''}</td>
-       <td class="num"><b>${p.points}</b></td><td class="num muted">${Math.round(p.capital)}€</td></tr>`).join("")}
-   </table></div>
+   <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Pts</th><th style="text-align:right">Capital</th></tr>
+     ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.is_ai?' <span class="tag">hors gage</span>':''}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${Math.round(p.capital)}€</td></tr>`).join("")}</table></div>
    <div class="box" style="border-color:#5a2b2b"><div class="row"><b class="red">🎭 Gage</b><span class="chip red">${last.emoji} ${esc(last.name)}</span></div>
      <div class="mini muted" style="margin-top:6px">${esc(last.name)} doit réaliser : <b>${esc(L.gage)}</b>.</div></div>
    <button class="btn ghost" onclick="leave()">Quitter</button>`;
@@ -501,7 +509,7 @@ function render(){
   $("subtitle").textContent = L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days)) : "Multijoueur en ligne";
 }
 function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if(S.view==="game"||S.view==="standings") refresh(); },4000); }
-function leave(){ if(!confirm("Quitter cette partie sur cet appareil ?"))return; if(poll)clearInterval(poll); clearSession(); S={view:"home",leagueId:null,myId:null,code:null}; L=null; render(); }
+function leave(){ if(!confirm("Quitter cette partie sur cet appareil ?"))return; if(poll)clearInterval(poll); clearSession(); S={view:"home",leagueId:null,myId:null,code:null,joinCode:"",recap:false,dispDay:0}; L=null; render(); }
 
 /* ============ boot ============ */
 (function boot(){
