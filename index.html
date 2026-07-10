@@ -71,11 +71,14 @@
 <div class="app">
   <div class="bar">
     <div><h1>🎯 Pronos Ligue</h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
-    <button class="btn ghost sm hide" id="leaveBtn" onclick="leave()">Quitter</button>
+    <div style="display:flex;gap:8px;flex:0 0 auto">
+      <button class="btn ghost sm" id="rulesBtn" onclick="openRules()">📖 Règles</button>
+      <button class="btn ghost sm hide" id="leaveBtn" onclick="leave()">Quitter</button>
+    </div>
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v0.4</div>
+  <div class="foot">Prototype de test · données sportives simulées · v0.5</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -498,17 +501,52 @@ function viewEnd(){
 
 /* ============ render / poll ============ */
 function render(){
-  $("leaveBtn").classList.toggle("hide", S.view==="home"||S.view==="create"||S.view==="join");
+  $("leaveBtn").classList.toggle("hide", S.view==="home"||S.view==="create"||S.view==="join"||S.view==="rules");
   let html="";
   if(S.view==="home") html=viewHome();
   else if(S.view==="create") html=viewCreate();
   else if(S.view==="join") html=viewJoin();
+  else if(S.view==="rules") html=viewRules();
   else if(S.view==="standings") html=viewStandings();
   else html=viewGame();
   $("root").innerHTML=html;
   $("subtitle").textContent = L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days)) : "Multijoueur en ligne";
 }
-function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if(S.view==="game"||S.view==="standings") refresh(); },4000); }
+// pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
+// pour ne pas re-dessiner et fermer le champ en cours de saisie.
+function isComposing(){
+  if(S.view!=="game"||!L||L.status!=="running"||S.recap) return false;
+  const d=myDuel(); if(!d) return false;
+  if(!d.fixtures) return d.home_id===S.myId; // à domicile : en train de choisir les 5 matchs
+  return !myBet();                            // en train de faire ses pronos/mises
+}
+function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings")&&!isComposing()) refresh(); },4000); }
+function openRules(){ if(S.view==="rules")return; S.prevView=S.view; S.view="rules"; render(); }
+function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"home"); render(); }
+function viewRules(){
+  const card=id=>`<div class="row" style="align-items:flex-start;margin:6px 0"><span class="sport" style="margin-right:8px">${CARDS[id].e}</span><div><b class="mini">${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>`;
+  return `<button class="btn ghost sm" onclick="closeRules()">← Retour</button>
+   <div class="box"><h2 style="margin-top:0">📖 Règles du jeu</h2>
+     <p class="mini"><b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>. Le dernier joueur humain fait le gage voté au départ.</p></div>
+   <div class="box"><b>🗓️ Format</b>
+     <div class="mini muted" style="margin-top:6px">Aller-retour entre tous (Round Robin). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.</div></div>
+   <div class="box"><b>⚽ Une journée</b>
+     <ul class="mini muted" style="margin:6px 0 0;padding-left:18px">
+       <li>Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).</li>
+       <li>Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>50 %</b> du capital (70 % avec la carte Investisseur).</li>
+       <li><b>👑 Pari du Capitaine</b> : un pari désigné secrètement — gain <b>et</b> perte <b>doublés</b>.</li>
+       <li>Optionnel : <b>1 carte bonus</b> (voir plus bas), révélée à la résolution.</li>
+       <li>Gain d'un pari = mise × (cote − 1) ; pari perdu = − mise. Le capital ne descend jamais sous 0.</li>
+     </ul></div>
+   <div class="box"><b>🏆 Points & classement</b>
+     <div class="mini muted" style="margin-top:6px">Chaque journée, les joueurs sont classés au <b>gain net</b> du jour → le 1er reçoit N points (N = nb de joueurs), le dernier 1 point. Le <b>vainqueur de son duel</b> gagne <b>+1 point</b>. Départage : capital, puis victoires en duel, plus gros gain, plus grosse cote.</div></div>
+   <div class="box"><b>🔥 Séries</b>
+     <div class="mini muted" style="margin-top:6px">3 victoires de duel d'affilée → +2 % de capital · 5 victoires → +1 carte aléatoire · 4 défaites → carte Assurance offerte.</div></div>
+   <div class="box"><b>🃏 Cartes bonus</b>
+     <div class="mini muted" style="margin:6px 0">Main distribuée au lancement (2 à 8 cartes selon la durée), 1 carte max par journée, chacune utilisable une seule fois.</div>
+     ${Object.keys(CARDS).map(card).join("")}</div>
+   <div class="box"><b>😴 Oubli</b><div class="mini muted" style="margin-top:6px">Pas de validation à temps → paris repris de l'adversaire, pronostics inversés.</div></div>`;
+}
 function leave(){ if(!confirm("Quitter cette partie sur cet appareil ?"))return; if(poll)clearInterval(poll); clearSession(); S={view:"home",leagueId:null,myId:null,code:null,joinCode:"",recap:false,dispDay:0}; L=null; render(); }
 
 /* ============ boot ============ */
