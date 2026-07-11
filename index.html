@@ -79,7 +79,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v1.0</div>
+  <div class="foot">Prototype de test · données sportives simulées · v1.1</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -97,7 +97,14 @@ const SPORTS=[
  {ic:"🎾",draw:false,t:["Alcaraz","Sinner","Djokovic","Zverev","Rune","Swiatek","Sabalenka","Gauff"]},
  {ic:"🏀",draw:false,t:["Lakers","Celtics","Warriors","Bucks","Nuggets","Heat","Suns","Mavs"]},
 ];
-const GAGES=["Le plongeon givré 🩲","Karaoké imposé 🎤","Rando déguisé en poulet 🐔","Serveur d'un soir 🍽️","Danse TikTok publique 💃"];
+const GAGES=[
+ {t:"Le plongeon givré 🩲", d:"Se baigner en maillot dans une eau glacée (mer, lac ou douche froide), vidéo à l'appui."},
+ {t:"Karaoké imposé 🎤", d:"Chanter en public une chanson ringarde choisie par le groupe, sans se dégonfler."},
+ {t:"Rando déguisé en poulet 🐔", d:"Faire une randonnée entière déguisé en poulet géant, photos obligatoires."},
+ {t:"Serveur d'un soir 🍽️", d:"Servir l'apéro et les plats du prochain resto/soirée entre potes, tablier compris."},
+ {t:"Danse TikTok publique 💃", d:"Exécuter une chorégraphie TikTok filmée dans un lieu public passant."},
+ {t:"Coup de fil embarrassant 📞", d:"Appeler un proche et lui déclarer une passion absurde en gardant son sérieux."},
+];
 const CARDS={
  assurance:{e:"🛡",n:"Assurance",t:true,  d:"Un pari choisi : s'il perd, mise remboursée."},
  double:   {e:"🚀",n:"Double Mise",t:true, d:"Un pari choisi : s'il gagne, gain doublé."},
@@ -325,7 +332,8 @@ function viewGageVote(){
   return `<div class="box"><h2 style="margin-top:0">🎭 Vote du gage</h2>
     <div class="mini muted">Le <b>dernier joueur humain</b> du classement final réalisera le gage le plus voté. Choisis le tien 👇 · ${voted}/${humans.length} ont voté</div></div>
     ${options.map((g,i)=>`<div class="box" onclick="voteGage(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
-      <div class="row"><b>${esc(g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ':''}${counts[i]} vote${counts[i]>1?'s':''}</span></div>
+      <div class="row"><b>${esc(g.t||g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ':''}${counts[i]} vote${counts[i]>1?'s':''}</span></div>
+      ${g.d?`<div class="mini muted" style="margin-top:5px">${esc(g.d)}</div>`:''}
       <div class="gauge" style="margin-top:8px"><i style="width:${humans.length?Math.round(counts[i]/humans.length*100):0}%"></i></div></div>`).join("")}
     ${org? `<button class="btn" ${allVoted?'':'disabled'} onclick="launchChampionship()">${allVoted?'Valider le gage & ouvrir la boutique →':'En attente des votes ('+voted+'/'+humans.length+')'}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">Tu démarres dès que tout le monde a voté.</div>`
@@ -347,8 +355,8 @@ async function launchChampionship(){
     const options=(st&&st.options)||GAGES.slice(0,4); const votes=(st&&st.votes)||{};
     const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length);
     const maxc=Math.max(0,...counts); const tied=counts.map((c,i)=>c===maxc?i:-1).filter(i=>i>=0);
-    const best=tied.length?tied[Math.floor(Math.random()*tied.length)]:0;
-    const gage=options[best]||pick(GAGES);
+    const best=tied.length?tied[Math.floor(Math.random()*tied.length)]:0; // égalité → tirage au hasard
+    const win=options[best]||pick(GAGES); const gage=(win&&win.t)||win;
     // l'IA fait ses achats automatiquement
     const ps=await q(db.from("players").select("id,is_ai").eq("league_id",L.id));
     for(const p of ps){ if(p.is_ai){ const s=aiShop(); await q(db.from("players").update({hand:s.hand,capital:s.capital,shop_done:true}).eq("id",p.id)); } }
@@ -361,17 +369,23 @@ let shopSel=[];
 function viewShop(){
   const ids=Object.keys(CARDS); const spent=shopSel.reduce((a,id)=>a+(CARD_PRICE[id]||0),0);
   const remaining=100-spent; const over=spent>SHOP_CAP;
+  const maxCards=Math.max(1, L.num_days||1); const full=shopSel.length>=maxCards;
   return `<div class="box"><h2 style="margin-top:0">🛒 Boutique bonus</h2>
-    <div class="mini muted">Compose ta main dans ton enveloppe de <b>100 €</b>. Chaque € dépensé en carte est un € en moins pour parier. Plafond bonus : <b>${SHOP_CAP} €</b>.</div>
-    <div class="row mini" style="margin-top:10px"><span class="muted">Dépensé <b id="sp" class="${over?'red':''}">${spent}</b> € / ${SHOP_CAP} € max</span><span class="muted">Capital de départ : <b class="green">${remaining} €</b></span></div>
+    <div class="mini muted">Compose ta main sur ton enveloppe de <b>100 €</b>. Chaque € dépensé est un € en moins pour parier. Limite : <b>${SHOP_CAP} €</b> et <b>${maxCards} carte${maxCards>1?'s':''} max</b> (1 par journée, ${L.num_days} journées).</div>
+    <div class="row mini" style="margin-top:10px"><span class="muted">Dépensé <b id="sp" class="${over?'red':''}">${spent}</b> € · ${shopSel.length}/${maxCards} carte${maxCards>1?'s':''}</span><span class="muted">Capital de départ : <b class="green">${remaining} €</b></span></div>
     <div class="gauge ${over?'over':''}" style="margin-top:6px"><i style="width:${Math.min(100,spent/SHOP_CAP*100)}%"></i></div></div>
-    ${ids.map(id=>{const on=shopSel.includes(id); const price=CARD_PRICE[id]||8;
-      return `<div class="box row" onclick="toggleShop('${id}')" style="cursor:pointer;${on?'border-color:var(--green)':''}">
+    ${ids.map(id=>{const on=shopSel.includes(id); const price=CARD_PRICE[id]||8; const dis=!on&&(full||spent+price>SHOP_CAP);
+      return `<div class="box row" onclick="toggleShop('${id}')" style="cursor:pointer;opacity:${dis?'.45':'1'};${on?'border-color:var(--green)':''}">
         <div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><b>${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>
         <div style="text-align:right;flex:0 0 auto"><b>${price} €</b><div style="margin-top:4px"><span class="chip ${on?'g':''}">${on?'✓ en main':'+ ajouter'}</span></div></div></div>`;}).join("")}
     <button class="btn" ${over?'disabled':''} onclick="confirmShop()">${over?'Dépasse le plafond de '+SHOP_CAP+' €':('Valider ('+shopSel.length+' carte'+(shopSel.length>1?'s':'')+' · capital '+remaining+' €) →')}</button>`;
 }
-function toggleShop(id){ const k=shopSel.indexOf(id); if(k>=0)shopSel.splice(k,1); else shopSel.push(id); render(); }
+function toggleShop(id){ const k=shopSel.indexOf(id);
+  if(k>=0){ shopSel.splice(k,1); showErr(""); render(); return; }
+  const maxCards=Math.max(1,L.num_days||1); const price=CARD_PRICE[id]||8; const spent=shopSel.reduce((a,x)=>a+(CARD_PRICE[x]||0),0);
+  if(shopSel.length>=maxCards){ showErr("Maximum "+maxCards+" carte(s) — 1 par journée."); return; }
+  if(spent+price>SHOP_CAP){ showErr("Plafond de "+SHOP_CAP+" € dépassé."); return; }
+  shopSel.push(id); showErr(""); render(); }
 async function confirmShop(){
   if(busy)return; const spent=shopSel.reduce((a,id)=>a+(CARD_PRICE[id]||0),0); if(spent>SHOP_CAP)return; busy=true;
   try{ await q(db.from("players").update({hand:shopSel.slice(),capital:100-spent,shop_done:true}).eq("id",S.myId)); shopSel=[]; await refresh(); }
@@ -428,7 +442,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
         <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
         <div class="row" style="margin-top:9px"><span class="mini muted">Mise (€)</span>
-          <input type="number" min="0" step="5" value="${b.stake}" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
+          <input type="number" inputmode="numeric" min="0" step="5" value="${b.stake||''}" placeholder="0" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
     <div class="box"><div class="row"><b class="mini">🃏 Carte bonus (1 max/jour)</b>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">✕ retirer</span>`:'<span class="mini muted">optionnel</span>'}</div>
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div>
         ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(CARDS[myCard.id].d)}${needTarget?' <b class="blue">→ touche le 🎯 du pari ciblé.</b>':''}</div>`:''}`
@@ -465,9 +479,21 @@ function viewWait(dayLbl){
       <span class="chip ${done?'g':''}">${done?'✓ validé':'en cours'}</span></div>`;}).join("");
   const canResolve = waiting.length===0;
   return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div></div>${list}
+    ${canResolve?`<h2>Paris de la journée (publics)</h2><div class="mini muted" style="margin:-4px 0 8px">Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'<b>après les résultats</b>.</div>${publicBetsHTML()}`:''}
     ${canResolve?(org?`<button class="btn" onclick="resolveDay()">Résoudre la journée →</button>`
           :`<div class="box mini muted" style="text-align:center">Tous les pronos sont validés — l'organisateur va lancer les résultats.</div>`)
       :`<div class="box mini muted" style="text-align:center">En attente de ${waiting.length} joueur(s).</div>`}${standingsBtn()}`;
+}
+function publicBetsHTML(){
+  const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
+  return duels.map(d=>{ const fx=d.fixtures||[]; if(!fx.length) return "";
+    const parts=[d.home_id,d.away_id].map(pid=>[pid, bets.find(b=>b.player_id===pid)]);
+    const nm=pid=> pid===S.myId?"toi":esc((pById(pid)||{}).name||"?");
+    return `<div class="box"><div class="mini muted" style="margin-bottom:6px">${nm(d.home_id)} vs ${nm(d.away_id)}</div>
+      ${fx.map((f,i)=>`<div class="mini" style="margin:6px 0"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
+        <div class="muted" style="margin-top:2px">${parts.map(([pid,bt])=>`${nm(pid)} : ${bt&&bt.picks?esc(selLabel(f,bt.picks[i].sel))+' · '+bt.picks[i].stake+'€':'<i>caché (IA)</i>'}`).join(' &nbsp;·&nbsp; ')}</div></div>`).join("")}
+      </div>`;
+  }).join("");
 }
 
 /* ============ RESOLUTION (cards engine) ============ */
@@ -559,22 +585,36 @@ function viewRecap(D){
   const myNet=netMap[S.myId]||0; const oppId=myD?(myD.home_id===S.myId?myD.away_id:myD.home_id):null;
   const oppNet=oppId!=null?(netMap[oppId]||0):0; const won=myNet>oppNet, tie=myNet===oppNet;
   const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
+  const cardDef=(who,c)=> (c&&c.id)?`<div class="mini muted" style="margin-top:4px">🃏 ${esc(who)} : <b>${esc(CARDS[c.id].n)}</b> — ${esc(CARDS[c.id].d)}</div>`:'';
   const oppB = oppId!=null? bets.find(b=>b.player_id===oppId) : null;
   const oppName = oppId!=null? pById(oppId).name : "";
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
   const line=(bt,f,i)=>{ if(!bt||!bt.picks) return `<span class="muted">n'a pas joué</span>`;
     const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
     return `${esc(selLabel(f,b.sel))} · ${b.stake}€ @${odd}${i===bt.captain?' 👑':''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
+  const explain=(bt,f,i)=>{ if(!bt||!bt.picks) return `n'a pas joué ce match.`;
+    const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); const base=win?(+b.stake)*(odd-1):-(+b.stake); let g=base;
+    let t= win?`a parié <b>${esc(selLabel(f,b.sel))}</b> (${b.stake}€ @${odd}) → gagné : ${b.stake}×(${odd}−1)=${fmt(base)}€`
+             :`a parié <b>${esc(selLabel(f,b.sel))}</b> (${b.stake}€) → perdu : −${b.stake}€`;
+    if(i===bt.captain){ g=base*2; t+=` · 👑 ×2 = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; } else t+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`;
+    return t; };
   let detail="";
-  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>`<div class="box" style="padding:10px 12px">
-    <div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="mini muted">résultat : <b>${esc(selLabel(f,f.res))}</b></span></div>
+  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
+    return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="toggleRecapMatch(${i})">
+    <div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="mini muted">résultat : <b>${esc(selLabel(f,f.res))}</b> ${open?'▲':'▼'}</span></div>
     <div class="mini" style="margin-top:6px"><span class="muted">Toi</span> — ${line(meB,f,i)}</div>
-    <div class="mini" style="margin-top:3px"><span class="muted">${esc(oppName)}</span> — ${line(oppB,f,i)}</div></div>`).join(""); }
+    <div class="mini" style="margin-top:3px"><span class="muted">${esc(oppName)}</span> — ${line(oppB,f,i)}</div>
+    ${open?`<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+       <div class="mini muted">Cotes : ${esc(f.home)} ${f.oh}${f.draw?` · Nul ${f.od}`:''} · ${esc(f.away)} ${f.oa}</div>
+       <div class="mini" style="margin-top:5px"><b>Toi</b> ${explain(meB,f,i)}</div>
+       <div class="mini" style="margin-top:3px"><b>${esc(oppName)}</b> ${explain(oppB,f,i)}</div></div>`:''}
+    </div>`; }).join(""); }
   return `<div class="box" style="background:linear-gradient(135deg,${myNet>=0?'#12251a':'#251215'},#0e1117);border-color:${won?'#2b6b45':(tie?'#3a3f4a':'#6b2b2b')}">
       <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — TON GAIN</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
       <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +1 pt':(tie?'Égalité':'Perdu')}</b>`:''}</div></div>
-      <div class="row mini muted" style="margin-top:8px"><span>Ta carte : ${cardTxt(meB&&meB.card)}</span>${oppId!=null?`<span>Carte adv. : ${cardTxt(oppB&&oppB.card)}</span>`:''}</div></div>
-    ${detail?`<h2>Détail des paris — toi vs ${esc(oppName)}</h2>${detail}`:''}
+      <div class="row mini muted" style="margin-top:8px"><span>Ta carte : ${cardTxt(meB&&meB.card)}</span>${oppId!=null?`<span>Carte adv. : ${cardTxt(oppB&&oppB.card)}</span>`:''}</div>
+      ${cardDef("Toi",meB&&meB.card)}${oppId!=null?cardDef(oppName,oppB&&oppB.card):''}</div>
+    ${detail?`<h2>Détail des paris — touche un match pour le calcul</h2>${detail}`:''}
     <h2>Résultats de la journée</h2>
     <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Pts jour</th><th>Carte</th></tr>
       ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}</td>
@@ -583,7 +623,9 @@ function viewRecap(D){
     <button class="btn" onclick="ackRecap()">Continuer →</button>
     <button class="btn ghost" style="margin-top:8px" onclick="S.view='standings';render()">Voir le classement général</button>`;
 }
-function ackRecap(){ setSeen(L.current_day); refresh(); }
+let recapOpen=-1;
+function toggleRecapMatch(i){ recapOpen=recapOpen===i?-1:i; render(); }
+function ackRecap(){ recapOpen=-1; setSeen(L.current_day); refresh(); }
 
 /* ============ STANDINGS ============ */
 function cmp(a,b){ return b.points-a.points || b.capital-a.capital || b.duel_wins-a.duel_wins || b.best_day-a.best_day || b.best_odd-a.best_odd; }
