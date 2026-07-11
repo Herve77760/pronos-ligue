@@ -80,7 +80,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v1.9</div>
+  <div class="foot">Prototype de test · données sportives simulées · v2.0</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -345,15 +345,30 @@ function viewLobby(){
       <div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">📋 Copier le code</button></div></div>
     <h2>Joueurs inscrits · ${n}</h2>
     ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
-        ${p.is_organizer?'<span class="tag">organisateur</span>':''}${p.is_ai?'<span class="tag">IA</span>':''}${p.id===S.myId?'<span class="chip b">toi</span>':''}</div>
-        <span class="chip g">Prêt</span></div>`).join("")}
+        ${p.is_organizer?'<span class="tag">organisateur</span>':''}${p.id===S.myId?'<span class="chip b">toi</span>':''}</div>
+        ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">Retirer</button>`:`<span class="chip g">Prêt</span>`}</div>`).join("")}
     ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>Joueur IA</b><div class="mini muted">ajouté au lancement (nombre impair)</div></div></div><span class="chip b">équilibre</span></div>`:""}
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?('Clôturer les inscriptions'+(addAI?' (+🤖)':'')+' →'):'Il faut au moins 2 joueurs'}</button>
-        <div class="mini muted" style="text-align:center;margin-top:8px">Après la clôture : vote du gage, puis le championnat démarre. Tes amis peuvent encore rejoindre avec le code <b>${esc(L.code)}</b> tant que tu n'as pas clôturé.</div>`
+        <div class="mini muted" style="text-align:center;margin-top:8px">Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>${esc(L.code)}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.</div>`
       : `<div class="box mini muted" style="text-align:center">En attente que l'organisateur clôture les inscriptions…</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast("Code copié : "+L.code); }
+async function kickPlayer(pid){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
+  const p=players.find(x=>x.id===pid)||{}; if(!confirm("Retirer "+(p.name||"ce joueur")+" du tournoi ?"))return;
+  busy=true; try{ await q(db.from("players").delete().eq("id",pid).eq("league_id",L.id)); await refresh(); }
+  catch(e){ showErr("Retrait : "+e.message); } busy=false; }
+async function relaunchLeague(){
+  if(busy||!L||!AUTH)return; if(!(me()&&me().is_organizer))return; busy=true; showErr("");
+  try{
+    const humans=players.filter(p=>!p.is_ai && p.user_id); // on réutilise les joueurs humains
+    const code=genCode();
+    const lg=await q(db.from("leagues").insert({code,name:L.name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
+    const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:EMOJIS[i]||p.emoji||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
+    const inserted=await q(db.from("players").insert(rows).select());
+    const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
+    openLeague(lg.id, mine.id, true); toast("Nouveau tournoi créé — même équipe ✓");
+  }catch(e){ showErr("Relance : "+e.message); } busy=false; }
 async function closeRegistration(){
   if(busy)return; busy=true;
   try{
@@ -821,7 +836,10 @@ function viewEnd(){
            ${(p.hand||[]).map(id=>`<div class="cardchip" title="Non utilisé — ${esc(CARDS[id].d)}"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
    <div class="box" style="border-color:#5a2b2b"><div class="row"><b class="red">🎭 Gage</b><span class="chip red">${last.emoji} ${esc(last.name)}</span></div>
      <div class="mini muted" style="margin-top:6px">${esc(last.name)} doit réaliser : <b>${esc(L.gage)}</b>.</div></div>
-   ${L.num_days>=1?`<button class="btn ghost" onclick="openResults(${L.num_days-1})">📊 Revoir les résultats journée par journée</button><div style="height:8px"></div>`:''}
+   ${(me()&&me().is_organizer)?`<button class="btn" onclick="relaunchLeague()">🔁 Relancer une compétition avec les mêmes joueurs</button>
+     <div class="mini muted" style="text-align:center;margin:6px 0 12px">Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.</div>`:''}
+   <button class="btn ghost" onclick="goStandings()">📊 Classement détaillé (séries, bonus)</button><div style="height:8px"></div>
+   ${L.num_days>=1?`<button class="btn ghost" onclick="openResults(${L.num_days-1})">📅 Revoir les résultats journée par journée</button><div style="height:8px"></div>`:''}
    <button class="btn ghost" onclick="backToLeagues()">← Mes ligues</button>`;
 }
 
