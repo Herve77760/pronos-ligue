@@ -79,7 +79,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v1.1</div>
+  <div class="foot">Prototype de test · données sportives simulées · v1.2</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -505,6 +505,41 @@ function aiPlay(cap,fx,hand){
   let card=null; if(hand&&hand.length&&Math.random()<0.4){ const id=pick(hand); card={id,target:CARDS[id].t?Math.floor(Math.random()*fx.length):null}; }
   return {picks,captain,card};
 }
+// Moteur pur : calcule les gains nets du jour à partir des plays (déterministe via pd.rnd).
+function runEngine(pdIn, capStart, dz, N){
+  const PD=JSON.parse(JSON.stringify(pdIn));
+  // Phase 1 : Chérie c'est cadeau (inverse un pari adverse)
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"){ const opp=PD[pd.oppId];
+    if(opp){ const i=Math.floor((pd.rnd||0)*opp.picks.length); if(opp.picks[i].sel==="1")opp.picks[i].sel="2"; else if(opp.picks[i].sel==="2")opp.picks[i].sel="1"; } } }
+  // Phase 2 : règlement pari par pari
+  const G={};
+  for(const pid in PD){ const pd=PD[pid]; const perBet=[]; let net=0,bestOdd=0;
+    pd.picks.forEach((b,i)=>{ const f=pd.fx[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel);
+      let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===pd.captain) g*=2;
+      if(pd.card&&pd.card.target===i){ if(pd.card.id==="double"&&win)g*=2; if(pd.card.id==="tout")g*=(win?3:2); if(pd.card.id==="assurance"&&!win)g=0; }
+      if(win&&odd>bestOdd) bestOdd=odd; perBet.push({gain:g,win,odd}); net+=g; });
+    G[pid]={perBet,net,bestOdd,bonus:0}; }
+  // Phase 3 : Dans ta face puis Miroir
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="face"){ const opp=G[pd.oppId];
+    if(opp){ const wi=opp.perBet.map((b,i)=>b.win?i:-1).filter(i=>i>=0);
+      if(wi.length){ const k=wi[Math.floor((pd.rnd||0)*wi.length)]; const cut=opp.perBet[k].gain/2; opp.perBet[k].gain-=cut; opp.net-=cut; } } } }
+  for(const d of dz){ const a=d.home_id,b=d.away_id; if(!PD[a]||!PD[b])continue; const useM=(PD[a].card&&PD[a].card.id==="miroir")||(PD[b].card&&PD[b].card.id==="miroir");
+    if(useM){ const best=g=>{let bi=-1,bv=0; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); return {bi,bv};};
+      const ba=best(G[a]), bb=best(G[b]); const va=ba.bv, vb=bb.bv;
+      if(ba.bi>=0){ G[a].perBet[ba.bi].gain+=(vb-va); G[a].net+=(vb-va); }
+      if(bb.bi>=0){ G[b].perBet[bb.bi].gain+=(va-vb); G[b].net+=(va-vb); } } }
+  // Phase 4 : Sniper, Roi de la cote
+  for(const pid in PD){ const pd=PD[pid]; const g=G[pid];
+    if(pd.card&&pd.card.id==="sniper"&&pd.card.target!=null){ let bi=-1,bv=-1e9; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); if(bi===pd.card.target&&g.perBet[bi].gain>0) g.bonus+=capStart[pid]*0.10; }
+    if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>4.0)) g.bonus+=capStart[pid]*0.05; } }
+  // Phase 5 : Gourmand, Serge Benamou
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
+  { let mp=null,mv=-1e9; for(const pid in G){ const v=G[pid].net+G[pid].bonus; if(v>mv){mv=v;mp=pid;} }
+    const anySerge=Object.keys(PD).some(pid=>PD[pid].card&&PD[pid].card.id==="serge");
+    if(anySerge&&mv>0&&N>1){ const pot=0.1*mv; G[mp].bonus-=pot; const sh=pot/(N-1); for(const pid in G){ if(pid!==mp) G[pid].bonus+=sh; } } }
+  const dayNet={},dayBest={}; for(const pid in G){ dayNet[pid]=G[pid].net+G[pid].bonus; dayBest[pid]=G[pid].bestOdd; }
+  return {dayNet,dayBest};
+}
 async function resolveDay(){
   if(resolving)return; resolving=true; showErr("");
   try{
@@ -521,41 +556,18 @@ async function resolveDay(){
       for(const pid of [d.home_id,d.away_id]){ let bt=bz.find(b=>b.player_id===pid);
         if(!bt){ const ai=aiPlay(capStart[pid],fx,pmap[pid].hand||[]); bt={player_id:pid,picks:ai.picks,captain:ai.captain,card:ai.card};
           aiInserts.push({league_id:L.id,day:D,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,card:ai.card,submitted:true}); }
-        PD[pid]={picks:bt.picks.map(x=>({...x})),captain:bt.captain,card:bt.card||null,duelId:d.id,oppId:(pid===d.home_id?d.away_id:d.home_id),fx}; } }
-    // Phase 1: Chérie c'est cadeau (invert one random opponent bet)
-    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"){ const opp=PD[pd.oppId];
-      if(opp){ const i=Math.floor(Math.random()*opp.picks.length); if(opp.picks[i].sel==="1")opp.picks[i].sel="2"; else if(opp.picks[i].sel==="2")opp.picks[i].sel="1"; } } }
-    // Phase 2: settle
-    const G={};
-    for(const pid in PD){ const pd=PD[pid]; const perBet=[]; let net=0,bestOdd=0;
-      pd.picks.forEach((b,i)=>{ const f=pd.fx[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel);
-        let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===pd.captain) g*=2;
-        if(pd.card&&pd.card.target===i){ if(pd.card.id==="double"&&win)g*=2; if(pd.card.id==="tout")g*=(win?3:2); if(pd.card.id==="assurance"&&!win)g=0; }
-        if(win&&odd>bestOdd) bestOdd=odd; perBet.push({gain:g,win,odd}); net+=g; });
-      G[pid]={perBet,net,bestOdd,bonus:0}; }
-    // Phase 3: face then miroir
-    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="face"){ const opp=G[pd.oppId];
-      if(opp){ const wi=opp.perBet.map((b,i)=>b.win?i:-1).filter(i=>i>=0);
-        if(wi.length){ const k=wi[Math.floor(Math.random()*wi.length)]; const cut=opp.perBet[k].gain/2; opp.perBet[k].gain-=cut; opp.net-=cut; } } } }
-    for(const d of dz){ const a=d.home_id,b=d.away_id; const useM=(PD[a].card&&PD[a].card.id==="miroir")||(PD[b].card&&PD[b].card.id==="miroir");
-      if(useM){ const best=g=>{let bi=-1,bv=0; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); return {bi,bv};};
-        const ba=best(G[a]), bb=best(G[b]); const va=ba.bv, vb=bb.bv;
-        if(ba.bi>=0){ G[a].perBet[ba.bi].gain+=(vb-va); G[a].net+=(vb-va); }
-        if(bb.bi>=0){ G[b].perBet[bb.bi].gain+=(va-vb); G[b].net+=(va-vb); } } }
-    // Phase 4: sniper, roi
-    for(const pid in PD){ const pd=PD[pid]; const g=G[pid];
-      if(pd.card&&pd.card.id==="sniper"&&pd.card.target!=null){ let bi=-1,bv=-1e9; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); if(bi===pd.card.target&&g.perBet[bi].gain>0) g.bonus+=capStart[pid]*0.10; }
-      if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>4.0)) g.bonus+=capStart[pid]*0.05; } }
-    // Phase 5: gourmand, serge
-    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
-    { let mp=null,mv=-1e9; for(const pid in G){ const v=G[pid].net+G[pid].bonus; if(v>mv){mv=v;mp=pid;} }
-      const anySerge=Object.keys(PD).some(pid=>PD[pid].card&&PD[pid].card.id==="serge");
-      if(anySerge&&mv>0&&N>1){ const pot=0.1*mv; G[mp].bonus-=pot; const sh=pot/(N-1); for(const pid in G){ if(pid!==mp) G[pid].bonus+=sh; } } }
-    // finalize
-    const dayNet={},dayBest={}; for(const pid in G){ dayNet[pid]=G[pid].net+G[pid].bonus; dayBest[pid]=G[pid].bestOdd; }
+        PD[pid]={picks:bt.picks.map(x=>({...x})),captain:bt.captain,card:bt.card||null,duelId:d.id,oppId:(pid===d.home_id?d.away_id:d.home_id),fx,rnd:Math.random()}; } }
+    // résolution déterministe (moteur en phases), + impact réel de chaque carte
+    const {dayNet,dayBest}=runEngine(PD,capStart,dz,N);
+    const impacts={};
+    for(const pid in PD){ if(PD[pid].card&&PD[pid].card.id){ const alt=JSON.parse(JSON.stringify(PD)); alt[pid].card=null;
+      const wo=runEngine(alt,capStart,dz,N).dayNet; const opp=PD[pid].oppId;
+      impacts[pid]={self:Math.round((dayNet[pid]||0)-(wo[pid]||0)), opp: opp!=null?Math.round((dayNet[opp]||0)-(wo[opp]||0)):0}; } }
     for(const d of dz){ await q(db.from("duels").update({fixtures:d.fixtures,resolved:true}).eq("id",d.id)); }
     if(aiInserts.length) await q(db.from("bets").upsert(aiInserts,{onConflict:"player_id,day"}));
-    for(const pid in dayNet){ await q(db.from("bets").update({net:dayNet[pid]}).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }
+    for(const pid in dayNet){ const c=PD[pid].card; const u2={net:dayNet[pid]};
+      if(c&&c.id){ u2.card={id:c.id,target:c.target,impact:impacts[pid]}; }
+      await q(db.from("bets").update(u2).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }
     const order=[...ps].sort((a,b)=>(dayNet[b.id]||0)-(dayNet[a.id]||0));
     const upd={}; ps.forEach(p=>{ upd[p.id]={points:p.points,capital:Math.max(0,capStart[p.id]+(dayNet[p.id]||0)),
       streak_w:p.streak_w,streak_l:p.streak_l,duel_wins:p.duel_wins,best_day:Math.max(p.best_day,dayNet[p.id]||0),
@@ -591,17 +603,26 @@ function viewRecap(D){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
   const line=(bt,f,i)=>{ if(!bt||!bt.picks) return `<span class="muted">n'a pas joué</span>`;
     const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
-    return `${esc(selLabel(f,b.sel))} · ${b.stake}€ @${odd}${i===bt.captain?' 👑':''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
+    const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g=0; }
+    return `${esc(selLabel(f,b.sel))} · ${b.stake}€ @${odd}${i===bt.captain?' 👑':''}${(c&&c.target===i)?' '+CARDS[c.id].e:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
   const explain=(bt,f,i)=>{ if(!bt||!bt.picks) return `n'a pas joué ce match.`;
     const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); const base=win?(+b.stake)*(odd-1):-(+b.stake); let g=base;
     let t= win?`a parié <b>${esc(selLabel(f,b.sel))}</b> (${b.stake}€ @${odd}) → gagné : ${b.stake}×(${odd}−1)=${fmt(base)}€`
              :`a parié <b>${esc(selLabel(f,b.sel))}</b> (${b.stake}€) → perdu : −${b.stake}€`;
-    if(i===bt.captain){ g=base*2; t+=` · 👑 ×2 = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; } else t+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`;
-    return t; };
+    if(i===bt.captain){ g=base*2; t+=` · 👑 Capitaine ×2 → ${fmt(g)}€`; }
+    const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;t+=` · 🚀 Double Mise ×2 → ${fmt(g)}€`;} else if(c.id==="tout"){g*=(win?3:2);t+=` · 🔥 Tout ou Rien ${win?'×3':'×2'} → ${fmt(g)}€`;} else if(c.id==="assurance"&&!win){g=0;t+=` · 🛡 Assurance : mise remboursée → 0€`;} }
+    t+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; return t; };
+  const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold">👑 Capitaine (${esc(who)})</span> `; if(bt&&bt.card&&bt.card.target===i) s+=`<span class="chip b">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
+  const impactTxt=(who,bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card; const im=c.impact||{}; const bits=[];
+    if(im.self!=null&&Math.abs(im.self)>=1) bits.push(`gain de ${esc(who)} : <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`);
+    if(im.opp!=null&&Math.abs(im.opp)>=1) bits.push(`adversaire : <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
+    return `<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>🃏 ${esc(who)} a joué ${CARDS[c.id].e} ${esc(CARDS[c.id].n)}</b>${c.target!=null?` <span class="muted">(match ${c.target+1})</span>`:''}</div>
+      <div class="mini muted" style="margin-top:3px">${esc(CARDS[c.id].d)}</div>${bits.length?`<div class="mini" style="margin-top:3px">Impact — ${bits.join(' · ')}</div>`:''}</div>`; };
   let detail="";
-  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
+  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const open=recapOpen===i; const bd=badge(meB,'toi',i)+(oppId!=null?badge(oppB,oppName,i):'');
     return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="toggleRecapMatch(${i})">
     <div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="mini muted">résultat : <b>${esc(selLabel(f,f.res))}</b> ${open?'▲':'▼'}</span></div>
+    ${bd?`<div style="margin-top:6px">${bd}</div>`:''}
     <div class="mini" style="margin-top:6px"><span class="muted">Toi</span> — ${line(meB,f,i)}</div>
     <div class="mini" style="margin-top:3px"><span class="muted">${esc(oppName)}</span> — ${line(oppB,f,i)}</div>
     ${open?`<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
@@ -611,9 +632,8 @@ function viewRecap(D){
     </div>`; }).join(""); }
   return `<div class="box" style="background:linear-gradient(135deg,${myNet>=0?'#12251a':'#251215'},#0e1117);border-color:${won?'#2b6b45':(tie?'#3a3f4a':'#6b2b2b')}">
       <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — TON GAIN</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
-      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +1 pt':(tie?'Égalité':'Perdu')}</b>`:''}</div></div>
-      <div class="row mini muted" style="margin-top:8px"><span>Ta carte : ${cardTxt(meB&&meB.card)}</span>${oppId!=null?`<span>Carte adv. : ${cardTxt(oppB&&oppB.card)}</span>`:''}</div>
-      ${cardDef("Toi",meB&&meB.card)}${oppId!=null?cardDef(oppName,oppB&&oppB.card):''}</div>
+      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +1 pt':(tie?'Égalité':'Perdu')}</b>`:''}</div></div></div>
+    ${impactTxt("Toi",meB)}${oppId!=null?impactTxt(oppName,oppB):''}
     ${detail?`<h2>Détail des paris — touche un match pour le calcul</h2>${detail}`:''}
     <h2>Résultats de la journée</h2>
     <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Pts jour</th><th>Carte</th></tr>
