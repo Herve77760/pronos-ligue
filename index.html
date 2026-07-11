@@ -72,13 +72,14 @@
   <div class="bar">
     <div><h1>🎯 Pronos Ligue</h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
     <div style="display:flex;gap:8px;flex:0 0 auto">
-      <button class="btn ghost sm" id="rulesBtn" onclick="openRules()">📖 Règles</button>
-      <button class="btn ghost sm hide" id="leaveBtn" onclick="leave()">Quitter</button>
+      <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()">← Mes ligues</button>
+      <button class="btn ghost sm hide" id="rulesBtn" onclick="openRules()">📖 Règles</button>
+      <button class="btn ghost sm hide" id="logoutBtn" onclick="logout()">Déconnexion</button>
     </div>
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v0.9</div>
+  <div class="foot">Prototype de test · données sportives simulées · v1.0</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -124,7 +125,8 @@ function aiShop(){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--)
   const budget=Math.round(rnd(10,SHOP_CAP)); let spent=0; const hand=[]; for(const id of ids){ const p=CARD_PRICE[id]||8; if(spent+p<=budget){ hand.push(id); spent+=p; } } return {hand,capital:100-spent}; }
 
 /* ============ STATE ============ */
-let S={ view:"home", leagueId:null, myId:null, code:null, joinCode:"", recap:false, dispDay:0 };
+let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, prevView:"leagues" };
+let AUTH=null, myLeagues=[];
 let L=null, players=[], duels=[], bets=[];
 let poll=null, busy=false, resolving=false;
 
@@ -136,9 +138,9 @@ const fmt=n=>(n>=0?"+":"")+Math.round(n);
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function showErr(m){ $("err").innerHTML = m?`<div class="err">${esc(m)}</div>`:""; }
 function toast(m){ const t=document.createElement("div"); t.className="toast"; t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
-function saveSession(){ localStorage.setItem("pl_session", JSON.stringify({leagueId:S.leagueId,myId:S.myId,code:S.code})); }
-function loadSession(){ try{return JSON.parse(localStorage.getItem("pl_session"));}catch(e){return null;} }
-function clearSession(){ localStorage.removeItem("pl_session"); }
+function saveAuth(){ localStorage.setItem("pl_auth", JSON.stringify(AUTH)); }
+function loadAuth(){ try{return JSON.parse(localStorage.getItem("pl_auth"));}catch(e){return null;} }
+function loadLast(){ try{return JSON.parse(localStorage.getItem("pl_last"));}catch(e){return null;} }
 function getSeen(){ return +(localStorage.getItem("pl_seen_"+S.leagueId)||0); }
 function setSeen(v){ localStorage.setItem("pl_seen_"+S.leagueId, v); }
 async function q(p){ const {data,error}=await p; if(error) throw new Error(error.message); return data; }
@@ -180,67 +182,91 @@ function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId);
 function myBet(){ return bets.find(b=>b.player_id===S.myId); }
 function pById(id){ return players.find(p=>p.id===id); }
 
-/* ============ HOME / CREATE / JOIN ============ */
-function viewHome(){
-  const sess=loadSession();
-  return `<div class="box"><button class="btn" onclick="go('create')">➕ Créer une ligue</button></div>
-    <div class="box"><label>Rejoindre avec un code</label>
-      <input id="joinCode" placeholder="Ex : 7XK2P" maxlength="5" style="text-transform:uppercase">
-      <div style="height:8px"></div><button class="btn ghost" onclick="go('join')">Rejoindre →</button></div>
-    ${sess?`<div class="box mini"><div class="row"><span class="muted">Reprendre ta partie (${esc(sess.code)})</span>
-      <button class="btn sm" onclick="resume()">Reprendre</button></div></div>`:""}`;
+/* ============ AUTH ============ */
+function viewAuth(){
+  return `<div class="box"><h2 style="margin-top:0">Connexion</h2>
+    <label>Identifiant (pseudo)</label><input id="aUser" autocomplete="username" placeholder="ex : herve" maxlength="20">
+    <label>Mot de passe</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••">
+    <div style="height:12px"></div>
+    <button class="btn" onclick="doLogin()">Se connecter</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="doSignup()">Créer un compte</button>
+    <div class="mini muted" style="margin-top:12px">Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b> et d'en jouer <b>plusieurs à la fois</b>, depuis n'importe quel appareil.</div></div>`;
 }
-function go(v){ if(v==="join"){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} S.joinCode=c; S.view="join"; render(); return; } S.view=v; render(); }
-function resume(){ const s=loadSession(); if(!s)return; S.leagueId=s.leagueId; S.myId=s.myId; S.code=s.code; S.view="game"; startPoll(); refresh(); }
-function viewCreate(){
-  return `<button class="btn ghost sm" onclick="S.view='home';render()">← Retour</button>
-   <div class="box"><h2 style="margin-top:0">Créer la ligue</h2>
-     <label>Ton prénom</label><input id="cName" placeholder="Hervé">
-     <div class="mini muted" style="margin-top:10px">Tu obtiens un <b>code</b> à partager. Tes amis rejoignent <b>librement</b> ; tu <b>clôtures les inscriptions</b> quand tu veux. Si le nombre de joueurs est impair, un 🤖 joueur IA est ajouté pour l'équilibre (il ne subit pas le gage).</div>
-     <div style="height:12px"></div><button class="btn" onclick="createLeague()">Créer et obtenir le code →</button></div>`;
+async function doLogin(){
+  if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
+  if(!u||!p){showErr("Identifiant et mot de passe requis.");return;} busy=true; showErr("");
+  try{ const uid=await q(db.rpc("app_login",{p_username:u,p_password:p}));
+    if(!uid){ showErr("Identifiant ou mot de passe incorrect."); busy=false; return; }
+    AUTH={id:uid,name:u}; saveAuth(); S.view="leagues"; await loadMyLeagues();
+  }catch(e){ showErr("Connexion : "+e.message); } busy=false;
 }
+async function doSignup(){
+  if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
+  if(u.length<2){showErr("Choisis un identifiant (2 caractères minimum).");return;}
+  if(p.length<6){showErr("Mot de passe : 6 caractères minimum.");return;} busy=true; showErr("");
+  try{ const uid=await q(db.rpc("app_signup",{p_username:u,p_password:p}));
+    AUTH={id:uid,name:u}; saveAuth(); S.view="leagues"; await loadMyLeagues();
+  }catch(e){ showErr(/USERNAME_TAKEN/.test(e.message)?"Cet identifiant est déjà pris.":"Création : "+e.message); } busy=false;
+}
+function logout(){ if(!confirm("Se déconnecter ?"))return; if(poll)clearInterval(poll);
+  localStorage.removeItem("pl_auth"); localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
+  S={view:"auth",leagueId:null,myId:null,code:null,recap:false,dispDay:0,prevView:"leagues"}; L=null; render(); }
+
+/* ============ MES LIGUES ============ */
+async function loadMyLeagues(){
+  try{ const mine=await q(db.from("players").select("id,league_id,is_organizer").eq("user_id",AUTH.id));
+    if(mine.length){ const ids=[...new Set(mine.map(m=>m.league_id))];
+      const lgs=await q(db.from("leagues").select("*").in("id",ids));
+      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id}))
+        .sort((a,b)=> (a.lg.created_at<b.lg.created_at?1:-1));
+    } else myLeagues=[];
+  }catch(e){ showErr("Chargement des ligues : "+e.message); myLeagues=[]; }
+  render();
+}
+function statusLabel(s){ return s==="lobby"?"Salon · inscriptions ouvertes":s==="gage_vote"?"Vote du gage":s==="done"?"Terminé":"En cours"; }
+function viewLeagues(){
+  return `<div class="box"><b>👋 Bonjour ${esc(AUTH.name)}</b></div>
+    <div class="box"><button class="btn" onclick="createLeague()">➕ Créer une ligue</button>
+      <div style="height:12px"></div><label>Rejoindre avec un code</label>
+      <input id="joinCode" maxlength="5" placeholder="Ex : 7XK2P" style="text-transform:uppercase">
+      <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">Rejoindre →</button></div>
+    <h2>Mes ligues</h2>
+    ${myLeagues.length? myLeagues.map(m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
+        <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · J'+Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days)+'/'+m.lg.num_days:''}</div></div>
+        <span class="chip b">Ouvrir →</span></div>`).join("")
+      : `<div class="box mini muted">Aucune ligue pour l'instant. Crée-en une, ou rejoins celle d'un ami avec son code.</div>`}`;
+}
+function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} joinLeague(c); }
+function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game";
+  localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
+  if(fresh) setSeen(0);
+  startPoll(); refresh();
+}
+function backToLeagues(){ if(poll)clearInterval(poll); localStorage.removeItem("pl_last");
+  S.leagueId=null; S.myId=null; L=null; S.view="leagues"; loadMyLeagues(); }
+
 async function createLeague(){
-  if(busy)return; const name=($("cName").value||"").trim();
-  if(!name){showErr("Entre ton prénom.");return;} busy=true; showErr("");
+  if(busy||!AUTH)return; busy=true; showErr("");
   try{
     const code=genCode();
-    // num_participants sert de plafond d'inscriptions ; le total réel est figé au lancement.
-    const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
-    const pl=await q(db.from("players").insert({league_id:lg.id,name,emoji:EMOJIS[0],is_organizer:true,join_order:0}).select().single());
-    S.leagueId=lg.id; S.myId=pl.id; S.code=code; S.view="game"; saveSession(); setSeen(0);
-    startPoll(); await refresh();
+    const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+AUTH.name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:EMOJIS[0],is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
+    openLeague(lg.id, pl.id, true);
   }catch(e){ showErr("Création : "+e.message); } busy=false;
 }
-function viewJoin(){
-  return `<button class="btn ghost sm" onclick="S.view='home';render()">← Retour</button>
-   <div class="box"><h2 style="margin-top:0">Rejoindre une ligue</h2>
-     <label>Code de la ligue</label><input id="jCode" value="${esc(S.joinCode||'')}" maxlength="5" style="text-transform:uppercase">
-     <label>Ton prénom</label><input id="jName" placeholder="Marc">
-     <div style="height:12px"></div><button class="btn" onclick="doJoin()">Rejoindre →</button>
-     <div class="mini muted" style="margin-top:10px">💡 Déjà dans une ligue en cours (ou tu as quitté / changé de téléphone) ? Entre le <b>même code</b> + ton <b>prénom exact</b> pour retrouver ta place.</div></div>`;
-}
-function doJoin(){ const c=($("jCode").value||"").toUpperCase().trim(); const n=($("jName").value||"").trim();
-  if(c.length<3){showErr("Code invalide.");return;} if(!n){showErr("Entre ton prénom.");return;} joinLeague(c,n); }
-async function joinLeague(code,name){
-  if(busy)return; const nm=(name||"").trim(); if(!nm){showErr("Entre ton prénom.");return;} busy=true; showErr("");
+async function joinLeague(code){
+  if(busy||!AUTH)return; busy=true; showErr("");
   try{
     const lg=await q(db.from("leagues").select("*").eq("code",code).single());
     const ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
+    const mine=ps.find(p=>p.user_id===AUTH.id);
+    if(mine){ openLeague(lg.id, mine.id); busy=false; return; } // déjà membre → on rouvre (reconnexion)
+    if(lg.status!=="lobby"){ showErr("Cette ligue a déjà démarré, tu ne peux plus la rejoindre."); busy=false; return; }
     const humans=ps.filter(p=>!p.is_ai);
-    const existing=humans.find(p=>(p.name||"").trim().toLowerCase()===nm.toLowerCase());
-    const attach=id=>{ S.leagueId=lg.id; S.myId=id; S.code=code; S.view="game"; saveSession(); setSeen(lg.current_day||0); startPoll(); };
-    if(lg.status!=="lobby"){
-      // ligue déjà démarrée → reconnexion uniquement (on retrouve sa place par le prénom)
-      if(existing){ attach(existing.id); await refresh(); }
-      else { showErr("La ligue a déjà démarré. Pour te reconnecter, entre ton prénom exact : "+(humans.map(p=>p.name).join(", ")||"—")); }
-      busy=false; return;
-    }
-    // lobby : si ce prénom est déjà présent (ex. reconnexion après avoir quitté), on s'y rattache
-    if(existing){ attach(existing.id); await refresh(); busy=false; return; }
     if(humans.length>=lg.num_participants){ showErr("La ligue est complète."); busy=false; return; }
     const ord=humans.length;
-    const pl=await q(db.from("players").insert({league_id:lg.id,name:nm,emoji:EMOJIS[ord]||"🎮",join_order:ord}).select().single());
-    attach(pl.id); await refresh();
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:EMOJIS[ord]||"🎮",join_order:ord,user_id:AUTH.id}).select().single());
+    openLeague(lg.id, pl.id, true);
   }catch(e){ showErr("Impossible de rejoindre : "+e.message); } busy=false;
 }
 
@@ -533,17 +559,22 @@ function viewRecap(D){
   const myNet=netMap[S.myId]||0; const oppId=myD?(myD.home_id===S.myId?myD.away_id:myD.home_id):null;
   const oppNet=oppId!=null?(netMap[oppId]||0):0; const won=myNet>oppNet, tie=myNet===oppNet;
   const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
+  const oppB = oppId!=null? bets.find(b=>b.player_id===oppId) : null;
+  const oppName = oppId!=null? pById(oppId).name : "";
+  const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
+  const line=(bt,f,i)=>{ if(!bt||!bt.picks) return `<span class="muted">n'a pas joué</span>`;
+    const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
+    return `${esc(selLabel(f,b.sel))} · ${b.stake}€ @${odd}${i===bt.captain?' 👑':''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
   let detail="";
-  if(meB&&myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const b=meB.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel);
-      let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===meB.captain)g*=2; const capi=(i===meB.captain);
-      return `<div class="box row" style="padding:9px 12px"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span>
-        <div><b>${esc(f.home)} – ${esc(f.away)}</b> ${capi?'<span class="chip gold">👑</span>':''}<div class="mini muted">pari ${b.sel} · ${b.stake}€ @${odd} · rés. ${f.res}</div></div></div>
-        <b class="${g>=0?'green':'red'}">${fmt(g)} €</b></div>`; }).join(""); }
+  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>`<div class="box" style="padding:10px 12px">
+    <div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="mini muted">résultat : <b>${esc(selLabel(f,f.res))}</b></span></div>
+    <div class="mini" style="margin-top:6px"><span class="muted">Toi</span> — ${line(meB,f,i)}</div>
+    <div class="mini" style="margin-top:3px"><span class="muted">${esc(oppName)}</span> — ${line(oppB,f,i)}</div></div>`).join(""); }
   return `<div class="box" style="background:linear-gradient(135deg,${myNet>=0?'#12251a':'#251215'},#0e1117);border-color:${won?'#2b6b45':(tie?'#3a3f4a':'#6b2b2b')}">
       <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — TON GAIN</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
-      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(pById(oppId).name)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +1 pt':(tie?'Égalité':'Perdu')}</b>`:''}
-        <div class="mini muted">Ta carte : ${cardTxt(meB&&meB.card)}</div></div></div></div>
-    ${detail?`<h2>Tes 5 paris</h2>${detail}`:''}
+      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +1 pt':(tie?'Égalité':'Perdu')}</b>`:''}</div></div>
+      <div class="row mini muted" style="margin-top:8px"><span>Ta carte : ${cardTxt(meB&&meB.card)}</span>${oppId!=null?`<span>Carte adv. : ${cardTxt(oppB&&oppB.card)}</span>`:''}</div></div>
+    ${detail?`<h2>Détail des paris — toi vs ${esc(oppName)}</h2>${detail}`:''}
     <h2>Résultats de la journée</h2>
     <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Pts jour</th><th>Carte</th></tr>
       ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}</td>
@@ -584,16 +615,18 @@ function viewEnd(){
 
 /* ============ render / poll ============ */
 function render(){
-  $("leaveBtn").classList.toggle("hide", S.view==="home"||S.view==="create"||S.view==="join"||S.view==="rules");
+  const inLeague=!!S.leagueId;
+  $("rulesBtn").classList.toggle("hide", S.view==="auth");
+  $("leaguesBtn").classList.toggle("hide", !inLeague);
+  $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
   let html="";
-  if(S.view==="home") html=viewHome();
-  else if(S.view==="create") html=viewCreate();
-  else if(S.view==="join") html=viewJoin();
+  if(S.view==="auth") html=viewAuth();
+  else if(S.view==="leagues") html=viewLeagues();
   else if(S.view==="rules") html=viewRules();
   else if(S.view==="standings") html=viewStandings();
   else html=viewGame();
   $("root").innerHTML=html;
-  $("subtitle").textContent = L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="gage_vote"?"Vote du gage":(L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days))) : "Multijoueur en ligne";
+  $("subtitle").textContent = S.view==="auth"?"Connexion" : S.view==="leagues"?"Mes ligues" : (L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="gage_vote"?"Vote du gage":(L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days))) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
@@ -606,7 +639,7 @@ function isComposing(){
 }
 function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings")&&!isComposing()) refresh(); },4000); }
 function openRules(){ if(S.view==="rules")return; S.prevView=S.view; S.view="rules"; render(); }
-function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"home"); render(); }
+function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
 function viewRules(){
   const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><b class="mini">${esc(CARDS[id].n)}</b> <span class="mini muted">· ${CARD_PRICE[id]} €</span><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>`;
   return `<button class="btn ghost sm" onclick="closeRules()">← Retour</button>
@@ -631,14 +664,14 @@ function viewRules(){
      ${Object.keys(CARDS).map(card).join("")}</div>
    <div class="box"><b>😴 Oubli</b><div class="mini muted" style="margin-top:6px">Pas de validation à temps → paris repris de l'adversaire, pronostics inversés.</div></div>`;
 }
-function leave(){ if(!confirm("Se déconnecter sur cet appareil ? Tu pourras revenir avec le code + ton prénom."))return; if(poll)clearInterval(poll); clearSession(); S={view:"home",leagueId:null,myId:null,code:null,joinCode:"",recap:false,dispDay:0}; L=null; render(); }
-
 /* ============ boot ============ */
 (function boot(){
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
-  const s=loadSession();
-  if(s&&s.leagueId){ S.leagueId=s.leagueId; S.myId=s.myId; S.code=s.code; S.view="game"; startPoll(); refresh(); }
-  else { S.view="home"; render(); }
+  AUTH=loadAuth();
+  if(!AUTH){ S.view="auth"; render(); return; }
+  const last=loadLast();
+  if(last&&last.leagueId){ S.leagueId=last.leagueId; S.myId=last.myId; S.view="game"; startPoll(); refresh(); }
+  else { S.view="leagues"; loadMyLeagues(); }
 })();
 </script>
 </body>
