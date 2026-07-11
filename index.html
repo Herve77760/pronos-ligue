@@ -80,7 +80,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v1.7a</div>
+  <div class="foot">Prototype de test · données sportives simulées · v1.8</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -139,6 +139,7 @@ let AUTH=null, myLeagues=[];
 let L=null, players=[], duels=[], bets=[];
 let poll=null, busy=false, resolving=false, endBets=null;
 let palmares=null, adminData=null, palmOpen="";
+let adminUsers=null, adminPwd="";
 
 /* ============ utils ============ */
 const $=id=>document.getElementById(id);
@@ -818,7 +819,15 @@ function viewEnd(){
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
 function openCoulisses(){ if(S.view==="coulisses")return; S.prevView=S.view; S.view="coulisses"; render(); }
 async function openPalmares(){ S.view="palmares"; palmares=null; palmOpen=""; render(); await loadPalmares(); render(); }
-async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; render(); await loadAdmin(); render(); }
+async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; render(); await loadAdmin(); render(); }
+async function adminLoadUsers(){ const el=$("adminPwd"); const pwd=el?el.value:""; if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
+  try{ adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:pwd})); adminPwd=pwd; showErr(""); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect.":("Erreur : "+e.message)); } }
+async function adminResetPwd(uid){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
+  const np=prompt("Nouveau mot de passe pour « "+(u.username||"?")+" » (6 caractères minimum) :"); if(np==null) return;
+  if((np||"").length<6){ alert("6 caractères minimum."); return; }
+  try{ await q(db.rpc("admin_set_password",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_new_password:np})); toast("Mot de passe réinitialisé pour "+(u.username||"")); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Reset : "+e.message)); } }
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
@@ -899,7 +908,14 @@ function viewAdmin(){
     ${st("🧮 Journées résolues (paris)", a.resolvedBets)}
     ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués</div>
-      ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b>${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>`;
+      ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b>${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
+    <div class="box"><div class="mini muted" style="margin-bottom:6px">👤 Comptes joueurs — identifiants & réinitialisation</div>
+      ${adminUsers ? `${adminUsers.length?adminUsers.map(u=>`<div class="row mini" style="margin:6px 0"><span>${esc(u.username)}${u.id===ADMIN_ID?' <span class="tag">(toi, admin)</span>':''}</span>${u.id===ADMIN_ID?'':`<button class="btn ghost sm" onclick="adminResetPwd('${u.id}')">🔑 Réinitialiser le mot de passe</button>`}</div>`).join(""):`<div class="mini muted">Aucun autre compte pour l'instant.</div>`}
+         <button class="btn ghost sm" style="margin-top:8px" onclick="adminUsers=null;render()">Masquer</button>`
+        : `<div class="mini muted">Un joueur a oublié son mot de passe ? Entre ton mot de passe admin pour voir les identifiants et en réinitialiser un.</div>
+           <input id="adminPwd" type="password" placeholder="Ton mot de passe admin" autocomplete="off" style="margin-top:8px" onkeydown="if(event.key==='Enter')adminLoadUsers()">
+           <button class="btn ghost" style="margin-top:6px" onclick="adminLoadUsers()">Afficher les comptes</button>`}
+    </div>`;
 }
 
 /* ============ render / poll ============ */
