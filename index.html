@@ -78,7 +78,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v0.7</div>
+  <div class="foot">Prototype de test · données sportives simulées · v0.8</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -201,7 +201,7 @@ async function createLeague(){
   try{
     const code=genCode();
     // num_participants sert de plafond d'inscriptions ; le total réel est figé au lancement.
-    const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+name,status:"lobby",num_participants:12,num_days:0,gage:pick(GAGES)}).select().single());
+    const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
     const pl=await q(db.from("players").insert({league_id:lg.id,name,emoji:EMOJIS[0],is_organizer:true,join_order:0}).select().single());
     S.leagueId=lg.id; S.myId=pl.id; S.code=code; S.view="game"; saveSession(); setSeen(0);
     startPoll(); await refresh();
@@ -244,6 +244,7 @@ async function joinLeague(code,name){
 function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
   if(L.status==="lobby") return viewLobby();
+  if(L.status==="gage_vote") return viewGageVote();
   if(S.recap) return viewRecap(S.dispDay);
   if(L.status==="done") return viewEnd();
   return viewDay();
@@ -259,12 +260,12 @@ function viewLobby(){
         <span class="chip g">Prêt</span></div>`).join("")}
     ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>Joueur IA</b><div class="mini muted">ajouté au lancement (nombre impair)</div></div></div><span class="chip b">équilibre</span></div>`:""}
     <div style="height:8px"></div>
-    ${org?`<button class="btn" onclick="startLeague()" ${canLaunch?'':'disabled'}>${canLaunch?('Clôturer les inscriptions & lancer'+(addAI?' (+🤖)':'')+' →'):'Il faut au moins 2 joueurs'}</button>
-        <div class="mini muted" style="text-align:center;margin-top:8px">Tes amis peuvent encore rejoindre avec le code <b>${esc(L.code)}</b> tant que tu n'as pas lancé.</div>`
-      : `<div class="box mini muted" style="text-align:center">En attente que l'organisateur clôture les inscriptions et lance le championnat…</div>`}`;
+    ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?('Clôturer les inscriptions'+(addAI?' (+🤖)':'')+' →'):'Il faut au moins 2 joueurs'}</button>
+        <div class="mini muted" style="text-align:center;margin-top:8px">Après la clôture : vote du gage, puis le championnat démarre. Tes amis peuvent encore rejoindre avec le code <b>${esc(L.code)}</b> tant que tu n'as pas clôturé.</div>`
+      : `<div class="box mini muted" style="text-align:center">En attente que l'organisateur clôture les inscriptions…</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast("Code copié : "+L.code); }
-async function startLeague(){
+async function closeRegistration(){
   if(busy)return; busy=true;
   try{
     let ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
@@ -274,9 +275,50 @@ async function startLeague(){
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
     for(const p of ps){ await q(db.from("players").update({hand:dealHand(sched.length)}).eq("id",p.id)); }
-    await q(db.from("leagues").update({status:"running",num_days:sched.length,current_day:0}).eq("id",L.id));
+    // propositions de gages (l'IA propose, les joueurs votent)
+    const pool=[...GAGES]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+    const options=pool.slice(0,Math.min(4,pool.length));
+    await q(db.from("leagues").update({status:"gage_vote",num_days:sched.length,current_day:0,gage:JSON.stringify({options,votes:{}})}).eq("id",L.id));
     setSeen(0); await refresh();
-  }catch(e){ showErr("Lancement : "+e.message); } busy=false;
+  }catch(e){ showErr("Clôture : "+e.message); } busy=false;
+}
+
+/* ============ VOTE DU GAGE ============ */
+function gageState(){ try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.options)) return o; }catch(e){} return {options:[],votes:{}}; }
+function viewGageVote(){
+  const st=gageState(); const options=st.options, votes=st.votes||{};
+  const humans=players.filter(p=>!p.is_ai); const myVote=votes[S.myId];
+  const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length);
+  const voted=humans.filter(p=>votes[p.id]!=null).length; const allVoted=voted>=humans.length && humans.length>0;
+  const org=me()&&me().is_organizer;
+  return `<div class="box"><h2 style="margin-top:0">🎭 Vote du gage</h2>
+    <div class="mini muted">Le <b>dernier joueur humain</b> du classement final réalisera le gage le plus voté. Choisis le tien 👇 · ${voted}/${humans.length} ont voté</div></div>
+    ${options.map((g,i)=>`<div class="box" onclick="voteGage(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
+      <div class="row"><b>${esc(g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ':''}${counts[i]} vote${counts[i]>1?'s':''}</span></div>
+      <div class="gauge" style="margin-top:8px"><i style="width:${humans.length?Math.round(counts[i]/humans.length*100):0}%"></i></div></div>`).join("")}
+    ${org? `<button class="btn" ${allVoted?'':'disabled'} onclick="launchChampionship()">${allVoted?'Valider le gage & démarrer →':'En attente des votes ('+voted+'/'+humans.length+')'}</button>
+        <div class="mini muted" style="text-align:center;margin-top:8px">Tu démarres dès que tout le monde a voté.</div>`
+      : (myVote!=null?`<div class="box mini muted" style="text-align:center">Ton vote est enregistré ✓. En attente des autres / de l'organisateur.</div>`
+                    :`<div class="box mini muted" style="text-align:center">Sélectionne un gage ci-dessus.</div>`)}`;
+}
+async function voteGage(i){
+  if(busy)return; busy=true;
+  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single());
+    let st; try{ st=JSON.parse(fresh.gage); }catch(e){ st=null; } if(!st||!Array.isArray(st.options)){ busy=false; return; }
+    st.votes=st.votes||{}; st.votes[S.myId]=i;
+    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
+  }catch(e){ showErr("Vote : "+e.message); } busy=false;
+}
+async function launchChampionship(){
+  if(busy)return; busy=true;
+  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single());
+    let st; try{ st=JSON.parse(fresh.gage); }catch(e){ st=null; }
+    const options=(st&&st.options)||GAGES.slice(0,4); const votes=(st&&st.votes)||{};
+    const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length);
+    const maxc=Math.max(0,...counts); const tied=counts.map((c,i)=>c===maxc?i:-1).filter(i=>i>=0);
+    const best=tied.length?tied[Math.floor(Math.random()*tied.length)]:0;
+    await q(db.from("leagues").update({status:"running",gage:options[best]||pick(GAGES)}).eq("id",L.id)); await refresh();
+  }catch(e){ showErr("Démarrage : "+e.message); } busy=false;
 }
 
 /* ============ DAY ============ */
@@ -520,7 +562,7 @@ function render(){
   else if(S.view==="standings") html=viewStandings();
   else html=viewGame();
   $("root").innerHTML=html;
-  $("subtitle").textContent = L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days)) : "Multijoueur en ligne";
+  $("subtitle").textContent = L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="gage_vote"?"Vote du gage":(L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days))) : "Multijoueur en ligne";
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
