@@ -78,7 +78,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v0.8</div>
+  <div class="foot">Prototype de test · données sportives simulées · v0.9</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -118,6 +118,10 @@ function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2
   const pool=[...RANDOM_POOL]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
   for(let i=0;i<size-nc;i++) hand.push(pool[i%pool.length]); return hand; }
 function randomCard(){ return RANDOM_POOL[Math.floor(Math.random()*RANDOM_POOL.length)]; }
+const CARD_PRICE={tout:12,sniper:10,miroir:10,double:10,gourmand:8,face:8,cadeau:8,assurance:8,invest:6,roi:6,serge:6};
+const SHOP_CAP=40; // dépense max en bonus sur les 100€
+function aiShop(){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
+  const budget=Math.round(rnd(10,SHOP_CAP)); let spent=0; const hand=[]; for(const id of ids){ const p=CARD_PRICE[id]||8; if(spent+p<=budget){ hand.push(id); spent+=p; } } return {hand,capital:100-spent}; }
 
 /* ============ STATE ============ */
 let S={ view:"home", leagueId:null, myId:null, code:null, joinCode:"", recap:false, dispDay:0 };
@@ -247,6 +251,7 @@ function viewGame(){
   if(L.status==="gage_vote") return viewGageVote();
   if(S.recap) return viewRecap(S.dispDay);
   if(L.status==="done") return viewEnd();
+  if(me() && !me().shop_done) return viewShop();
   return viewDay();
 }
 function viewLobby(){
@@ -274,7 +279,7 @@ async function closeRegistration(){
     const n=ps.length; const sched=makeSchedule(n); const rows=[];
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
-    for(const p of ps){ await q(db.from("players").update({hand:dealHand(sched.length)}).eq("id",p.id)); }
+    // pas de distribution gratuite : les cartes s'achètent à la boutique (après le vote du gage)
     // propositions de gages (l'IA propose, les joueurs votent)
     const pool=[...GAGES]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
     const options=pool.slice(0,Math.min(4,pool.length));
@@ -296,7 +301,7 @@ function viewGageVote(){
     ${options.map((g,i)=>`<div class="box" onclick="voteGage(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
       <div class="row"><b>${esc(g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ':''}${counts[i]} vote${counts[i]>1?'s':''}</span></div>
       <div class="gauge" style="margin-top:8px"><i style="width:${humans.length?Math.round(counts[i]/humans.length*100):0}%"></i></div></div>`).join("")}
-    ${org? `<button class="btn" ${allVoted?'':'disabled'} onclick="launchChampionship()">${allVoted?'Valider le gage & démarrer →':'En attente des votes ('+voted+'/'+humans.length+')'}</button>
+    ${org? `<button class="btn" ${allVoted?'':'disabled'} onclick="launchChampionship()">${allVoted?'Valider le gage & ouvrir la boutique →':'En attente des votes ('+voted+'/'+humans.length+')'}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">Tu démarres dès que tout le monde a voté.</div>`
       : (myVote!=null?`<div class="box mini muted" style="text-align:center">Ton vote est enregistré ✓. En attente des autres / de l'organisateur.</div>`
                     :`<div class="box mini muted" style="text-align:center">Sélectionne un gage ci-dessus.</div>`)}`;
@@ -317,8 +322,34 @@ async function launchChampionship(){
     const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length);
     const maxc=Math.max(0,...counts); const tied=counts.map((c,i)=>c===maxc?i:-1).filter(i=>i>=0);
     const best=tied.length?tied[Math.floor(Math.random()*tied.length)]:0;
-    await q(db.from("leagues").update({status:"running",gage:options[best]||pick(GAGES)}).eq("id",L.id)); await refresh();
+    const gage=options[best]||pick(GAGES);
+    // l'IA fait ses achats automatiquement
+    const ps=await q(db.from("players").select("id,is_ai").eq("league_id",L.id));
+    for(const p of ps){ if(p.is_ai){ const s=aiShop(); await q(db.from("players").update({hand:s.hand,capital:s.capital,shop_done:true}).eq("id",p.id)); } }
+    await q(db.from("leagues").update({status:"running",gage}).eq("id",L.id)); await refresh();
   }catch(e){ showErr("Démarrage : "+e.message); } busy=false;
+}
+
+/* ============ BOUTIQUE BONUS ============ */
+let shopSel=[];
+function viewShop(){
+  const ids=Object.keys(CARDS); const spent=shopSel.reduce((a,id)=>a+(CARD_PRICE[id]||0),0);
+  const remaining=100-spent; const over=spent>SHOP_CAP;
+  return `<div class="box"><h2 style="margin-top:0">🛒 Boutique bonus</h2>
+    <div class="mini muted">Compose ta main dans ton enveloppe de <b>100 €</b>. Chaque € dépensé en carte est un € en moins pour parier. Plafond bonus : <b>${SHOP_CAP} €</b>.</div>
+    <div class="row mini" style="margin-top:10px"><span class="muted">Dépensé <b id="sp" class="${over?'red':''}">${spent}</b> € / ${SHOP_CAP} € max</span><span class="muted">Capital de départ : <b class="green">${remaining} €</b></span></div>
+    <div class="gauge ${over?'over':''}" style="margin-top:6px"><i style="width:${Math.min(100,spent/SHOP_CAP*100)}%"></i></div></div>
+    ${ids.map(id=>{const on=shopSel.includes(id); const price=CARD_PRICE[id]||8;
+      return `<div class="box row" onclick="toggleShop('${id}')" style="cursor:pointer;${on?'border-color:var(--green)':''}">
+        <div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><b>${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>
+        <div style="text-align:right;flex:0 0 auto"><b>${price} €</b><div style="margin-top:4px"><span class="chip ${on?'g':''}">${on?'✓ en main':'+ ajouter'}</span></div></div></div>`;}).join("")}
+    <button class="btn" ${over?'disabled':''} onclick="confirmShop()">${over?'Dépasse le plafond de '+SHOP_CAP+' €':('Valider ('+shopSel.length+' carte'+(shopSel.length>1?'s':'')+' · capital '+remaining+' €) →')}</button>`;
+}
+function toggleShop(id){ const k=shopSel.indexOf(id); if(k>=0)shopSel.splice(k,1); else shopSel.push(id); render(); }
+async function confirmShop(){
+  if(busy)return; const spent=shopSel.reduce((a,id)=>a+(CARD_PRICE[id]||0),0); if(spent>SHOP_CAP)return; busy=true;
+  try{ await q(db.from("players").update({hand:shopSel.slice(),capital:100-spent,shop_done:true}).eq("id",S.myId)); shopSel=[]; await refresh(); }
+  catch(e){ showErr("Boutique : "+e.message); } busy=false;
 }
 
 /* ============ DAY ============ */
@@ -568,6 +599,7 @@ function render(){
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
 function isComposing(){
   if(S.view!=="game"||!L||L.status!=="running"||S.recap) return false;
+  if(me() && !me().shop_done) return true; // boutique en cours
   const d=myDuel(); if(!d) return false;
   if(!d.fixtures) return d.home_id===S.myId; // à domicile : en train de choisir les 5 matchs
   return !myBet();                            // en train de faire ses pronos/mises
@@ -576,7 +608,7 @@ function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S
 function openRules(){ if(S.view==="rules")return; S.prevView=S.view; S.view="rules"; render(); }
 function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"home"); render(); }
 function viewRules(){
-  const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><b class="mini">${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>`;
+  const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><b class="mini">${esc(CARDS[id].n)}</b> <span class="mini muted">· ${CARD_PRICE[id]} €</span><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>`;
   return `<button class="btn ghost sm" onclick="closeRules()">← Retour</button>
    <div class="box"><h2 style="margin-top:0">📖 Règles du jeu</h2>
      <p class="mini"><b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>. Le dernier joueur humain fait le gage voté au départ.</p></div>
@@ -594,8 +626,8 @@ function viewRules(){
      <div class="mini muted" style="margin-top:6px">Chaque journée, les joueurs sont classés au <b>gain net</b> du jour → le 1er reçoit N points (N = nb de joueurs), le dernier 1 point. Le <b>vainqueur de son duel</b> gagne <b>+1 point</b>. Départage : capital, puis victoires en duel, plus gros gain, plus grosse cote.</div></div>
    <div class="box"><b>🔥 Séries</b>
      <div class="mini muted" style="margin-top:6px">3 victoires de duel d'affilée → +2 % de capital · 5 victoires → +1 carte aléatoire · 4 défaites → carte Assurance offerte.</div></div>
-   <div class="box"><b>🃏 Cartes bonus</b>
-     <div class="mini muted" style="margin:6px 0">Main distribuée au lancement (2 à 8 cartes selon la durée), 1 carte max par journée, chacune utilisable une seule fois.</div>
+   <div class="box"><b>🃏 Cartes bonus (boutique)</b>
+     <div class="mini muted" style="margin:6px 0">Au début, chacun <b>achète ses cartes</b> dans la boutique, sur son enveloppe de 100 € (plafond ${SHOP_CAP} €) — le reste devient ton <b>capital de départ</b>. 1 carte max par journée, chacune utilisable une seule fois.</div>
      ${Object.keys(CARDS).map(card).join("")}</div>
    <div class="box"><b>😴 Oubli</b><div class="mini muted" style="margin-top:6px">Pas de validation à temps → paris repris de l'adversaire, pronostics inversés.</div></div>`;
 }
