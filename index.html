@@ -73,13 +73,14 @@
     <div><h1>🎯 Pronos Ligue</h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
     <div style="display:flex;gap:8px;flex:0 0 auto">
       <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()">← Mes ligues</button>
+      <button class="btn ghost sm hide" id="coulissesBtn" onclick="openCoulisses()" title="Coulisses : gage & enchères d'ouverture">🎪</button>
       <button class="btn ghost sm hide" id="rulesBtn" onclick="openRules()">📖 Règles</button>
       <button class="btn ghost sm hide" id="logoutBtn" onclick="logout()">Déconnexion</button>
     </div>
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v1.6</div>
+  <div class="foot">Prototype de test · données sportives simulées · v1.7</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -89,6 +90,7 @@
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
+const ADMIN_ID = "b107abd6-a61a-4b3d-a403-c15182060896"; // compte administrateur (Hervé)
 
 /* ============ CONSTANTS ============ */
 const EMOJIS=["👑","🦊","🐻","🦁","🐼","🐯","🦉","🐸","🐙","🦄"];
@@ -115,7 +117,7 @@ const CARDS={
  cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:false,d:"Un pari adverse (au hasard) est inversé."},
  sniper:   {e:"🎯",n:"Sniper",t:true,      d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
  invest:   {e:"📈",n:"Investisseur",t:false,d:"Plafond de mise porté à 70 % du capital ce jour."},
- roi:      {e:"👑",n:"Roi de la cote",t:false,d:"Un pari gagné à cote > 4,00 → +5 % capital."},
+ roi:      {e:"👑",n:"Roi de la cote",t:false,d:"Un pari gagné à cote ≥ 2,00 → +5 % capital."},
  tout:     {e:"🔥",n:"Tout ou Rien",t:true, d:"Un pari choisi : gain ×3, perte ×2."},
 };
 const COMMON=["assurance","double"];
@@ -136,6 +138,7 @@ let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0
 let AUTH=null, myLeagues=[];
 let L=null, players=[], duels=[], bets=[];
 let poll=null, busy=false, resolving=false, endBets=null;
+let palmares=null, adminData=null, palmOpen="";
 
 /* ============ utils ============ */
 const $=id=>document.getElementById(id);
@@ -250,6 +253,7 @@ function viewLeagues(){
       <div style="height:12px"></div><label>Rejoindre avec un code</label>
       <input id="joinCode" maxlength="5" placeholder="Ex : 7XK2P" style="text-transform:uppercase">
       <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">Rejoindre →</button></div>
+    <div class="row" style="gap:8px"><button class="btn ghost" onclick="openPalmares()">🏆 Palmarès général</button>${AUTH&&AUTH.id===ADMIN_ID?`<button class="btn ghost" onclick="openAdmin()">🛠 Admin</button>`:''}</div>
     <h2>Mes ligues</h2>
     ${myLeagues.length? myLeagues.map(m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
         <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · J'+Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days)+'/'+m.lg.num_days:''}</div></div>
@@ -303,11 +307,10 @@ function viewGame(){
 }
 function prepSeen(){ return localStorage.getItem("pl_preps_"+S.leagueId)==="1"; }
 function ackPrep(){ localStorage.setItem("pl_preps_"+S.leagueId,"1"); render(); }
-function viewPrepSummary(){
+function prepSummaryBody(){
   const s=L.prep_summary||{}; const gv=s.gageVotes||[]; const maxV=Math.max(1,...gv.map(g=>g.count));
   const pName=pid=>{const p=(s.players||[]).find(x=>x.pid===pid)||{};return (p.emoji?p.emoji+' ':'')+esc(p.name||'?');};
-  return `<div class="box"><h2 style="margin-top:0">🎬 C'est parti !</h2><div class="mini muted">Résultat du vote et des enchères, avant le coup d'envoi.</div></div>
-   <h2>🎭 Gage retenu</h2>
+  return `<h2>🎭 Gage retenu</h2>
    <div class="box"><div class="row"><b class="gold">${esc(s.gage||L.gage)}</b><span class="chip gold">à faire par le dernier</span></div>
      <div style="margin-top:10px">${gv.map(g=>`<div style="margin:7px 0"><div class="row mini"><span class="${g.win?'gold':''}">${g.win?'✓ ':''}${esc(g.t)}</span><span class="muted">${g.count} vote${g.count>1?'s':''}</span></div>
         <div class="gauge" style="margin-top:4px"><i style="width:${Math.round(g.count/maxV*100)}%;${g.win?'background:var(--gold)':''}"></i></div></div>`).join("")}</div></div>
@@ -321,8 +324,17 @@ function viewPrepSummary(){
    <div class="box" style="padding:4px 10px"><table><tr><th>Joueur</th><th style="text-align:right">Dépensé</th><th style="text-align:right">Capital</th><th>Bonus</th></tr>
      ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">(toi)</span>':''}${p.is_ai?' <span class="tag">IA</span>':''}</td>
         <td class="num muted">${p.spent}€</td><td class="num"><b>${Math.round(p.capital)}€</b></td>
-        <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span title="${esc(CARDS[id].n+' — '+CARDS[id].d)}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>
+        <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span title="${esc(CARDS[id].n+' — '+CARDS[id].d)}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>`;
+}
+function viewPrepSummary(){
+  return `<div class="box"><h2 style="margin-top:0">🎬 C'est parti !</h2><div class="mini muted">Voici le vote du gage et les enchères de bonus — jette un œil avant ton premier pari.</div></div>
+   ${prepSummaryBody()}
    <button class="btn" onclick="ackPrep()">C'est parti ! →</button>`;
+}
+function viewCoulisses(){
+  return `<button class="btn ghost sm" onclick="S.view='game';render()">← Retour au jeu</button>
+   <div class="box"><h2 style="margin-top:0">🎪 Les Coulisses de l'ouverture</h2><div class="mini muted">Comment tout a commencé : le vote du gage et la grande vente aux enchères des bonus.</div></div>
+   ${L.prep_summary?prepSummaryBody():`<div class="box mini muted">La ligue n'a pas encore démarré : le tirage arrive bientôt !</div>`}`;
 }
 function viewLobby(){
   const humans=players.filter(p=>!p.is_ai); const n=humans.length; const org=me()&&me().is_organizer;
@@ -393,7 +405,7 @@ function viewPrep(){
    <div class="box"><div class="mini muted">Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>${SHOP_CAP} €</b>, jusqu'à <b>${maxCards}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ.</div>
      <div class="row mini" style="margin-top:8px"><span class="muted">Misé <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} bonus</span></div>
      <div class="gauge ${over?'over':''}" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
-   ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><b>${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div><div class="mini muted">valeur indicative : ~${CARD_PRICE[id]||8} €</div></div></div>
+   ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><b>${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
    <button class="btn" id="prepValidate" ${(over||tooMany)?'disabled':''} onclick="savePrep()">${over?('Dépasse '+SHOP_CAP+' €'):(tooMany?('Trop de bonus (max '+maxCards+')'):'Valider ma préparation →')}</button>`;
 }
@@ -585,7 +597,7 @@ function runEngine(pdIn, capStart, dz, N){
   // Phase 4 : Sniper, Roi de la cote
   for(const pid in PD){ const pd=PD[pid]; const g=G[pid];
     if(pd.card&&pd.card.id==="sniper"&&pd.card.target!=null){ let bi=-1,bv=-1e9; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); if(bi===pd.card.target&&g.perBet[bi].gain>0) g.bonus+=capStart[pid]*0.10; }
-    if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>4.0)) g.bonus+=capStart[pid]*0.05; } }
+    if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>=2.0)) g.bonus+=capStart[pid]*0.05; } }
   // Phase 5 : Gourmand, Serge Benamou
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
   { let mp=null,mv=-1e9; for(const pid in G){ const v=G[pid].net+G[pid].bonus; if(v>mv){mv=v;mp=pid;} }
@@ -619,14 +631,17 @@ async function resolveDay(){
       impacts[pid]={self:Math.round((dayNet[pid]||0)-(wo[pid]||0)), opp: opp!=null?Math.round((dayNet[opp]||0)-(wo[opp]||0)):0}; } }
     for(const d of dz){ await q(db.from("duels").update({fixtures:d.fixtures,resolved:true}).eq("id",d.id)); }
     if(aiInserts.length) await q(db.from("bets").upsert(aiInserts,{onConflict:"player_id,day"}));
-    for(const pid in dayNet){ const c=PD[pid].card; const u2={net:dayNet[pid]};
-      if(c&&c.id){ u2.card={id:c.id,target:c.target,impact:impacts[pid]}; }
-      await q(db.from("bets").update(u2).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }
-    // "Chérie c'est cadeau" : inverse le pari ciblé de la victime et le persiste (choix initial → final)
+    // "Chérie c'est cadeau" : détermine l'inversion du pari ciblé de la victime
+    const cadeauFlips={};
     for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"){ const vId=pd.oppId; const opp=PD[vId];
       if(opp&&opp.picks.length){ const i=Math.floor((pd.rnd||0)*opp.picks.length); const from=opp.picks[i].sel; let to=from; if(from==="1")to="2"; else if(from==="2")to="1";
-        if(to!==from){ const picks=opp.picks.map(x=>({...x})); picks[i]={...picks[i],sel:to,orig:from,flipBy:pid};
-          await q(db.from("bets").update({picks}).eq("league_id",L.id).eq("day",D).eq("player_id",vId)); } } } }
+        if(to!==from) cadeauFlips[pid]={victim:vId, match:i, from, to}; } } }
+    for(const pid in dayNet){ const c=PD[pid].card; const u2={net:dayNet[pid]};
+      if(c&&c.id){ u2.card={id:c.id,target:c.target,impact:impacts[pid]}; if(cadeauFlips[pid]) u2.card.flip=cadeauFlips[pid]; }
+      await q(db.from("bets").update(u2).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }
+    // persiste l'inversion sur le pari de la victime (choix initial → final visibles dans le détail)
+    for(const pid in cadeauFlips){ const fl=cadeauFlips[pid]; const picks=PD[fl.victim].picks.map(x=>({...x})); picks[fl.match]={...picks[fl.match],sel:fl.to,orig:fl.from,flipBy:pid};
+      await q(db.from("bets").update({picks}).eq("league_id",L.id).eq("day",D).eq("player_id",fl.victim)); }
     const upd={}; ps.forEach(p=>{ upd[p.id]={points:p.points,capital:Math.max(0,capStart[p.id]+(dayNet[p.id]||0)),
       streak_w:p.streak_w,streak_l:p.streak_l,duel_wins:p.duel_wins,best_day:Math.max(p.best_day,dayNet[p.id]||0),
       best_odd:Math.max(p.best_odd,dayBest[p.id]||0),hand:(p.hand||[]).slice(),cards_used:(p.cards_used||[]).slice()}; });
@@ -676,11 +691,28 @@ function viewRecap(D){
     const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;t+=` · 🚀 Double Mise ×2 → ${fmt(g)}€`;} else if(c.id==="tout"){g*=(win?3:2);t+=` · 🔥 Tout ou Rien ${win?'×3':'×2'} → ${fmt(g)}€`;} else if(c.id==="assurance"&&!win){g=0;t+=` · 🛡 Assurance : mise remboursée → 0€`;} }
     t+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; return t; };
   const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Pari du Capitaine : gain et perte doublés">👑 Capitaine (${esc(who)})</span> `; if(bt&&bt.card&&bt.card.target===i) s+=`<span class="chip b" title="${esc(CARDS[bt.card.id].d)}">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
-  const impactTxt=(who,bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card; const im=c.impact||{}; const bits=[];
+  const fxRecap = (myD && myD.fixtures) || [];
+  const impactTxt=(who,bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card; const C=CARDS[c.id]; const im=c.impact||{}; let detail='';
+    if(c.id==="cadeau"){
+      if(c.flip && fxRecap[c.flip.match]){ const f=fxRecap[c.flip.match]; const won=(c.flip.to===f.res);
+        detail=`Pari adverse sur <b>${esc(f.home)}–${esc(f.away)}</b> inversé : <s class="red">${esc(selLabel(f,c.flip.from))}</s> → <b>${esc(selLabel(f,c.flip.to))}</b> — ${won?'devenu <span class="green">gagnant</span>':'reste <span class="red">perdant</span>'}.`; }
+      else detail=`Un pari adverse (tiré au hasard) a été inversé.`;
+    } else if(c.target!=null && fxRecap[c.target] && bt.picks){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const win=b.sel===f.res; const nm=`<b>${esc(f.home)}–${esc(f.away)}</b>`;
+      // garde-fou : sur d'anciennes parties l'inversion « cadeau » n'était pas enregistrée sur le pari visible → on n'affiche pas une mécanique contradictoire
+      const inconsistent = (c.id==="tout"||c.id==="double") && ((win && (im.self||0)<0) || (!win && (im.self||0)>0));
+      if(!inconsistent){
+        if(c.id==="tout") detail=`Sur ${nm} (${esc(selLabel(f,b.sel))}, ${b.stake}€) : ${win?'pari <span class="green">gagné</span> → gain <b>×3</b>':'pari <span class="red">perdu</span> → perte <b>×2</b>'}.`;
+        else if(c.id==="double") detail=`Sur ${nm} : ${win?'pari <span class="green">gagné</span> → gain <b>×2</b>':'perdu → aucun effet'}.`;
+        else if(c.id==="assurance") detail=`Sur ${nm} : ${win?'gagné → aucun effet':'perdu → <b>mise remboursée</b>'}.`;
+        else if(c.id==="sniper") detail=`Cible ${nm} : ${win?'gagné':'perdu'}.`;
+      }
+    }
+    const bits=[];
     if(im.self!=null&&Math.abs(im.self)>=1) bits.push(`gain de ${esc(who)} : <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`);
-    if(im.opp!=null&&Math.abs(im.opp)>=1) bits.push(`adversaire : <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
-    return `<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>🃏 ${esc(who)} a joué ${CARDS[c.id].e} ${esc(CARDS[c.id].n)}</b>${c.target!=null?` <span class="muted">(match ${c.target+1})</span>`:''}</div>
-      <div class="mini muted" style="margin-top:3px">${esc(CARDS[c.id].d)}</div>${bits.length?`<div class="mini" style="margin-top:3px">Impact — ${bits.join(' · ')}</div>`:''}</div>`; };
+    if(im.opp!=null&&Math.abs(im.opp)>=1) bits.push(`gain adverse : <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
+    return `<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>🃏 ${esc(who)} a joué ${C.e} ${esc(C.n)}</b></div>
+      <div class="mini muted" style="margin-top:3px">${esc(C.d)}</div>${detail?`<div class="mini" style="margin-top:4px">${detail}</div>`:''}
+      ${bits.length?`<div class="mini" style="margin-top:4px"><span class="muted">Effet de la carte (vs sans la carte)</span> — ${bits.join(' · ')}</div>`:''}</div>`; };
   let detail="";
   if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const open=recapOpen===i; const bd=badge(meB,'toi',i)+(oppId!=null?badge(oppB,oppName,i):'');
     return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="toggleRecapMatch(${i})">
@@ -769,17 +801,103 @@ function viewEnd(){
    <button class="btn ghost" onclick="backToLeagues()">← Mes ligues</button>`;
 }
 
+/* ============ COULISSES / PALMARÈS / ADMIN ============ */
+function openCoulisses(){ if(S.view==="coulisses")return; S.prevView=S.view; S.view="coulisses"; render(); }
+async function openPalmares(){ S.view="palmares"; palmares=null; palmOpen=""; render(); await loadPalmares(); render(); }
+async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; render(); await loadAdmin(); render(); }
+function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
+async function loadPalmares(){
+  try{
+    const lgs=await q(db.from("leagues").select("id,name,num_participants,status"));
+    const pls=await q(db.from("players").select("id,name,emoji,league_id"));
+    const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").not("net","is",null));
+    const dls=await q(db.from("duels").select("id,fixtures"));
+    const lgMap={},plMap={},dlMap={}; lgs.forEach(l=>lgMap[l.id]=l); pls.forEach(p=>plMap[p.id]=p); dls.forEach(d=>dlMap[d.id]=d);
+    const oddF=(f,s)=> s==="1"?f.oh:s==="2"?f.oa:f.od; const selNm=(f,s)=> s==="1"?f.home:s==="2"?f.away:"Nul";
+    const dayRecs=[], oddRecs=[];
+    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||pl.name==="Joueur IA") continue; const lg=lgMap[b.league_id]||{}; const d=dlMap[b.duel_id]; const fx=(d&&d.fixtures)||[];
+      const picks=b.picks||[]; const staked=picks.reduce((a,x)=>a+(+x.stake||0),0);
+      const lines=picks.map((x,i)=>{ const f=fx[i]; if(!f) return null; const win=x.sel===f.res; const odd=oddF(f,x.sel); let g=win?(+x.stake)*(odd-1):-(+x.stake); if(i===b.captain)g*=2;
+        if(win && +x.stake>0) oddRecs.push({odd, name:pl.name, emoji:pl.emoji, lname:lg.name, day:b.day, match:f.home+"–"+f.away, sel:selNm(f,x.sel), stake:+x.stake});
+        return {m:f.home+"–"+f.away, sel:selNm(f,x.sel), win, odd, stake:+x.stake, g:+g.toFixed(2), cap:i===b.captain}; }).filter(Boolean);
+      dayRecs.push({net:+(b.net||0).toFixed(2), staked, ret: staked>0?(b.net||0)/staked:0, name:pl.name, emoji:pl.emoji, lname:lg.name, np:lg.num_participants, day:b.day, cardId:b.card&&b.card.id, lines});
+    }
+    palmares={
+      bigGain: [...dayRecs].sort((a,b)=>b.net-a.net).slice(0,5),
+      bestRet: [...dayRecs].filter(r=>r.staked>=5).sort((a,b)=>b.ret-a.ret).slice(0,5),
+      bestOdd: [...oddRecs].sort((a,b)=>b.odd-a.odd).slice(0,5),
+      bigLoss: [...dayRecs].sort((a,b)=>a.net-b.net).slice(0,5),
+      counts:{leagues:lgs.length, players:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length}
+    };
+  }catch(e){ palmares={error:e.message}; }
+}
+function viewPalmares(){
+  const back=`<button class="btn ghost sm" onclick="S.view='leagues';render()">← Mes ligues</button>`;
+  if(!palmares) return back+`<div class="box">Chargement du palmarès…</div>`;
+  if(palmares.error) return back+`<div class="err">${esc(palmares.error)}</div>`;
+  const medal=i=>["🥇","🥈","🥉","4ᵉ","5ᵉ"][i]||(i+1);
+  const dayDetail=r=>`<div class="mini muted">${esc(r.lname||'?')} · J${r.day+1} · ${r.np||'?'} joueurs · misé ${Math.round(r.staked)}€${r.cardId&&CARDS[r.cardId]?' · '+CARDS[r.cardId].e+' '+esc(CARDS[r.cardId].n):''}</div>
+     ${r.lines.map(l=>`<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(l.sel)}${l.cap?' 👑':''} ${l.stake}€ @${l.odd} → <b class="${l.g>=0?'green':'red'}">${fmt(l.g)}€</b> ${l.win?'✓':'✗'}</div>`).join("")}`;
+  const oddDetail=r=>`<div class="mini muted">${esc(r.lname||'?')} · J${r.day+1}</div><div class="mini" style="margin-top:3px">${esc(r.match)} — <b>${esc(r.sel)}</b> · ${r.stake}€ @${r.odd} ✓ → <b class="green">+${Math.round(r.stake*(r.odd-1))}€</b></div>`;
+  const sec=(title,arr,val,detail,tag,empty)=>`<h2>${title}</h2>${arr.length?arr.map((r,i)=>{const k=tag+i;const op=palmOpen===k;const v=val(r);
+     return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="togglePalm('${k}')">
+       <div class="row"><div class="row" style="gap:8px"><b style="min-width:22px">${medal(i)}</b><span>${r.emoji||''} ${esc(r.name)}</span></div><b class="${v.cls}">${v.txt} ${op?'▲':'▼'}</b></div>
+       ${op?`<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">${detail(r)}</div>`:''}</div>`;}).join(""):`<div class="box mini muted">${empty||'Pas encore de données.'}</div>`}`;
+  return `${back}
+    <div class="box"><h2 style="margin-top:0">🏆 Palmarès général</h2><div class="mini muted">Les plus grosses perfs sur <b>toutes</b> les ligues (${palmares.counts.leagues} ligues · ${palmares.counts.players} joueurs). Astuce : une grosse ligue gonfle les gains en €, donc le <b>rendement</b> et la <b>plus grosse cote</b> — indépendants du nombre de joueurs — sont les mesures les plus justes.</div></div>
+    ${sec("💥 Plus gros gain sur une journée", palmares.bigGain, r=>({txt:fmt(r.net)+"€",cls:r.net>=0?'green':'red'}), dayDetail, "g")}
+    ${sec("📈 Meilleur rendement d'une journée", palmares.bestRet, r=>({txt:"×"+(1+r.ret).toFixed(2),cls:'green'}), dayDetail, "r", "Il faut avoir misé ≥ 5€.")}
+    ${sec("🎯 Plus grosse cote gagnée", palmares.bestOdd, r=>({txt:"@"+r.odd,cls:'gold'}), oddDetail, "o")}
+    ${sec("💀 Pire dégringolade d'une journée", palmares.bigLoss, r=>({txt:fmt(r.net)+"€",cls:'red'}), dayDetail, "l")}`;
+}
+async function loadAdmin(){
+  try{
+    const lgs=await q(db.from("leagues").select("id,status"));
+    const pls=await q(db.from("players").select("id,name,is_ai"));
+    const bts=await q(db.from("bets").select("card,net").not("net","is",null));
+    let users=null; try{ users=await q(db.rpc("app_user_count")); }catch(e){ users=null; }
+    const cardCount={}; let withCard=0;
+    bts.forEach(b=>{ if(b.card&&b.card.id){ cardCount[b.card.id]=(cardCount[b.card.id]||0)+1; withCard++; } });
+    adminData={ users, leagues:lgs.length,
+      byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
+      humans:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length, distinct:new Set(pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").map(p=>p.name.toLowerCase())).size,
+      resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.entries(cardCount).sort((a,b)=>b[1]-a[1]) };
+  }catch(e){ adminData={error:e.message}; }
+}
+function viewAdmin(){
+  const back=`<button class="btn ghost sm" onclick="S.view='leagues';render()">← Mes ligues</button>`;
+  if(!(AUTH&&AUTH.id===ADMIN_ID)) return back+`<div class="box">Accès réservé à l'administrateur.</div>`;
+  if(!adminData) return back+`<div class="box">Chargement des stats…</div>`;
+  if(adminData.error) return back+`<div class="err">${esc(adminData.error)}</div>`;
+  const a=adminData; const st=(k,v)=>`<div class="box row"><span class="muted">${k}</span><b>${v}</b></div>`;
+  return `${back}
+    <div class="box"><h2 style="margin-top:0">🛠 Tableau de bord admin</h2><div class="mini muted">Statistiques globales du jeu.</div></div>
+    ${st("👤 Comptes créés", a.users!=null?a.users:("≈ "+a.distinct+" (joueurs uniques)"))}
+    ${st("🏆 Ligues créées", a.leagues)}
+    <div class="box"><div class="mini muted" style="margin-bottom:8px">Ligues par statut</div>
+      <div class="row mini"><span>🕓 Salon <b>${a.byStatus.lobby}</b></span><span>🎬 Prépa <b>${a.byStatus.prep}</b></span><span>▶️ En cours <b>${a.byStatus.running}</b></span><span>🏁 Fini <b>${a.byStatus.done}</b></span></div></div>
+    ${st("🎮 Joueurs humains (toutes ligues)", a.humans)}
+    ${st("🧮 Journées résolues (paris)", a.resolvedBets)}
+    ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
+    <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués</div>
+      ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b>${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>`;
+}
+
 /* ============ render / poll ============ */
 function render(){
   const inLeague=!!S.leagueId;
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
+  $("coulissesBtn").classList.toggle("hide", !(inLeague && L && L.prep_summary && S.view==="game"));
   let html="";
   if(S.view==="auth") html=viewAuth();
   else if(S.view==="leagues") html=viewLeagues();
   else if(S.view==="rules") html=viewRules();
   else if(S.view==="standings") html=viewStandings();
+  else if(S.view==="coulisses") html=viewCoulisses();
+  else if(S.view==="palmares") html=viewPalmares();
+  else if(S.view==="admin") html=viewAdmin();
   else html=viewGame();
   $("root").innerHTML=html;
   $("subtitle").textContent = S.view==="auth"?"Connexion" : S.view==="leagues"?"Mes ligues" : (L? (L.status==="lobby"?"Salon · "+L.code : ((L.status==="prep"||L.status==="starting")?"Préparation":(L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days))) : "…");
@@ -798,7 +916,7 @@ function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S
 function openRules(){ if(S.view==="rules")return; S.prevView=S.view; S.view="rules"; render(); }
 function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
 function viewRules(){
-  const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><b class="mini">${esc(CARDS[id].n)}</b> <span class="mini muted">· ${CARD_PRICE[id]} €</span><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>`;
+  const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><b class="mini">${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>`;
   return `<button class="btn ghost sm" onclick="closeRules()">← Retour</button>
    <div class="box"><h2 style="margin-top:0">📖 Règles du jeu</h2>
      <p class="mini"><b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>. Le dernier joueur humain fait le gage voté au départ.</p></div>
