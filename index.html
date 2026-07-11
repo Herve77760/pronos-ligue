@@ -79,7 +79,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v1.4</div>
+  <div class="foot">Prototype de test · données sportives simulées · v1.5</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -281,10 +281,9 @@ async function joinLeague(code){
 function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
   if(L.status==="lobby") return viewLobby();
-  if(L.status==="gage_vote") return viewGageVote();
+  if(L.status==="prep") return viewPrep();
   if(S.recap) return viewRecap(S.dispDay);
   if(L.status==="done") return viewEnd();
-  if(me() && !me().shop_done) return viewShop();
   return viewDay();
 }
 function viewLobby(){
@@ -312,85 +311,95 @@ async function closeRegistration(){
     const n=ps.length; const sched=makeSchedule(n); const rows=[];
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
-    // pas de distribution gratuite : les cartes s'achètent à la boutique (après le vote du gage)
-    // propositions de gages (l'IA propose, les joueurs votent)
     const pool=[...GAGES]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
     const options=pool.slice(0,Math.min(4,pool.length));
-    await q(db.from("leagues").update({status:"gage_vote",num_days:sched.length,current_day:0,gage:JSON.stringify({options,votes:{}})}).eq("id",L.id));
+    // l'IA fait sa prépa (vote + enchères) tout de suite
+    const votes={},bids={},bidTs={};
+    for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length); votes[p.id]=ap.vote; bids[p.id]=ap.bids; bidTs[p.id]=Date.now(); await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
+    const deadline=new Date(Date.now()+24*3600*1000).toISOString();
+    await q(db.from("leagues").update({status:"prep",num_days:sched.length,current_day:0,gage:JSON.stringify({options,votes,bids,bidTs,deadline})}).eq("id",L.id));
     setSeen(0); await refresh();
   }catch(e){ showErr("Clôture : "+e.message); } busy=false;
 }
+function aiPrep(nDays){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
+  const maxCards=Math.max(1,nDays); const nb=1+Math.floor(Math.random()*Math.min(maxCards,4)); const budget=Math.round(rnd(15,SHOP_CAP)); const bids={}; let spent=0;
+  for(let k=0;k<nb && k<ids.length;k++){ const id=ids[k]; const base=CARD_PRICE[id]||8; const bid=Math.min(base+Math.round(rnd(-2,6)), budget-spent); if(bid>=1){ bids[id]=bid; spent+=bid; } }
+  return {vote:Math.floor(Math.random()*4), bids}; }
 
-/* ============ VOTE DU GAGE ============ */
-function gageState(){ try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.options)) return o; }catch(e){} return {options:[],votes:{}}; }
-function viewGageVote(){
-  const st=gageState(); const options=st.options, votes=st.votes||{};
-  const humans=players.filter(p=>!p.is_ai); const myVote=votes[S.myId];
+/* ============ PRÉPARATION (vote + enchères bonus) ============ */
+let bidL={};
+function prepState(){ try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.options)) return {options:o.options,votes:o.votes||{},deadline:o.deadline,bids:o.bids||{},bidTs:o.bidTs||{}}; }catch(e){} return {options:[],votes:{},bids:{},bidTs:{}}; }
+function fmtLeft(dl){ if(!dl) return ""; const ms=new Date(dl).getTime()-Date.now(); if(ms<=0) return "délai écoulé"; const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000); return h>0?(h+"h "+m+"min"):(m+"min"); }
+function startBtnHTML(){ const st=prepState(); const dlPassed=st.deadline&&(new Date(st.deadline).getTime()<=Date.now());
+  const org=me()&&me().is_organizer; const validated=players.filter(p=>p.shop_done).length;
+  if(org&&validated>=2) return `<button class="btn" onclick="resolvePrep()">🚀 Démarrer le championnat maintenant</button><div class="mini muted" style="text-align:center;margin-top:6px">Tu peux lancer dès que 2 joueurs sont prêts (${validated} prêts).</div>`;
+  if(dlPassed) return `<button class="btn" onclick="resolvePrep()">🚀 Démarrer (délai écoulé)</button>`;
+  return `<div class="box mini muted" style="text-align:center">Démarrage par l'organisateur dès que 2 joueurs sont prêts (ou à la fin du délai). ${validated}/${players.length} prêts.</div>`;
+}
+function viewPrep(){
+  const st=prepState(); const options=st.options, votes=st.votes; const myVote=votes[S.myId];
   const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length);
-  const voted=humans.filter(p=>votes[p.id]!=null).length; const allVoted=voted>=humans.length && humans.length>0;
-  const org=me()&&me().is_organizer;
-  return `<div class="box"><h2 style="margin-top:0">🎭 Vote du gage</h2>
-    <div class="mini muted">Le <b>dernier joueur humain</b> du classement final réalisera le gage le plus voté. Choisis le tien 👇 · ${voted}/${humans.length} ont voté</div></div>
-    ${options.map((g,i)=>`<div class="box" onclick="voteGage(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
-      <div class="row"><b>${esc(g.t||g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ':''}${counts[i]} vote${counts[i]>1?'s':''}</span></div>
-      ${g.d?`<div class="mini muted" style="margin-top:5px">${esc(g.d)}</div>`:''}
-      <div class="gauge" style="margin-top:8px"><i style="width:${humans.length?Math.round(counts[i]/humans.length*100):0}%"></i></div></div>`).join("")}
-    ${org? `<button class="btn" ${allVoted?'':'disabled'} onclick="launchChampionship()">${allVoted?'Valider le gage & ouvrir la boutique →':'En attente des votes ('+voted+'/'+humans.length+')'}</button>
-        <div class="mini muted" style="text-align:center;margin-top:8px">Tu démarres dès que tout le monde a voté.</div>`
-      : (myVote!=null?`<div class="box mini muted" style="text-align:center">Ton vote est enregistré ✓. En attente des autres / de l'organisateur.</div>`
-                    :`<div class="box mini muted" style="text-align:center">Sélectionne un gage ci-dessus.</div>`)}`;
+  const meP=me(); const done=meP&&meP.shop_done; const maxCards=Math.max(1,L.num_days||1);
+  if(!done && S.bidLLeague!==L.id){ bidL=Object.assign({}, (st.bids[S.myId]||{})); S.bidLLeague=L.id; }
+  if(done){ const validated=players.filter(p=>p.shop_done).length;
+    return `<div class="box"><h2 style="margin-top:0">✅ Préparation validée</h2>
+      <div class="mini muted">Ton vote et tes enchères sont enregistrés. ⏳ ${fmtLeft(st.deadline)} · ${validated}/${players.length} prêts.</div></div>
+      <button class="btn ghost" onclick="editPrep()">✏️ Modifier ma préparation</button>
+      <div style="height:8px"></div>${startBtnHTML()}`; }
+  const ids=Object.keys(CARDS);
+  const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
+  const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
+  return `<div class="box"><h2 style="margin-top:0">🎬 Préparation</h2>
+     <div class="mini muted">Vote pour le gage <b>et</b> mise sur les bonus — sans attendre les autres. ⏳ ${fmtLeft(st.deadline)}</div></div>
+   <h2>🎭 Vote du gage</h2>
+   ${options.map((g,i)=>`<div class="box" onclick="prepVote(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
+      <div class="row"><b>${esc(g.t||g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ton vote':(counts[i]+' vote'+(counts[i]>1?'s':''))}</span></div>
+      ${g.d?`<div class="mini muted" style="margin-top:5px">${esc(g.d)}</div>`:''}</div>`).join("")}
+   <h2>🃏 Enchères bonus</h2>
+   <div class="box"><div class="mini muted">Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>${SHOP_CAP} €</b>, jusqu'à <b>${maxCards}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ.</div>
+     <div class="row mini" style="margin-top:8px"><span class="muted">Misé <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} bonus</span></div>
+     <div class="gauge ${over?'over':''}" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
+   ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><b>${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div><div class="mini muted">valeur indicative : ~${CARD_PRICE[id]||8} €</div></div></div>
+      <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
+   <button class="btn" id="prepValidate" ${(over||tooMany)?'disabled':''} onclick="savePrep()">${over?('Dépasse '+SHOP_CAP+' €'):(tooMany?('Trop de bonus (max '+maxCards+')'):'Valider ma préparation →')}</button>
+   <div style="height:8px"></div>${startBtnHTML()}`;
 }
-async function voteGage(i){
-  if(busy)return; busy=true;
-  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single());
-    let st; try{ st=JSON.parse(fresh.gage); }catch(e){ st=null; } if(!st||!Array.isArray(st.options)){ busy=false; return; }
-    st.votes=st.votes||{}; st.votes[S.myId]=i;
-    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
-  }catch(e){ showErr("Vote : "+e.message); } busy=false;
-}
-async function launchChampionship(){
-  if(busy)return; busy=true;
-  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single());
-    let st; try{ st=JSON.parse(fresh.gage); }catch(e){ st=null; }
-    const options=(st&&st.options)||GAGES.slice(0,4); const votes=(st&&st.votes)||{};
-    const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length);
-    const maxc=Math.max(0,...counts); const tied=counts.map((c,i)=>c===maxc?i:-1).filter(i=>i>=0);
-    const best=tied.length?tied[Math.floor(Math.random()*tied.length)]:0; // égalité → tirage au hasard
-    const win=options[best]||pick(GAGES); const gage=(win&&win.t)||win;
-    // l'IA fait ses achats automatiquement
-    const ps=await q(db.from("players").select("id,is_ai").eq("league_id",L.id));
-    for(const p of ps){ if(p.is_ai){ const s=aiShop(); await q(db.from("players").update({hand:s.hand,capital:s.capital,shop_done:true}).eq("id",p.id)); } }
-    await q(db.from("leagues").update({status:"running",gage}).eq("id",L.id)); await refresh();
-  }catch(e){ showErr("Démarrage : "+e.message); } busy=false;
-}
-
-/* ============ BOUTIQUE BONUS ============ */
-let shopSel=[];
-function viewShop(){
-  const ids=Object.keys(CARDS); const spent=shopSel.reduce((a,id)=>a+(CARD_PRICE[id]||0),0);
-  const remaining=100-spent; const over=spent>SHOP_CAP;
-  const maxCards=Math.max(1, L.num_days||1); const full=shopSel.length>=maxCards;
-  return `<div class="box"><h2 style="margin-top:0">🛒 Boutique bonus</h2>
-    <div class="mini muted">Compose ta main sur ton enveloppe de <b>100 €</b>. Chaque € dépensé est un € en moins pour parier. Limite : <b>${SHOP_CAP} €</b> et <b>${maxCards} carte${maxCards>1?'s':''} max</b> (1 par journée, ${L.num_days} journées).</div>
-    <div class="row mini" style="margin-top:10px"><span class="muted">Dépensé <b id="sp" class="${over?'red':''}">${spent}</b> € · ${shopSel.length}/${maxCards} carte${maxCards>1?'s':''}</span><span class="muted">Capital de départ : <b class="green">${remaining} €</b></span></div>
-    <div class="gauge ${over?'over':''}" style="margin-top:6px"><i style="width:${Math.min(100,spent/SHOP_CAP*100)}%"></i></div></div>
-    ${ids.map(id=>{const on=shopSel.includes(id); const price=CARD_PRICE[id]||8; const dis=!on&&(full||spent+price>SHOP_CAP);
-      return `<div class="box row" onclick="toggleShop('${id}')" style="cursor:pointer;opacity:${dis?'.45':'1'};${on?'border-color:var(--green)':''}">
-        <div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><b>${esc(CARDS[id].n)}</b><div class="mini muted">${esc(CARDS[id].d)}</div></div></div>
-        <div style="text-align:right;flex:0 0 auto"><b>${price} €</b><div style="margin-top:4px"><span class="chip ${on?'g':''}">${on?'✓ en main':'+ ajouter'}</span></div></div></div>`;}).join("")}
-    <button class="btn" ${over?'disabled':''} onclick="confirmShop()">${over?'Dépasse le plafond de '+SHOP_CAP+' €':('Valider ('+shopSel.length+' carte'+(shopSel.length>1?'s':'')+' · capital '+remaining+' €) →')}</button>`;
-}
-function toggleShop(id){ const k=shopSel.indexOf(id);
-  if(k>=0){ shopSel.splice(k,1); showErr(""); render(); return; }
-  const maxCards=Math.max(1,L.num_days||1); const price=CARD_PRICE[id]||8; const spent=shopSel.reduce((a,x)=>a+(CARD_PRICE[x]||0),0);
-  if(shopSel.length>=maxCards){ showErr("Maximum "+maxCards+" carte(s) — 1 par journée."); return; }
-  if(spent+price>SHOP_CAP){ showErr("Plafond de "+SHOP_CAP+" € dépassé."); return; }
-  shopSel.push(id); showErr(""); render(); }
-async function confirmShop(){
-  if(busy)return; const spent=shopSel.reduce((a,id)=>a+(CARD_PRICE[id]||0),0); if(spent>SHOP_CAP)return; busy=true;
-  try{ await q(db.from("players").update({hand:shopSel.slice(),capital:100-spent,shop_done:true}).eq("id",S.myId)); shopSel=[]; await refresh(); }
-  catch(e){ showErr("Boutique : "+e.message); } busy=false;
-}
+function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else delete bidL[id];
+  const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1); const over=tot>SHOP_CAP,tooMany=cnt>maxCards;
+  const bt=$("bt"); if(bt){bt.textContent=Math.round(tot); bt.className=over?'red':'';}
+  const bc=$("bc"); if(bc){bc.textContent=cnt; bc.className=tooMany?'red':'';}
+  const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,tot/SHOP_CAP*100)+"%"; g.classList.toggle("over",over);}
+  const btn=$("prepValidate"); if(btn){ btn.disabled=over||tooMany; btn.textContent=over?('Dépasse '+SHOP_CAP+' €'):(tooMany?('Trop de bonus (max '+maxCards+')'):'Valider ma préparation →'); } }
+async function prepVote(i){ if(busy)return; busy=true;
+  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
+    st.votes=st.votes||{}; st.votes[S.myId]=i; await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
+  }catch(e){ showErr("Vote : "+e.message); } busy=false; }
+async function savePrep(){ if(busy)return; const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1);
+  if(tot>SHOP_CAP||cnt>maxCards) return; busy=true;
+  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
+    st.bids=st.bids||{}; st.bidTs=st.bidTs||{}; st.bids[S.myId]=Object.assign({},bidL); if(st.bidTs[S.myId]==null) st.bidTs[S.myId]=Date.now();
+    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id));
+    await q(db.from("players").update({shop_done:true}).eq("id",S.myId)); S.bidLLeague=null; await refresh();
+  }catch(e){ showErr("Préparation : "+e.message); } busy=false; }
+async function editPrep(){ if(busy)return; busy=true;
+  try{ await q(db.from("players").update({shop_done:false}).eq("id",S.myId)); S.bidLLeague=null; await refresh(); }catch(e){ showErr(e.message); } busy=false; }
+async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
+  try{ const fresh=await q(db.from("leagues").select("*").eq("id",L.id).single()); if(fresh.status!=="prep"){ resolving=false; await refresh(); return; }
+    let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} const options=(st&&st.options)||[]; const votes=(st&&st.votes)||{}; const bids=(st&&st.bids)||{}; const bidTs=(st&&st.bidTs)||{};
+    // gage gagnant (égalité → hasard)
+    let gage="";
+    if(options.length){ const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length); const mx=Math.max(0,...counts);
+      const tied=counts.map((c,i)=>c===mx?i:-1).filter(i=>i>=0); const bi=tied.length?tied[Math.floor(Math.random()*tied.length)]:0; const w=options[bi]; gage=(w&&w.t)||w||pick(GAGES).t; }
+    else gage=pick(GAGES).t;
+    // enchères : chaque bonus au plus offrant (égalité → premier à avoir misé)
+    const ps=await q(db.from("players").select("*").eq("league_id",L.id));
+    const paid={},won={}; ps.forEach(p=>{paid[p.id]=0;won[p.id]=[];});
+    for(const cardId in CARDS){ const cand=ps.map(p=>({pid:p.id,amt:(bids[p.id]&&+bids[p.id][cardId])||0,ts:(bidTs[p.id]!=null?bidTs[p.id]:Infinity)})).filter(c=>c.amt>0);
+      if(!cand.length) continue; cand.sort((a,b)=> (b.amt-a.amt) || (a.ts-b.ts)); const wpid=cand[0].pid; won[wpid].push(cardId); paid[wpid]+=cand[0].amt; }
+    for(const p of ps){ await q(db.from("players").update({hand:won[p.id],capital:Math.max(0,100-paid[p.id]),shop_done:true}).eq("id",p.id)); }
+    await q(db.from("leagues").update({status:"running",gage,current_day:0}).eq("id",L.id));
+    resolving=false; setSeen(0); await refresh(); toast("Championnat lancé ✓");
+  }catch(e){ showErr("Démarrage : "+e.message); resolving=false; } }
 
 /* ============ DAY ============ */
 function viewDay(){
@@ -690,13 +699,14 @@ function render(){
   else if(S.view==="standings") html=viewStandings();
   else html=viewGame();
   $("root").innerHTML=html;
-  $("subtitle").textContent = S.view==="auth"?"Connexion" : S.view==="leagues"?"Mes ligues" : (L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="gage_vote"?"Vote du gage":(L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days))) : "…");
+  $("subtitle").textContent = S.view==="auth"?"Connexion" : S.view==="leagues"?"Mes ligues" : (L? (L.status==="lobby"?"Salon · "+L.code : (L.status==="prep"?"Préparation":(L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days))) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
 function isComposing(){
-  if(S.view!=="game"||!L||L.status!=="running"||S.recap) return false;
-  if(me() && !me().shop_done) return true; // boutique en cours
+  if(S.view!=="game"||!L) return false;
+  if(L.status==="prep") return !!(me() && !me().shop_done); // prépa (vote/enchères) en cours
+  if(L.status!=="running"||S.recap) return false;
   const d=myDuel(); if(!d) return false;
   if(!d.fixtures) return d.home_id===S.myId; // à domicile : en train de choisir les 5 matchs
   return !myBet();                            // en train de faire ses pronos/mises
@@ -723,8 +733,8 @@ function viewRules(){
      <div class="mini muted" style="margin-top:6px">Chaque journée : le <b>vainqueur de son duel</b> gagne <b>3 points</b> (comme au foot), et le <b>meilleur pronostiqueur</b> ⭐ (plus gros gain parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>. Départage à égalité : capital, puis victoires en duel, plus gros gain, plus grosse cote.</div></div>
    <div class="box"><b>🔥 Séries</b>
      <div class="mini muted" style="margin-top:6px">3 victoires de duel d'affilée → +2 % de capital · 5 victoires → +1 carte aléatoire · 4 défaites → carte Assurance offerte.</div></div>
-   <div class="box"><b>🃏 Cartes bonus (boutique)</b>
-     <div class="mini muted" style="margin:6px 0">Au début, chacun <b>achète ses cartes</b> dans la boutique, sur son enveloppe de 100 € (plafond ${SHOP_CAP} €) — le reste devient ton <b>capital de départ</b>. 1 carte max par journée, chacune utilisable une seule fois.</div>
+   <div class="box"><b>🃏 Cartes bonus (enchères)</b>
+     <div class="mini muted" style="margin:6px 0">Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>${SHOP_CAP} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée.</div>
      ${Object.keys(CARDS).map(card).join("")}</div>
    <div class="box"><b>😴 Oubli</b><div class="mini muted" style="margin-top:6px">Pas de validation à temps → paris repris de l'adversaire, pronostics inversés.</div></div>`;
 }
