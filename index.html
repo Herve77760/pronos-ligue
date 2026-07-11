@@ -80,7 +80,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v1.7</div>
+  <div class="foot">Prototype de test · données sportives simulées · v1.7a</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -663,7 +663,7 @@ async function resolveDay(){
 }
 
 /* ============ RECAP ============ */
-function viewRecap(D){
+function recapBody(D){
   const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
   const ord=[...players].sort((a,b)=>(netMap[b.id]||0)-(netMap[a.id]||0));
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
@@ -725,7 +725,7 @@ function viewRecap(D){
        <div class="mini" style="margin-top:5px"><b>Toi</b> ${explain(meB,f,i)}</div>
        <div class="mini" style="margin-top:3px"><b>${esc(oppName)}</b> ${explain(oppB,f,i)}</div></div>`:''}
     </div>`; }).join(""); }
-  return `<div class="box" style="background:linear-gradient(135deg,${myNet>=0?'#12251a':'#251215'},#0e1117);border-color:${won?'#2b6b45':(tie?'#3a3f4a':'#6b2b2b')}">
+  return `${recapNav(D)}<div class="box" style="background:linear-gradient(135deg,${myNet>=0?'#12251a':'#251215'},#0e1117);border-color:${won?'#2b6b45':(tie?'#3a3f4a':'#6b2b2b')}">
       <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — TON GAIN</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
       <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +3 pts':(tie?'Égalité':'Perdu')}</b>`:''}</div></div></div>
     ${impactTxt("Toi",meB)}${oppId!=null?impactTxt(oppName,oppB):''}
@@ -734,10 +734,23 @@ function viewRecap(D){
     <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Pts jour</th><th>Carte</th></tr>
       ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${(netMap[p.id]||0)===maxN?' ⭐':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}</td>
         <td class="num ${(netMap[p.id]||0)>=0?'green':'red'}">${fmt(netMap[p.id]||0)}€</td><td class="num"><b>${dpts[p.id]}</b></td>
-        <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`).join("")}</table></div>
-    <button class="btn" onclick="ackRecap()">Continuer →</button>
-    <button class="btn ghost" style="margin-top:8px" onclick="S.view='standings';render()">Voir le classement général</button>`;
+        <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`).join("")}</table></div>`;
 }
+function recapNav(D){ const last=L.current_day-1;
+  return `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm" ${D>0?'':'disabled'} onclick="navDay(${D-1})">◀ Préc.</button>
+    <b class="mini" style="text-align:center;flex:1">Journée ${D+1} / ${L.num_days}</b>
+    <button class="btn ghost sm" ${D<last?'':'disabled'} onclick="navDay(${D+1})">Suiv. ▶</button></div>`; }
+function navDay(d){ const last=L.current_day-1; if(d<0||d>last) return; openResults(d); }
+async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1;
+  try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); render(); }
+  catch(e){ showErr("Résultats : "+e.message); } }
+function viewRecap(D){ return `${recapBody(D)}
+    <button class="btn" onclick="ackRecap()">Continuer →</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="S.view='standings';render()">Voir le classement général</button>`; }
+function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:L.current_day-1);
+  return `<button class="btn ghost sm" onclick="S.view='game';refresh()">← Retour au jeu</button>
+    ${recapBody(d)}
+    <button class="btn ghost" style="margin-top:8px" onclick="S.view='standings';render()">Voir le classement général</button>`; }
 let recapOpen=-1;
 function toggleRecapMatch(i){ recapOpen=recapOpen===i?-1:i; render(); }
 function ackRecap(){ recapOpen=-1; setSeen(L.current_day); refresh(); }
@@ -747,7 +760,7 @@ function cmp(a,b){ return b.points-a.points || b.capital-a.capital || b.duel_win
 function viewStandings(){
   const ord=[...players].sort(cmp); const humans=ord.filter(p=>!p.is_ai); const lastH=humans[humans.length-1];
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
-  return `<button class="btn ghost sm" onclick="S.view='game';render()">← Retour au jeu</button>
+  return `<div class="row" style="gap:8px"><button class="btn ghost sm" onclick="S.view='game';render()">← Retour au jeu</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">📊 Résultats par journée</button>`:''}</div>
     <h2>Classement · J${Math.min(L.current_day+ (L.status==='done'?0:1),L.num_days)}/${L.num_days}</h2>
     <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Pts</th><th style="text-align:right">Capital</th><th style="text-align:right">Série</th></tr>
       ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:'–');
@@ -798,6 +811,7 @@ function viewEnd(){
            ${(p.hand||[]).map(id=>`<div class="cardchip" title="Non utilisé — ${esc(CARDS[id].d)}"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
    <div class="box" style="border-color:#5a2b2b"><div class="row"><b class="red">🎭 Gage</b><span class="chip red">${last.emoji} ${esc(last.name)}</span></div>
      <div class="mini muted" style="margin-top:6px">${esc(last.name)} doit réaliser : <b>${esc(L.gage)}</b>.</div></div>
+   ${L.num_days>=1?`<button class="btn ghost" onclick="openResults(${L.num_days-1})">📊 Revoir les résultats journée par journée</button><div style="height:8px"></div>`:''}
    <button class="btn ghost" onclick="backToLeagues()">← Mes ligues</button>`;
 }
 
@@ -836,8 +850,11 @@ function viewPalmares(){
   if(!palmares) return back+`<div class="box">Chargement du palmarès…</div>`;
   if(palmares.error) return back+`<div class="err">${esc(palmares.error)}</div>`;
   const medal=i=>["🥇","🥈","🥉","4ᵉ","5ᵉ"][i]||(i+1);
-  const dayDetail=r=>`<div class="mini muted">${esc(r.lname||'?')} · J${r.day+1} · ${r.np||'?'} joueurs · misé ${Math.round(r.staked)}€${r.cardId&&CARDS[r.cardId]?' · '+CARDS[r.cardId].e+' '+esc(CARDS[r.cardId].n):''}</div>
-     ${r.lines.map(l=>`<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(l.sel)}${l.cap?' 👑':''} ${l.stake}€ @${l.odd} → <b class="${l.g>=0?'green':'red'}">${fmt(l.g)}€</b> ${l.win?'✓':'✗'}</div>`).join("")}`;
+  const dayDetail=r=>{ const sumL=r.lines.reduce((a,l)=>a+l.g,0); const adj=+(r.net-sumL).toFixed(2);
+    return `<div class="mini muted">${esc(r.lname||'?')} · J${r.day+1} · ${r.np||'?'} joueurs · misé ${Math.round(r.staked)}€${r.cardId&&CARDS[r.cardId]?' · carte '+CARDS[r.cardId].e+' '+esc(CARDS[r.cardId].n):''}</div>
+     ${r.lines.map(l=>`<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(l.sel)}${l.cap?' 👑':''} ${l.stake}€ @${l.odd} → <b class="${l.g>=0?'green':'red'}">${fmt(l.g)}€</b> ${l.win?'✓':'✗'}</div>`).join("")}
+     ${Math.abs(adj)>=1?`<div class="mini" style="margin-top:4px">🃏 Bonus &amp; ajustements ${r.cardId&&CARDS[r.cardId]?'('+CARDS[r.cardId].e+' '+esc(CARDS[r.cardId].n)+', séries…)':'(séries, bonus…)'} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`:''}
+     <div class="mini" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><b>Total journée : <span class="${r.net>=0?'green':'red'}">${fmt(r.net)}€</span></b></div>`; };
   const oddDetail=r=>`<div class="mini muted">${esc(r.lname||'?')} · J${r.day+1}</div><div class="mini" style="margin-top:3px">${esc(r.match)} — <b>${esc(r.sel)}</b> · ${r.stake}€ @${r.odd} ✓ → <b class="green">+${Math.round(r.stake*(r.odd-1))}€</b></div>`;
   const sec=(title,arr,val,detail,tag,empty)=>`<h2>${title}</h2>${arr.length?arr.map((r,i)=>{const k=tag+i;const op=palmOpen===k;const v=val(r);
      return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="togglePalm('${k}')">
@@ -853,14 +870,15 @@ function viewPalmares(){
 async function loadAdmin(){
   try{
     const lgs=await q(db.from("leagues").select("id,status"));
-    const pls=await q(db.from("players").select("id,name,is_ai"));
+    const pls=await q(db.from("players").select("name,is_ai,user_id"));
     const bts=await q(db.from("bets").select("card,net").not("net","is",null));
     let users=null; try{ users=await q(db.rpc("app_user_count")); }catch(e){ users=null; }
     const cardCount={}; let withCard=0;
     bts.forEach(b=>{ if(b.card&&b.card.id){ cardCount[b.card.id]=(cardCount[b.card.id]||0)+1; withCard++; } });
+    const activeAccounts=new Set(pls.filter(p=>!p.is_ai&&p.user_id).map(p=>p.user_id)); // 1 personne = 1, même sur plusieurs ligues
     adminData={ users, leagues:lgs.length,
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
-      humans:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length, distinct:new Set(pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").map(p=>p.name.toLowerCase())).size,
+      activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
       resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.entries(cardCount).sort((a,b)=>b[1]-a[1]) };
   }catch(e){ adminData={error:e.message}; }
 }
@@ -876,7 +894,8 @@ function viewAdmin(){
     ${st("🏆 Ligues créées", a.leagues)}
     <div class="box"><div class="mini muted" style="margin-bottom:8px">Ligues par statut</div>
       <div class="row mini"><span>🕓 Salon <b>${a.byStatus.lobby}</b></span><span>🎬 Prépa <b>${a.byStatus.prep}</b></span><span>▶️ En cours <b>${a.byStatus.running}</b></span><span>🏁 Fini <b>${a.byStatus.done}</b></span></div></div>
-    ${st("🎮 Joueurs humains (toutes ligues)", a.humans)}
+    ${st("🎮 Joueurs (comptes distincts ayant rejoint)", a.activeAccounts)}
+    ${st("🎫 Participations (joueur × ligue)", a.participations)}
     ${st("🧮 Journées résolues (paris)", a.resolvedBets)}
     ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués</div>
@@ -896,6 +915,7 @@ function render(){
   else if(S.view==="rules") html=viewRules();
   else if(S.view==="standings") html=viewStandings();
   else if(S.view==="coulisses") html=viewCoulisses();
+  else if(S.view==="results") html=viewResults();
   else if(S.view==="palmares") html=viewPalmares();
   else if(S.view==="admin") html=viewAdmin();
   else html=viewGame();
