@@ -83,7 +83,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v2.7</div>
+  <div class="foot">Prototype de test · données sportives simulées · v2.8</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -244,6 +244,7 @@ async function refresh(){
     // sélection auto (IA à domicile, ou échéance de sélection dépassée) + résolution auto
     if(L.status==="running" && !S.recap && !resolving){
       if(await ensureFixtures()){ duels = await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); }
+      if(await ensureAiBets()){ bets = await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); }
       if(shouldAutoResolve()){ resolveDay(); return; }
     }
     if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; }
@@ -256,6 +257,14 @@ async function ensureFixtures(){ let filled=false; const dt=dayTimes(); const se
     const auto=(h&&h.is_ai) || selPassed; // IA à domicile → tout de suite ; humain à domicile → à l'échéance de sélection
     if(auto){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} } }
   return filled; }
+// L'IA mise dès que les 5 matchs sont connus (pour que ses pronos soient visibles pendant l'attente)
+async function ensureAiBets(){ let made=false;
+  for(const d of duels){ if(!d.fixtures) continue;
+    for(const pid of [d.home_id,d.away_id]){ const p=pById(pid); if(!p||!p.is_ai) continue;
+      if(bets.find(b=>b.player_id===pid)) continue;
+      const ai=aiPlay(p.capital!=null?p.capital:100, d.fixtures, p.hand||[]);
+      try{ const r=await q(db.from("bets").insert({league_id:L.id,day:S.dispDay,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,card:ai.card,submitted:true}).select()); if(r&&r.length) made=true; }catch(e){} } }
+  return made; }
 function shouldAutoResolve(){
   const dz=duels; if(!dz.length || dz.some(d=>!d.fixtures)) return false; // sélection pas finie
   const inDay=new Set(); dz.forEach(d=>{inDay.add(d.home_id);inDay.add(d.away_id);});
@@ -681,7 +690,12 @@ function viewWait(dayLbl){
   const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">🔒 Tes pronos (verrouillés — consultation seule)</div>
      ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const sel=b.sel==="1"?f.home:b.sel==="2"?f.away:"Nul"; return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${esc(sel)}</b> · ${b.stake}€ @${oddOf(f,b.sel)}${i===mine.captain?' 👑':''}</div>`;}).join("")}
      ${mine.card&&mine.card.id?`<div class="mini" style="margin-top:6px">🃏 Bonus joué : <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(CARDS[mine.card.id].n)}</span> <span class="muted">(visible par toi seul jusqu'aux résultats)</span></div>`:'<div class="mini muted" style="margin-top:6px">Aucun bonus joué ce jour.</div>'}</div>` : '';
-  return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div>${betLineHTML()}</div>${mySummary}${list}
+  const aiSection = players.filter(p=>p.is_ai).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const fx=d&&d.fixtures;
+    if(!b||!b.picks||!fx) return '';
+    return `<div class="box"><div class="mini muted" style="margin-bottom:4px">🤖 Pronos de <b>${esc(p.name)}</b> <span class="mini">(l'IA a déjà misé)</span></div>
+      ${fx.map((f,i)=>{const bp=b.picks[i]; if(!bp)return ''; const sel=bp.sel==="1"?f.home:bp.sel==="2"?f.away:"Nul"; return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${esc(sel)}</b> · ${bp.stake}€${i===b.captain?' 👑':''}</div>`;}).join("")}
+      <div class="mini muted" style="margin-top:4px">🃏 bonus caché jusqu'aux résultats</div></div>`;}).join("");
+  return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div>${betLineHTML()}</div>${mySummary}${aiSection}${list}
     ${canResolve?`<h2>Paris de la journée (publics)</h2><div class="mini muted" style="margin:-4px 0 8px">Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'<b>après les résultats</b>.</div>${publicBetsHTML()}`:''}
     ${canResolve?`<div class="box mini muted" style="text-align:center">✅ Tous les pronos sont validés — <b>résolution automatique en cours…</b></div>`
       :`<div class="box mini muted" style="text-align:center">⏳ On attend les autres — ${waiting.length} joueur(s) à valider. Résolution auto à l'échéance.</div>`}${standingsBtn()}`;
