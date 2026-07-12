@@ -83,7 +83,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v2.3</div>
+  <div class="foot">Prototype de test · données sportives simulées · v2.6</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -131,8 +131,11 @@ function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2
   const pool=[...RANDOM_POOL]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
   for(let i=0;i<size-nc;i++) hand.push(pool[i%pool.length]); return hand; }
 function randomCard(){ return RANDOM_POOL[Math.floor(Math.random()*RANDOM_POOL.length)]; }
+// Seuils de série adaptés au nombre de journées (2 joueurs = 2 journées → seuils bas ; sinon plus élevés).
+function streakThresholds(N){ N=N||0; return { win2: N<=2?2:3, card: N<=2?99:(N<=6?4:5), loss: N<=2?99:4 }; }
 const CARD_PRICE={tout:12,sniper:10,miroir:10,double:10,gourmand:8,face:8,cadeau:8,assurance:8,invest:6,roi:6,serge:6};
 const SHOP_CAP=40; // dépense max en bonus sur les 100€
+const RECAP_THRESHOLD=10, RECAP_AMOUNT=20; // recapitalisation solidaire : sous 10€ un joueur ne peut plus miser → +20€ à lui ET à tout le monde
 // Formules de rythme : délais MAX (heures) pour choisir les matchs puis miser.
 const FORMULAS={
   fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"~12h pour choisir les matchs, puis ~12h pour miser (idée : de midi à minuit, puis de minuit à midi)."},
@@ -152,7 +155,7 @@ function aiShop(){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--)
 
 /* ============ STATE ============ */
 let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, prevView:"leagues" };
-let AUTH=null, myLeagues=[];
+let AUTH=null, myLeagues=[], showFinished=false;
 let L=null, players=[], duels=[], bets=[];
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1;
 let palmares=null, adminData=null, palmOpen="";
@@ -316,11 +319,19 @@ function viewLeagues(){
       <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">Rejoindre →</button></div>
     <div class="row" style="gap:8px"><button class="btn ghost" onclick="openPalmares()">🏆 Palmarès général</button>${AUTH&&AUTH.id===ADMIN_ID?`<button class="btn ghost" onclick="openAdmin()">🛠 Admin</button>`:''}</div>
     ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost" onclick="askNotif()">🔔 Activer les notifications</button><div class="mini muted" style="text-align:center;margin-top:-4px">Pour être prévenu quand c'est à toi de jouer (onglet ouvert).</div>`:''}
-    <h2>Mes ligues</h2>
-    ${myLeagues.length? myLeagues.map(m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
+    ${(()=>{
+      const row=m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
         <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · J'+Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days)+'/'+m.lg.num_days:''}</div></div>
-        <span class="chip b">Ouvrir →</span></div>`).join("")
-      : `<div class="box mini muted">Aucune ligue pour l'instant. Crée-en une, ou rejoins celle d'un ami avec son code.</div>`}`;
+        <span class="chip b">Ouvrir →</span></div>`;
+      const active=myLeagues.filter(m=>m.lg.status!=='done'); const finished=myLeagues.filter(m=>m.lg.status==='done');
+      let h=`<h2>Mes ligues${active.length?' · '+active.length:''}</h2>`;
+      h+= active.length? active.map(row).join("") : `<div class="box mini muted">Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.</div>`;
+      if(finished.length){
+        h+=`<div class="box row clik" onclick="showFinished=!showFinished;render()"><b>🏁 Ligues terminées · ${finished.length}</b><span class="chip">${showFinished?'▲ masquer':'▼ afficher'}</span></div>`;
+        if(showFinished) h+= finished.map(row).join("");
+      }
+      return h;
+    })()}`;
 }
 function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} joinLeague(c); }
 function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; S.bidLLeague=null; notifKey=null;
@@ -768,14 +779,21 @@ async function resolveDay(){
     // +1 au meilleur pronostiqueur du jour (plus gros gain parmi tous les joueurs)
     const maxNet=Math.max(...ps.map(p=>dayNet[p.id]||0));
     ps.forEach(p=>{ if((dayNet[p.id]||0)===maxNet) upd[p.id].points+=1; });
+    const T=streakThresholds(fresh.num_days); const streakEv={};
     for(const d of dz){ const nh=dayNet[d.home_id]||0,na=dayNet[d.away_id]||0; let w=null,l=null;
       if(nh>na){w=d.home_id;l=d.away_id;} else if(na>nh){w=d.away_id;l=d.home_id;}
       if(w){ upd[w].points+=3; upd[w].duel_wins+=1; upd[w].streak_w+=1; upd[w].streak_l=0;
-        if(upd[w].streak_w===3) upd[w].capital*=1.02;
-        if(upd[w].streak_w===5) upd[w].hand.push(randomCard());
-        upd[l].streak_l+=1; upd[l].streak_w=0; if(upd[l].streak_l===4) upd[l].hand.push("assurance"); } }
+        if(upd[w].streak_w===T.win2){ upd[w].capital*=1.02; streakEv[w]='🔥 '+T.win2+' victoires d\'affilée → +2 % de capital'; }
+        if(upd[w].streak_w===T.card){ const c=randomCard(); upd[w].hand.push(c); streakEv[w]=(streakEv[w]?streakEv[w]+' · ':'')+'🔥 '+T.card+' victoires → carte '+CARDS[c].e+' '+CARDS[c].n+' offerte'; }
+        upd[l].streak_l+=1; upd[l].streak_w=0; if(upd[l].streak_l===T.loss){ upd[l].hand.push("assurance"); streakEv[l]='❄️ '+T.loss+' défaites d\'affilée → carte 🛡 Assurance offerte'; } } }
     for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id){ const h=upd[pid].hand; const idx=h.indexOf(pd.card.id); if(idx>=0){ h.splice(idx,1); upd[pid].cards_used.push(pd.card.id); } } }
+    // Recapitalisation solidaire : si un humain n'a plus assez pour miser (< seuil), +20€ à lui ET à tout le monde
+    let recapNote=null;
+    const broke=ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
+    if(broke.length){ ps.forEach(p=>{ upd[p.id].capital += RECAP_AMOUNT; }); recapNote={day:D, amount:RECAP_AMOUNT, names:broke.map(p=>(p.emoji?p.emoji+' ':'')+p.name)}; }
     for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
+    for(const pid in streakEv){ try{ await q(db.from("bets").update({streak:streakEv[pid]}).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }catch(e){} } // bonus de série (défensif si colonne absente)
+    try{ await q(db.from("leagues").update({recap_note:recapNote}).eq("id",L.id)); }catch(e){} // message recapitalisation (défensif si colonne absente)
     const next=D+1; const done=next>=fresh.num_days;
     await q(db.from("leagues").update({current_day:next,status:done?"done":"running"}).eq("id",L.id));
     if(!done){ try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} } // début journée suivante (défensif si colonne absente)
@@ -852,6 +870,7 @@ function recapBody(D){
       <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — ${isMe?'TON GAIN':('GAIN DE '+esc((fpP.emoji||'')+' '+fpName))}</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
       <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +3 pts':(tie?'Égalité':'Perdu')}</b>`:''}</div></div></div>
     ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">← Revenir à mes résultats</button>`:''}
+    ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">💸 Recapitalisation solidaire</b><div class="mini" style="margin-top:4px"><b>${esc((L.recap_note.names||[]).join(', '))}</b> n'${(L.recap_note.names||[]).length>1?'avaient':'avait'} plus assez pour miser → <b>+${L.recap_note.amount} €</b> pour ${(L.recap_note.names||[]).length>1?'eux':'lui'} <b>et pour tout le monde</b>, histoire de rester équitable. Tout le monde repart avec un coup de pouce ! 🤝</div></div>`:''}
     ${impactTxt(fpName,meB)}${oppId!=null?impactTxt(oppName,oppB):''}
     ${detail?`<h2>Détail — ${isMe?'tes paris':esc((fpP.emoji||'')+' '+fpName)} <span class="mini muted">(touche un match)</span></h2>${detail}`:''}
     <h2>Résultats de la journée</h2>
@@ -859,7 +878,8 @@ function recapBody(D){
     <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Pts jour</th><th>Carte</th></tr>
       ${ord.map((p,i)=>`<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:rgba(96,165,250,.12)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${(netMap[p.id]||0)===maxN?' ⭐':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
         <td class="num ${(netMap[p.id]||0)>=0?'green':'red'}">${fmt(netMap[p.id]||0)}€</td><td class="num"><b>${dpts[p.id]}</b></td>
-        <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`).join("")}</table></div>`;
+        <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`).join("")}</table></div>
+    ${(()=>{const sl=bets.filter(b=>b.streak).map(b=>{const pp=pById(b.player_id)||{};return `${pp.emoji||''} ${esc(pp.name||'?')} — ${esc(b.streak)}`;}); return sl.length?`<h2>🔥 Bonus de série</h2><div class="box mini" style="line-height:1.9">${sl.join('<br>')}</div>`:'';})()}`;
 }
 function setRecapFocus(pid){ recapFocus=pid||null; recapOpen=-1; render(); }
 function recapNav(D){ const last=L.current_day-1;
@@ -943,8 +963,10 @@ function viewEnd(){
      <div class="mini muted" style="text-align:center;margin:6px 0 12px">Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.</div>`:''}
    <button class="btn ghost" onclick="goStandings()">📊 Classement détaillé (séries, bonus)</button><div style="height:8px"></div>
    ${L.num_days>=1?`<button class="btn ghost" onclick="openResults(${L.num_days-1})">📅 Revoir les résultats journée par journée</button><div style="height:8px"></div>`:''}
-   <button class="btn ghost" onclick="backToLeagues()">← Mes ligues</button>`;
+   <button class="btn" onclick="closeLeague()">🏁 Fermer la ligue</button>
+   <div class="mini muted" style="text-align:center;margin-top:6px">Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.</div>`;
 }
+function closeLeague(){ showFinished=false; backToLeagues(); }
 
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
 function openCoulisses(){ if(S.view==="coulisses")return; S.prevView=S.view; S.view="coulisses"; render(); }
@@ -1099,7 +1121,7 @@ function viewRules(){
    <div class="box"><b>🏆 Points & classement</b>
      <div class="mini muted" style="margin-top:6px">Chaque journée : le <b>vainqueur de son duel</b> gagne <b>3 points</b> (comme au foot), et le <b>meilleur pronostiqueur</b> ⭐ (plus gros gain parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>. Départage à égalité : capital, puis victoires en duel, plus gros gain, plus grosse cote.</div></div>
    <div class="box"><b>🔥 Séries</b>
-     <div class="mini muted" style="margin-top:6px">3 victoires de duel d'affilée → +2 % de capital · 5 victoires → +1 carte aléatoire · 4 défaites → carte Assurance offerte.</div></div>
+     ${(()=>{const T=streakThresholds(L&&L.num_days); return `<div class="mini muted" style="margin-top:6px">Les seuils s'adaptent à la durée du championnat.${(L&&L.num_days)?` Ici (${L.num_days} journées) : <b>${T.win2}</b> victoires d'affilée → +2 % de capital${T.card<99?` · <b>${T.card}</b> victoires → +1 carte aléatoire`:''}${T.loss<99?` · <b>${T.loss}</b> défaites → carte Assurance offerte`:''}.`:` En général : 3 victoires → +2 % · 5 victoires → carte · 4 défaites → Assurance (moins en championnat très court).`}</div>`;})()}</div>
    <div class="box"><b>🃏 Cartes bonus (enchères)</b>
      <div class="mini muted" style="margin:6px 0">Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>${SHOP_CAP} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée.</div>
      ${Object.keys(CARDS).map(card).join("")}</div>
