@@ -65,6 +65,9 @@
     border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:50;}
   a{color:var(--blue);}
   .big{font-size:26px;font-weight:800;letter-spacing:-.5px;}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
+  .mbox{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;max-width:340px;width:100%;text-align:center;}
+  .clik{cursor:pointer;}
 </style>
 </head>
 <body>
@@ -80,7 +83,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v2.0b</div>
+  <div class="foot">Prototype de test · données sportives simulées · v2.2</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -110,7 +113,7 @@ const GAGES=[
 const CARDS={
  assurance:{e:"🛡",n:"Assurance",t:true,  d:"Un pari choisi : s'il perd, mise remboursée."},
  double:   {e:"🚀",n:"Double Mise",t:true, d:"Un pari choisi : s'il gagne, gain doublé."},
- miroir:   {e:"🪞",n:"Miroir",t:false,     d:"Le meilleur pari gagnant des deux joueurs est échangé."},
+ miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, d:"Le meilleur pari gagnant des deux joueurs est échangé."},
  gourmand: {e:"🍽️",n:"Gourmand",t:false,   d:"Adversaire positif → tu récupères 20 % de son bénéfice."},
  face:     {e:"😏",n:"Dans ta face",t:false,d:"Un pari gagnant adverse (au hasard) réduit de moitié."},
  serge:    {e:"💰",n:"Serge Benamou",t:false,d:"10 % du plus gros gain du jour redistribué aux autres."},
@@ -130,6 +133,20 @@ function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2
 function randomCard(){ return RANDOM_POOL[Math.floor(Math.random()*RANDOM_POOL.length)]; }
 const CARD_PRICE={tout:12,sniper:10,miroir:10,double:10,gourmand:8,face:8,cadeau:8,assurance:8,invest:6,roi:6,serge:6};
 const SHOP_CAP=40; // dépense max en bonus sur les 100€
+// Formules de rythme : délais MAX (heures) pour choisir les matchs puis miser.
+const FORMULAS={
+  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"~12h pour choisir les matchs, puis ~12h pour miser (idée : de midi à minuit, puis de minuit à midi)."},
+  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"~24h pour choisir, puis ~24h pour miser — 48h en tout (idée : de midi au lendemain midi, deux fois)."}
+};
+function leagueFormula(){ return FORMULAS[(L&&L.formula)||'classique'] || FORMULAS.classique; }
+// Échéances du jour courant à partir de day_started_at (si présent). sel = fin sélection, bet = clôture paris.
+function dayTimes(){ const f=leagueFormula(); const t0=(L&&L.day_started_at)?new Date(L.day_started_at).getTime():0;
+  if(!t0||isNaN(t0)) return {ok:false,sel:0,bet:0}; return {ok:true, sel:t0+f.sel*3600000, bet:t0+(f.sel+f.bet)*3600000}; }
+function fmtWhen(ts){ if(!ts) return ""; const d=new Date(ts); const now=new Date(); const hm=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  const sameDay=d.toDateString()===now.toDateString(); const tomorrow=new Date(now.getTime()+86400000).toDateString()===d.toDateString();
+  return (sameDay?"aujourd'hui":(tomorrow?"demain":d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'})))+" "+hm; }
+function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ Choix des matchs avant <b>${fmtWhen(dt.sel)}</b> · ${leagueFormula().n}</div>`:''; }
+function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ Clôture des paris <b>${fmtWhen(dt.bet)}</b> · ${leagueFormula().n}</div>`:''; }
 function aiShop(){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
   const budget=Math.round(rnd(10,SHOP_CAP)); let spent=0; const hand=[]; for(const id of ids){ const p=CARD_PRICE[id]||8; if(spent+p<=budget){ hand.push(id); spent+=p; } } return {hand,capital:100-spent}; }
 
@@ -149,6 +166,36 @@ const fmt=n=>(n>=0?"+":"")+Math.round(n);
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
 function showErr(m){ $("err").innerHTML = m?`<div class="err">${esc(m)}</div>`:""; }
 function toast(m){ const t=document.createElement("div"); t.className="toast"; t.textContent=m; document.body.appendChild(t); setTimeout(()=>t.remove(),2200); }
+function showCardInfo(id){ const c=CARDS[id]; if(!c)return; closeCardInfo();
+  const o=document.createElement("div"); o.id="cardModal"; o.className="modal";
+  o.addEventListener("click",e=>{ if(e.target===o) closeCardInfo(); });
+  o.innerHTML=`<div class="mbox"><div style="font-size:34px">${c.e}</div><h2 style="margin:6px 0 4px">${esc(c.n)}</h2><div class="mini muted">${esc(c.d)}</div><button class="btn" style="margin-top:16px" onclick="closeCardInfo()">OK 👍</button></div>`;
+  document.body.appendChild(o); }
+function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.remove(); }
+/* ---- Notifications (onglet ouvert : système si en arrière-plan, sinon rappel dans l'app) ---- */
+let notifKey=null;
+function notifAvailable(){ return typeof window!=="undefined" && "Notification" in window; }
+function askNotif(){ try{ if(notifAvailable() && Notification.permission==="default") Notification.requestPermission(); }catch(e){} }
+function notify(title,body){ try{ if(notifAvailable() && Notification.permission==="granted" && document.hidden){ new Notification(title,{body}); } }catch(e){} toast(body); }
+function myActionKey(){
+  if(!L) return null;
+  if(L.status==="prep") return (me()&&!me().shop_done)?("prep:"+L.id):null;
+  if(L.status==="running"){
+    if(S.recap) return "recap:"+L.id+":"+S.dispDay;
+    const d=myDuel(); if(!d) return null;
+    if(!d.fixtures) return (d.home_id===S.myId)?("sel:"+L.id+":"+L.current_day):null;
+    if(!myBet()) return "bet:"+L.id+":"+L.current_day;
+  }
+  return null;
+}
+function notifMsg(key){
+  if(key.indexOf("prep:")===0) return ["🎬 Préparation","Vote le gage et mise sur les bonus."];
+  if(key.indexOf("sel:")===0)  return ["🏠 À toi de jouer !","Choisis les 5 matchs de la journée."];
+  if(key.indexOf("bet:")===0)  return ["⚽ Paris ouverts","À toi de faire tes pronostics !"];
+  if(key.indexOf("recap:")===0) return ["📊 Résultats dispo","Les résultats de la journée sont là."];
+  return null;
+}
+function maybeNotify(){ const key=myActionKey(); if(key && key!==notifKey){ const m=notifMsg(key); if(m) notify(m[0],(L&&L.name?L.name+" — ":"")+m[1]); } notifKey=key; }
 function saveAuth(){ localStorage.setItem("pl_auth", JSON.stringify(AUTH)); }
 function loadAuth(){ try{return JSON.parse(localStorage.getItem("pl_auth"));}catch(e){return null;} }
 function loadLast(){ try{return JSON.parse(localStorage.getItem("pl_last"));}catch(e){return null;} }
@@ -191,17 +238,29 @@ async function refresh(){
     S.dispDay = dispDay;
     duels = await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",dispDay));
     bets  = await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",dispDay));
-    // l'IA à domicile choisit ses 5 matchs automatiquement (sinon l'adversaire humain reste bloqué)
-    if(L.status==="running" && !S.recap){ if(await ensureAiFixtures()){ duels = await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); } }
+    // sélection auto (IA à domicile, ou échéance de sélection dépassée) + résolution auto
+    if(L.status==="running" && !S.recap && !resolving){
+      if(await ensureFixtures()){ duels = await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); }
+      if(shouldAutoResolve()){ resolveDay(); return; }
+    }
     if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; }
     if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){ chartBets = await q(db.from("bets").select("player_id,day,net").eq("league_id",S.leagueId).not("net","is",null)); }
-    showErr(""); render();
+    showErr(""); render(); maybeNotify();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
-async function ensureAiFixtures(){ let filled=false;
+async function ensureFixtures(){ let filled=false; const dt=dayTimes(); const selPassed=dt.ok && Date.now()>=dt.sel;
   for(const d of duels){ if(d.fixtures) continue; const h=pById(d.home_id);
-    if(h&&h.is_ai){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} } }
+    const auto=(h&&h.is_ai) || selPassed; // IA à domicile → tout de suite ; humain à domicile → à l'échéance de sélection
+    if(auto){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} } }
   return filled; }
+function shouldAutoResolve(){
+  const dz=duels; if(!dz.length || dz.some(d=>!d.fixtures)) return false; // sélection pas finie
+  const inDay=new Set(); dz.forEach(d=>{inDay.add(d.home_id);inDay.add(d.away_id);});
+  const dayHumans=players.filter(p=>!p.is_ai && inDay.has(p.id));
+  const allBet = dayHumans.length>0 && dayHumans.every(p=>bets.find(b=>b.player_id===p.id));
+  const dt=dayTimes(); const betPassed=dt.ok && Date.now()>=dt.bet;
+  return allBet || betPassed;
+}
 function me(){ return players.find(p=>p.id===S.myId); }
 function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId); }
 function myBet(){ return bets.find(b=>b.player_id===S.myId); }
@@ -256,6 +315,7 @@ function viewLeagues(){
       <input id="joinCode" maxlength="5" placeholder="Ex : 7XK2P" style="text-transform:uppercase">
       <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">Rejoindre →</button></div>
     <div class="row" style="gap:8px"><button class="btn ghost" onclick="openPalmares()">🏆 Palmarès général</button>${AUTH&&AUTH.id===ADMIN_ID?`<button class="btn ghost" onclick="openAdmin()">🛠 Admin</button>`:''}</div>
+    ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost" onclick="askNotif()">🔔 Activer les notifications</button><div class="mini muted" style="text-align:center;margin-top:-4px">Pour être prévenu quand c'est à toi de jouer (onglet ouvert).</div>`:''}
     <h2>Mes ligues</h2>
     ${myLeagues.length? myLeagues.map(m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
         <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · J'+Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days)+'/'+m.lg.num_days:''}</div></div>
@@ -263,10 +323,10 @@ function viewLeagues(){
       : `<div class="box mini muted">Aucune ligue pour l'instant. Crée-en une, ou rejoins celle d'un ami avec son code.</div>`}`;
 }
 function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} joinLeague(c); }
-function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; S.bidLLeague=null;
+function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; S.bidLLeague=null; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
-  startPoll(); refresh();
+  askNotif(); startPoll(); refresh();
 }
 function backToLeagues(){ if(poll)clearInterval(poll); localStorage.removeItem("pl_last");
   S.leagueId=null; S.myId=null; L=null; S.view="leagues"; loadMyLeagues(); }
@@ -302,6 +362,7 @@ function viewGame(){
   if(L.status==="lobby") return viewLobby();
   if(L.status==="prep") return viewPrep();
   if(L.status==="starting") return `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
+  if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">⚙️</div><b>Résolution de la journée…</b><div class="mini muted" style="margin-top:6px">Calcul des gains en cours.</div></div>`;
   if(L.status==="done") return viewEnd();
   if(L.prep_summary && !prepSeen()) return viewPrepSummary();
   if(S.recap) return viewRecap(S.dispDay);
@@ -309,6 +370,27 @@ function viewGame(){
 }
 function prepSeen(){ return localStorage.getItem("pl_preps_"+S.leagueId)==="1"; }
 function ackPrep(){ localStorage.setItem("pl_preps_"+S.leagueId,"1"); render(); }
+function prepSuperlatives(s){
+  const auction=s.auction||[]; const ps=(s.players||[]);
+  if(ps.length<2 || !auction.length) return '';
+  const nm=pid=>{const p=ps.find(x=>x.pid===pid)||{}; return (p.emoji?p.emoji+' ':'')+esc(p.name||'?');};
+  const st={}; ps.forEach(p=>st[p.pid]={bids:0,total:0,won:0,maxBid:0,maxCard:null});
+  auction.forEach(a=>{ (a.bids||[]).forEach(bd=>{ const x=st[bd.pid]; if(x&&bd.amt>0){ x.bids++; x.total+=bd.amt; if(bd.amt>x.maxBid){x.maxBid=bd.amt;x.maxCard=a.card;} } }); if(st[a.winner]) st[a.winner].won++; });
+  const bidders=ps.filter(p=>st[p.pid].bids>0);
+  if(bidders.length<2) return '';
+  const best=(arr,fn)=>arr.slice().sort(fn)[0];
+  const items=[];
+  const strat=best(bidders,(a,b)=> st[b.pid].won-st[a.pid].won || (st[b.pid].won/st[b.pid].bids)-(st[a.pid].won/st[a.pid].bids));
+  if(strat && st[strat.pid].won>0) items.push(`🧠 <b>Le stratège :</b> ${nm(strat.pid)} — a raflé <b>${st[strat.pid].won}</b> bonus sur ${st[strat.pid].bids} visé${st[strat.pid].bids>1?'s':''}. Chirurgical.`);
+  const poisse=best(bidders,(a,b)=> (st[b.pid].bids-st[b.pid].won)-(st[a.pid].bids-st[a.pid].won));
+  if(poisse && (st[poisse.pid].bids-st[poisse.pid].won)>=1 && (!strat||poisse.pid!==strat.pid)) items.push(`😭 <b>La poisse :</b> ${nm(poisse.pid)} — a misé sur ${st[poisse.pid].bids} bonus, repart avec <b>${st[poisse.pid].won}</b>. Aïe aïe aïe.`);
+  const radin=best(bidders,(a,b)=> st[a.pid].total-st[b.pid].total);
+  if(radin) items.push(`🤏 <b>Le radin :</b> ${nm(radin.pid)} — <b>${st[radin.pid].total}€</b> lâchés en tout, pas un centime de plus.`);
+  const fou=best(bidders,(a,b)=> st[b.pid].maxBid-st[a.pid].maxBid);
+  if(fou && st[fou.pid].maxBid>0 && (!radin||fou.pid!==radin.pid)) items.push(`🤪 <b>Le plus fou :</b> ${nm(fou.pid)} — <b>${st[fou.pid].maxBid}€</b> d'un coup sur ${CARDS[st[fou.pid].maxCard]?CARDS[st[fou.pid].maxCard].e+' '+esc(CARDS[st[fou.pid].maxCard].n):'un bonus'}. Le poker, ça le connaît.`);
+  if(!items.length) return '';
+  return `<h2>🎭 Le mot des coulisses</h2><div class="box"><div class="mini" style="line-height:1.9">${items.join('<br>')}</div></div>`;
+}
 function prepSummaryBody(){
   const s=L.prep_summary||{}; const gv=s.gageVotes||[]; const maxV=Math.max(1,...gv.map(g=>g.count));
   const pName=pid=>{const p=(s.players||[]).find(x=>x.pid===pid)||{};return (p.emoji?p.emoji+' ':'')+esc(p.name||'?');};
@@ -326,7 +408,8 @@ function prepSummaryBody(){
    <div class="box" style="padding:4px 10px"><table><tr><th>Joueur</th><th style="text-align:right">Dépensé</th><th style="text-align:right">Capital</th><th>Bonus</th></tr>
      ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">(toi)</span>':''}${p.is_ai?' <span class="tag">IA</span>':''}</td>
         <td class="num muted">${p.spent}€</td><td class="num"><b>${Math.round(p.capital)}€</b></td>
-        <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span title="${esc(CARDS[id].n+' — '+CARDS[id].d)}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>`;
+        <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(CARDS[id].n)}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>
+   ${prepSuperlatives(s)}`;
 }
 function viewPrepSummary(){
   return `<div class="box"><h2 style="margin-top:0">🎬 C'est parti !</h2><div class="mini muted">Voici le vote du gage et les enchères de bonus — jette un œil avant ton premier pari.</div></div>
@@ -348,12 +431,18 @@ function viewLobby(){
         ${p.is_organizer?'<span class="tag">organisateur</span>':''}${p.id===S.myId?'<span class="chip b">toi</span>':''}</div>
         ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">Retirer</button>`:`<span class="chip g">Prêt</span>`}</div>`).join("")}
     ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>Joueur IA</b><div class="mini muted">ajouté au lancement (nombre impair)</div></div></div><span class="chip b">équilibre</span></div>`:""}
+    <h2>⏱️ Formule de rythme</h2>
+    ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${f.n}</b><div class="mini muted">${esc(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?'✓ choisie':(org?'choisir':'')}</span></div>`;}).join("")}
+    <div class="mini muted" style="text-align:center;margin-bottom:4px">Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.</div>
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?('Clôturer les inscriptions'+(addAI?' (+🤖)':'')+' →'):'Il faut au moins 2 joueurs'}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>${esc(L.code)}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.</div>`
       : `<div class="box mini muted" style="text-align:center">En attente que l'organisateur clôture les inscriptions…</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast("Code copié : "+L.code); }
+async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
+  try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
+  catch(e){ showErr("Formule : "+e.message+" (ajoute la colonne 'formula' — voir schema.sql)"); } busy=false; }
 async function kickPlayer(pid){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
   const p=players.find(x=>x.id===pid)||{}; if(!confirm("Retirer "+(p.name||"ce joueur")+" du tournoi ?"))return;
   busy=true; try{ await q(db.from("players").delete().eq("id",pid).eq("league_id",L.id)); await refresh(); }
@@ -476,6 +565,7 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
       auction,
       players: ps.map(p=>({pid:p.id,name:p.name,emoji:p.emoji,is_ai:!!p.is_ai,spent:paid[p.id],capital:Math.max(0,100-paid[p.id]),hand:won[p.id]})) };
     await q(db.from("leagues").update({status:"running",gage,current_day:0,prep_summary:summary}).eq("id",L.id));
+    try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} // début J1 (défensif)
     resolving=false; setSeen(0); localStorage.removeItem("pl_preps_"+L.id); await refresh(); toast("Championnat lancé ✓");
   }catch(e){ showErr("Démarrage : "+e.message); resolving=false; } }
 
@@ -485,7 +575,7 @@ function viewDay(){
   if(!d) return `<div class="box">${dayLbl}<br><span class="muted mini">Aucun duel (repos).</span></div>${standingsBtn()}`;
   const iAmHome=d.home_id===S.myId; const opp=pById(iAmHome?d.away_id:d.home_id);
   if(!d.fixtures){ if(iAmHome) return viewSelect(d,dayLbl,opp);
-    return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">En attente que <b>${esc(opp.name)}</b> (à domicile) choisisse les 5 matchs…</div></div>${standingsBtn()}`; }
+    return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">En attente que <b>${esc(opp.name)}</b> (à domicile) choisisse les 5 matchs…</div>${selLineHTML()}</div>${standingsBtn()}`; }
   if(!myBet()) return viewBet(d,dayLbl,opp,iAmHome);
   return viewWait(dayLbl);
 }
@@ -498,7 +588,7 @@ let selPool=null, selChosen=[];
 function viewSelect(d,dayLbl,opp){
   if(!selPool){ selPool=genPool(9); selChosen=[]; }
   return `<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">🏠 Domicile</span></div>
-     <div class="mini muted" style="margin-top:6px">Choisis 5 rencontres (${selChosen.length}/5) — imposées à ${esc(opp.name)}.</div></div>
+     <div class="mini muted" style="margin-top:6px">Choisis 5 rencontres (${selChosen.length}/5) — imposées à ${esc(opp.name)}.</div>${selLineHTML()}</div>
      ${selPool.map((f,i)=>{const on=selChosen.includes(i);return `<div class="box row" onclick="toggleSel(${i})" style="cursor:pointer;${on?'border-color:var(--green)':''}">
        <div class="row" style="gap:9px"><span class="sport">${f.sport}</span><div><b>${esc(f.home)} – ${esc(f.away)}</b>
        <div class="mini muted">${f.oh}${f.draw?' / '+f.od:''} / ${f.oa}</div></div></div><span class="chip ${on?'g':''}">${on?'✓':'+'}</span></div>`;}).join("")}
@@ -522,7 +612,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
   const ok = allMin && !over && bet.captain>=0 && !needTarget;
   const hand = meP.hand||[];
   return `<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?'🏠 Domicile':'✈️ Extérieur'}</span></div>
-    <div class="row mini" style="margin-top:8px"><span class="muted">Duel vs <b>${esc(opp.name)}</b></span><span class="muted">Capital <b>${Math.round(cap)}</b> €</span></div>
+    <div class="row mini" style="margin-top:8px"><span class="muted">Duel vs <b>${esc(opp.name)}</b></span><span class="muted">Capital <b>${Math.round(cap)}</b> €</span></div>${betLineHTML()}
     <div class="row mini" style="margin-top:6px"><span class="muted">Misé <b id="tot">${Math.round(tot)}</b> € / ${Math.round(max)} € max${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">👑 Capitaine ×2</span></div>
     <div class="gauge ${over?'over':''}"><i style="width:${pct}%"></i></div></div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
@@ -569,11 +659,14 @@ function viewWait(dayLbl){
     return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}</div>
       <span class="chip ${done?'g':''}">${done?'✓ validé':'en cours'}</span></div>`;}).join("");
   const canResolve = waiting.length===0;
-  return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div></div>${list}
+  const mine=myBet(); const md=myDuel();
+  const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">🔒 Tes pronos (verrouillés — consultation seule)</div>
+     ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const sel=b.sel==="1"?f.home:b.sel==="2"?f.away:"Nul"; return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${esc(sel)}</b> · ${b.stake}€ @${oddOf(f,b.sel)}${i===mine.captain?' 👑':''}</div>`;}).join("")}
+     ${mine.card&&mine.card.id?`<div class="mini" style="margin-top:6px">🃏 Bonus joué : <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(CARDS[mine.card.id].n)}</span> <span class="muted">(visible par toi seul jusqu'aux résultats)</span></div>`:'<div class="mini muted" style="margin-top:6px">Aucun bonus joué ce jour.</div>'}</div>` : '';
+  return `<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div>${betLineHTML()}</div>${mySummary}${list}
     ${canResolve?`<h2>Paris de la journée (publics)</h2><div class="mini muted" style="margin:-4px 0 8px">Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'<b>après les résultats</b>.</div>${publicBetsHTML()}`:''}
-    ${canResolve?(org?`<button class="btn" onclick="resolveDay()">Résoudre la journée →</button>`
-          :`<div class="box mini muted" style="text-align:center">✅ Tous les pronos sont validés — <b>en attente des résultats</b>…</div>`)
-      :`<div class="box mini muted" style="text-align:center">⏳ On attend les autres — ${waiting.length} joueur(s) à valider.</div>`}${standingsBtn()}`;
+    ${canResolve?`<div class="box mini muted" style="text-align:center">✅ Tous les pronos sont validés — <b>résolution automatique en cours…</b></div>`
+      :`<div class="box mini muted" style="text-align:center">⏳ On attend les autres — ${waiting.length} joueur(s) à valider. Résolution auto à l'échéance.</div>`}${standingsBtn()}`;
 }
 function publicBetsHTML(){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
@@ -635,8 +728,10 @@ async function resolveDay(){
   if(resolving)return; resolving=true; showErr("");
   try{
     const D=L.current_day;
-    const fresh=await q(db.from("leagues").select("*").eq("id",L.id).single());
-    if(fresh.current_day!==D||fresh.status!=="running"){ resolving=false; await refresh(); return; }
+    // verrou atomique : un seul client résout la journée (auto-avancement)
+    const claim=await q(db.from("leagues").update({status:"resolving"}).eq("id",L.id).eq("status","running").eq("current_day",D).select("*"));
+    if(!claim||!claim.length){ resolving=false; await refresh(); return; }
+    const fresh=claim[0];
     const ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
     const dz=await q(db.from("duels").select("*").eq("league_id",L.id).eq("day",D));
     const bz=await q(db.from("bets").select("*").eq("league_id",L.id).eq("day",D));
@@ -683,6 +778,7 @@ async function resolveDay(){
     for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
     const next=D+1; const done=next>=fresh.num_days;
     await q(db.from("leagues").update({current_day:next,status:done?"done":"running"}).eq("id",L.id));
+    if(!done){ try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} } // début journée suivante (défensif si colonne absente)
     resolving=false; await refresh(); toast("Journée résolue ✓");
   }catch(e){ showErr("Résolution : "+e.message); resolving=false; }
 }
@@ -715,7 +811,7 @@ function recapBody(D){
     if(i===bt.captain){ g=base*2; t+=` · 👑 Capitaine ×2 → ${fmt(g)}€`; }
     const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;t+=` · 🚀 Double Mise ×2 → ${fmt(g)}€`;} else if(c.id==="tout"){g*=(win?3:2);t+=` · 🔥 Tout ou Rien ${win?'×3':'×2'} → ${fmt(g)}€`;} else if(c.id==="assurance"&&!win){g=0;t+=` · 🛡 Assurance : mise remboursée → 0€`;} }
     t+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; return t; };
-  const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Pari du Capitaine : gain et perte doublés">👑 Capitaine (${esc(who)})</span> `; if(bt&&bt.card&&bt.card.target===i) s+=`<span class="chip b" title="${esc(CARDS[bt.card.id].d)}">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
+  const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Pari du Capitaine : gain et perte doublés">👑 Capitaine (${esc(who)})</span> `; if(bt&&bt.card&&bt.card.target===i) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.id}')">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
   const fxRecap = (myD && myD.fixtures) || [];
   const impactTxt=(who,bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card; const C=CARDS[c.id]; const im=c.impact||{}; let detail='';
     if(c.id==="cadeau"){
@@ -792,7 +888,7 @@ function viewStandings(){
         return `<tr><td>${p.is_ai?'🤖':i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${p.is_ai?' <span class="tag">hors gage</span>':''}</td>
         <td class="num"><b>${p.points}</b></td><td class="num muted">${Math.round(p.capital)}€</td><td class="num">${s}</td></tr>`;}).join("")}</table></div>
     ${capChart()}
-    ${(hand.length||used.length)?`<div class="box"><div class="mini muted">🃏 Tes bonus <span class="mini">(survole pour la description · barré = déjà utilisé)</span></div><div class="cards">${hand.map(id=>`<div class="cardchip" title="${esc(CARDS[id].d)}"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}${used.map(id=>`<div class="cardchip" title="Déjà utilisé — ${esc(CARDS[id].d)}" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(CARDS[id].n)}</s></div>`).join("")}</div></div>`:''}
+    ${(hand.length||used.length)?`<div class="box"><div class="mini muted">🃏 Tes bonus <span class="mini">(touche un bonus pour sa description · barré = déjà utilisé)</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(CARDS[id].n)}</s></div>`).join("")}</div></div>`:''}
     <div class="box mini"><span class="muted">🎭 Gage (au dernier humain) :</span> <b>${esc(L.gage)}</b> → ${lastH.emoji} ${esc(lastH.name)}</div>`;
 }
 
@@ -834,8 +930,8 @@ function viewEnd(){
      ${ord.map(p=>{ const owned=[...(p.cards_used||[]),...(p.hand||[])];
        return `<div style="margin-top:8px"><div class="mini"><b>${p.emoji} ${esc(p.name)}</b>${owned.length?'':' <span class="muted">— aucun bonus</span>'}</div>
          ${owned.length?`<div class="cards" style="margin-top:4px">
-           ${(p.cards_used||[]).map(id=>`<div class="cardchip" title="Utilisé — ${esc(CARDS[id].d)}" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(CARDS[id].n)}</s></div>`).join("")}
-           ${(p.hand||[]).map(id=>`<div class="cardchip" title="Non utilisé — ${esc(CARDS[id].d)}"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
+           ${(p.cards_used||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(CARDS[id].n)}</s></div>`).join("")}
+           ${(p.hand||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
    <div class="box" style="border-color:#5a2b2b"><div class="row"><b class="red">🎭 Gage</b><span class="chip red">${last.emoji} ${esc(last.name)}</span></div>
      <div class="mini muted" style="margin-top:6px">${esc(last.name)} doit réaliser : <b>${esc(L.gage)}</b>.</div></div>
    ${(me()&&me().is_organizer)?`<button class="btn" onclick="relaunchLeague()">🔁 Relancer une compétition avec les mêmes joueurs</button>
@@ -901,7 +997,7 @@ function viewPalmares(){
   return `${back}
     <div class="box"><h2 style="margin-top:0">🏆 Palmarès général</h2><div class="mini muted">Les plus grosses perfs sur <b>toutes</b> les ligues (${palmares.counts.leagues} ligues · ${palmares.counts.players} joueurs). Astuce : une grosse ligue gonfle les gains en €, donc le <b>rendement</b> et la <b>plus grosse cote</b> — indépendants du nombre de joueurs — sont les mesures les plus justes.</div></div>
     ${sec("💥 Plus gros gain sur une journée", palmares.bigGain, r=>({txt:fmt(r.net)+"€",cls:r.net>=0?'green':'red'}), dayDetail, "g")}
-    ${sec("📈 Meilleur rendement d'une journée", palmares.bestRet, r=>({txt:"×"+(1+r.ret).toFixed(2),cls:'green'}), dayDetail, "r", "Il faut avoir misé ≥ 5€.")}
+    ${sec("📈 Meilleur rendement d'une journée", palmares.bestRet, r=>({txt:"×"+r.ret.toFixed(2)+" la mise",cls:r.ret>=0?'green':'red'}), dayDetail, "r", "Il faut avoir misé ≥ 5€.")}
     ${sec("🎯 Plus grosse cote gagnée", palmares.bestOdd, r=>({txt:"@"+r.odd,cls:'gold'}), oddDetail, "o")}
     ${sec("💀 Pire dégringolade d'une journée", palmares.bigLoss, r=>({txt:fmt(r.net)+"€",cls:'red'}), dayDetail, "l")}`;
 }
@@ -917,7 +1013,7 @@ async function loadAdmin(){
     adminData={ users, leagues:lgs.length,
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
       activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
-      resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.entries(cardCount).sort((a,b)=>b[1]-a[1]) };
+      resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]) };
   }catch(e){ adminData={error:e.message}; }
 }
 function viewAdmin(){
