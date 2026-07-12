@@ -115,7 +115,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.3</div>
+  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.5</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -135,12 +135,18 @@ const SPORTS=[
  {ic:"🏀",draw:false,t:["Lakers","Celtics","Warriors","Bucks","Nuggets","Heat","Suns","Mavs"]},
 ];
 const GAGES=[
- {t:"Le plongeon givré 🩲", d:"Se baigner en maillot dans une eau glacée (mer, lac ou douche froide), vidéo à l'appui."},
- {t:"Karaoké imposé 🎤", d:"Chanter en public une chanson ringarde choisie par le groupe, sans se dégonfler."},
- {t:"Rando déguisé en poulet 🐔", d:"Faire une randonnée entière déguisé en poulet géant, photos obligatoires."},
- {t:"Serveur d'un soir 🍽️", d:"Servir l'apéro et les plats du prochain resto/soirée entre potes, tablier compris."},
- {t:"Danse TikTok publique 💃", d:"Exécuter une chorégraphie TikTok filmée dans un lieu public passant."},
- {t:"Coup de fil embarrassant 📞", d:"Appeler un proche et lui déclarer une passion absurde en gardant son sérieux."},
+ {t:"Le plongeon givré 🥶", d:"Se baigner en maillot dans une eau bien froide (mer, lac ou douche glacée), vidéo à l'appui."},
+ {t:"Karaoké sauvage 🎤", d:"Chanter en public une chanson kitsch choisie par le groupe, sans se dégonfler."},
+ {t:"La tenue improbable 🤡", d:"Passer une sortie entière déguisé (poulet, banane, licorne…) au choix du groupe, photos obligatoires."},
+ {t:"Serveur d'un soir 🍽️", d:"Assurer le service (apéro, plats, débarrassage) de la prochaine soirée entre potes, tablier compris."},
+ {t:"Chorée TikTok publique 💃", d:"Exécuter une chorégraphie filmée dans un lieu public passant."},
+ {t:"L'appel gênant 📞", d:"Appeler un proche et lui déclarer une passion absurde en gardant son sérieux."},
+ {t:"La story hommage 📸", d:"Publier pendant 24 h une story qui célèbre pompeusement le champion du tournoi."},
+ {t:"Fond d'écran imposé 📱", d:"Garder une semaine un fond d'écran choisi par le groupe (et le prouver sur demande)."},
+ {t:"La tournée du perdant 🍹", d:"Offrir la prochaine tournée (boissons ou goûter) à toute la bande."},
+ {t:"Photo de profil déléguée 🖼️", d:"Laisser le groupe choisir ta photo de profil pendant 3 jours."},
+ {t:"Le défi 50 pompes 💪", d:"Réaliser 50 pompes filmées d'une traite (ou une planche de 3 min), sans tricher."},
+ {t:"Diète de réseaux 📵", d:"48 h sans réseaux sociaux — preuve à l'appui (temps d'écran)."},
 ];
 const CARDS={
  assurance:{e:"🛡",n:"Assurance",t:true,  d:"Un pari choisi : s'il perd, mise remboursée."},
@@ -154,16 +160,18 @@ const CARDS={
  invest:   {e:"📈",n:"Investisseur",t:false,d:"Plafond de mise porté à 70 % du capital ce jour."},
  roi:      {e:"💎",n:"Roi de la cote",t:false,d:"Un pari gagné à cote ≥ 2,00 → +5 % du capital de départ."},
  tout:     {e:"🔥",n:"Tout ou Rien",t:true, d:"Un pari choisi : gain ×3, perte ×2."},
+ sangsue:  {e:"🩸",n:"Sangsue",t:false,d:"Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches)."},
+ parachute:{e:"🪂",n:"Parachute",t:false,d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
+ joker:    {e:"🃏",n:"Joker",t:true,d:"Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien."},
 };
 const COMMON=["assurance","double"];
-const RANDOM_POOL=["miroir","gourmand","face","serge","cadeau","sniper","invest","roi","tout"];
+const RANDOM_POOL=["miroir","gourmand","face","serge","cadeau","sniper","invest","roi","tout","sangsue","parachute","joker"];
 function handSize(d){ if(d>=18)return 8; if(d>=15)return 6; if(d>=12)return 5; if(d>=9)return 4; if(d>=6)return 3; return 2; }
 function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2); const hand=[];
   for(let i=0;i<nc;i++) hand.push(COMMON[i%COMMON.length]);
   const pool=[...RANDOM_POOL]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
   for(let i=0;i<size-nc;i++) hand.push(pool[i%pool.length]); return hand; }
-const CARD_PRICE={tout:12,sniper:10,miroir:10,double:10,gourmand:8,face:8,cadeau:8,assurance:8,invest:6,roi:6,serge:6};
-const SHOP_CAP=40; // dépense max en bonus sur les 100€
+const SHOP_CAP=40; // dépense max en bonus sur les 100€ (les bonus n'ont pas de prix fixe : chacun enchérit ce qu'il veut)
 const RECAP_THRESHOLD=10, RECAP_AMOUNT=20; // recapitalisation solidaire : sous 10€ un joueur ne peut plus miser → +20€ à lui ET à tout le monde
 // Formules de rythme : délais MAX (heures) pour choisir les matchs puis miser.
 const FORMULAS={
@@ -179,8 +187,6 @@ function fmtWhen(ts){ if(!ts) return ""; const d=new Date(ts); const now=new Dat
   return (sameDay?"aujourd'hui":(tomorrow?"demain":d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'})))+" "+hm; }
 function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ Choix des matchs avant <b>${fmtWhen(dt.sel)}</b> · ${leagueFormula().n}</div>`:''; }
 function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ Clôture des paris <b>${fmtWhen(dt.bet)}</b> · ${leagueFormula().n}</div>`:''; }
-function aiShop(){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
-  const budget=Math.round(rnd(10,SHOP_CAP)); let spent=0; const hand=[]; for(const id of ids){ const p=CARD_PRICE[id]||8; if(spent+p<=budget){ hand.push(id); spent+=p; } } return {hand,capital:100-spent}; }
 
 /* ============ STATE ============ */
 let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, prevView:"leagues" };
@@ -538,7 +544,7 @@ async function closeRegistration(){
 }
 function aiPrep(nDays){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
   const maxCards=Math.max(1,nDays); const nb=1+Math.floor(Math.random()*Math.min(maxCards,4)); const budget=Math.round(rnd(15,SHOP_CAP)); const bids={}; let spent=0;
-  for(let k=0;k<nb && k<ids.length;k++){ const id=ids[k]; const base=CARD_PRICE[id]||8; const bid=Math.min(base+Math.round(rnd(-2,6)), budget-spent); if(bid>=1){ bids[id]=bid; spent+=bid; } }
+  for(let k=0;k<nb && k<ids.length;k++){ const id=ids[k]; const bid=Math.min(Math.round(rnd(3,12)), budget-spent); if(bid>=1){ bids[id]=bid; spent+=bid; } }
   return {vote:Math.floor(Math.random()*4), bids}; }
 
 /* ============ PRÉPARATION (vote + enchères bonus) ============ */
@@ -776,7 +782,7 @@ function runEngine(pdIn, capStart, dz, N){
   for(const pid in PD){ const pd=PD[pid]; const perBet=[]; let net=0,bestOdd=0;
     pd.picks.forEach((b,i)=>{ const f=pd.fx[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel);
       let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===pd.captain) g*=2;
-      if(pd.card&&pd.card.target===i){ if(pd.card.id==="double"&&win)g*=2; if(pd.card.id==="tout")g*=(win?3:2); if(pd.card.id==="assurance"&&!win)g=0; }
+      if(pd.card&&pd.card.target===i){ if(pd.card.id==="double"&&win)g*=2; if(pd.card.id==="tout")g*=(win?3:2); if(pd.card.id==="assurance"&&!win)g=0; if(pd.card.id==="joker")g*=2; }
       if(win&&odd>bestOdd) bestOdd=odd; perBet.push({gain:g,win,odd}); net+=g; });
     G[pid]={perBet,net,bestOdd,bonus:0}; }
   // Phase 3 : Dans ta face puis Miroir
@@ -791,11 +797,14 @@ function runEngine(pdIn, capStart, dz, N){
   for(const pid in PD){ const pd=PD[pid]; const g=G[pid];
     if(pd.card&&pd.card.id==="sniper"&&pd.card.target!=null){ let bi=-1,bv=-1e9; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); if(bi===pd.card.target&&g.perBet[bi].gain>0) g.bonus+=capStart[pid]*0.10; }
     if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>=2.0)) g.bonus+=capStart[pid]*0.05; } }
-  // Phase 5 : Gourmand, Serge Benamou
+  // Phase 5 : Gourmand, Sangsue, Serge Benamou
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="sangsue"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0){ const t=0.15*on; G[pid].bonus+=t; opp.bonus-=t; } } } }
   { let mp=null,mv=-1e9; for(const pid in G){ const v=G[pid].net+G[pid].bonus; if(v>mv){mv=v;mp=pid;} }
     const anySerge=Object.keys(PD).some(pid=>PD[pid].card&&PD[pid].card.id==="serge");
     if(anySerge&&mv>0&&N>1){ const pot=0.1*mv; G[mp].bonus-=pot; const sh=pot/(N-1); for(const pid in G){ if(pid!==mp) G[pid].bonus+=sh; } } }
+  // Phase 6 : Parachute (amortit 30 % de la perte nette du jour)
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="parachute"){ const cur=G[pid].net+G[pid].bonus; if(cur<0) G[pid].bonus += (-0.3*cur); } }
   const dayNet={},dayBest={}; for(const pid in G){ dayNet[pid]=G[pid].net+G[pid].bonus; dayBest[pid]=G[pid].bestOdd; }
   return {dayNet,dayBest};
 }
@@ -881,7 +890,7 @@ function recapBody(D){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
   const line=(bt,f,i)=>{ if(!bt||!bt.picks) return `<span class="muted">n'a pas joué</span>`;
     const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
-    const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g=0; }
+    const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g=0; if(c.id==="joker")g*=2; }
     const selTxt = b.orig!=null ? `<s class="red">${esc(selLabel(f,b.orig))}</s> → <b>${esc(selLabel(f,b.sel))}</b> 🎁` : esc(selLabel(f,b.sel));
     return `${selTxt} · ${b.stake}€ @${odd}${i===bt.captain?' 👑':''}${(c&&c.target===i)?' '+CARDS[c.id].e:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
   const explain=(bt,f,i)=>{ if(!bt||!bt.picks) return `n'a pas joué ce match.`;
@@ -890,7 +899,7 @@ function recapBody(D){
     let t= flip + (win?`a parié <b>${esc(selLabel(f,b.sel))}</b> (${b.stake}€ @${odd}) → gagné : ${b.stake}×(${odd}−1)=${fmt(base)}€`
              :`a parié <b>${esc(selLabel(f,b.sel))}</b> (${b.stake}€) → perdu : −${b.stake}€`);
     if(i===bt.captain){ g=base*2; t+=` · 👑 Capitaine ×2 → ${fmt(g)}€`; }
-    const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;t+=` · 🚀 Double Mise ×2 → ${fmt(g)}€`;} else if(c.id==="tout"){g*=(win?3:2);t+=` · 🔥 Tout ou Rien ${win?'×3':'×2'} → ${fmt(g)}€`;} else if(c.id==="assurance"&&!win){g=0;t+=` · 🛡 Assurance : mise remboursée → 0€`;} }
+    const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;t+=` · 🚀 Double Mise ×2 → ${fmt(g)}€`;} else if(c.id==="tout"){g*=(win?3:2);t+=` · 🔥 Tout ou Rien ${win?'×3':'×2'} → ${fmt(g)}€`;} else if(c.id==="joker"){g*=2;t+=` · 🃏 Joker ×2 → ${fmt(g)}€`;} else if(c.id==="assurance"&&!win){g=0;t+=` · 🛡 Assurance : mise remboursée → 0€`;} }
     t+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; return t; };
   const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Pari du Capitaine : gain et perte doublés">👑 Capitaine (${esc(who)})</span> `; if(bt&&bt.card&&bt.card.target===i) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.id}')">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
   const fxRecap = (myD && myD.fixtures) || [];
@@ -902,6 +911,8 @@ function recapBody(D){
     } else if(c.id==="face"){ const f=fxRecap[c.target]; const nm=f?`<b>${esc(f.home)}–${esc(f.away)}</b>`:'le match ciblé';
       const ob=(vb&&vb.picks&&c.target!=null)?vb.picks[c.target]:null; const owin=(ob&&f)?(ob.sel===f.res):false;
       detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(selLabel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
+    } else if(c.id==="sangsue"){ detail=(Math.abs(im.opp||0)>=1)?`Tu as siphonné une part du bénéfice de l'adversaire.`:`L'adversaire n'était pas bénéficiaire → rien à siphonner.`;
+    } else if(c.id==="parachute"){ detail=((im.self||0)>=1)?`Filet de sécurité déclenché : une partie de ta perte a été amortie.`:`Filet non déclenché (journée non négative).`;
     } else if(c.target!=null && fxRecap[c.target] && bt.picks){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const win=b.sel===f.res; const nm=`<b>${esc(f.home)}–${esc(f.away)}</b>`;
       // garde-fou : sur d'anciennes parties l'inversion « cadeau » n'était pas enregistrée sur le pari visible → on n'affiche pas une mécanique contradictoire
       const inconsistent = (c.id==="tout"||c.id==="double") && ((win && (im.self||0)<0) || (!win && (im.self||0)>0));
@@ -909,6 +920,7 @@ function recapBody(D){
         if(c.id==="tout") detail=`Sur ${nm} (${esc(selLabel(f,b.sel))}, ${b.stake}€) : ${win?'pari <span class="green">gagné</span> → gain <b>×3</b>':'pari <span class="red">perdu</span> → perte <b>×2</b>'}.`;
         else if(c.id==="double") detail=`Sur ${nm} : ${win?'pari <span class="green">gagné</span> → gain <b>×2</b>':'perdu → aucun effet'}.`;
         else if(c.id==="assurance") detail=`Sur ${nm} : ${win?'gagné → aucun effet':'perdu → <b>mise remboursée</b>'}.`;
+        else if(c.id==="joker") detail=`Sur ${nm} : 2ᵉ Capitaine → ${win?'gain <b>×2</b>':'perte <b>×2</b>'}.`;
         else if(c.id==="sniper") detail=`Cible ${nm} : ${win?'gagné':'perdu'}.`;
       }
     }
@@ -1094,17 +1106,22 @@ function viewPalmares(){
 }
 async function loadAdmin(){
   try{
-    const lgs=await q(db.from("leagues").select("id,status"));
+    const lgs=await q(db.from("leagues").select("id,status,gage,prep_summary"));
     const pls=await q(db.from("players").select("name,is_ai,user_id"));
     const bts=await q(db.from("bets").select("card,net").not("net","is",null));
     let users=null; try{ users=await q(db.rpc("app_user_count")); }catch(e){ users=null; }
     const cardCount={}; let withCard=0;
     bts.forEach(b=>{ if(b.card&&b.card.id){ cardCount[b.card.id]=(cardCount[b.card.id]||0)+1; withCard++; } });
+    // Gages les plus choisis : cumul des votes (et nombre de fois retenu) sur toutes les ligues démarrées
+    const gageTally={};
+    lgs.forEach(l=>{ const gv=(l.prep_summary&&l.prep_summary.gageVotes)||[]; gv.forEach(g=>{ if(!g||!g.t) return; const k=g.t;
+      gageTally[k]=gageTally[k]||{votes:0,wins:0}; gageTally[k].votes+=(g.count||0); if(g.win) gageTally[k].wins++; }); });
+    const topGages=Object.keys(gageTally).map(t=>({t,votes:gageTally[t].votes,wins:gageTally[t].wins})).sort((a,b)=> b.votes-a.votes || b.wins-a.wins);
     const activeAccounts=new Set(pls.filter(p=>!p.is_ai&&p.user_id).map(p=>p.user_id)); // 1 personne = 1, même sur plusieurs ligues
     adminData={ users, leagues:lgs.length,
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
       activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
-      resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]) };
+      resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]), topGages };
   }catch(e){ adminData={error:e.message}; }
 }
 function viewAdmin(){
@@ -1125,6 +1142,8 @@ function viewAdmin(){
     ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués</div>
       ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b>${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
+    <div class="box"><div class="mini muted" style="margin-bottom:6px">🎭 Gages les plus choisis <span class="mini">(cumul des votes sur toutes les ligues)</span></div>
+      ${(a.topGages&&a.topGages.length)?a.topGages.slice(0,10).map((g,i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${esc(g.t)}</span><b>${g.votes} vote${g.votes>1?'s':''}${g.wins?` · ${g.wins}× retenu`:''}</b></div>`).join(""):`<div class="mini muted">Aucun vote de gage enregistré pour l'instant.</div>`}</div>
     <div class="box"><div class="mini muted" style="margin-bottom:6px">👤 Comptes joueurs — identifiants & réinitialisation</div>
       ${adminUsers ? `${adminUsers.length?adminUsers.map(u=>`<div class="row mini" style="margin:6px 0"><span>${esc(u.username)}${u.id===ADMIN_ID?' <span class="tag">(toi, admin)</span>':''}</span>${u.id===ADMIN_ID?'':`<button class="btn ghost sm" onclick="adminResetPwd('${u.id}')">🔑 Réinitialiser le mot de passe</button>`}</div>`).join(""):`<div class="mini muted">Aucun autre compte pour l'instant.</div>`}
          <button class="btn ghost sm" style="margin-top:8px" onclick="adminUsers=null;render()">Masquer</button>`
@@ -1188,7 +1207,7 @@ function viewRules(){
    <div class="box"><b>🔥 Dynamique</b>
      <div class="mini muted" style="margin-top:6px">Une 🔥 flamme signale une <b>bonne dynamique</b> (victoires de duel qui s'enchaînent), un ❄️ flocon une <b>mauvaise passe</b>. C'est <b>purement indicatif</b> (visible au classement) : aucun bonus ni malus n'y est associé.</div></div>
    <div class="box"><b>🃏 Cartes bonus (enchères)</b>
-     <div class="mini muted" style="margin:6px 0">Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>${SHOP_CAP} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée.</div>
+     <div class="mini muted" style="margin:6px 0">Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>${SHOP_CAP} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.</div>
      ${Object.keys(CARDS).map(card).join("")}</div>
    <div class="box"><b>😴 Oubli</b><div class="mini muted" style="margin-top:6px">Pas de validation à temps → paris repris de l'adversaire, pronostics inversés.</div></div>`;
 }
