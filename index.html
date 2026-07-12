@@ -115,7 +115,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.5</div>
+  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.6</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -338,10 +338,10 @@ async function doLogin(){
 async function doSignup(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
   if(u.length<2){showErr("Choisis un identifiant (2 caractères minimum).");return;}
-  if(p.length<6){showErr("Mot de passe : 6 caractères minimum.");return;} busy=true; showErr("");
+  if(p.length<8){showErr("Mot de passe : 8 caractères minimum.");return;} busy=true; showErr("");
   try{ const uid=await q(db.rpc("app_signup",{p_username:u,p_password:p}));
     AUTH={id:uid,name:u}; saveAuth(); S.view="leagues"; await loadMyLeagues();
-  }catch(e){ showErr(/USERNAME_TAKEN/.test(e.message)?"Cet identifiant est déjà pris.":"Création : "+e.message); } busy=false;
+  }catch(e){ showErr(/WEAK_PASSWORD/.test(e.message)?"Mot de passe trop court (8 caractères minimum).":(/USERNAME_TAKEN/.test(e.message)?"Cet identifiant est déjà pris.":"Création : "+e.message)); } busy=false;
 }
 function logout(){ if(!confirm("Se déconnecter ?"))return; if(poll)clearInterval(poll);
   localStorage.removeItem("pl_auth"); localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
