@@ -83,7 +83,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Prototype de test · données sportives simulées · v2.2</div>
+  <div class="foot">Prototype de test · données sportives simulées · v2.3</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -120,7 +120,7 @@ const CARDS={
  cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:false,d:"Un pari adverse (au hasard) est inversé."},
  sniper:   {e:"🎯",n:"Sniper",t:true,      d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
  invest:   {e:"📈",n:"Investisseur",t:false,d:"Plafond de mise porté à 70 % du capital ce jour."},
- roi:      {e:"👑",n:"Roi de la cote",t:false,d:"Un pari gagné à cote ≥ 2,00 → +5 % capital."},
+ roi:      {e:"💎",n:"Roi de la cote",t:false,d:"Un pari gagné à cote ≥ 2,00 → +5 % du capital de départ."},
  tout:     {e:"🔥",n:"Tout ou Rien",t:true, d:"Un pari choisi : gain ×3, perte ×2."},
 };
 const COMMON=["assurance","double"];
@@ -790,8 +790,10 @@ function recapBody(D){
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
   duels.forEach(d=>{ const nh=netMap[d.home_id]||0,na=netMap[d.away_id]||0; if(nh>na)dpts[d.home_id]+=3; else if(na>nh)dpts[d.away_id]+=3; });
   const maxN=Math.max(...players.map(p=>netMap[p.id]||0)); players.forEach(p=>{ if((netMap[p.id]||0)===maxN) dpts[p.id]+=1; });
-  const meB=bets.find(b=>b.player_id===S.myId); const myD=duels.find(d=>d.home_id===S.myId||d.away_id===S.myId);
-  const myNet=netMap[S.myId]||0; const oppId=myD?(myD.home_id===S.myId?myD.away_id:myD.home_id):null;
+  const fp=(recapFocus && players.find(p=>p.id===recapFocus))?recapFocus:S.myId; const isMe=fp===S.myId;
+  const fpP=pById(fp)||{}; const fpName=isMe?"Toi":(fpP.name||"?");
+  const meB=bets.find(b=>b.player_id===fp); const myD=duels.find(d=>d.home_id===fp||d.away_id===fp);
+  const myNet=netMap[fp]||0; const oppId=myD?(myD.home_id===fp?myD.away_id:myD.home_id):null;
   const oppNet=oppId!=null?(netMap[oppId]||0):0; const won=myNet>oppNet, tie=myNet===oppNet;
   const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
   const cardDef=(who,c)=> (c&&c.id)?`<div class="mini muted" style="margin-top:4px">🃏 ${esc(who)} : <b>${esc(CARDS[c.id].n)}</b> — ${esc(CARDS[c.id].d)}</div>`:'';
@@ -835,34 +837,37 @@ function recapBody(D){
       <div class="mini muted" style="margin-top:3px">${esc(C.d)}</div>${detail?`<div class="mini" style="margin-top:4px">${detail}</div>`:''}
       ${bits.length?`<div class="mini" style="margin-top:4px"><span class="muted">Effet de la carte (vs sans la carte)</span> — ${bits.join(' · ')}</div>`:''}</div>`; };
   let detail="";
-  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const open=recapOpen===i; const bd=badge(meB,'toi',i)+(oppId!=null?badge(oppB,oppName,i):'');
+  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const open=recapOpen===i; const bd=badge(meB,fpName,i)+(oppId!=null?badge(oppB,oppName,i):'');
     return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="toggleRecapMatch(${i})">
     <div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="mini muted">résultat : <b>${esc(selLabel(f,f.res))}</b> ${open?'▲':'▼'}</span></div>
     ${bd?`<div style="margin-top:6px">${bd}</div>`:''}
-    <div class="mini" style="margin-top:6px"><span class="muted">Toi</span> — ${line(meB,f,i)}</div>
+    <div class="mini" style="margin-top:6px"><span class="muted">${esc(fpName)}</span> — ${line(meB,f,i)}</div>
     <div class="mini" style="margin-top:3px"><span class="muted">${esc(oppName)}</span> — ${line(oppB,f,i)}</div>
     ${open?`<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
        <div class="mini muted">Cotes : ${esc(f.home)} ${f.oh}${f.draw?` · Nul ${f.od}`:''} · ${esc(f.away)} ${f.oa}</div>
-       <div class="mini" style="margin-top:5px"><b>Toi</b> ${explain(meB,f,i)}</div>
+       <div class="mini" style="margin-top:5px"><b>${esc(fpName)}</b> ${explain(meB,f,i)}</div>
        <div class="mini" style="margin-top:3px"><b>${esc(oppName)}</b> ${explain(oppB,f,i)}</div></div>`:''}
     </div>`; }).join(""); }
   return `${recapNav(D)}<div class="box" style="background:linear-gradient(135deg,${myNet>=0?'#12251a':'#251215'},#0e1117);border-color:${won?'#2b6b45':(tie?'#3a3f4a':'#6b2b2b')}">
-      <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — TON GAIN</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
+      <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — ${isMe?'TON GAIN':('GAIN DE '+esc((fpP.emoji||'')+' '+fpName))}</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
       <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +3 pts':(tie?'Égalité':'Perdu')}</b>`:''}</div></div></div>
-    ${impactTxt("Toi",meB)}${oppId!=null?impactTxt(oppName,oppB):''}
-    ${detail?`<h2>Détail des paris — touche un match pour le calcul</h2>${detail}`:''}
+    ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">← Revenir à mes résultats</button>`:''}
+    ${impactTxt(fpName,meB)}${oppId!=null?impactTxt(oppName,oppB):''}
+    ${detail?`<h2>Détail — ${isMe?'tes paris':esc((fpP.emoji||'')+' '+fpName)} <span class="mini muted">(touche un match)</span></h2>${detail}`:''}
     <h2>Résultats de la journée</h2>
+    <div class="mini muted" style="margin:-4px 0 6px">👉 Touche un joueur pour voir le détail de ses paris.</div>
     <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Pts jour</th><th>Carte</th></tr>
-      ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${(netMap[p.id]||0)===maxN?' ⭐':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}</td>
+      ${ord.map((p,i)=>`<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:rgba(96,165,250,.12)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${(netMap[p.id]||0)===maxN?' ⭐':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
         <td class="num ${(netMap[p.id]||0)>=0?'green':'red'}">${fmt(netMap[p.id]||0)}€</td><td class="num"><b>${dpts[p.id]}</b></td>
         <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`).join("")}</table></div>`;
 }
+function setRecapFocus(pid){ recapFocus=pid||null; recapOpen=-1; render(); }
 function recapNav(D){ const last=L.current_day-1;
   return `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm" ${D>0?'':'disabled'} onclick="navDay(${D-1})">◀ Préc.</button>
     <b class="mini" style="text-align:center;flex:1">Journée ${D+1} / ${L.num_days}</b>
     <button class="btn ghost sm" ${D<last?'':'disabled'} onclick="navDay(${D+1})">Suiv. ▶</button></div>`; }
 function navDay(d){ const last=L.current_day-1; if(d<0||d>last) return; openResults(d); }
-async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1;
+async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recapFocus=null;
   try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); render(); }
   catch(e){ showErr("Résultats : "+e.message); } }
 function viewRecap(D){ return `${recapBody(D)}
@@ -872,9 +877,9 @@ function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.r
   return `<button class="btn ghost sm" onclick="S.view='game';refresh()">← Retour au jeu</button>
     ${recapBody(d)}
     <button class="btn ghost" style="margin-top:8px" onclick="goStandings()">Voir le classement général</button>`; }
-let recapOpen=-1;
+let recapOpen=-1, recapFocus=null;
 function toggleRecapMatch(i){ recapOpen=recapOpen===i?-1:i; render(); }
-function ackRecap(){ recapOpen=-1; setSeen(L.current_day); refresh(); }
+function ackRecap(){ recapOpen=-1; recapFocus=null; setSeen(L.current_day); refresh(); }
 
 /* ============ STANDINGS ============ */
 function cmp(a,b){ return b.points-a.points || b.capital-a.capital || b.duel_wins-a.duel_wins || b.best_day-a.best_day || b.best_odd-a.best_odd; }
