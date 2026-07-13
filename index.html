@@ -118,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.38</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.39</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -160,7 +160,7 @@ const CARDS={
  miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, f:3, d:"Le meilleur pari gagnant des deux joueurs est échangé."},
  gourmand: {e:"🍽️",n:"Gourmand",t:false, f:2, d:"Adversaire positif → tu récupères 20 % de son bénéfice."},
  face:     {e:"😏",n:"Dans ta face",t:true, f:3, d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
- serge:    {e:"💰",n:"Serge Benamou",t:false, f:2, d:"Si ton résultat du jour est positif, tu partages 10 % de ton gain net avec tous les autres joueurs (généreux !)."},
+ serge:    {e:"💰",n:"Serge Benamou",t:false, f:2, retired:true, d:"(Bonus retiré du jeu.)"},
  cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:true, f:3, d:"Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement)."},
  sniper:   {e:"🎯",n:"Sniper",t:true, f:3, d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
  invest:   {e:"📈",n:"Investisseur",t:false, f:3, d:"Plafond de mise porté à 70 % du capital ce jour."},
@@ -174,7 +174,8 @@ const CARDS={
 // Indicateur de force d'un bonus (1 à 5 muscles) affiché aux enchères / infos.
 function forceHTML(id){ const f=(CARDS[id]&&CARDS[id].f)||3; return `<span class="chip gold" title="Force ${f}/5" style="flex:0 0 auto">💪 ${f}/5</span>`; }
 const COMMON=["assurance","double"];
-const RANDOM_POOL=["miroir","gourmand","face","serge","cadeau","sniper","invest","roi","tout","sangsue","parachute","joker","chance"];
+const RANDOM_POOL=["miroir","gourmand","face","cadeau","sniper","invest","roi","tout","sangsue","parachute","joker","chance"];
+const CARD_IDS=Object.keys(CARDS).filter(id=>!CARDS[id].retired); // cartes actives (hors retirées) — enchères / règles / IA
 function handSize(d){ if(d>=18)return 8; if(d>=15)return 6; if(d>=12)return 5; if(d>=9)return 4; if(d>=6)return 3; return 2; }
 function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2); const hand=[];
   for(let i=0;i<nc;i++) hand.push(COMMON[i%COMMON.length]);
@@ -380,6 +381,8 @@ function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); }
 /* ---- Barème d'un duel ---- */
 // gain (retour brut des paris gagnants, à la cote) et mise (total misé) d'un joueur.
 function gainMise(picks,fx){ let gain=0,mise=0; (picks||[]).forEach((b,i)=>{ const st=+b.stake||0; mise+=st; const f=(fx||[])[i]; if(f&&b.sel===f.res) gain+=st*oddOf(f,b.sel); }); return {gain,mise}; }
+// Nombre de paris gagnants d'un joueur (gère la Double Chance)
+function winCount(bt,fx){ if(!bt||!bt.picks||!fx) return 0; const c=bt.card; let w=0; bt.picks.forEach((b,i)=>{ const f=fx[i]; if(!f)return; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res); if(win)w++; }); return w; }
 // Compare deux joueurs {net,gain,mise} : vainqueur = meilleur net, puis gain, puis mise, sinon nul.
 // Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
 function duelPts(h,a){ const R=x=>Math.round((+x||0)*100)/100;
@@ -707,7 +710,7 @@ async function closeRegistration(){
     setSeen(0); await refresh();
   }catch(e){ showErr("Clôture : "+e.message); } busy=false;
 }
-function aiPrep(nDays){ const ids=Object.keys(CARDS); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
+function aiPrep(nDays){ const ids=CARD_IDS.slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
   const maxCards=Math.max(1,nDays); const nb=1+Math.floor(Math.random()*Math.min(maxCards,4)); const budget=Math.round(rnd(15,SHOP_CAP)); const bids={}; let spent=0;
   for(let k=0;k<nb && k<ids.length;k++){ const id=ids[k]; const bid=Math.min(Math.round(rnd(3,12)), budget-spent); if(bid>=1){ bids[id]=bid; spent+=bid; } }
   return {vote:Math.floor(Math.random()*4), bids}; }
@@ -730,7 +733,7 @@ function viewPrep(){
       <h2>Joueurs</h2>
       ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">IA</span>':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?'✓ prêt':'⏳ pas encore'}</span></div>`).join("")}
       <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">✏️ Modifier ma préparation</button>`; }
-  const ids=Object.keys(CARDS);
+  const ids=CARD_IDS;
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   return `<div class="box"><h2 style="margin-top:0">🎬 Préparation</h2>
@@ -905,8 +908,8 @@ async function submitBet(){
 function humansToSubmit(){ return players.filter(p=>!p.is_ai).filter(p=>!bets.find(b=>b.player_id===p.id)); }
 function viewWait(dayLbl){
   const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
-  const list=players.filter(p=>!p.is_ai).map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
-    return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div>
+  const list=players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
+    return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">IA</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div>
       <span class="chip ${done?'g':''}">${done?t("✓ validé"):t("en cours")}</span></div>`;}).join("");
   const canResolve = waiting.length===0;
   const mine=myBet(); const md=myDuel();
@@ -978,11 +981,10 @@ function runEngine(pdIn, capStart, dz, N){
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="sangsue"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0){ const t=0.15*on; G[pid].bonus+=t; opp.bonus-=t; } } } }
   // Serge Benamou : si le joueur qui l'a jouée finit dans le vert, il partage 10 % de SON net avec tous les autres.
-  for(const pid in PD){ if(PD[pid].card&&PD[pid].card.id==="serge"&&N>1){ const own=G[pid].net+G[pid].bonus; if(own>0){ const pot=0.1*own; G[pid].bonus-=pot; const sh=pot/(N-1); for(const q in G){ if(q!==pid) G[q].bonus+=sh; } } } }
   // Phase 6 : Parachute (amortit 30 % de la perte nette du jour)
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="parachute"){ const cur=G[pid].net+G[pid].bonus; if(cur<0) G[pid].bonus += (-0.3*cur); } }
-  const dayNet={},dayBest={}; for(const pid in G){ dayNet[pid]=Math.round((G[pid].net+G[pid].bonus)*100)/100; dayBest[pid]=G[pid].bestOdd; }
-  return {dayNet,dayBest};
+  const dayNet={},dayBest={},dayWins={}; for(const pid in G){ dayNet[pid]=Math.round((G[pid].net+G[pid].bonus)*100)/100; dayBest[pid]=G[pid].bestOdd; dayWins[pid]=G[pid].perBet.filter(x=>x.win).length; }
+  return {dayNet,dayBest,dayWins};
 }
 async function resolveDay(){
   if(resolving)return; resolving=true; showErr("");
@@ -1005,7 +1007,7 @@ async function resolveDay(){
           aiInserts.push({league_id:L.id,day:D,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,card:ai.card,submitted:true}); }
         PD[pid]={picks:bt.picks.map(x=>({...x})),captain:bt.captain,card:bt.card||null,duelId:d.id,oppId:(pid===d.home_id?d.away_id:d.home_id),fx,rnd:Math.random()}; } }
     // résolution déterministe (moteur en phases), + impact réel de chaque carte
-    const {dayNet,dayBest}=runEngine(PD,capStart,dz,N);
+    const {dayNet,dayBest,dayWins}=runEngine(PD,capStart,dz,N);
     const impacts={};
     for(const pid in PD){ if(PD[pid].card&&PD[pid].card.id){ const alt=JSON.parse(JSON.stringify(PD)); alt[pid].card=null;
       const wo=runEngine(alt,capStart,dz,N).dayNet; const opp=PD[pid].oppId;
@@ -1029,6 +1031,8 @@ async function resolveDay(){
     // +1 au meilleur pronostiqueur du jour (plus gros gain parmi tous les joueurs)
     const starId=dayStar(ps.map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
     if(starId!=null) upd[starId].points+=1;
+    // Malus : -1 point si TOUS les paris du joueur sont faux (aucun gagnant) → possible d'être en négatif.
+    ps.forEach(p=>{ if(PD[p.id] && PD[p.id].picks && PD[p.id].picks.length && (dayWins[p.id]||0)===0) upd[p.id].points-=1; });
     // Duel : vainqueur = meilleur net (gain−mise), puis gain, puis mise, sinon nul.
     // Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
     // Les séries 🔥/❄️ ne servent que d'indicateur de dynamique (aucun avantage).
@@ -1061,7 +1065,8 @@ function recapBody(D){
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
     const H=Object.assign({net:netMap[d.home_id]||0}, gainMise(hb&&hb.picks, d.fixtures));
     const A=Object.assign({net:netMap[d.away_id]||0}, gainMise(ab&&ab.picks, d.fixtures));
-    const r=duelPts(H,A); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a; });
+    const r=duelPts(H,A); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a;
+    [d.home_id,d.away_id].forEach(pid=>{ const bb=bets.find(x=>x.player_id===pid); if(bb&&bb.picks&&bb.picks.length&&winCount(bb,d.fixtures)===0) dpts[pid]-=1; }); });
   const starId=dayStar(players.map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
   if(starId!=null) dpts[starId]+=1;
   const fp=(recapFocus && players.find(p=>p.id===recapFocus))?recapFocus:S.myId; const isMe=fp===S.myId;
@@ -1160,10 +1165,10 @@ function recapBody(D){
       </div>`; }).join("");
     detail=`<div class="box" style="padding:12px 14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div class="mini">${nameCell(hP,'🏠 domicile')}</div>
-        <div class="mini" style="text-align:right">${nameCell(aP,'extérieur ✈️')}</div>
+        <div><div class="mini muted">🏠 domicile</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((hP.emoji||'')+' '+(hP.name||'?'))}${hP.id===S.myId?' <span class="tag">(toi)</span>':''}</div></div>
+        <div style="text-align:right"><div class="mini muted">extérieur ✈️</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((aP.emoji||'')+' '+(aP.name||'?'))}${aP.id===S.myId?' <span class="tag">(toi)</span>':''}</div></div>
       </div>
-      <div class="mini muted" style="margin-top:4px">👉 Touche un match pour le calcul détaillé.</div>
+      <div class="mini muted" style="margin-top:6px">👉 Touche un match pour le calcul détaillé.</div>
       ${rows}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:2px solid var(--border);margin-top:4px;padding-top:10px">
         <div>
@@ -1248,13 +1253,17 @@ function cmp(a,b){ return b.points-a.points || b.capital-a.capital || b.duel_win
 function viewStandings(){
   const ord=[...players].sort(cmp); const humans=ord.filter(p=>!p.is_ai); const lastH=humans[humans.length-1];
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
+  // Points bonus ⭐ cumulés (meilleur net de la ligue chaque journée) — reconstitués à partir des résultats.
+  const sc={}; players.forEach(p=>sc[p.id]=0);
+  if(chartBets){ const N=Math.min(L.current_day,L.num_days); const byDay={}; chartBets.forEach(b=>{ if(b.day<N){(byDay[b.day]=byDay[b.day]||[]).push(b);} });
+    for(let d=0;d<N;d++){ const arr=byDay[d]; if(!arr||!arr.length)continue; let best=null,bn=-1e9,bo=1e9; arr.forEach(b=>{ const R=Math.round((b.net||0)*100)/100; const pp=pById(b.player_id); const o=pp?(pp.join_order||0):0; if(R>bn||(R===bn&&o<bo)){bn=R;best=b.player_id;bo=o;} }); if(best!=null)sc[best]++; } }
   return `<div class="row" style="gap:8px"><button class="btn ghost sm" onclick="S.view='game';render()">← Retour au jeu</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">📅 Résultats par journée</button>`:''}</div>
     ${quickBar('standings')}
-    <h2>Classement · J${Math.min(L.current_day+ (L.status==='done'?0:1),L.num_days)}/${L.num_days}</h2>
-    <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Pts</th><th style="text-align:right">Capital</th><th style="text-align:right">Série</th></tr>
-      ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:'–');
-        return `<tr><td>${p.is_ai?'🤖':i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${p.is_ai?' <span class="tag">hors gage</span>':''}</td>
-        <td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td><td class="num">${s}</td></tr>`;}).join("")}</table></div>
+    <h2>Classement · J${Math.min(L.current_day,L.num_days)}/${L.num_days}</h2>
+    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Duel</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th style="text-align:right">Pts</th><th style="text-align:right">Cap.</th></tr>
+      ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:''); const bp=sc[p.id]||0; const dp=p.points-bp;
+        return `<tr><td>${p.is_ai?'🤖':i+1}</td><td>${p.emoji} ${esc(p.name)}${s?' <span class="mini muted">'+s+'</span>':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${p.is_ai?' <span class="tag">hors gage</span>':''}</td>
+        <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     ${capChart()}
     ${(hand.length||used.length)?`<div class="box"><div class="mini muted">🃏 Tes bonus <span class="mini">(touche un bonus pour sa description · barré = déjà utilisé)</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(CARDS[id].n)}</s></div>`).join("")}</div></div>`:''}
     <div class="box mini"><span class="muted">🎭 Gage (au dernier humain) :</span> <b>${esc(L.gage)}</b> → ${lastH.emoji} ${esc(lastH.name)}</div>`;
@@ -1472,7 +1481,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.38";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.39";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
@@ -1521,13 +1530,14 @@ function viewRules(){
    <div class="box"><b>🏆 Points & classement</b>
      <div class="mini muted" style="margin-top:6px">Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.
      <br>Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.
+     <br><b>Malus</b> : <b>−1 pt</b> si <b>tous</b> tes paris du jour sont perdants (le total au classement peut donc devenir négatif).
      <br>Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.
      <br>Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.</div></div>
    <div class="box"><b>🔥 Dynamique</b>
      <div class="mini muted" style="margin-top:6px">Une 🔥 flamme signale une <b>bonne dynamique</b> (victoires de duel qui s'enchaînent), un ❄️ flocon une <b>mauvaise passe</b>. C'est <b>purement indicatif</b> (visible au classement) : aucun bonus ni malus n'y est associé.</div></div>
    <div class="box"><b>🃏 Cartes bonus (enchères)</b>
      <div class="mini muted" style="margin:6px 0">Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>${SHOP_CAP} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.</div>
-     ${Object.keys(CARDS).map(card).join("")}</div>
+     ${CARD_IDS.map(card).join("")}</div>
    <div class="box"><b>😴 Oubli</b><div class="mini muted" style="margin-top:6px">Pas de validation à temps → paris repris de l'adversaire, pronostics inversés.</div></div>`;
 }
 /* ============ boot ============ */
