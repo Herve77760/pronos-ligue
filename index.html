@@ -117,7 +117,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.30</div>
+  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.31</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -226,6 +226,7 @@ function infoModal(emoji,title,bodyHTML){ closeCardInfo();
   document.body.appendChild(o); }
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, c.n, `<div style="margin:4px 0 6px">💪 Force ${c.f||3}/5</div><div class="mini muted">${esc(c.d)}</div>`); }
 function showCaptainInfo(){ infoModal("👑","Capitaine (pari doublé)",`<div class="mini muted">Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.</div>`); }
+function showStarInfo(){ infoModal("⭐","Meilleur pronostiqueur",`<div class="mini muted">Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.</div>`); }
 function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.remove(); }
 /* ---- Notifications (onglet ouvert : système si en arrière-plan, sinon rappel dans l'app) ---- */
 let notifKey=null;
@@ -1078,7 +1079,7 @@ function recapBody(D){
       ${(()=>{ const dbN=Math.max(hNet,aNet), dbP=(hNet>=aNet?hP:aP); const sP=starId?(pById(starId)||{}):{}; const sN=starId?(netMap[starId]||0):0;
         return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;line-height:1.85">
         🏅 <b>Meilleur gain net du duel :</b> <b class="${dbN>=0?'green':'red'}">${fmt(dbN)}€</b> — ${esc((dbP.emoji||'')+' '+(dbP.name||'?'))}<br>
-        ⭐ <b>Meilleur gain net de la ligue :</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${esc((sP.emoji||'')+' '+(sP.name||'?'))} <span class="muted">→ +1 pt bonus</span></div>`; })()}
+        <span class="clik" onclick="showStarInfo()">⭐</span> <b>Meilleur gain net de la ligue :</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${esc((sP.emoji||'')+' '+(sP.name||'?'))} <span class="muted">→ +1 pt bonus</span></div>`; })()}
     </div>`;
   }
   return `${quickBar('results')}${recapNav(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
@@ -1089,11 +1090,11 @@ function recapBody(D){
     ${detail?`<h2>⚔️ Le duel en détail</h2>${detail}`:''}
     <h2>Résultats de la journée</h2>
     <div class="mini muted" style="margin:-4px 0 6px">👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.</div>
-    <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Duel</th><th style="text-align:right">⭐</th><th>Carte</th></tr>
+    <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Duel</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>Carte</th></tr>
       ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
         <td class="num">${duelP}</td>
-        <td class="num">${isStar?'⭐ +1':'–'}</td>
+        <td class="num">${isStar?'+1':'–'}</td>
         <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`;}).join("")}</table></div>`;
 }
 // Fenêtre « détail du calcul » du gain net d'un joueur pour la journée affichée
