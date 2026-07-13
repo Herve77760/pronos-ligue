@@ -117,7 +117,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.17</div>
+  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.18</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -160,7 +160,7 @@ const CARDS={
  gourmand: {e:"🍽️",n:"Gourmand",t:false,   d:"Adversaire positif → tu récupères 20 % de son bénéfice."},
  face:     {e:"😏",n:"Dans ta face",t:true,d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
  serge:    {e:"💰",n:"Serge Benamou",t:false,d:"10 % du plus gros gain du jour redistribué aux autres."},
- cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:false,d:"Un pari adverse (au hasard) est inversé."},
+ cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:true,d:"Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement)."},
  sniper:   {e:"🎯",n:"Sniper",t:true,      d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
  invest:   {e:"📈",n:"Investisseur",t:false,d:"Plafond de mise porté à 70 % du capital ce jour."},
  roi:      {e:"💎",n:"Roi de la cote",t:false,d:"Un pari gagné à cote ≥ 2,00 → +5 % du capital de départ."},
@@ -798,9 +798,9 @@ function aiPlay(cap,fx,hand){
 // Moteur pur : calcule les gains nets du jour à partir des plays (déterministe via pd.rnd).
 function runEngine(pdIn, capStart, dz, N){
   const PD=JSON.parse(JSON.stringify(pdIn));
-  // Phase 1 : Chérie c'est cadeau (inverse un pari adverse)
-  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"){ const opp=PD[pd.oppId];
-    if(opp){ const i=Math.floor((pd.rnd||0)*opp.picks.length); if(opp.picks[i].sel==="1")opp.picks[i].sel="2"; else if(opp.picks[i].sel==="2")opp.picks[i].sel="1"; } } }
+  // Phase 1 : Chérie c'est cadeau (inverse le pari adverse du match CIBLÉ)
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"&&pd.card.target!=null){ const opp=PD[pd.oppId]; const i=pd.card.target;
+    if(opp&&opp.picks[i]){ if(opp.picks[i].sel==="1")opp.picks[i].sel="2"; else if(opp.picks[i].sel==="2")opp.picks[i].sel="1"; } } }
   // Phase 2 : règlement pari par pari
   const G={};
   for(const pid in PD){ const pd=PD[pid]; const perBet=[]; let net=0,bestOdd=0;
@@ -861,8 +861,8 @@ async function resolveDay(){
     if(aiInserts.length) await q(db.from("bets").upsert(aiInserts,{onConflict:"player_id,day"}));
     // "Chérie c'est cadeau" : détermine l'inversion du pari ciblé de la victime
     const cadeauFlips={};
-    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"){ const vId=pd.oppId; const opp=PD[vId];
-      if(opp&&opp.picks.length){ const i=Math.floor((pd.rnd||0)*opp.picks.length); const from=opp.picks[i].sel; let to=from; if(from==="1")to="2"; else if(from==="2")to="1";
+    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"&&pd.card.target!=null){ const vId=pd.oppId; const opp=PD[vId]; const i=pd.card.target;
+      if(opp&&opp.picks[i]){ const from=opp.picks[i].sel; let to=from; if(from==="1")to="2"; else if(from==="2")to="1";
         if(to!==from) cadeauFlips[pid]={victim:vId, match:i, from, to}; } } }
     for(const pid in dayNet){ const c=PD[pid].card; const u2={net:dayNet[pid]};
       if(c&&c.id){ u2.card={id:c.id,target:c.target,impact:impacts[pid]}; if(cadeauFlips[pid]) u2.card.flip=cadeauFlips[pid]; }
@@ -947,7 +947,7 @@ function recapBody(D){
     if(c.id==="cadeau"){
       if(c.flip && fxRecap[c.flip.match]){ const f=fxRecap[c.flip.match]; const won=(c.flip.to===f.res);
         detail=`Pari adverse sur <b>${esc(f.home)}–${esc(f.away)}</b> inversé : <s class="red">${esc(selLabel(f,c.flip.from))}</s> → <b>${esc(selLabel(f,c.flip.to))}</b> — ${won?'devenu <span class="green">gagnant</span>':'reste <span class="red">perdant</span>'}.`; }
-      else detail=`Un pari adverse (tiré au hasard) a été inversé.`;
+      else detail=`Le pari adverse du match ciblé n'était ni 1 ni 2 → pas d'inversion.`;
     } else if(c.id==="face"){ const f=fxRecap[c.target]; const nm=f?`<b>${esc(f.home)}–${esc(f.away)}</b>`:'le match ciblé';
       const ob=(vb&&vb.picks&&c.target!=null)?vb.picks[c.target]:null; const owin=(ob&&f)?(ob.sel===f.res):false;
       detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(selLabel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
