@@ -117,7 +117,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.14</div>
+  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.15</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -150,6 +150,9 @@ const GAGES=[
  {t:"Le défi 50 pompes 💪", d:"Réaliser 50 pompes filmées d'une traite (ou une planche de 3 min), sans tricher."},
  {t:"Diète de réseaux 📵", d:"48 h sans réseaux sociaux — preuve à l'appui (temps d'écran)."},
 ];
+// Retrouve la description d'un gage à partir de son titre, en ignorant emoji/espaces/casse
+// (robuste même si l'emoji a changé entre deux versions).
+function gageDescOf(t){ const n=s=>(s||'').replace(/[^\p{L}]/gu,'').toLowerCase(); const g=GAGES.find(x=>n(x.t)===n(t)); return g?g.d:''; }
 const CARDS={
  assurance:{e:"🛡",n:"Assurance",t:true,  d:"Un pari choisi : s'il perd, mise remboursée."},
  double:   {e:"🚀",n:"Double Mise",t:true, d:"Un pari choisi : s'il gagne, gain doublé."},
@@ -476,7 +479,7 @@ function prepSuperlatives(s){
 function prepSummaryBody(){
   const s=L.prep_summary||{}; const gv=s.gageVotes||[]; const maxV=Math.max(1,...gv.map(g=>g.count));
   const pName=pid=>{const p=(s.players||[]).find(x=>x.pid===pid)||{};return (p.emoji?p.emoji+' ':'')+esc(p.name||'?');};
-  const gDesc=(GAGES.find(x=>x.t===(s.gage||L.gage))||{}).d;
+  const gDesc=s.gageDesc||gageDescOf(s.gage||L.gage);
   return `<h2>🎭 Gage retenu</h2>
    <div class="box"><div class="row"><b class="gold">${esc(s.gage||L.gage)}</b><span class="chip gold">à faire par le dernier</span></div>
      ${gDesc?`<div class="mini muted" style="margin-top:6px">${esc(gDesc)}</div>`:''}
@@ -647,8 +650,8 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
       auction.push({card:cardId, winner:wpid, amount:cand[0].amt, bids:cand.map(c=>({pid:c.pid,amt:c.amt}))}); }
     for(const p of ps){ await q(db.from("players").update({hand:won[p.id],capital:Math.max(0,100-paid[p.id]),shop_done:true}).eq("id",p.id)); }
     // récap de préparation (affiché avant le coup d'envoi)
-    const summary={ gage,
-      gageVotes: options.map((o,i)=>({t:(o&&o.t)||o, count:Object.values(votes).filter(v=>v===i).length, win:i===winIdx})),
+    const summary={ gage, gageDesc:(options[winIdx]&&options[winIdx].d)||gageDescOf(gage),
+      gageVotes: options.map((o,i)=>({t:(o&&o.t)||o, d:(o&&o.d)||'', count:Object.values(votes).filter(v=>v===i).length, win:i===winIdx})),
       auction,
       players: ps.map(p=>({pid:p.id,name:p.name,emoji:p.emoji,is_ai:!!p.is_ai,spent:paid[p.id],capital:Math.max(0,100-paid[p.id]),hand:won[p.id]})) };
     await q(db.from("leagues").update({status:"running",gage,current_day:0,prep_summary:summary}).eq("id",L.id));
