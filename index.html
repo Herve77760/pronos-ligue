@@ -115,7 +115,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.8</div>
+  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.9</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -963,24 +963,48 @@ function recapBody(D){
       <div class="mini muted" style="margin-top:3px">${esc(C.d)}</div>${detail?`<div class="mini" style="margin-top:4px">${detail}</div>`:''}
       ${bits.length?`<div class="mini" style="margin-top:4px"><span class="muted">Effet de la carte (vs sans la carte)</span> — ${bits.join(' · ')}</div>`:''}</div>`; };
   let detail="";
-  if(myD&&myD.fixtures){ detail=myD.fixtures.map((f,i)=>{ const open=recapOpen===i; const bd=badge(meB,fpName,i)+(oppId!=null?badge(oppB,oppName,i):'');
-    return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="toggleRecapMatch(${i})">
-    <div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="mini muted">résultat : <b>${esc(selLabel(f,f.res))}</b> ${open?'▲':'▼'}</span></div>
-    ${bd?`<div style="margin-top:6px">${bd}</div>`:''}
-    <div class="mini" style="margin-top:6px"><span class="muted">${esc(fpName)}</span> — ${line(meB,f,i)}</div>
-    <div class="mini" style="margin-top:3px"><span class="muted">${esc(oppName)}</span> — ${line(oppB,f,i)}</div>
-    ${open?`<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
-       <div class="mini muted">Cotes : ${esc(f.home)} ${f.oh}${f.draw?` · Nul ${f.od}`:''} · ${esc(f.away)} ${f.oa}</div>
-       <div class="mini" style="margin-top:5px"><b>${esc(fpName)}</b> ${explain(meB,f,i)}</div>
-       <div class="mini" style="margin-top:3px"><b>${esc(oppName)}</b> ${explain(oppB,f,i)}</div></div>`:''}
-    </div>`; }).join(""); }
+  if(myD&&myD.fixtures){
+    const homeId=myD.home_id, awayId=myD.away_id;
+    const hP=pById(homeId)||{}, aP=pById(awayId)||{};
+    const hB=bets.find(b=>b.player_id===homeId), aB=bets.find(b=>b.player_id===awayId);
+    const hNet=netMap[homeId]||0, aNet=netMap[awayId]||0;
+    const rr=duelPts(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)));
+    const nameCell=(p,side)=>`<span class="mini muted">${side}</span> <b>${esc((p.emoji||'')+' '+(p.name||'?'))}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}`;
+    const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
+      const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`<b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`adv. <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
+      return `<div class="mini blue clik" onclick="showCardInfo('${c.id}')" style="margin-top:4px">🃏 ${C.e} ${esc(C.n)}${ps.length?' · '+ps.join(' · '):''}</div>`; };
+    const rows=myD.fixtures.map((f,i)=>`<div style="padding:8px 0;border-top:1px solid var(--border)">
+        <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(selLabel(f,f.res))}</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:5px">
+          <div class="mini">${line(hB,f,i)}</div>
+          <div class="mini" style="text-align:right">${line(aB,f,i)}</div>
+        </div></div>`).join("");
+    detail=`<div class="box" style="padding:12px 14px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div class="mini">${nameCell(hP,'🏠 domicile')}</div>
+        <div class="mini" style="text-align:right">${nameCell(aP,'extérieur ✈️')}</div>
+      </div>
+      ${rows}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:2px solid var(--border);margin-top:4px;padding-top:10px">
+        <div>
+          <div class="big ${hNet>=0?'green':'red'}" style="font-size:22px">${fmt(hNet)} €</div>
+          <div style="margin-top:3px"><span class="ptpill ${rr.h>0?'':'zero'}">${rr.h} pt${rr.h>1?'s':''}</span></div>
+          ${bonusMini(hB)}
+        </div>
+        <div style="text-align:right">
+          <div class="big ${aNet>=0?'green':'red'}" style="font-size:22px">${fmt(aNet)} €</div>
+          <div style="margin-top:3px"><span class="ptpill ${rr.a>0?'':'zero'}">${rr.a} pt${rr.a>1?'s':''}</span></div>
+          ${bonusMini(aB)}
+        </div>
+      </div>
+    </div>`;
+  }
   return `${quickBar('results')}${recapNav(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
       <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — ${isMe?'TON GAIN':('GAIN DE '+esc((fpP.emoji||'')+' '+fpName))}</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
       <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné':(tie?'Match nul':'Perdu')} · ${fpDuelPts} pt${fpDuelPts>1?'s':''}</b>`:''}</div></div></div>
     ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">← Revenir à mes résultats</button>`:''}
     ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">💸 Recapitalisation solidaire</b><div class="mini" style="margin-top:4px"><b>${esc((L.recap_note.names||[]).join(', '))}</b> n'${(L.recap_note.names||[]).length>1?'avaient':'avait'} plus assez pour miser → <b>+${L.recap_note.amount} €</b> pour ${(L.recap_note.names||[]).length>1?'eux':'lui'} <b>et pour tout le monde</b>, histoire de rester équitable. Tout le monde repart avec un coup de pouce ! 🤝</div></div>`:''}
-    ${impactTxt(fpName,meB,oppB)}${oppId!=null?impactTxt(oppName,oppB,meB):''}
-    ${detail?`<h2>Détail — ${isMe?'tes paris':esc((fpP.emoji||'')+' '+fpName)} <span class="mini muted">(touche un match)</span></h2>${detail}`:''}
+    ${detail?`<h2>⚔️ Le duel en détail</h2>${detail}`:''}
     <h2>Résultats de la journée</h2>
     <div class="mini muted" style="margin:-4px 0 6px">👉 Touche un joueur pour voir le détail de ses paris.</div>
     <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain · points</th><th>Carte</th></tr>
