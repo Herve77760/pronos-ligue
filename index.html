@@ -118,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.39</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.40</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -189,9 +189,14 @@ const FORMULAS={
   classique: {n:"🗓️ Classique", sel:24, bet:24, d:"~24h pour choisir, puis ~24h pour miser — 48h en tout (idée : de midi au lendemain midi, deux fois)."}
 };
 function leagueFormula(){ return FORMULAS[(L&&L.formula)||'classique'] || FORMULAS.classique; }
-// Échéances du jour courant à partir de day_started_at (si présent). sel = fin sélection, bet = clôture paris.
+// Échéances du jour courant. sel = fin sélection ; bet = clôture des paris.
+// Dès que tous les matchs sont choisis (bet_started_at), la clôture des paris = bet_started_at + delai (max 24h / 12h fast).
 function dayTimes(){ const f=leagueFormula(); const t0=(L&&L.day_started_at)?new Date(L.day_started_at).getTime():0;
-  if(!t0||isNaN(t0)) return {ok:false,sel:0,bet:0}; return {ok:true, sel:t0+f.sel*3600000, bet:t0+(f.sel+f.bet)*3600000}; }
+  if(!t0||isNaN(t0)) return {ok:false,sel:0,bet:0};
+  const sel=t0+f.sel*3600000;
+  const bs=(L&&L.bet_started_at)?new Date(L.bet_started_at).getTime():0;
+  const bet=(bs&&!isNaN(bs))?(bs+f.bet*3600000):(t0+(f.sel+f.bet)*3600000);
+  return {ok:true, sel, bet}; }
 function fmtWhen(ts){ if(!ts) return ""; const d=new Date(ts); const now=new Date(); const hm=d.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
   const sameDay=d.toDateString()===now.toDateString(); const tomorrow=new Date(now.getTime()+86400000).toDateString()===d.toDateString();
   return (sameDay?"aujourd'hui":(tomorrow?"demain":d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'2-digit'})))+" "+hm; }
@@ -420,6 +425,9 @@ async function refresh(){
     // sélection auto (IA à domicile, ou échéance de sélection dépassée) + résolution auto
     if(L.status==="running" && !S.recap && !resolving){
       if(await ensureFixtures()){ duels = await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); }
+      // tous les matchs choisis → on démarre le compte à rebours des paris (max 24h / 12h fast), une seule fois
+      if(!L.bet_started_at && duels.length && duels.every(d=>d.fixtures)){
+        try{ const r=await q(db.from("leagues").update({bet_started_at:new Date().toISOString()}).eq("id",L.id).is("bet_started_at",null).select("bet_started_at")); if(r&&r.length){ L.bet_started_at=r[0].bet_started_at; } }catch(e){} }
       if(await ensureAiBets()){ bets = await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); }
       if(shouldAutoResolve()){ resolveDay(); return; }
     }
@@ -1052,7 +1060,8 @@ async function resolveDay(){
     try{ await q(db.from("leagues").update({recap_note:recapNote}).eq("id",L.id)); }catch(e){} // message recapitalisation (défensif si colonne absente)
     const next=D+1; const done=next>=fresh.num_days;
     await q(db.from("leagues").update({current_day:next,status:done?"done":"running"}).eq("id",L.id));
-    if(!done){ try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} } // début journée suivante (défensif si colonne absente)
+    if(!done){ try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} // début journée suivante (défensif si colonne absente)
+      try{ await q(db.from("leagues").update({bet_started_at:null}).eq("id",L.id)); }catch(e){} } // remise à zéro du compte à rebours des paris
     resolving=false; await refresh(); toast("Journée résolue ✓");
   }catch(e){ showErr("Résolution : "+e.message); resolving=false; }
 }
@@ -1481,7 +1490,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.39";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.40";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
