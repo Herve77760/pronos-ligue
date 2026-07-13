@@ -117,7 +117,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.31</div>
+  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.32</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -227,6 +227,22 @@ function infoModal(emoji,title,bodyHTML){ closeCardInfo();
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, c.n, `<div style="margin:4px 0 6px">💪 Force ${c.f||3}/5</div><div class="mini muted">${esc(c.d)}</div>`); }
 function showCaptainInfo(){ infoModal("👑","Capitaine (pari doublé)",`<div class="mini muted">Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.</div>`); }
 function showStarInfo(){ infoModal("⭐","Meilleur pronostiqueur",`<div class="mini muted">Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.</div>`); }
+function showDuelPtsInfo(pid){
+  const p=pById(pid)||{}; const d=duels.find(x=>x.home_id===pid||x.away_id===pid);
+  const bareme=`<div class="mini muted" style="text-align:left">Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>
+    • <b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> si négatif.<br>
+    • <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> si négatif.<br>
+    • <b>Match nul</b> : <b>1 pt</b> chacun.</div>`;
+  let ctx='';
+  if(d){ const hb=bets.find(x=>x.player_id===d.home_id), ab=bets.find(x=>x.player_id===d.away_id);
+    const H=Object.assign({net:(hb&&hb.net)||0},gainMise(hb&&hb.picks,d.fixtures));
+    const A=Object.assign({net:(ab&&ab.net)||0},gainMise(ab&&ab.picks,d.fixtures));
+    const r=duelPts(H,A); const iAmHome=d.home_id===pid; const pts=iAmHome?r.h:r.a; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
+    const issue = r.win==null?'fait match nul' : (((r.win==='h')===iAmHome)?'gagné son duel':'perdu son duel');
+    ctx=`<div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><b>Ici :</b> ${esc((p.emoji||'')+' '+(p.name||'?'))} a <b>${issue}</b> avec un net <b class="${pos?'green':'red'}">${fmt(netMe)}€</b> (${pos?'positif':'négatif ou nul'}) → <b>${pts} pt${pts>1?'s':''}</b>.</div>`;
+  }
+  infoModal("🥇","Points du duel", bareme+ctx);
+}
 function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.remove(); }
 /* ---- Notifications (onglet ouvert : système si en arrière-plan, sinon rappel dans l'app) ---- */
 let notifKey=null;
@@ -1093,7 +1109,7 @@ function recapBody(D){
     <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Duel</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>Carte</th></tr>
       ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
-        <td class="num">${duelP}</td>
+        <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
         <td class="num">${isStar?'+1':'–'}</td>
         <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`;}).join("")}</table></div>`;
 }
