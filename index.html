@@ -115,7 +115,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.6</div>
+  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.8</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -259,6 +259,22 @@ function genFixture(){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t);
   if(s.draw) f.od=+rnd(3.0,3.9).toFixed(2); return f; }
 function genPool(k){ return Array.from({length:k},genFixture); }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
+/* ---- Barème d'un duel ---- */
+// gain (retour brut des paris gagnants, à la cote) et mise (total misé) d'un joueur.
+function gainMise(picks,fx){ let gain=0,mise=0; (picks||[]).forEach((b,i)=>{ const st=+b.stake||0; mise+=st; const f=(fx||[])[i]; if(f&&b.sel===f.res) gain+=st*oddOf(f,b.sel); }); return {gain,mise}; }
+// Compare deux joueurs {net,gain,mise} : vainqueur = meilleur net, puis gain, puis mise, sinon nul.
+// Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
+function duelPts(h,a){ const R=x=>Math.round((+x||0)*100)/100;
+  const c=(R(h.net)-R(a.net)) || (R(h.gain)-R(a.gain)) || (R(h.mise)-R(a.mise));
+  if(c>0) return {h:R(h.net)>0?3:1, a:R(a.net)>0?1:0, win:'h'};
+  if(c<0) return {h:R(h.net)>0?1:0, a:R(a.net)>0?3:1, win:'a'};
+  return {h:1,a:1,win:null}; }
+// Meilleur pronostiqueur du jour (un SEUL joueur de toute la ligue) : net, puis gain, puis mise, puis 1er inscrit.
+function dayStar(rows){ const R=x=>Math.round((+x||0)*100)/100; let best=null;
+  for(const r of rows){ if(!best){ best=r; continue; }
+    const c=(R(r.net)-R(best.net))||(R(r.gain)-R(best.gain))||(R(r.mise)-R(best.mise))||((best.order||0)-(r.order||0));
+    if(c>0) best=r; }
+  return best?best.id:null; }
 function simResult(f){ const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1",f.oh],["2",f.oa]];
   const inv=outs.map(o=>1/o[1]); const sum=inv.reduce((a,b)=>a+b,0);
   let r=Math.random(); for(let i=0;i<outs.length;i++){ r-=inv[i]/sum; if(r<=0) return outs[i][0]; } return outs[outs.length-1][0]; }
@@ -850,13 +866,18 @@ async function resolveDay(){
       streak_w:p.streak_w,streak_l:p.streak_l,duel_wins:p.duel_wins,best_day:Math.max(p.best_day,dayNet[p.id]||0),
       best_odd:Math.max(p.best_odd,dayBest[p.id]||0),hand:(p.hand||[]).slice(),cards_used:(p.cards_used||[]).slice()}; });
     // +1 au meilleur pronostiqueur du jour (plus gros gain parmi tous les joueurs)
-    const maxNet=Math.max(...ps.map(p=>dayNet[p.id]||0));
-    ps.forEach(p=>{ if((dayNet[p.id]||0)===maxNet) upd[p.id].points+=1; });
-    // Duel : +3 pts au vainqueur ; on suit les séries 🔥/❄️ pour l'indicateur de dynamique (sans aucun avantage).
-    for(const d of dz){ const nh=dayNet[d.home_id]||0,na=dayNet[d.away_id]||0; let w=null,l=null;
-      if(nh>na){w=d.home_id;l=d.away_id;} else if(na>nh){w=d.away_id;l=d.home_id;}
-      if(w){ upd[w].points+=3; upd[w].duel_wins+=1; upd[w].streak_w+=1; upd[w].streak_l=0;
-        upd[l].streak_l+=1; upd[l].streak_w=0; } }
+    const starId=dayStar(ps.map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
+    if(starId!=null) upd[starId].points+=1;
+    // Duel : vainqueur = meilleur net (gain−mise), puis gain, puis mise, sinon nul.
+    // Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
+    // Les séries 🔥/❄️ ne servent que d'indicateur de dynamique (aucun avantage).
+    for(const d of dz){ const hp=PD[d.home_id], ap=PD[d.away_id]; if(!hp||!ap) continue;
+      const H=Object.assign({net:dayNet[d.home_id]||0}, gainMise(hp.picks,hp.fx));
+      const A=Object.assign({net:dayNet[d.away_id]||0}, gainMise(ap.picks,ap.fx));
+      const r=duelPts(H,A); upd[d.home_id].points+=r.h; upd[d.away_id].points+=r.a;
+      if(r.win==='h'){ upd[d.home_id].duel_wins+=1; upd[d.home_id].streak_w+=1; upd[d.home_id].streak_l=0; upd[d.away_id].streak_l+=1; upd[d.away_id].streak_w=0; }
+      else if(r.win==='a'){ upd[d.away_id].duel_wins+=1; upd[d.away_id].streak_w+=1; upd[d.away_id].streak_l=0; upd[d.home_id].streak_l+=1; upd[d.home_id].streak_w=0; }
+      else { upd[d.home_id].streak_w=0; upd[d.home_id].streak_l=0; upd[d.away_id].streak_w=0; upd[d.away_id].streak_l=0; } }
     for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id){ const h=upd[pid].hand; const idx=h.indexOf(pd.card.id); if(idx>=0){ h.splice(idx,1); upd[pid].cards_used.push(pd.card.id); } } }
     // Recapitalisation solidaire : si un humain n'a plus assez pour miser (< seuil), +20€ à lui ET à tout le monde
     let recapNote=null;
@@ -876,13 +897,24 @@ function recapBody(D){
   const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
   const ord=[...players].sort((a,b)=>(netMap[b.id]||0)-(netMap[a.id]||0));
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
-  duels.forEach(d=>{ const nh=netMap[d.home_id]||0,na=netMap[d.away_id]||0; if(nh>na)dpts[d.home_id]+=3; else if(na>nh)dpts[d.away_id]+=3; });
-  const maxN=Math.max(...players.map(p=>netMap[p.id]||0)); players.forEach(p=>{ if((netMap[p.id]||0)===maxN) dpts[p.id]+=1; });
+  duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
+    const H=Object.assign({net:netMap[d.home_id]||0}, gainMise(hb&&hb.picks, d.fixtures));
+    const A=Object.assign({net:netMap[d.away_id]||0}, gainMise(ab&&ab.picks, d.fixtures));
+    const r=duelPts(H,A); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a; });
+  const starId=dayStar(players.map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
+  if(starId!=null) dpts[starId]+=1;
   const fp=(recapFocus && players.find(p=>p.id===recapFocus))?recapFocus:S.myId; const isMe=fp===S.myId;
   const fpP=pById(fp)||{}; const fpName=isMe?"Toi":(fpP.name||"?");
   const meB=bets.find(b=>b.player_id===fp); const myD=duels.find(d=>d.home_id===fp||d.away_id===fp);
   const myNet=netMap[fp]||0; const oppId=myD?(myD.home_id===fp?myD.away_id:myD.home_id):null;
-  const oppNet=oppId!=null?(netMap[oppId]||0):0; const won=myNet>oppNet, tie=myNet===oppNet;
+  const oppNet=oppId!=null?(netMap[oppId]||0):0;
+  let fpOutcome=null, fpDuelPts=0;
+  if(myD){ const hb=bets.find(b=>b.player_id===myD.home_id), ab=bets.find(b=>b.player_id===myD.away_id);
+    const H=Object.assign({net:netMap[myD.home_id]||0}, gainMise(hb&&hb.picks, myD.fixtures));
+    const A=Object.assign({net:netMap[myD.away_id]||0}, gainMise(ab&&ab.picks, myD.fixtures));
+    const r=duelPts(H,A); const iAmHome=myD.home_id===fp; fpDuelPts=iAmHome?r.h:r.a;
+    fpOutcome = (r.win==null)?'tie':(((r.win==='h')===iAmHome)?'win':'loss'); }
+  const won=fpOutcome==='win', tie=fpOutcome==='tie';
   const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
   const cardDef=(who,c)=> (c&&c.id)?`<div class="mini muted" style="margin-top:4px">🃏 ${esc(who)} : <b>${esc(CARDS[c.id].n)}</b> — ${esc(CARDS[c.id].d)}</div>`:'';
   const oppB = oppId!=null? bets.find(b=>b.player_id===oppId) : null;
@@ -944,7 +976,7 @@ function recapBody(D){
     </div>`; }).join(""); }
   return `${quickBar('results')}${recapNav(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
       <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — ${isMe?'TON GAIN':('GAIN DE '+esc((fpP.emoji||'')+' '+fpName))}</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
-      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné +3 pts':(tie?'Égalité':'Perdu')}</b>`:''}</div></div></div>
+      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné':(tie?'Match nul':'Perdu')} · ${fpDuelPts} pt${fpDuelPts>1?'s':''}</b>`:''}</div></div></div>
     ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">← Revenir à mes résultats</button>`:''}
     ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">💸 Recapitalisation solidaire</b><div class="mini" style="margin-top:4px"><b>${esc((L.recap_note.names||[]).join(', '))}</b> n'${(L.recap_note.names||[]).length>1?'avaient':'avait'} plus assez pour miser → <b>+${L.recap_note.amount} €</b> pour ${(L.recap_note.names||[]).length>1?'eux':'lui'} <b>et pour tout le monde</b>, histoire de rester équitable. Tout le monde repart avec un coup de pouce ! 🤝</div></div>`:''}
     ${impactTxt(fpName,meB,oppB)}${oppId!=null?impactTxt(oppName,oppB,meB):''}
@@ -952,7 +984,7 @@ function recapBody(D){
     <h2>Résultats de la journée</h2>
     <div class="mini muted" style="margin:-4px 0 6px">👉 Touche un joueur pour voir le détail de ses paris.</div>
     <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain · points</th><th>Carte</th></tr>
-      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${(netMap[p.id]||0)===maxN?' ⭐':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
+      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===starId?' ⭐':''}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
         <td class="num"><span style="display:inline-flex;gap:7px;align-items:center;justify-content:flex-end"><b class="${(netMap[p.id]||0)>=0?'green':'red'}">${fmt(netMap[p.id]||0)}€</b><span class="ptpill ${dp>0?'':'zero'}">${dp>0?'+'+dp:'0'} pt${dp>1?'s':''}</span></span></td>
         <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</td></tr>`;}).join("")}</table></div>`;
 }
@@ -1203,7 +1235,10 @@ function viewRules(){
        <li>Gain d'un pari = mise × (cote − 1) ; pari perdu = − mise. Le capital ne descend jamais sous 0.</li>
      </ul></div>
    <div class="box"><b>🏆 Points & classement</b>
-     <div class="mini muted" style="margin-top:6px">Chaque journée : le <b>vainqueur de son duel</b> gagne <b>3 points</b> (comme au foot), et le <b>meilleur pronostiqueur</b> ⭐ (plus gros gain parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>. Départage à égalité : capital, puis victoires en duel, plus gros gain, plus grosse cote.</div></div>
+     <div class="mini muted" style="margin-top:6px">Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.
+     <br>Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.
+     <br>Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.
+     <br>Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.</div></div>
    <div class="box"><b>🔥 Dynamique</b>
      <div class="mini muted" style="margin-top:6px">Une 🔥 flamme signale une <b>bonne dynamique</b> (victoires de duel qui s'enchaînent), un ❄️ flocon une <b>mauvaise passe</b>. C'est <b>purement indicatif</b> (visible au classement) : aucun bonus ni malus n'y est associé.</div></div>
    <div class="box"><b>🃏 Cartes bonus (enchères)</b>
