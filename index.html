@@ -117,7 +117,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.21</div>
+  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.25</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -469,15 +469,42 @@ function prepSuperlatives(s){
   const bidders=ps.filter(p=>st[p.pid].bids>0);
   if(bidders.length<2) return '';
   const best=(arr,fn)=>arr.slice().sort(fn)[0];
+  // choix d'une formulation stable par ligue (varie d'une ligue à l'autre, fixe quand on rouvre les coulisses)
+  const seed=k=>{ let h=0; const s=((L&&L.id)||'')+k; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0; return h; };
+  const pickV=(arr,k)=>arr[seed(k)%arr.length];
   const items=[];
   const strat=best(bidders,(a,b)=> st[b.pid].won-st[a.pid].won || (st[b.pid].won/st[b.pid].bids)-(st[a.pid].won/st[a.pid].bids));
-  if(strat && st[strat.pid].won>0) items.push(`🧠 <b>Le stratège :</b> ${nm(strat.pid)} — a raflé <b>${st[strat.pid].won}</b> bonus sur ${st[strat.pid].bids} visé${st[strat.pid].bids>1?'s':''}. Chirurgical.`);
+  if(strat && st[strat.pid].won>0){ const N=nm(strat.pid), w=st[strat.pid].won, b=st[strat.pid].bids;
+    items.push(pickV([
+      `🧠 <b>Le stratège :</b> ${N} — a raflé <b>${w}</b> bonus sur ${b} visé${b>1?'s':''}. Chirurgical.`,
+      `🎯 <b>Le sniper des enchères :</b> ${N} — ${w} bonus décroché${w>1?'s':''} sur ${b} tenté${b>1?'s':''}. Redoutable.`,
+      `🧠 <b>Le cerveau :</b> ${N} avait tout calculé — <b>${w}</b> bonus dans la poche. Personne n'a rien vu venir.`,
+      `♟️ <b>Le tacticien :</b> ${N} place ses pions et rafle <b>${w}</b> bonus. Échec et mat.`
+    ], strat.pid+'S')); }
   const poisse=best(bidders,(a,b)=> (st[b.pid].bids-st[b.pid].won)-(st[a.pid].bids-st[a.pid].won));
-  if(poisse && (st[poisse.pid].bids-st[poisse.pid].won)>=1 && (!strat||poisse.pid!==strat.pid)) items.push(`😭 <b>La poisse :</b> ${nm(poisse.pid)} — a misé sur ${st[poisse.pid].bids} bonus, repart avec <b>${st[poisse.pid].won}</b>. Aïe aïe aïe.`);
+  if(poisse && (st[poisse.pid].bids-st[poisse.pid].won)>=1 && (!strat||poisse.pid!==strat.pid)){ const N=nm(poisse.pid), b=st[poisse.pid].bids, w=st[poisse.pid].won;
+    items.push(pickV([
+      `😭 <b>La poisse :</b> ${N} — a misé sur ${b} bonus, repart avec <b>${w}</b>. Aïe aïe aïe.`,
+      `🍀 <b>Pas de bol :</b> ${N} a tenté ${b} fois, remporté <b>${w}</b>. Ce n'était pas son jour.`,
+      `😩 <b>Le malchanceux :</b> ${b} enchères pour seulement <b>${w}</b> bonus. Dur dur, ${N}.`,
+      `🎭 <b>Le déçu du soir :</b> ${N} visait gros (${b} bonus)… résultat : <b>${w}</b>. La vie est cruelle.`
+    ], poisse.pid+'P')); }
   const radin=best(bidders,(a,b)=> st[a.pid].total-st[b.pid].total);
-  if(radin) items.push(`🤏 <b>Le radin :</b> ${nm(radin.pid)} — <b>${st[radin.pid].total}€</b> lâchés en tout, pas un centime de plus.`);
+  if(radin){ const N=nm(radin.pid), tot=st[radin.pid].total;
+    items.push(pickV([
+      `🤏 <b>Le radin :</b> ${N} — <b>${tot}€</b> lâchés en tout, pas un centime de plus.`,
+      `💰 <b>L'économe :</b> ${N} a serré les cordons — <b>${tot}€</b> dépensés, point final.`,
+      `🐭 <b>Le prudent :</b> <b>${tot}€</b> misés par ${N}. On ne se refait pas.`,
+      `🧊 <b>Le pingre :</b> ${N} garde son magot — à peine <b>${tot}€</b> de mises.`
+    ], radin.pid+'R')); }
   const fou=best(bidders,(a,b)=> st[b.pid].maxBid-st[a.pid].maxBid);
-  if(fou && st[fou.pid].maxBid>0 && (!radin||fou.pid!==radin.pid)) items.push(`🤪 <b>Le plus fou :</b> ${nm(fou.pid)} — <b>${st[fou.pid].maxBid}€</b> d'un coup sur ${CARDS[st[fou.pid].maxCard]?CARDS[st[fou.pid].maxCard].e+' '+esc(CARDS[st[fou.pid].maxCard].n):'un bonus'}. Le poker, ça le connaît.`);
+  if(fou && st[fou.pid].maxBid>0 && (!radin||fou.pid!==radin.pid)){ const N=nm(fou.pid), mb=st[fou.pid].maxBid, cl=CARDS[st[fou.pid].maxCard]?CARDS[st[fou.pid].maxCard].e+' '+esc(CARDS[st[fou.pid].maxCard].n):'un bonus';
+    items.push(pickV([
+      `🤪 <b>Le plus fou :</b> ${N} — <b>${mb}€</b> d'un coup sur ${cl}. Le poker, ça le connaît.`,
+      `🔥 <b>Le flambeur :</b> ${N} a balancé <b>${mb}€</b> sur ${cl}. Tout ou rien !`,
+      `🎰 <b>Le parieur fou :</b> <b>${mb}€</b> d'un seul coup sur ${cl} pour ${N}. Respect (ou pas).`,
+      `💸 <b>Le mégalo :</b> ${N} claque <b>${mb}€</b> sur ${cl}. Y'a pas de petites économies… sauf là.`
+    ], fou.pid+'F')); }
   if(!items.length) return '';
   return `<h2>🎭 Le mot des coulisses</h2><div class="box"><div class="mini" style="line-height:1.9">${items.join('<br>')}</div></div>`;
 }
@@ -603,8 +630,9 @@ function viewPrep(){
    <h2>👥 Joueurs de la ligue · ${players.filter(p=>!p.is_ai).length}</h2>
    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">organisateur</span>':''}${p.is_ai?' <span class="tag">IA</span>':''}${p.id===S.myId?' <span class="chip b">toi</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?'✓ prêt':'en cours'}</span></div>`).join("")}
    <h2>🎭 Vote du gage</h2>
+   <div class="mini muted" style="margin:-4px 0 6px">🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).</div>
    ${options.map((g,i)=>`<div class="box" onclick="prepVote(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
-      <div class="row"><b>${esc(g.t||g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ton vote':(counts[i]+' vote'+(counts[i]>1?'s':''))}</span></div>
+      <div class="row"><b>${esc(g.t||g)}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?'✓ ton vote':'Voter'}</span></div>
       ${g.d?`<div class="mini muted" style="margin-top:5px">${esc(g.d)}</div>`:''}</div>`).join("")}
    <h2>🃏 Enchères bonus</h2>
    <div class="box"><div class="mini muted">Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>${SHOP_CAP} €</b>, jusqu'à <b>${maxCards}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.</div>
@@ -710,7 +738,7 @@ let bet={picks:null,captain:-1}, myCard=null;
 function viewBet(d,dayLbl,opp,iAmHome){
   const fx=d.fixtures;
   if(!bet.picks || bet.picks.length!==fx.length){ bet={picks:fx.map(()=>({sel:"1",stake:0})),captain:-1}; myCard=null; }
-  const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=cap*(invest?0.7:0.5);
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=Math.floor(cap*(invest?0.7:0.5)+1e-9);
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const pct=Math.min(100,max>0?tot/max*100:0); const over=tot>max+0.001;
   const targetCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].t;
   const needTarget = targetCard && (myCard.target==null);
@@ -720,7 +748,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
   const hand = meP.hand||[];
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?'🏠 Domicile':'✈️ Extérieur'}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">Duel vs <b>${esc(opp.name)}</b></span><span class="muted">Capital <b>${Math.round(cap)}</b> €</span></div>${betLineHTML()}
-    <div class="row mini" style="margin-top:6px"><span class="muted">Misé <b id="tot">${Math.round(tot)}</b> € / ${Math.round(max)} € max${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">👑 Capitaine ×2</span></div>
+    <div class="row mini" style="margin-top:6px"><span class="muted">Misé <b id="tot">${Math.round(tot)}</b> € / ${max} € max${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">👑 Capitaine ×2</span></div>
     <div class="gauge ${over?'over':''}"><i style="width:${pct}%"></i></div></div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${oddOf(f,v)}</b></div>`;
@@ -739,7 +767,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
 }
 function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCard.target===i&&myCard.sel2===v) myCard.sel2=null; render(); }
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
-  const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=meP.capital*(invest?0.7:0.5);
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*(invest?0.7:0.5)+1e-9);
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const t=$("tot"); if(t){t.textContent=Math.round(tot);
     const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
   const targetCard=myCard&&CARDS[myCard.id].t; const needTarget=targetCard&&myCard.target==null;
@@ -942,15 +970,16 @@ function recapBody(D){
   const oppB = oppId!=null? bets.find(b=>b.player_id===oppId) : null;
   const oppName = oppId!=null? pById(oppId).name : "";
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
-  const line=(bt,f,i)=>{ if(!bt||!bt.picks||!bt.picks[i]) return `<span class="muted">—</span>`;
+  const line=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return `<span class="muted">—</span>`;
     const b=bt.picks[i]; const c=bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
     const odd = isDC ? dcOdd(oddOf(f,b.sel),oddOf(f,c.sel2)) : oddOf(f,b.sel);
     let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
     if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g=0; if(c.id==="joker")g*=2; }
+    let faceCut=false; if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; faceCut=true; }
     const selTxt = isDC ? `<b>${esc(selLabel(f,b.sel))}</b>/<b>${esc(selLabel(f,c.sel2))}</b>` : (b.orig!=null ? `<s class="red">${esc(selLabel(f,b.orig))}</s> → <b>${esc(selLabel(f,b.sel))}</b> <span class="bem clik" onclick="event.stopPropagation();showCardInfo('cadeau')">🎁</span>` : esc(selLabel(f,b.sel)));
-    return `${selTxt} · ${b.stake}€ @${odd}${i===bt.captain?' <span class="bem">👑</span>':''}${(c&&c.target===i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.id}')">${CARDS[c.id].e}</span>`:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
-  const explain=(bt,f,i)=>{ if(!bt||!bt.picks||!bt.picks[i]) return `pari non enregistré pour ce match.`;
+    return `${selTxt} · ${b.stake}€ @${odd}${i===bt.captain?' <span class="bem">👑</span>':''}${(c&&c.target===i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.id}')">${CARDS[c.id].e}</span>`:''}${faceCut?` <span class="mini red" title="Gain réduit de moitié par « Dans ta face » adverse">↓½ 😏</span>`:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
+  const explain=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return `pari non enregistré pour ce match.`;
     const b=bt.picks[i]; const c=bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
     const odd = isDC ? dcOdd(oddOf(f,b.sel),oddOf(f,c.sel2)) : oddOf(f,b.sel);
@@ -961,6 +990,7 @@ function recapBody(D){
              :`a parié <b>${esc(selLabel(f,b.sel))}</b> (${b.stake}€) → perdu : −${b.stake}€`); }
     if(i===bt.captain){ g=base*2; t+=` · 👑 Capitaine ×2 → ${fmt(g)}€`; }
     if(c&&c.target===i&&!isDC){ if(c.id==="double"&&win){g*=2;t+=` · 🚀 Double Mise ×2 → ${fmt(g)}€`;} else if(c.id==="tout"){g*=(win?3:2);t+=` · 🔥 Tout ou Rien ${win?'×3':'×2'} → ${fmt(g)}€`;} else if(c.id==="joker"){g*=2;t+=` · 🃏 Joker ×2 → ${fmt(g)}€`;} else if(c.id==="assurance"&&!win){g=0;t+=` · 🛡 Assurance : mise remboursée → 0€`;} }
+    if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; t+=` · 😏 Dans ta face adverse : gain <b>réduit de moitié</b> → ${fmt(g)}€`; }
     t+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; return t; };
   const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Pari du Capitaine : gain et perte doublés">👑 Capitaine (${esc(who)})</span> `; if(bt&&bt.card&&bt.card.target===i) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.id}')">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
   const fxRecap = (myD && myD.fixtures) || [];
@@ -1009,13 +1039,13 @@ function recapBody(D){
       return `<div class="clik" style="border-top:2px solid color-mix(in srgb,var(--ink) 22%,transparent);${imp?'border-left:3px solid var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent);border-radius:0 10px 10px 0;padding:10px 8px 10px 9px;':'padding:10px 2px;'}" onclick="toggleRecapMatch(${i})">
         <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(selLabel(f,f.res))} ${open?'▲':'▼'}</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:5px">
-          <div class="mini">${line(hB,f,i)}</div>
-          <div class="mini" style="text-align:right">${line(aB,f,i)}</div>
+          <div class="mini">${line(hB,f,i,aB&&aB.card)}</div>
+          <div class="mini" style="text-align:right">${line(aB,f,i,hB&&hB.card)}</div>
         </div>
         ${open?`<div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">
           <div class="mini muted">Cotes : ${esc(f.home)} ${f.oh}${f.draw?` · Nul ${f.od}`:''} · ${esc(f.away)} ${f.oa}</div>
-          <div class="mini" style="margin-top:5px"><b>${esc((hP.emoji||'')+' '+(hP.name||'?'))}</b> ${explain(hB,f,i)}</div>
-          <div class="mini" style="margin-top:3px"><b>${esc((aP.emoji||'')+' '+(aP.name||'?'))}</b> ${explain(aB,f,i)}</div></div>`:''}
+          <div class="mini" style="margin-top:5px"><b>${esc((hP.emoji||'')+' '+(hP.name||'?'))}</b> ${explain(hB,f,i,aB&&aB.card)}</div>
+          <div class="mini" style="margin-top:3px"><b>${esc((aP.emoji||'')+' '+(aP.name||'?'))}</b> ${explain(aB,f,i,hB&&hB.card)}</div></div>`:''}
       </div>`; }).join("");
     detail=`<div class="box" style="padding:12px 14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
