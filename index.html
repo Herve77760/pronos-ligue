@@ -98,6 +98,7 @@
   .modal{position:fixed;inset:0;background:rgba(4,6,12,.62);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
   .mbox{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px;max-width:340px;width:100%;text-align:center;box-shadow:var(--shadow);}
   .clik{cursor:pointer;}
+  .bem{font-size:1.35em;line-height:1;vertical-align:-2px;}
 </style>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('pl_theme')||'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
 </head>
@@ -115,7 +116,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.11</div>
+  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.12</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -923,8 +924,8 @@ function recapBody(D){
   const line=(bt,f,i)=>{ if(!bt||!bt.picks) return `<span class="muted">n'a pas joué</span>`;
     const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
     const c=bt.card; if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g=0; if(c.id==="joker")g*=2; }
-    const selTxt = b.orig!=null ? `<s class="red">${esc(selLabel(f,b.orig))}</s> → <b>${esc(selLabel(f,b.sel))}</b> 🎁` : esc(selLabel(f,b.sel));
-    return `${selTxt} · ${b.stake}€ @${odd}${i===bt.captain?' 👑':''}${(c&&c.target===i)?' '+CARDS[c.id].e:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
+    const selTxt = b.orig!=null ? `<s class="red">${esc(selLabel(f,b.orig))}</s> → <b>${esc(selLabel(f,b.sel))}</b> <span class="bem">🎁</span>` : esc(selLabel(f,b.sel));
+    return `${selTxt} · ${b.stake}€ @${odd}${i===bt.captain?' <span class="bem">👑</span>':''}${(c&&c.target===i)?' <span class="bem">'+CARDS[c.id].e+'</span>':''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
   const explain=(bt,f,i)=>{ if(!bt||!bt.picks) return `n'a pas joué ce match.`;
     const b=bt.picks[i]; const win=b.sel===f.res; const odd=oddOf(f,b.sel); const base=win?(+b.stake)*(odd-1):-(+b.stake); let g=base;
     let flip = b.orig!=null ? `🎁 <b>Chérie c'est cadeau</b> : choix initial <s class="red">${esc(selLabel(f,b.orig))}</s> inversé en <b>${esc(selLabel(f,b.sel))}</b>.<br>` : '';
@@ -973,7 +974,9 @@ function recapBody(D){
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`<b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`adv. <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
       return `<div class="mini blue clik" onclick="showCardInfo('${c.id}')" style="margin-top:4px">🃏 ${C.e} ${esc(C.n)}${ps.length?' · '+ps.join(' · '):''}</div>`; };
-    const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i; return `<div class="clik" style="padding:8px 0;border-top:1px solid var(--border)" onclick="toggleRecapMatch(${i})">
+    const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
+      const impB=(bt)=> !!(bt&&bt.picks&&bt.picks[i]&&bt.picks[i].orig!=null) || !!(bt&&bt.card&&bt.card.id&&bt.card.target===i); const imp=impB(hB)||impB(aB);
+      return `<div class="clik" style="border-top:1px solid var(--border);${imp?'border-left:3px solid var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent);border-radius:0 10px 10px 0;padding:8px 8px 8px 9px;':'padding:8px 2px;'}" onclick="toggleRecapMatch(${i})">
         <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(selLabel(f,f.res))} ${open?'▲':'▼'}</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:5px">
           <div class="mini">${line(hB,f,i)}</div>
