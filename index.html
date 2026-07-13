@@ -108,6 +108,7 @@
   <div class="bar">
     <div><h1 style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 40 40" width="30" height="30" style="flex:0 0 auto" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#e0a020"/><circle cx="20" cy="20" r="18" fill="none" stroke="#f4c14e" stroke-width="3.6" stroke-dasharray="4.5 5"/><circle cx="20" cy="20" r="12.5" fill="#f7cf87"/><circle cx="20" cy="20" r="12.5" fill="none" stroke="#c68e1e" stroke-width="1.3"/><text x="20" y="24.5" text-anchor="middle" font-size="12.5" font-weight="800" fill="#2a1a05">VS</text></svg><span><span style="color:var(--accent)">B</span>ankroll <span style="color:var(--accent)">B</span>et <span style="color:var(--accent)">B</span>attle</span></h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
     <div style="display:flex;gap:8px;flex:0 0 auto">
+      <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🇬🇧</button>
       <button class="btn ghost sm" id="themeBtn" onclick="toggleTheme()" title="Basculer clair / sombre">☀️</button>
       <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()">← Mes ligues</button>
       <button class="btn ghost sm hide" id="coulissesBtn" onclick="openCoulisses()" title="Coulisses : gage & enchères d'ouverture">🎪</button>
@@ -117,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.34</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.36</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -159,7 +160,7 @@ const CARDS={
  miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, f:3, d:"Le meilleur pari gagnant des deux joueurs est échangé."},
  gourmand: {e:"🍽️",n:"Gourmand",t:false, f:2, d:"Adversaire positif → tu récupères 20 % de son bénéfice."},
  face:     {e:"😏",n:"Dans ta face",t:true, f:3, d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
- serge:    {e:"💰",n:"Serge Benamou",t:false, f:2, d:"10 % du plus gros gain du jour redistribué aux autres."},
+ serge:    {e:"💰",n:"Serge Benamou",t:false, f:2, d:"Si ton résultat du jour est positif, tu partages 10 % de ton gain net avec tous les autres joueurs (généreux !)."},
  cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:true, f:3, d:"Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement)."},
  sniper:   {e:"🎯",n:"Sniper",t:true, f:3, d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
  invest:   {e:"📈",n:"Investisseur",t:false, f:3, d:"Plafond de mise porté à 70 % du capital ce jour."},
@@ -211,6 +212,43 @@ function currentTheme(){ return document.documentElement.getAttribute("data-them
 function applyThemeBtn(){ const b=$("themeBtn"); if(b) b.textContent = currentTheme()==="light"?"🌙":"☀️"; }
 function toggleTheme(){ const t=currentTheme()==="light"?"dark":"light"; document.documentElement.setAttribute("data-theme",t);
   try{ localStorage.setItem("pl_theme",t); }catch(e){} applyThemeBtn(); }
+/* ---- i18n (FR par défaut, EN via dictionnaire ; clé = texte français, repli = FR si non traduit) ---- */
+let lang=(()=>{ try{ return localStorage.getItem("pl_lang")||"fr"; }catch(e){ return "fr"; } })();
+const EN={
+  // En-tête / navigation
+  "← Mes ligues":"← My leagues", "📖 Règles":"📖 Rules", "Déconnexion":"Log out",
+  "Connexion":"Login", "Mes ligues":"My leagues", "Préparation":"Preparation", "Terminé":"Finished",
+  "Coulisses : gage & enchères d'ouverture":"Behind the scenes: forfeit & opening auction",
+  // Pied de page
+  "prototype de test · données sportives simulées":"test prototype · simulated sports data",
+  // Écran connexion
+  "Identifiant (pseudo)":"Username", "Mot de passe":"Password", "ex : herve":"e.g. herve",
+  "Se connecter":"Log in", "Créer un compte":"Create an account",
+  "Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b> et d'en jouer <b>plusieurs à la fois</b>, depuis n'importe quel appareil.":"No email needed: pick a username + password. Your account lets you <b>find all your leagues</b> and play <b>several at once</b>, from any device.",
+  "Identifiant et mot de passe requis.":"Username and password required.",
+  "Identifiant ou mot de passe incorrect.":"Wrong username or password.",
+  "Choisis un identifiant (2 caractères minimum).":"Pick a username (2 characters minimum).",
+  "Mot de passe : 8 caractères minimum.":"Password: 8 characters minimum.",
+  "Mot de passe trop court (8 caractères minimum).":"Password too short (8 characters minimum).",
+  "Cet identifiant est déjà pris.":"This username is already taken.",
+  // Mes ligues
+  "➕ Créer une ligue":"➕ Create a league", "Rejoindre avec un code":"Join with a code",
+  "Rejoindre →":"Join →", "🏆 Palmarès général":"🏆 Overall hall of fame", "🛠 Admin":"🛠 Admin",
+  "🔔 Activer les notifications":"🔔 Enable notifications",
+  "Pour être prévenu quand c'est à toi de jouer (onglet ouvert).":"To be notified when it's your turn (tab open).",
+  "Ouvrir →":"Open →", "Salon · inscriptions ouvertes":"Lobby · sign-ups open", "Vote du gage":"Forfeit vote", "En cours":"Ongoing",
+  "Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.":"No ongoing league. Create one, or join a friend's with their code.",
+  "Entre un code valide.":"Enter a valid code.",
+  "▲ masquer":"▲ hide", "▼ afficher":"▼ show",
+  "Salon":"Lobby", "Journée {a}/{b}":"Day {a}/{b}",
+  "Capitaine et bonus doivent être sur des matchs différents.":"Captain and bonus must be on different matches.",
+  "👋 Bonjour {a}":"👋 Hello {a}", "Ex : 7XK2P":"e.g. 7XK2P",
+  "🏁 Ligues terminées · {a}":"🏁 Finished leagues · {a}", "J{a}/{b}":"D{a}/{b}",
+  "Se déconnecter ?":"Log out?"
+};
+function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); } return out; }
+function applyLangBtn(){ const b=$("langBtn"); if(b) b.textContent = lang==="en"?"🇫🇷":"🇬🇧"; }
+function toggleLang(){ lang=lang==="en"?"fr":"en"; try{ localStorage.setItem("pl_lang",lang); }catch(e){} applyLangBtn(); render(); }
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
 const r2=n=>Math.round((+n||0)*100)/100;                       // arrondi à 2 décimales
@@ -382,31 +420,31 @@ function pById(id){ return players.find(p=>p.id===id); }
 
 /* ============ AUTH ============ */
 function viewAuth(){
-  return `<div class="box"><h2 style="margin-top:0">Connexion</h2>
-    <label>Identifiant (pseudo)</label><input id="aUser" autocomplete="username" placeholder="ex : herve" maxlength="20">
-    <label>Mot de passe</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••">
+  return `<div class="box"><h2 style="margin-top:0">${t("Connexion")}</h2>
+    <label>${t("Identifiant (pseudo)")}</label><input id="aUser" autocomplete="username" placeholder="${t("ex : herve")}" maxlength="20">
+    <label>${t("Mot de passe")}</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••">
     <div style="height:12px"></div>
-    <button class="btn" onclick="doLogin()">Se connecter</button>
-    <button class="btn ghost" style="margin-top:8px" onclick="doSignup()">Créer un compte</button>
-    <div class="mini muted" style="margin-top:12px">Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b> et d'en jouer <b>plusieurs à la fois</b>, depuis n'importe quel appareil.</div></div>`;
+    <button class="btn" onclick="doLogin()">${t("Se connecter")}</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="doSignup()">${t("Créer un compte")}</button>
+    <div class="mini muted" style="margin-top:12px">${t("Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b> et d'en jouer <b>plusieurs à la fois</b>, depuis n'importe quel appareil.")}</div></div>`;
 }
 async function doLogin(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
-  if(!u||!p){showErr("Identifiant et mot de passe requis.");return;} busy=true; showErr("");
+  if(!u||!p){showErr(t("Identifiant et mot de passe requis."));return;} busy=true; showErr("");
   try{ const uid=await q(db.rpc("app_login",{p_username:u,p_password:p}));
-    if(!uid){ showErr("Identifiant ou mot de passe incorrect."); busy=false; return; }
+    if(!uid){ showErr(t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
     AUTH={id:uid,name:u}; saveAuth(); S.view="leagues"; await loadMyLeagues();
   }catch(e){ showErr("Connexion : "+e.message); } busy=false;
 }
 async function doSignup(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
-  if(u.length<2){showErr("Choisis un identifiant (2 caractères minimum).");return;}
-  if(p.length<8){showErr("Mot de passe : 8 caractères minimum.");return;} busy=true; showErr("");
+  if(u.length<2){showErr(t("Choisis un identifiant (2 caractères minimum)."));return;}
+  if(p.length<8){showErr(t("Mot de passe : 8 caractères minimum."));return;} busy=true; showErr("");
   try{ const uid=await q(db.rpc("app_signup",{p_username:u,p_password:p}));
     AUTH={id:uid,name:u}; saveAuth(); S.view="leagues"; await loadMyLeagues();
-  }catch(e){ showErr(/WEAK_PASSWORD/.test(e.message)?"Mot de passe trop court (8 caractères minimum).":(/USERNAME_TAKEN/.test(e.message)?"Cet identifiant est déjà pris.":"Création : "+e.message)); } busy=false;
+  }catch(e){ showErr(/WEAK_PASSWORD/.test(e.message)?t("Mot de passe trop court (8 caractères minimum)."):(/USERNAME_TAKEN/.test(e.message)?t("Cet identifiant est déjà pris."):"Création : "+e.message)); } busy=false;
 }
-function logout(){ if(!confirm("Se déconnecter ?"))return; if(poll)clearInterval(poll);
+function logout(){ if(!confirm(t("Se déconnecter ?")))return; if(poll)clearInterval(poll);
   localStorage.removeItem("pl_auth"); localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
   S={view:"auth",leagueId:null,myId:null,code:null,recap:false,dispDay:0,prevView:"leagues"}; L=null; render(); }
 
@@ -421,35 +459,35 @@ async function loadMyLeagues(){
   }catch(e){ showErr("Chargement des ligues : "+e.message); myLeagues=[]; }
   render();
 }
-function statusLabel(s){ return s==="lobby"?"Salon · inscriptions ouvertes":s==="gage_vote"?"Vote du gage":s==="done"?"Terminé":"En cours"; }
+function statusLabel(s){ return s==="lobby"?t("Salon · inscriptions ouvertes"):s==="gage_vote"?t("Vote du gage"):s==="done"?t("Terminé"):t("En cours"); }
 function howItWorksHTML(){ return `<div class="box" style="border-left:3px solid var(--blue)"><b class="mini">💡 Comment ça marche ?</b>
    <div class="mini muted" style="margin-top:5px;line-height:1.7">Championnat de pronos entre amis, <b>sans argent réel</b> — tu démarres avec <b>100 € virtuels</b>.<br>
    1️⃣ <b>Enchères bonus</b> : tu mises en aveugle sur les cartes bonus que tu veux (jusqu'à <b>${SHOP_CAP} €</b>) ; ce que tu remportes est retiré de tes 100 €.<br>
    2️⃣ <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2).<br>
    3️⃣ Le <b>vainqueur du duel</b> du jour marque des points ; à la fin, le <b>dernier</b> du classement fait le <b>gage</b> 😅.</div></div>`; }
 function viewLeagues(){
-  return `<div class="box"><b>👋 Bonjour ${esc(AUTH.name)}</b></div>
-    <div class="box"><button class="btn" onclick="createLeague()">➕ Créer une ligue</button>
-      <div style="height:12px"></div><label>Rejoindre avec un code</label>
-      <input id="joinCode" maxlength="5" placeholder="Ex : 7XK2P" style="text-transform:uppercase">
-      <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">Rejoindre →</button></div>
-    <div class="row" style="gap:8px"><button class="btn ghost" onclick="openPalmares()">🏆 Palmarès général</button>${AUTH&&AUTH.id===ADMIN_ID?`<button class="btn ghost" onclick="openAdmin()">🛠 Admin</button>`:''}</div>
-    ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost" onclick="askNotif()">🔔 Activer les notifications</button><div class="mini muted" style="text-align:center;margin-top:-4px">Pour être prévenu quand c'est à toi de jouer (onglet ouvert).</div>`:''}
+  return `<div class="box"><b>${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b></div>
+    <div class="box"><button class="btn" onclick="createLeague()">${t("➕ Créer une ligue")}</button>
+      <div style="height:12px"></div><label>${t("Rejoindre avec un code")}</label>
+      <input id="joinCode" maxlength="5" placeholder="${t("Ex : 7XK2P")}" style="text-transform:uppercase">
+      <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">${t("Rejoindre →")}</button></div>
+    <div class="row" style="gap:8px"><button class="btn ghost" onclick="openPalmares()">${t("🏆 Palmarès général")}</button>${AUTH&&AUTH.id===ADMIN_ID?`<button class="btn ghost" onclick="openAdmin()">${t("🛠 Admin")}</button>`:''}</div>
+    ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost" onclick="askNotif()">${t("🔔 Activer les notifications")}</button><div class="mini muted" style="text-align:center;margin-top:-4px">${t("Pour être prévenu quand c'est à toi de jouer (onglet ouvert).")}</div>`:''}
     ${(()=>{
       const row=m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
-        <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · J'+Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days)+'/'+m.lg.num_days:''}</div></div>
-        <span class="chip b">Ouvrir →</span></div>`;
+        <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div></div>
+        <span class="chip b">${t("Ouvrir →")}</span></div>`;
       const active=myLeagues.filter(m=>m.lg.status!=='done'); const finished=myLeagues.filter(m=>m.lg.status==='done');
-      let h=`<h2>Mes ligues${active.length?' · '+active.length:''}</h2>`;
-      h+= active.length? active.map(row).join("") : `<div class="box mini muted">Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.</div>`;
+      let h=`<h2>${t("Mes ligues")}${active.length?' · '+active.length:''}</h2>`;
+      h+= active.length? active.map(row).join("") : `<div class="box mini muted">${t("Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.")}</div>`;
       if(finished.length){
-        h+=`<div class="box row clik" onclick="showFinished=!showFinished;render()"><b>🏁 Ligues terminées · ${finished.length}</b><span class="chip">${showFinished?'▲ masquer':'▼ afficher'}</span></div>`;
+        h+=`<div class="box row clik" onclick="showFinished=!showFinished;render()"><b>${t("🏁 Ligues terminées · {a}",{a:finished.length})}</b><span class="chip">${showFinished?t("▲ masquer"):t("▼ afficher")}</span></div>`;
         if(showFinished) h+= finished.map(row).join("");
       }
       return h;
     })()}`;
 }
-function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr("Entre un code valide.");return;} joinLeague(c); }
+function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr(t("Entre un code valide."));return;} joinLeague(c); }
 function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; endStats=null; S.bidLLeague=null; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
@@ -775,17 +813,18 @@ let bet={picks:null,captain:-1}, myCard=null;
 function viewBet(d,dayLbl,opp,iAmHome){
   const fx=d.fixtures;
   if(!bet.picks || bet.picks.length!==fx.length){ bet={picks:fx.map(()=>({sel:"1",stake:0})),captain:-1}; myCard=null; }
-  const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=Math.floor(cap*(invest?0.7:0.5)+1e-9);
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=Math.floor(cap*(invest?0.7:0.5)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const pct=Math.min(100,max>0?tot/max*100:0); const over=tot>max+0.001;
   const targetCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].t;
   const needTarget = targetCard && (myCard.target==null);
   const needSel2 = myCard && myCard.id==="chance" && myCard.target!=null && !myCard.sel2;
+  const conflict = targetCard && myCard.target!=null && myCard.target===bet.captain;
   const allMin = bet.picks.every(b=>(+b.stake||0)>=1);
-  const ok = allMin && !over && bet.captain>=0 && !needTarget && !needSel2;
+  const ok = allMin && !over && bet.captain>=0 && !needTarget && !needSel2 && !conflict;
   const hand = meP.hand||[];
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?'🏠 Domicile':'✈️ Extérieur'}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">Duel vs <b>${esc(opp.name)}</b></span><span class="muted">Capital <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
-    <div class="row mini" style="margin-top:6px"><span class="muted">Misé <b id="tot">${Math.round(tot)}</b> € / ${max} € max${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">👑 Capitaine ×2</span></div>
+    <div class="row mini" style="margin-top:6px"><span class="muted">Misé <b id="tot">${eur(tot)}</b> € / ${eur(max)} € max${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">👑 Capitaine ×2</span></div>
     <div class="gauge ${over?'over':''}"><i style="width:${pct}%"></i></div></div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${oddOf(f,v)}</b></div>`;
@@ -796,26 +835,27 @@ function viewBet(d,dayLbl,opp,iAmHome){
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
         ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">🎲 2ᵉ résultat couvert (Double Chance)</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${oddOf(f,v)}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">Cote combinée ≈ <b>${dcOdd(oddOf(f,b.sel),oddOf(f,myCard.sel2))}</b> pour 1 seule mise</div>`:''}</div>`:''}
         <div class="row" style="margin-top:9px"><span class="mini muted">Mise (€)</span>
-          <input type="number" inputmode="numeric" min="1" step="1" value="${b.stake||''}" placeholder="min 1€" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
+          <input type="number" inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="min 1€" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
     <div class="box"><div class="row"><b class="mini">🃏 Carte bonus (1 max/jour)</b>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">✕ retirer</span>`:'<span class="mini muted">optionnel</span>'}</div>
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" title="${esc(CARDS[id].d)}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(CARDS[id].n)}</div>`).join("")}</div>
         ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(CARDS[myCard.id].d)}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">→ aucun match éligible aujourd\'hui (il faut un match avec match nul) : retire cette carte.</b>':(needTarget?' <b class="blue">→ touche le 🎯 du pari ciblé.</b>':(needSel2?' <b class="blue">→ choisis le 2ᵉ résultat sur le match ciblé.</b>':''))}</div>`:''}`
         :'<div class="mini muted" style="margin-top:6px">Plus de cartes en main.</div>'}</div>
-    <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?'Choisis ton Capitaine 👑':(over?'Mise trop élevée':(needTarget?'Choisis la cible 🎯':(needSel2?'Choisis le 2ᵉ résultat 🎲':(!allMin?'Mise de 1 € min. sur chaque pari':'Valider mes pronostics →'))))}</button>`;
+    <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?'Choisis ton Capitaine 👑':(over?'Mise trop élevée':(needTarget?'Choisis la cible 🎯':(needSel2?'Choisis le 2ᵉ résultat 🎲':(conflict?'Capitaine et bonus sur des matchs différents':(!allMin?'Mise de 1 € min. sur chaque pari':'Valider mes pronostics →')))))}</button>`;
 }
 function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCard.target===i&&myCard.sel2===v) myCard.sel2=null; render(); }
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
-  const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*(invest?0.7:0.5)+1e-9);
-  const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const t=$("tot"); if(t){t.textContent=Math.round(tot);
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*(invest?0.7:0.5)*100)/100;
+  const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const t=$("tot"); if(t){t.textContent=eur(tot);
     const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
   const targetCard=myCard&&CARDS[myCard.id].t; const needTarget=targetCard&&myCard.target==null;
   const needSel2=myCard&&myCard.id==="chance"&&myCard.target!=null&&!myCard.sel2;
+  const conflict=targetCard&&myCard.target!=null&&myCard.target===bet.captain;
   const btn=$("betSubmit");
-  if(btn){ const over=tot>max+0.001; const allMin=bet.picks.every(b=>(+b.stake||0)>=1); const ok=allMin&&!over&&bet.captain>=0&&!needTarget&&!needSel2; btn.disabled=!ok;
-    btn.textContent = bet.captain<0?'Choisis ton Capitaine 👑':(over?'Mise trop élevée':(needTarget?'Choisis la cible 🎯':(needSel2?'Choisis le 2ᵉ résultat 🎲':(!allMin?'Mise de 1 € min. sur chaque pari':'Valider mes pronostics →')))); }
+  if(btn){ const over=tot>max+0.001; const allMin=bet.picks.every(b=>(+b.stake||0)>=1); const ok=allMin&&!over&&bet.captain>=0&&!needTarget&&!needSel2&&!conflict; btn.disabled=!ok;
+    btn.textContent = bet.captain<0?'Choisis ton Capitaine 👑':(over?'Mise trop élevée':(needTarget?'Choisis la cible 🎯':(needSel2?'Choisis le 2ᵉ résultat 🎲':(conflict?'Capitaine et bonus sur des matchs différents':(!allMin?'Mise de 1 € min. sur chaque pari':'Valider mes pronostics →'))))); }
 }
-function setCap(i){ bet.captain=bet.captain===i?-1:i; render(); }
-function setTarget(i){ if(!myCard) return; if(myCard.id==="chance"){ const d=myDuel(); const f=d&&d.fixtures&&d.fixtures[i]; if(!f||!f.draw) return; } myCard.target=i; if(myCard.id==="chance") myCard.sel2=null; render(); }
+function setCap(i){ const on=bet.captain!==i; if(on && myCard && CARDS[myCard.id] && CARDS[myCard.id].t && myCard.target===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; } bet.captain=bet.captain===i?-1:i; render(); }
+function setTarget(i){ if(!myCard) return; if(bet.captain===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; } if(myCard.id==="chance"){ const d=myDuel(); const f=d&&d.fixtures&&d.fixtures[i]; if(!f||!f.draw) return; } myCard.target=i; if(myCard.id==="chance") myCard.sel2=null; render(); }
 function setSel2(i,v){ if(!myCard||myCard.id!=="chance"||myCard.target!==i) return; if(bet.picks[i].sel===v) return; myCard.sel2=v; render(); }
 function selCard(id){ if(myCard&&myCard.id===id){ myCard=null; } else { myCard={id, target:null}; } render(); }
 async function submitBet(){
@@ -847,7 +887,7 @@ function viewWait(dayLbl){
   return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">Tes pronos sont validés ✓. On attend les autres.</div>${betLineHTML()}</div>${mySummary}${aiSection}${list}
     ${canResolve?`<h2>Paris de la journée (publics)</h2><div class="mini muted" style="margin:-4px 0 8px">Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'<b>après les résultats</b>.</div>${publicBetsHTML()}`:''}
     ${canResolve?`<div class="box mini muted" style="text-align:center">✅ Tous les pronos sont validés — <b>résolution automatique en cours…</b></div>`
-      :`<div class="box mini muted" style="text-align:center">⏳ On attend les autres — ${waiting.length} joueur(s) à valider. Résolution auto à l'échéance.</div>`}`;
+      :`<div class="box mini muted" style="text-align:center">⏳ On attend les autres — ${waiting.length} joueur(s) à valider.${(()=>{const dt=dayTimes();return dt.ok?` <b>Temps restant : ${fmtLeft(dt.bet)}</b>`:'';})()}<br>Résolution automatique à l'échéance.</div>`}`;
 }
 function publicBetsHTML(){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : "Nul";
@@ -903,9 +943,8 @@ function runEngine(pdIn, capStart, dz, N){
   // Phase 5 : Gourmand, Sangsue, Serge Benamou
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="sangsue"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0){ const t=0.15*on; G[pid].bonus+=t; opp.bonus-=t; } } } }
-  { let mp=null,mv=-1e9; for(const pid in G){ const v=G[pid].net+G[pid].bonus; if(v>mv){mv=v;mp=pid;} }
-    const anySerge=Object.keys(PD).some(pid=>PD[pid].card&&PD[pid].card.id==="serge");
-    if(anySerge&&mv>0&&N>1){ const pot=0.1*mv; G[mp].bonus-=pot; const sh=pot/(N-1); for(const pid in G){ if(pid!==mp) G[pid].bonus+=sh; } } }
+  // Serge Benamou : si le joueur qui l'a jouée finit dans le vert, il partage 10 % de SON net avec tous les autres.
+  for(const pid in PD){ if(PD[pid].card&&PD[pid].card.id==="serge"&&N>1){ const own=G[pid].net+G[pid].bonus; if(own>0){ const pot=0.1*own; G[pid].bonus-=pot; const sh=pot/(N-1); for(const q in G){ if(q!==pid) G[q].bonus+=sh; } } } }
   // Phase 6 : Parachute (amortit 30 % de la perte nette du jour)
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="parachute"){ const cur=G[pid].net+G[pid].bonus; if(cur<0) G[pid].bonus += (-0.3*cur); } }
   const dayNet={},dayBest={}; for(const pid in G){ dayNet[pid]=Math.round((G[pid].net+G[pid].bonus)*100)/100; dayBest[pid]=G[pid].bestOdd; }
@@ -1397,7 +1436,9 @@ function viewAdmin(){
 /* ============ render / poll ============ */
 function render(){
   const inLeague=!!S.leagueId;
-  applyThemeBtn();
+  applyThemeBtn(); applyLangBtn();
+  $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.36";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
@@ -1413,7 +1454,7 @@ function render(){
   else if(S.view==="admin") html=viewAdmin();
   else html=viewGame();
   $("root").innerHTML=html;
-  $("subtitle").textContent = S.view==="auth"?"Connexion" : S.view==="leagues"?"Mes ligues" : (L? (L.status==="lobby"?"Salon · "+L.code : ((L.status==="prep"||L.status==="starting")?"Préparation":(L.status==="done"?"Terminé":"Journée "+(L.current_day+1)+"/"+L.num_days))) : "…");
+  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
