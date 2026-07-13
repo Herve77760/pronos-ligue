@@ -115,7 +115,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.9</div>
+  <div class="foot">My Bet Friend · prototype de test · données sportives simulées · v3.10</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -973,17 +973,23 @@ function recapBody(D){
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`<b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`adv. <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
       return `<div class="mini blue clik" onclick="showCardInfo('${c.id}')" style="margin-top:4px">🃏 ${C.e} ${esc(C.n)}${ps.length?' · '+ps.join(' · '):''}</div>`; };
-    const rows=myD.fixtures.map((f,i)=>`<div style="padding:8px 0;border-top:1px solid var(--border)">
-        <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(selLabel(f,f.res))}</span></div>
+    const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i; return `<div class="clik" style="padding:8px 0;border-top:1px solid var(--border)" onclick="toggleRecapMatch(${i})">
+        <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(selLabel(f,f.res))} ${open?'▲':'▼'}</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:5px">
           <div class="mini">${line(hB,f,i)}</div>
           <div class="mini" style="text-align:right">${line(aB,f,i)}</div>
-        </div></div>`).join("");
+        </div>
+        ${open?`<div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">
+          <div class="mini muted">Cotes : ${esc(f.home)} ${f.oh}${f.draw?` · Nul ${f.od}`:''} · ${esc(f.away)} ${f.oa}</div>
+          <div class="mini" style="margin-top:5px"><b>${esc((hP.emoji||'')+' '+(hP.name||'?'))}</b> ${explain(hB,f,i)}</div>
+          <div class="mini" style="margin-top:3px"><b>${esc((aP.emoji||'')+' '+(aP.name||'?'))}</b> ${explain(aB,f,i)}</div></div>`:''}
+      </div>`; }).join("");
     detail=`<div class="box" style="padding:12px 14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div class="mini">${nameCell(hP,'🏠 domicile')}</div>
         <div class="mini" style="text-align:right">${nameCell(aP,'extérieur ✈️')}</div>
       </div>
+      <div class="mini muted" style="margin-top:4px">👉 Touche un match pour le calcul détaillé.</div>
       ${rows}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:2px solid var(--border);margin-top:4px;padding-top:10px">
         <div>
