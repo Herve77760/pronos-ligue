@@ -118,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.41</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.42</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -313,7 +313,23 @@ const EN={
   "🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).":"🔒 Other players' votes stay hidden until everyone has confirmed (results in the backstage).",
   "✓ ton vote":"✓ your vote", "Voter":"Vote", "🃏 Enchères bonus":"🃏 Bonus auction",
   "Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.":"Blind bidding: each bonus goes to the <b>highest bidder</b> (tie → whoever bid first). Non-winners are <b>refunded</b>. Total ≤ <b>€{a}</b>, up to <b>{b}</b> bonuses. What you pay (winning bids) is deducted from your starting balance. <b>💪 x/5</b> shows each bonus's <b>strength</b> (indicative) — some are worth more than others.",
-  "bonus":"bonuses", "Dépasse {a} €":"Over €{a}", "Trop de bonus (max {a})":"Too many bonuses (max {a})", "Valider ma préparation →":"Confirm my preparation →"
+  "bonus":"bonuses", "Dépasse {a} €":"Over €{a}", "Trop de bonus (max {a})":"Too many bonuses (max {a})", "Valider ma préparation →":"Confirm my preparation →",
+  // Résultats & recap (phase 4a)
+  "🏠 domicile":"🏠 home", "extérieur ✈️":"away ✈️", "(duel)":"(duel)",
+  "👉 Touche un match pour le calcul détaillé.":"👉 Tap a match for the detailed calculation.",
+  "Gain net":"Net gain", "Meilleur gain net du duel :":"Best net gain of the duel:", "Meilleur gain net de la ligue :":"Best net gain of the league:", "→ +1 pt bonus":"→ +1 bonus pt",
+  "JOURNÉE {a} —":"DAY {a} —", "TON GAIN":"YOUR GAIN", "GAIN DE {a}":"{a}'S GAIN", "DUEL vs {a}":"DUEL vs {a}",
+  "Gagné":"Won", "Match nul":"Draw", "Perdu":"Lost", "← Revenir à mes résultats":"← Back to my results",
+  "💸 Recapitalisation solidaire":"💸 Solidarity top-up",
+  "<b>{a}</b> n'avaient plus assez pour miser → <b>+{b} €</b> pour tout le monde, histoire de rester équitable. Tout le monde repart avec un coup de pouce ! 🤝":"<b>{a}</b> no longer had enough to bet → <b>+€{b}</b> for everyone, to keep it fair. Everybody gets a boost! 🤝",
+  "⚔️ Le duel en détail":"⚔️ The duel in detail", "Résultats de la journée":"Results of the day",
+  "👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.":"👉 Tap a player for their duel · tap a <b>gain</b> for the detailed calculation.",
+  "Joueur":"Player", "Gain":"Gain", "Duel":"Duel", "Carte":"Card",
+  "◀ Préc.":"◀ Prev.", "Suiv. ▶":"Next ▶", "Continuer →":"Continue →", "Voir le classement général":"View overall standings", "← Retour au jeu":"← Back to the game",
+  "💪 Force {a}/5":"💪 Strength {a}/5", "Capitaine (pari doublé)":"Captain (doubled bet)",
+  "Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.":"Each day you secretly pick <b>one</b> of your bets as Captain: its <b>gain AND loss are doubled</b> (×2). It's not a bonus card — you choose one every day.",
+  "Meilleur pronostiqueur":"Best predictor",
+  "Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.":"Each day, the player with the <b>best net gain in the whole league</b> earns <b>+1 bonus point</b> (on top of duel points). Ties are broken by the biggest gain, then the biggest stake."
 };
 function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); } return out; }
 function applyLangBtn(){ const b=$("langBtn"); if(b) b.textContent = lang==="en"?"🇫🇷":"🇬🇧"; }
@@ -331,9 +347,9 @@ function infoModal(emoji,title,bodyHTML){ closeCardInfo();
   o.addEventListener("click",e=>{ if(e.target===o) closeCardInfo(); });
   o.innerHTML=`<div class="mbox"><div style="font-size:34px">${emoji}</div><h2 style="margin:6px 0 4px">${esc(title)}</h2>${bodyHTML}<button class="btn" style="margin-top:16px" onclick="closeCardInfo()">OK 👍</button></div>`;
   document.body.appendChild(o); }
-function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, c.n, `<div style="margin:4px 0 6px">💪 Force ${c.f||3}/5</div><div class="mini muted">${esc(c.d)}</div>`); }
-function showCaptainInfo(){ infoModal("👑","Capitaine (pari doublé)",`<div class="mini muted">Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.</div>`); }
-function showStarInfo(){ infoModal("⭐","Meilleur pronostiqueur",`<div class="mini muted">Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.</div>`); }
+function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, t(c.n), `<div style="margin:4px 0 6px">${t("💪 Force {a}/5",{a:c.f||3})}</div><div class="mini muted">${esc(t(c.d))}</div>`); }
+function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.")}</div>`); }
+function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class="mini muted">${t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.")}</div>`); }
 function showDuelPtsInfo(pid){
   const p=pById(pid)||{}; const d=duels.find(x=>x.home_id===pid||x.away_id===pid);
   const bareme=`<div class="mini muted" style="text-align:left">Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>
@@ -1203,41 +1219,41 @@ function recapBody(D){
       </div>`; }).join("");
     detail=`<div class="box" style="padding:12px 14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><div class="mini muted">🏠 domicile</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((hP.emoji||'')+' '+(hP.name||'?'))}${hP.id===S.myId?' <span class="tag">(toi)</span>':''}</div></div>
-        <div style="text-align:right"><div class="mini muted">extérieur ✈️</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((aP.emoji||'')+' '+(aP.name||'?'))}${aP.id===S.myId?' <span class="tag">(toi)</span>':''}</div></div>
+        <div><div class="mini muted">${t("🏠 domicile")}</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((hP.emoji||'')+' '+(hP.name||'?'))}${hP.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div></div>
+        <div style="text-align:right"><div class="mini muted">${t("extérieur ✈️")}</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((aP.emoji||'')+' '+(aP.name||'?'))}${aP.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div></div>
       </div>
-      <div class="mini muted" style="margin-top:6px">👉 Touche un match pour le calcul détaillé.</div>
+      <div class="mini muted" style="margin-top:6px">${t("👉 Touche un match pour le calcul détaillé.")}</div>
       ${rows}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:2px solid var(--border);margin-top:4px;padding-top:10px">
         <div>
-          <div class="mini muted">Gain net</div>
+          <div class="mini muted">${t("Gain net")}</div>
           <div class="big ${hNet>=0?'green':'red'}" style="font-size:22px">${fmt(hNet)} €</div>
-          <div style="margin-top:3px"><span class="ptpill ${rr.h>0?'':'zero'}">${rr.h} pt${rr.h>1?'s':''} (duel)</span></div>
+          <div style="margin-top:3px"><span class="ptpill ${rr.h>0?'':'zero'}">${rr.h} pt${rr.h>1?'s':''} ${t("(duel)")}</span></div>
           ${bonusMini(hB)}
         </div>
         <div style="text-align:right">
-          <div class="mini muted">Gain net</div>
+          <div class="mini muted">${t("Gain net")}</div>
           <div class="big ${aNet>=0?'green':'red'}" style="font-size:22px">${fmt(aNet)} €</div>
-          <div style="margin-top:3px"><span class="ptpill ${rr.a>0?'':'zero'}">${rr.a} pt${rr.a>1?'s':''} (duel)</span></div>
+          <div style="margin-top:3px"><span class="ptpill ${rr.a>0?'':'zero'}">${rr.a} pt${rr.a>1?'s':''} ${t("(duel)")}</span></div>
           ${bonusMini(aB)}
         </div>
       </div>
       ${(()=>{ const dbN=Math.max(hNet,aNet), dbP=(hNet>=aNet?hP:aP); const sP=starId?(pById(starId)||{}):{}; const sN=starId?(netMap[starId]||0):0;
         return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;line-height:1.85">
-        🏅 <b>Meilleur gain net du duel :</b> <b class="${dbN>=0?'green':'red'}">${fmt(dbN)}€</b> — ${esc((dbP.emoji||'')+' '+(dbP.name||'?'))}<br>
-        <span class="clik" onclick="showStarInfo()">⭐</span> <b>Meilleur gain net de la ligue :</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${esc((sP.emoji||'')+' '+(sP.name||'?'))} <span class="muted">→ +1 pt bonus</span></div>`; })()}
+        🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="${dbN>=0?'green':'red'}">${fmt(dbN)}€</b> — ${esc((dbP.emoji||'')+' '+(dbP.name||'?'))}<br>
+        <span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${esc((sP.emoji||'')+' '+(sP.name||'?'))} <span class="muted">${t("→ +1 pt bonus")}</span></div>`; })()}
     </div>`;
   }
   return `${quickBar('results')}${recapNav(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
-      <div class="row"><div><div class="mini muted">JOURNÉE ${D+1} — ${isMe?'TON GAIN':('GAIN DE '+esc((fpP.emoji||'')+' '+fpName))}</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
-      <div style="text-align:right">${oppId!=null?`<div class="mini muted">DUEL vs ${pById(oppId).emoji} ${esc(oppName)}</div><b class="${won?'green':(tie?'muted':'red')}">${won?'Gagné':(tie?'Match nul':'Perdu')} · ${fpDuelPts} pt${fpDuelPts>1?'s':''}</b>`:''}</div></div></div>
-    ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">← Revenir à mes résultats</button>`:''}
-    ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">💸 Recapitalisation solidaire</b><div class="mini" style="margin-top:4px"><b>${esc((L.recap_note.names||[]).join(', '))}</b> n'${(L.recap_note.names||[]).length>1?'avaient':'avait'} plus assez pour miser → <b>+${L.recap_note.amount} €</b> pour ${(L.recap_note.names||[]).length>1?'eux':'lui'} <b>et pour tout le monde</b>, histoire de rester équitable. Tout le monde repart avec un coup de pouce ! 🤝</div></div>`:''}
-    ${detail?`<h2>⚔️ Le duel en détail</h2>${detail}`:''}
-    <h2>Résultats de la journée</h2>
-    <div class="mini muted" style="margin:-4px 0 6px">👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.</div>
-    <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>Joueur</th><th style="text-align:right">Gain</th><th style="text-align:right">Duel</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>Carte</th></tr>
-      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">(toi)</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
+      <div class="row"><div><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:esc((fpP.emoji||'')+' '+fpName)})}</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
+      <div style="text-align:right">${oppId!=null?`<div class="mini muted">${t("DUEL vs {a}",{a:pById(oppId).emoji+' '+esc(oppName)})}</div><b class="${won?'green':(tie?'muted':'red')}">${won?t("Gagné"):(tie?t("Match nul"):t("Perdu"))} · ${fpDuelPts} pt${fpDuelPts>1?'s':''}</b>`:''}</div></div></div>
+    ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">${t("← Revenir à mes résultats")}</button>`:''}
+    ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">${t("💸 Recapitalisation solidaire")}</b><div class="mini" style="margin-top:4px">${t("<b>{a}</b> n'avaient plus assez pour miser → <b>+{b} €</b> pour tout le monde, histoire de rester équitable. Tout le monde repart avec un coup de pouce ! 🤝",{a:esc((L.recap_note.names||[]).join(', ')),b:L.recap_note.amount})}</div></div>`:''}
+    ${detail?`<h2>${t("⚔️ Le duel en détail")}</h2>${detail}`:''}
+    <h2>${t("Résultats de la journée")}</h2>
+    <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.")}</div>
+    <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>${t("Carte")}</th></tr>
+      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
         <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
         <td class="num">${isStar?'+1':'–'}</td>
@@ -1268,20 +1284,20 @@ function showGainDetail(pid){
 }
 function setRecapFocus(pid){ recapFocus=pid||null; recapOpen=-1; render(); }
 function recapNav(D){ const last=L.current_day-1;
-  return `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm" ${D>0?'':'disabled'} onclick="navDay(${D-1})">◀ Préc.</button>
-    <b class="mini" style="text-align:center;flex:1">Journée ${D+1} / ${L.num_days}</b>
-    <button class="btn ghost sm" ${D<last?'':'disabled'} onclick="navDay(${D+1})">Suiv. ▶</button></div>`; }
+  return `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm" ${D>0?'':'disabled'} onclick="navDay(${D-1})">${t("◀ Préc.")}</button>
+    <b class="mini" style="text-align:center;flex:1">${t("Journée {a} / {b}",{a:D+1,b:L.num_days})}</b>
+    <button class="btn ghost sm" ${D<last?'':'disabled'} onclick="navDay(${D+1})">${t("Suiv. ▶")}</button></div>`; }
 function navDay(d){ const last=L.current_day-1; if(d<0||d>last) return; openResults(d); }
 async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recapFocus=null;
   try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); render(); }
   catch(e){ showErr("Résultats : "+e.message); } }
 function viewRecap(D){ return `${recapBody(D)}
-    <button class="btn" onclick="ackRecap()">Continuer →</button>
-    <button class="btn ghost" style="margin-top:8px" onclick="goStandings()">Voir le classement général</button>`; }
+    <button class="btn" onclick="ackRecap()">${t("Continuer →")}</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`; }
 function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:L.current_day-1);
-  return `<button class="btn ghost sm" onclick="S.view='game';refresh()">← Retour au jeu</button>
+  return `<button class="btn ghost sm" onclick="S.view='game';refresh()">${t("← Retour au jeu")}</button>
     ${recapBody(d)}
-    <button class="btn ghost" style="margin-top:8px" onclick="goStandings()">Voir le classement général</button>`; }
+    <button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`; }
 let recapOpen=-1, recapFocus=null;
 function toggleRecapMatch(i){ recapOpen=recapOpen===i?-1:i; render(); }
 function ackRecap(){ recapOpen=-1; recapFocus=null; setSeen(L.current_day); refresh(); }
@@ -1519,7 +1535,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.41";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.42";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
