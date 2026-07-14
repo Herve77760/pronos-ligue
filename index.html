@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.65</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.66</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -208,6 +208,38 @@ function leagueFormula(){ return FORMULAS[(L&&L.formula)||'classique'] || FORMUL
 // Mode de contenu & gage perso : stockés dans le JSON `gage` (lobby puis prépa). Défaut "complet".
 function getMode(){ try{ const o=JSON.parse(L.gage); if(o&&o.mode) return o.mode; }catch(e){} return "complet"; }
 function getCustom(){ try{ const o=JSON.parse(L.gage); if(o&&o.custom) return o.custom; }catch(e){} return ""; }
+/* ===== DONNÉES RÉELLES (mode test) — The Odds API ===== */
+const ODDS_KEY="b03f55cb3edb5b6b0f1e7eefa73ec410"; // clé TEST (plan gratuit) — passera côté serveur en prod
+const ODDS_BASE="https://api.the-odds-api.com/v4";
+const REAL_GROUPS=["Soccer","Basketball","Tennis","Rugby League","Rugby Union"];
+const GROUP_EMOJI={Soccer:"⚽",Basketball:"🏀",Tennis:"🎾","Rugby League":"🏉","Rugby Union":"🏉"};
+// Convertit un événement The Odds API en "fixture" du jeu, avec cotes h2h figées.
+function oddsEventToFixture(ev, group){
+  const bk=(ev.bookmakers||[])[0]; if(!bk) return null;
+  const mk=(bk.markets||[]).find(m=>m.key==="h2h"); if(!mk||!mk.outcomes) return null;
+  const oc=mk.outcomes; const pr=n=>{ const o=oc.find(x=>x.name===n); return o?+o.price:null; };
+  const oh=pr(ev.home_team), oa=pr(ev.away_team), od=pr("Draw");
+  if(!oh||!oa) return null;
+  const draw=(group==="Soccer")&&(od!=null);
+  const f={ sport:GROUP_EMOJI[group]||"🎯", home:ev.home_team, away:ev.away_team,
+    oh:Math.round(oh*100)/100, oa:Math.round(oa*100)/100, draw:!!draw,
+    evId:ev.id, sportKey:ev.sport_key, commence:ev.commence_time };
+  if(draw) f.od=Math.round(od*100)/100;
+  return f;
+}
+// Pool de vrais matchs À VENIR (foot/basket/tennis/rugby), cotes figées. Limité en nb d'appels (quota).
+async function fetchRealPool(){
+  const sr=await fetch(`${ODDS_BASE}/sports/?apiKey=${ODDS_KEY}`); if(!sr.ok) throw new Error("sports "+sr.status);
+  const sports=await sr.json(); const grp={}; sports.forEach(s=>grp[s.key]=s.group);
+  const keys=sports.filter(s=>REAL_GROUPS.includes(s.group)&&!s.has_outrights).map(s=>s.key).slice(0,6);
+  const out=[]; const now=Date.now();
+  for(const k of keys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
+    if(!r.ok) continue; const arr=await r.json();
+    arr.forEach(ev=>{ if(new Date(ev.commence_time).getTime()<=now) return; const f=oddsEventToFixture(ev,grp[k]); if(f) out.push(f); });
+  }catch(e){} }
+  out.sort((a,b)=>String(a.commence).localeCompare(String(b.commence)));
+  return out.slice(0,12);
+}
 // Échéances du jour courant. sel = fin sélection ; bet = clôture des paris.
 // Dès que tous les matchs sont choisis (bet_started_at), la clôture des paris = bet_started_at + delai (max 24h / 12h fast).
 function dayTimes(){ const f=leagueFormula(); const t0=(L&&L.day_started_at)?new Date(L.day_started_at).getTime():0;
@@ -408,6 +440,11 @@ const EN={
   "Ciné offert 🎬":"Movie night on you 🎬", "Payer les places de cinéma du groupe pour la prochaine sortie — réglé entre vous, hors application.":"Pay for the group's cinema tickets next outing — settled between you, outside the app.",
   "La pizza party 🍕":"Pizza party 🍕", "Offrir les pizzas de la prochaine soirée à toute l'équipe — réglé entre vous, hors application.":"Buy the pizzas for the whole team's next night — settled between you, outside the app.",
   "🎛️ Mode de jeu":"🎛️ Game mode", "🎛️ Complet":"🎛️ Full", "🎯 Simple":"🎯 Simple", "✓ choisi":"✓ chosen",
+  "🎲 Données":"🎲 Data", "🎮 Simulé":"🎮 Simulated", "📡 Données réelles (test)":"📡 Real data (test)",
+  "Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.":"Fictional matches and odds — instant resolution. Ideal to test the game.",
+  "Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results. ⚠️ A matchday only resolves once the matches are actually played.",
+  "⏳ Chargement des vrais matchs à venir…":"⏳ Loading upcoming real matches…", "🔄 Réessayer":"🔄 Retry",
+  "Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.":"Not enough upcoming real matches right now (off-season?). Try again later, or the organizer can switch the league back to simulated.",
   "Toutes les cartes bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus cards and a wide choice of forfeits — the full-featured game.",
   "Moins de cartes bonus et de gages — parfait pour débuter ou jouer vite.":"Fewer bonus cards and forfeits — perfect to start or play fast.",
   "🎯 Gage personnalisé (optionnel)":"🎯 Custom forfeit (optional)",
@@ -678,7 +715,8 @@ async function refresh(){
     showErr(""); render(); maybeNotify();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
-async function ensureFixtures(){ let filled=false; const dt=dayTimes(); const selPassed=dt.ok && Date.now()>=dt.sel;
+async function ensureFixtures(){ if(L&&L.data_mode==="real") return false; // ligue réelle : matchs choisis à la main (auto/IA réel = Étape 2)
+  let filled=false; const dt=dayTimes(); const selPassed=dt.ok && Date.now()>=dt.sel;
   for(const d of duels){ if(d.fixtures) continue; const h=pById(d.home_id);
     const auto=(h&&h.is_ai) || selPassed; // IA à domicile → tout de suite ; humain à domicile → à l'échéance de sélection
     if(auto){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} } }
@@ -693,6 +731,7 @@ async function ensureAiBets(){ let made=false;
   return made; }
 function shouldAutoResolve(){
   const dz=duels; if(!dz.length || dz.some(d=>!d.fixtures)) return false; // sélection pas finie
+  if(dz.some(d=>(d.fixtures||[]).some(f=>f&&f.evId))) return false; // matchs réels → résolution sur vrais résultats (Étape 2)
   const inDay=new Set(); dz.forEach(d=>{inDay.add(d.home_id);inDay.add(d.away_id);});
   const dayHumans=players.filter(p=>!p.is_ai && inDay.has(p.id));
   const allBet = dayHumans.length>0 && dayHumans.every(p=>bets.find(b=>b.player_id===p.id));
@@ -931,6 +970,8 @@ function viewLobby(){
     <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
     <h2>${t("🎛️ Mode de jeu")}</h2>
     ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b><div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    <h2>${t("🎲 Données")}</h2>
+    ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     ${org?`<h2>${t("🎯 Gage personnalisé (optionnel)")}</h2>
     <div class="box"><div class="mini muted">${t("Ajoute ton propre gage — il sera proposé au vote. Ex. « tout le monde doit 5 € au vainqueur ». ⚠️ Réglé <b>entre vous</b> : l'application ne gère aucun argent.")}</div>
       ${getCustom()?`<div class="mini" style="margin-top:8px">« <b>${esc(getCustom())}</b> »</div>`:''}
@@ -950,6 +991,9 @@ async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me
 async function setCustomGage(txt){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.custom=(txt||"").trim().slice(0,120); await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Gage perso : "+e.message); } busy=false; }
+async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
+  try{ await q(db.from("leagues").update({data_mode:m}).eq("id",L.id)); await refresh(); }
+  catch(e){ showErr("Mode données : "+e.message+" (ajoute la colonne 'data_mode')"); } busy=false; }
 function editCustomGage(){ const v=prompt(t("Ton gage personnalisé (réglé entre vous, hors application) :"), getCustom()||""); if(v!=null) setCustomGage(v); }
 function clearCustomGage(){ if(confirm(t("Retirer le gage personnalisé ?"))) setCustomGage(""); }
 async function kickPlayer(pid){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
@@ -1109,9 +1153,17 @@ function quickBar(active){
 }
 
 /* --- selection --- */
-let selPool=null, selChosen=[];
+let selPool=null, selChosen=[], selLoading=false;
+async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
+  try{ selPool=await fetchRealPool(); }catch(e){ selPool=[]; showErr("Vrais matchs : "+e.message); }
+  selLoading=false; render(); }
 function viewSelect(d,dayLbl,opp){
-  if(!selPool){ selPool=genPool(9); selChosen=[]; }
+  const real=(L.data_mode==="real");
+  if(!selPool && !selLoading){ if(real){ loadRealPool(); } else { selPool=genPool(9); selChosen=[]; } }
+  if(real && (selLoading || !selPool)) return `${quickBar('')}<div class="box">${t("⏳ Chargement des vrais matchs à venir…")}</div>`;
+  if(real && selPool.length<5) return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
+     <div class="mini muted" style="margin-top:8px">${t("Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.")}</div>
+     <button class="btn ghost sm" style="margin-top:8px" onclick="selPool=null;render()">${t("🔄 Réessayer")}</button></div>`;
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
      <div class="mini muted" style="margin-top:6px">${t("Choisis 5 rencontres ({a}/5) — imposées à {b}.",{a:selChosen.length,b:esc(opp.name)})}</div>${selLineHTML()}</div>
      ${selPool.map((f,i)=>{const on=selChosen.includes(i);return `<div class="box row" onclick="toggleSel(${i})" style="cursor:pointer;${on?'border-color:var(--green)':''}">
@@ -1868,7 +1920,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.65";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.66";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
