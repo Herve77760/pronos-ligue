@@ -118,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.53</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.54</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -134,7 +134,7 @@ const emailFor = u => u.trim().toLowerCase() + "@" + AUTH_DOMAIN;
 const validUser = u => /^[a-zA-Z0-9._-]{2,20}$/.test(u); // pseudo : 2–20, lettres/chiffres/._- (sans espace ni accent)
 
 /* ============ CONSTANTS ============ */
-const EMOJIS=["👑","🦊","🐻","🦁","🐼","🐯","🦉","🐸","🐙","🦄"];
+const EMOJIS=["👑","🦊","🐻","🦁","🐼","🐯","🦉","🐸","🐙","🦄","🐺","🐨","🐷","🐵","🦈","🐲","🦖","🦩","🦜","🐝","🦋","🐳","🦥","🦦","🐹","🐰","🦝","🐢","🦅","🐬"];
 const SPORTS=[
  {ic:"⚽",draw:true, t:["PSG","OM","Lyon","Real","Barça","Bayern","Man City","Liverpool","Milan","Naples"]},
  {ic:"🎾",draw:false,t:["Alcaraz","Sinner","Djokovic","Zverev","Rune","Swiatek","Sabalenka","Gauff"]},
@@ -252,6 +252,7 @@ const EN={
   "Salon":"Lobby", "Journée {a}/{b}":"Day {a}/{b}",
   "Capitaine et bonus doivent être sur des matchs différents.":"Captain and bonus must be on different matches.",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : 7XK2P":"e.g. 7XK2P",
+  "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
   "🏁 Ligues terminées · {a}":"🏁 Finished leagues · {a}", "J{a}/{b}":"D{a}/{b}",
   "Se déconnecter ?":"Log out?",
   // Barre d'accès + flux d'une journée (phase 2)
@@ -686,7 +687,7 @@ async function doLogin(){
   if(!u||!p){showErr(t("Identifiant et mot de passe requis."));return;} busy=true; showErr("");
   const { data, error } = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
   if(error){ showErr(t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
-  AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u };
+  AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u, avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"" };
   S.view="leagues"; busy=false; await loadMyLeagues();
 }
 async function doSignup(){
@@ -699,7 +700,7 @@ async function doSignup(){
     const r = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
     if(r.error){ showErr("Config Supabase : désactive la confirmation e-mail (voir runbook Partie A)."); busy=false; return; }
   }
-  AUTH={ id:data.user.id, name:u };
+  AUTH={ id:data.user.id, name:u, avatar:"" };
   S.view="leagues"; busy=false; await loadMyLeagues();
 }
 async function logout(){ if(!confirm(t("Se déconnecter ?")))return; if(poll)clearInterval(poll);
@@ -723,8 +724,19 @@ function howItWorksHTML(){ return `<div class="box" style="border-left:3px solid
    ${t("1️⃣ <b>Enchères bonus</b> : tu mises en aveugle sur les cartes bonus que tu veux (jusqu'à <b>{a} €</b>) ; ce que tu remportes est retiré de tes 100 €.",{a:SHOP_CAP})}<br>
    ${t("2️⃣ <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2).")}<br>
    ${t("3️⃣ Le <b>vainqueur du duel</b> du jour marque des points ; à la fin, le <b>dernier</b> du classement fait le <b>gage</b> 😅.")}</div></div>`; }
+async function setAvatar(em){
+  try{
+    await db.auth.updateUser({ data:{ username:AUTH.name, avatar:em } });
+    try{ await q(db.from("players").update({emoji:em}).eq("user_id",AUTH.id)); }catch(e){}
+    AUTH.avatar=em; toast(t("Avatar mis à jour ✓"));
+    if(S.leagueId){ await refresh(); } else { await loadMyLeagues(); }
+  }catch(e){ showErr("Avatar : "+e.message); }
+}
 function viewLeagues(){
-  return `<div class="box"><b>${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b></div>
+  return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px">
+      <b>${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b><span style="font-size:30px;line-height:1">${AUTH.avatar||'🎮'}</span></div>
+    <div class="mini muted" style="margin-top:10px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${EMOJIS.map(em=>`<button class="btn ghost sm" onclick="setAvatar('${em}')" style="font-size:20px;padding:6px 9px;line-height:1${em===AUTH.avatar?';border-color:var(--accent)':''}">${em}</button>`).join("")}</div></div>
     <div class="box"><button class="btn" onclick="createLeague()">${t("➕ Créer une ligue")}</button>
       <div style="height:12px"></div><label>${t("Rejoindre avec un code")}</label>
       <input id="joinCode" maxlength="5" placeholder="${t("Ex : 7XK2P")}" style="text-transform:uppercase">
@@ -759,7 +771,7 @@ async function createLeague(){
   try{
     const code=genCode();
     const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+AUTH.name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
-    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:EMOJIS[0],is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[0],is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     openLeague(lg.id, pl.id, true);
   }catch(e){ showErr("Création : "+e.message); } busy=false;
 }
@@ -774,7 +786,7 @@ async function joinLeague(code){
     const humans=ps.filter(p=>!p.is_ai);
     if(humans.length>=lg.num_participants){ showErr("La ligue est complète."); busy=false; return; }
     const ord=humans.length;
-    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:EMOJIS[ord]||"🎮",join_order:ord,user_id:AUTH.id}).select().single());
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[ord]||"🎮",join_order:ord,user_id:AUTH.id}).select().single());
     openLeague(lg.id, pl.id, true);
   }catch(e){ showErr("Impossible de rejoindre : "+e.message); } busy=false;
 }
@@ -907,7 +919,7 @@ async function relaunchLeague(){
     const humans=players.filter(p=>!p.is_ai && p.user_id); // on réutilise les joueurs humains
     const code=genCode();
     const lg=await q(db.from("leagues").insert({code,name:L.name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
-    const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:EMOJIS[i]||p.emoji||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
+    const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:p.emoji||EMOJIS[i]||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
     const inserted=await q(db.from("players").insert(rows).select());
     const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
     openLeague(lg.id, mine.id, true); toast("Nouveau tournoi créé — même équipe ✓");
@@ -1804,7 +1816,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.53";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.54";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
@@ -1867,7 +1879,7 @@ function viewRules(){
 (async function boot(){
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
   try{ const { data:{ session } } = await db.auth.getSession();
-    if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"" }; }
+    if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"" }; }
   }catch(e){}
   if(!AUTH){ S.view="auth"; render(); return; }
   const last=loadLast();
