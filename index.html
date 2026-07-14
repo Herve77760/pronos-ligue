@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.73</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.76</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -389,6 +389,17 @@ const EN={
   "Paris de la journée (publics)":"Bets of the day (public)",
   "Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.":"All picks are locked and visible. The 🃏 bonus cards are only revealed after the results.",
   "✅ Tous les pronos sont validés — résolution automatique en cours…":"✅ All picks are in — automatic resolution under way…",
+  "✅ Tous les pronos sont validés — on attend les vrais résultats.":"✅ All picks are in — waiting for the real results.",
+  "🎲 Les dés sont jetés — y'a plus qu'à prier pour les vrais résultats !":"🎲 The dice are cast — now just pray for the real results!",
+  "🕯️ Pronos verrouillés… tu peux aller brûler un cierge.":"🕯️ Picks locked in… time to go light a candle.",
+  "😬 On serre les fesses jusqu'au coup de sifflet final !":"😬 Clench tight until the final whistle!",
+  "🍀 Tout est joué de ton côté — croise les doigts pour les vrais scores.":"🍀 Your part is done — cross your fingers for the real scores.",
+  "🙏 Pronos dans la boîte. Une petite prière au dieu du ballon ?":"🙏 Picks are in. A little prayer to the football gods?",
+  "🔒 C'est plié côté paris — maintenant, patience et sueurs froides.":"🔒 Betting's done — now, patience and cold sweats.",
+  "🎰 Les paris sont clos, la roue tourne dans le monde réel…":"🎰 Bets are closed, the wheel is spinning in the real world…",
+  "⚽ Rien à ajouter : place au terrain. Que le sort te soit favorable !":"⚽ Nothing left to do: over to the pitch. May fortune favor you!",
+  "🍿 Sors le pop-corn : le reste se joue sur le terrain.":"🍿 Grab the popcorn: the rest plays out on the pitch.",
+  "🤞 Tes pronos sont scellés. À toi de trouver un trèfle à quatre feuilles.":"🤞 Your picks are sealed. Now go find a four-leaf clover.",
   "⏳ On attend les autres — {a} joueur(s) à valider.":"⏳ Waiting for the others — {a} player(s) to confirm.",
   "Temps restant : {a}":"Time left: {a}", "Résolution automatique à l'échéance.":"Automatic resolution at the deadline.",
   // Comment ça marche + salon + préparation (phase 3)
@@ -496,6 +507,9 @@ const EN={
   "La pizza party 🍕":"Pizza party 🍕", "Offrir les pizzas de la prochaine soirée à toute l'équipe — réglé entre vous, hors application.":"Buy the pizzas for the whole team's next night — settled between you, outside the app.",
   "🎛️ Mode de jeu":"🎛️ Game mode", "🎛️ Complet":"🎛️ Full", "🎯 Simple":"🎯 Simple", "✓ choisi":"✓ chosen",
   "🎲 Données":"🎲 Data", "🎮 Simulé":"🎮 Simulated", "📡 Données réelles (test)":"📡 Real data (test)",
+  "Caractéristiques de la ligue":"League settings", "Code":"Code", "Format":"Format",
+  "Simple":"Simple", "Complet":"Full", "📡 Réelles":"📡 Real", "🎯 Gage personnalisé":"🎯 Custom forfeit", "{a} journées":"{a} matchdays",
+  "Archive la ligue dans « Ligues terminées ». Action irréversible.":"Archives the league under “Finished leagues”. This cannot be undone.",
   "Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.":"Fictional matches and odds — instant resolution. Ideal to test the game.",
   "Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results. ⚠️ A matchday only resolves once the matches are actually played.",
   "⏳ Chargement des vrais matchs à venir…":"⏳ Loading upcoming real matches…", "🔄 Réessayer":"🔄 Retry",
@@ -852,7 +866,7 @@ async function loadMyLeagues(){
   try{ const mine=await q(db.from("players").select("id,league_id,is_organizer").eq("user_id",AUTH.id));
     if(mine.length){ const ids=[...new Set(mine.map(m=>m.league_id))];
       const lgs=await q(db.from("leagues").select("*").in("id",ids));
-      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id}))
+      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id, org:!!(mine.find(m=>m.league_id===l.id)||{}).is_organizer}))
         .sort((a,b)=> (a.lg.created_at<b.lg.created_at?1:-1));
     } else myLeagues=[];
   }catch(e){ showErr("Chargement des ligues : "+e.message); myLeagues=[]; }
@@ -883,7 +897,7 @@ function viewLeagues(){
     ${(()=>{
       const row=m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
         <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div></div>
-        <span class="chip b">${t("Ouvrir →")}</span></div>`;
+        <div class="row" style="gap:6px;flex:0 0 auto"><button class="btn ghost sm" title="${t("Caractéristiques de la ligue")}" onclick="event.stopPropagation();showLeagueInfo('${m.lg.id}')" style="flex:0 0 auto">⚙️</button><span class="chip b">${t("Ouvrir →")}</span></div></div>`;
       const active=myLeagues.filter(m=>m.lg.status!=='done'); const finished=myLeagues.filter(m=>m.lg.status==='done');
       let h=`<h2>${t("Mes ligues")}${active.length?' · '+active.length:''}</h2>`;
       h+= active.length? active.map(row).join("") : `<div class="box mini muted">${t("Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.")}</div>`;
@@ -1047,8 +1061,7 @@ function viewLobby(){
       <div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost sm" onclick="editCustomGage()">${getCustom()?t("✏️ Modifier"):t("➕ Ajouter un gage perso")}</button>${getCustom()?`<button class="btn ghost sm" onclick="clearCustomGage()">${t("Retirer")}</button>`:''}</div></div>`:''}
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?(t("Clôturer les inscriptions")+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 2 joueurs")}</button>
-        <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>
-        <div style="height:12px"></div><button class="btn ghost sm" style="border-color:var(--red);color:var(--red)" onclick="closeLeagueAdmin()">${t("🛑 Fermer la ligue")}</button>`
+        <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
       : `<div class="box mini muted" style="text-align:center">${t("En attente que l'organisateur clôture les inscriptions…")}</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast(t("Code copié : {a}",{a:L.code})); }
@@ -1307,6 +1320,20 @@ async function submitBet(){
 
 /* --- waiting / resolve --- */
 function humansToSubmit(){ return players.filter(p=>!p.is_ai).filter(p=>!bets.find(b=>b.player_id===p.id)); }
+// Mode réel : messages fun pendant l'attente des vrais résultats (tournants, stables par journée/ligue → pas de clignotement)
+const REAL_WAIT_MSGS=[
+  "🎲 Les dés sont jetés — y'a plus qu'à prier pour les vrais résultats !",
+  "🕯️ Pronos verrouillés… tu peux aller brûler un cierge.",
+  "😬 On serre les fesses jusqu'au coup de sifflet final !",
+  "🍀 Tout est joué de ton côté — croise les doigts pour les vrais scores.",
+  "🙏 Pronos dans la boîte. Une petite prière au dieu du ballon ?",
+  "🔒 C'est plié côté paris — maintenant, patience et sueurs froides.",
+  "🎰 Les paris sont clos, la roue tourne dans le monde réel…",
+  "⚽ Rien à ajouter : place au terrain. Que le sort te soit favorable !",
+  "🍿 Sors le pop-corn : le reste se joue sur le terrain.",
+  "🤞 Tes pronos sont scellés. À toi de trouver un trèfle à quatre feuilles."
+];
+function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; for(let i=0;i<id.length;i++) h=(h+id.charCodeAt(i))|0; return t(REAL_WAIT_MSGS[Math.abs(h)%REAL_WAIT_MSGS.length]); }
 function viewWait(dayLbl){
   const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
   const list=players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
@@ -1324,7 +1351,7 @@ function viewWait(dayLbl){
       <div class="mini muted" style="margin-top:4px">${t("🃏 bonus caché jusqu'aux résultats")}</div></div>`;}).join("");
   return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("Tes pronos sont validés ✓. On attend les autres.")}</div>${betLineHTML()}</div>${mySummary}${aiSection}${list}
     ${canResolve?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
-    ${canResolve?`<div class="box mini muted" style="text-align:center">${t("✅ Tous les pronos sont validés — résolution automatique en cours…")}</div>`
+    ${canResolve?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Tous les pronos sont validés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Tous les pronos sont validés — résolution automatique en cours…")}</div>`
       :`<div class="box mini muted" style="text-align:center">${t("⏳ On attend les autres — {a} joueur(s) à valider.",{a:waiting.length})}${(()=>{const dt=dayTimes();return dt.ok?` <b>${t("Temps restant : {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}<br>${t("Résolution automatique à l'échéance.")}</div>`}`;
 }
 function publicBetsHTML(){
@@ -1741,8 +1768,7 @@ function viewStandings(){
         <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     ${capChart()}
     ${(hand.length||used.length)?`<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div></div>`:''}
-    <div class="box mini"><span class="muted">${t("🎭 Gage (au dernier humain) :")}</span> <b>${esc(t(L.gage))}</b> → ${lastH.emoji} ${esc(lastH.name)}</div>
-    ${(me()&&me().is_organizer&&L.status!=="done")?`<button class="btn ghost sm" style="border-color:var(--red);color:var(--red)" onclick="closeLeagueAdmin()">${t("🛑 Fermer la ligue")}</button>`:''}`;
+    <div class="box mini"><span class="muted">${t("🎭 Gage (au dernier humain) :")}</span> <b>${esc(t(L.gage))}</b> → ${lastH.emoji} ${esc(lastH.name)}</div>`;
 }
 
 /* ============ END ============ */
@@ -1842,10 +1868,25 @@ function viewEnd(){
    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.")}</div>`;
 }
 function closeLeague(){ showFinished=false; backToLeagues(); }
-async function closeLeagueAdmin(){
-  if(!L||!(me()&&me().is_organizer))return;
+// Fiche « Caractéristiques de la ligue » depuis l'accueil (format, options, + fermeture pour l'organisateur)
+function showLeagueInfo(lid){
+  const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m)return; const lg=m.lg;
+  const f=FORMULAS[lg.formula||'classique']||FORMULAS.classique;
+  let mode="complet", custom=""; try{ const o=JSON.parse(lg.gage); if(o){ if(o.mode)mode=o.mode; if(o.custom)custom=o.custom; } }catch(e){}
+  const real=(lg.data_mode==="real");
+  const row=(lab,val)=>`<div class="box row" style="text-align:left"><b>${lab}</b><span class="chip" style="flex:0 0 auto">${val}</span></div>`;
+  let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg.status)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
+    <div class="box" style="text-align:left"><div class="row"><b>${t("Format")}</b><span class="chip" style="flex:0 0 auto">${t(f.n)}</span></div><div class="mini muted" style="margin-top:5px">${t(f.d)}</div></div>
+    ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"))}
+    ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"))}
+    ${custom?`<div class="box" style="text-align:left"><b>${t("🎯 Gage personnalisé")}</b><div class="mini muted" style="margin-top:5px">« ${esc(custom)} »</div></div>`:''}
+    ${(m.org&&lg.status!=="done")?`<div style="height:6px"></div><button class="btn ghost sm" style="border-color:var(--red);color:var(--red);width:100%" onclick="closeLeagueFromHome('${lg.id}')">${t("🛑 Fermer la ligue")}</button><div class="mini muted" style="margin-top:6px">${t("Archive la ligue dans « Ligues terminées ». Action irréversible.")}</div>`:''}`;
+  infoModal("⚙️", t("Caractéristiques de la ligue"), body);
+}
+async function closeLeagueFromHome(lid){
+  const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m||!m.org)return;
   if(!confirm(t("Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible.")))return;
-  try{ await q(db.from("leagues").update({status:"done"}).eq("id",L.id)); toast(t("Ligue fermée.")); backToLeagues(); }
+  try{ await q(db.from("leagues").update({status:"done"}).eq("id",lid)); closeCardInfo(); toast(t("Ligue fermée.")); await loadMyLeagues(); }
   catch(e){ showErr("Fermeture : "+e.message); } }
 
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
@@ -1996,7 +2037,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.73";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.76";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
