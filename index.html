@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.70</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.72</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -260,6 +260,38 @@ async function fetchRealPool(){
   const pool=[...soc.slice(0,socTarget), ...oth.slice(0,N-socTarget)];
   if(pool.length<N){ [...soc.slice(socTarget), ...oth.slice(N-socTarget)].sort(sortBig).forEach(e=>{ if(pool.length<N) pool.push(e); }); }
   return pool.sort(sortBig).slice(0,N);
+}
+let lastRealCheck=0, lastRealFill=0;
+// Récupère les résultats réels (scores) par compétition → map evId -> {completed, res(1/N/2)}.
+async function fetchRealResults(sportKeys){
+  const map={};
+  for(const k of sportKeys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/scores/?apiKey=${ODDS_KEY}&daysFrom=3&dateFormat=iso`);
+    if(!r.ok) continue; const arr=await r.json();
+    arr.forEach(ev=>{ const done=!!ev.completed; let res=null;
+      if(done && Array.isArray(ev.scores)){ const sc=n=>{ const o=ev.scores.find(x=>x.name===n); return o!=null?parseFloat(o.score):null; };
+        const h=sc(ev.home_team), a=sc(ev.away_team);
+        if(h!=null&&a!=null&&!isNaN(h)&&!isNaN(a)) res=(h>a?"1":(h<a?"2":"N")); }
+      map[ev.id]={completed:done, res};
+    });
+  }catch(e){} }
+  return map;
+}
+// Résout une journée en DONNÉES RÉELLES quand TOUS les vrais matchs sont terminés (throttle 10 min pour le quota).
+async function resolveRealIfReady(){
+  if(!L||L.data_mode!=="real"||L.status!=="running"||S.recap||resolving) return;
+  const realDuels=duels.filter(d=>Array.isArray(d.fixtures)&&d.fixtures.some(f=>f&&f.evId));
+  if(!realDuels.length) return;
+  const times=realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.commence).map(f=>new Date(f.commence).getTime());
+  if(!times.length || Math.min.apply(null,times)>Date.now()) return; // aucun match commencé
+  if(Date.now()-lastRealCheck < 600000) return; lastRealCheck=Date.now();
+  const keys=[...new Set(realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.evId).map(f=>f.sportKey))];
+  const results=await fetchRealResults(keys);
+  let allDone=true;
+  realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId){ const r=results[f.evId]; if(!r||!r.completed) allDone=false; } }));
+  if(!allDone) return; // il reste des matchs en cours
+  for(const d of realDuels){ const fx=d.fixtures.map(f=>{ if(f&&f.evId){ const r=results[f.evId]; if(r&&r.res) return Object.assign({},f,{res:r.res}); } return f; });
+    try{ await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); }catch(e){} }
+  resolveDay();
 }
 // Échéances du jour courant. sel = fin sélection ; bet = clôture des paris.
 // Dès que tous les matchs sont choisis (bet_started_at), la clôture des paris = bet_started_at + delai (max 24h / 12h fast).
@@ -727,6 +759,7 @@ async function refresh(){
         try{ const r=await q(db.from("leagues").update({bet_started_at:new Date().toISOString()}).eq("id",L.id).is("bet_started_at",null).select("bet_started_at")); if(r&&r.length){ L.bet_started_at=r[0].bet_started_at; } }catch(e){} }
       if(await ensureAiBets()){ bets = await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); }
       if(shouldAutoResolve()){ resolveDay(); return; }
+      await resolveRealIfReady(); // données réelles : résout quand les vrais matchs sont terminés
     }
     if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; standDuels=null; }
     if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){
@@ -736,11 +769,21 @@ async function refresh(){
     showErr(""); render(); maybeNotify();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
-async function ensureFixtures(){ if(L&&L.data_mode==="real") return false; // ligue réelle : matchs choisis à la main (auto/IA réel = Étape 2)
+async function ensureFixtures(){
   let filled=false; const dt=dayTimes(); const selPassed=dt.ok && Date.now()>=dt.sel;
-  for(const d of duels){ if(d.fixtures) continue; const h=pById(d.home_id);
-    const auto=(h&&h.is_ai) || selPassed; // IA à domicile → tout de suite ; humain à domicile → à l'échéance de sélection
-    if(auto){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} } }
+  // Duels à remplir : IA à domicile (tout de suite) ou humain à domicile ayant dépassé l'échéance de sélection.
+  const todo=duels.filter(d=>!d.fixtures && ((pById(d.home_id)&&pById(d.home_id).is_ai) || selPassed));
+  if(!todo.length) return false;
+  if(L&&L.data_mode==="real"){
+    if(Date.now()-lastRealFill < 300000) return false; lastRealFill=Date.now(); // throttle quota (5 min)
+    let pool=[]; try{ pool=await fetchRealPool(); }catch(e){}
+    if(pool.length<5) return false; // pas assez de vrais matchs → on attend (jamais de simulé en réel)
+    for(const d of todo){ const cp=pool.slice(); for(let i=cp.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cp[i],cp[j]]=[cp[j],cp[i]];}
+      const fx=cp.slice(0,5);
+      try{ const r=await q(db.from("duels").update({fixtures:fx}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} }
+    return filled;
+  }
+  for(const d of todo){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} }
   return filled; }
 // L'IA mise dès que les 5 matchs sont connus (pour que ses pronos soient visibles pendant l'attente)
 async function ensureAiBets(){ let made=false;
@@ -1352,7 +1395,7 @@ async function resolveDay(){
     const N=ps.length; const pmap={}; ps.forEach(p=>pmap[p.id]=p);
     const capStart={}; ps.forEach(p=>capStart[p.id]=p.capital);
     const PD={}; const aiInserts=[]; const forgot=new Set();
-    for(const d of dz){ let fx=d.fixtures||genPool(5); fx.forEach(f=>{if(!f.res)f.res=simResult(f);}); d.fixtures=fx;
+    for(const d of dz){ let fx=d.fixtures||(fresh.data_mode==="real"?[]:genPool(5)); fx.forEach(f=>{if(!f.res&&!f.evId)f.res=simResult(f);}); d.fixtures=fx;
       for(const pid of [d.home_id,d.away_id]){ let bt=bz.find(b=>b.player_id===pid);
         const valid = bt && Array.isArray(bt.picks) && bt.picks.length===fx.length;
         if(!valid){
@@ -1941,7 +1984,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.70";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.72";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
