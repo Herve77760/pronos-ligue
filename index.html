@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.72</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.73</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -405,6 +405,8 @@ const EN={
   "Clôturer les inscriptions":"Close sign-ups", "Il faut au moins 2 joueurs":"At least 2 players needed",
   "Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.":"You're the organizer: <b>remove</b> a player above, or <b>add</b> some by sharing the code <b>{a}</b>. Close when the count suits you — then: forfeit vote + auction, then the championship starts.",
   "En attente que l'organisateur clôture les inscriptions…":"Waiting for the organizer to close sign-ups…",
+  "🛑 Fermer la ligue":"🛑 Close the league", "Ligue fermée.":"League closed.",
+  "Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible.":"Permanently close this league? It will be archived under \"Finished leagues\". This cannot be undone.",
   "Code copié : {a}":"Code copied: {a}", "Retirer {a} du tournoi ?":"Remove {a} from the tournament?",
   "⚡ Fast":"⚡ Fast", "🗓️ Classique":"🗓️ Classic",
   "~12h pour choisir les matchs, puis ~12h pour miser (idée : de midi à minuit, puis de minuit à midi).":"~12h to pick the matches, then ~12h to bet (idea: noon to midnight, then midnight to noon).",
@@ -706,8 +708,11 @@ function makeSchedule(n){ let arr=[...Array(n).keys()]; const rounds=[];
 
 /* ============ fixtures ============ */
 function genFixture(){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t); while(b===a) b=pick(s.t);
-  const f={sport:s.ic,draw:s.draw,home:a,away:b,oh:+rnd(1.4,3.2).toFixed(2),oa:+rnd(1.5,3.6).toFixed(2)};
-  if(s.draw) f.od=+rnd(3.0,3.9).toFixed(2); return f; }
+  // Cotes COHÉRENTES : on part de probabilités qui somment à 100 %, + une marge bookmaker (~5-9 %), puis cote = 1/(p×marge).
+  const M=rnd(1.05,1.09); const odd=p=>Math.max(1.05,+(1/(p*M)).toFixed(2));
+  if(s.draw){ const pd=rnd(0.22,0.30); let ph=rnd(0.22,0.55); let pa=1-ph-pd; if(pa<0.12){pa=0.12;ph=1-pd-pa;} if(ph<0.12){ph=0.12;pa=1-pd-ph;}
+    return {sport:s.ic,draw:true,home:a,away:b,oh:odd(ph),od:odd(pd),oa:odd(pa)}; }
+  const ph=rnd(0.30,0.70); return {sport:s.ic,draw:false,home:a,away:b,oh:odd(ph),oa:odd(1-ph)}; }
 function genPool(k){ return Array.from({length:k},genFixture); }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
 // Cote « double chance » : combinée de deux issues couvertes pour une seule mise.
@@ -1042,7 +1047,8 @@ function viewLobby(){
       <div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost sm" onclick="editCustomGage()">${getCustom()?t("✏️ Modifier"):t("➕ Ajouter un gage perso")}</button>${getCustom()?`<button class="btn ghost sm" onclick="clearCustomGage()">${t("Retirer")}</button>`:''}</div></div>`:''}
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?(t("Clôturer les inscriptions")+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 2 joueurs")}</button>
-        <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
+        <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>
+        <div style="height:12px"></div><button class="btn ghost sm" style="border-color:var(--red);color:var(--red)" onclick="closeLeagueAdmin()">${t("🛑 Fermer la ligue")}</button>`
       : `<div class="box mini muted" style="text-align:center">${t("En attente que l'organisateur clôture les inscriptions…")}</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast(t("Code copié : {a}",{a:L.code})); }
@@ -1735,7 +1741,8 @@ function viewStandings(){
         <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     ${capChart()}
     ${(hand.length||used.length)?`<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div></div>`:''}
-    <div class="box mini"><span class="muted">${t("🎭 Gage (au dernier humain) :")}</span> <b>${esc(t(L.gage))}</b> → ${lastH.emoji} ${esc(lastH.name)}</div>`;
+    <div class="box mini"><span class="muted">${t("🎭 Gage (au dernier humain) :")}</span> <b>${esc(t(L.gage))}</b> → ${lastH.emoji} ${esc(lastH.name)}</div>
+    ${(me()&&me().is_organizer&&L.status!=="done")?`<button class="btn ghost sm" style="border-color:var(--red);color:var(--red)" onclick="closeLeagueAdmin()">${t("🛑 Fermer la ligue")}</button>`:''}`;
 }
 
 /* ============ END ============ */
@@ -1835,6 +1842,11 @@ function viewEnd(){
    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.")}</div>`;
 }
 function closeLeague(){ showFinished=false; backToLeagues(); }
+async function closeLeagueAdmin(){
+  if(!L||!(me()&&me().is_organizer))return;
+  if(!confirm(t("Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible.")))return;
+  try{ await q(db.from("leagues").update({status:"done"}).eq("id",L.id)); toast(t("Ligue fermée.")); backToLeagues(); }
+  catch(e){ showErr("Fermeture : "+e.message); } }
 
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
 function openCoulisses(){ if(S.view==="coulisses")return; S.prevView=S.view; S.view="coulisses"; render(); }
@@ -1984,7 +1996,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.72";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.73";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
