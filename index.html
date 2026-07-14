@@ -118,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.48</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.49</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -128,7 +128,10 @@
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
-const ADMIN_ID = "b107abd6-a61a-4b3d-a403-c15182060896"; // compte administrateur (Hervé)
+const ADMIN_ID = "b107abd6-a61a-4b3d-a403-c15182060896"; // compte administrateur (Hervé) — À METTRE À JOUR avec le nouvel uid Supabase Auth (Phase 1, étape C)
+const AUTH_DOMAIN = "bbb.app"; // e-mail synthétique invisible pour l'utilisateur (Supabase Auth) : pseudo@bbb.app
+const emailFor = u => u.trim().toLowerCase() + "@" + AUTH_DOMAIN;
+const validUser = u => /^[a-zA-Z0-9._-]{2,20}$/.test(u); // pseudo : 2–20, lettres/chiffres/._- (sans espace ni accent)
 
 /* ============ CONSTANTS ============ */
 const EMOJIS=["👑","🦊","🐻","🦁","🐼","🐯","🦉","🐸","🐙","🦄"];
@@ -554,8 +557,6 @@ function notifMsg(key){
   return null;
 }
 function maybeNotify(){ const key=myActionKey(); if(key && key!==notifKey){ const m=notifMsg(key); if(m) notify(m[0],(L&&L.name?L.name+" — ":"")+m[1]); } notifKey=key; }
-function saveAuth(){ localStorage.setItem("pl_auth", JSON.stringify(AUTH)); }
-function loadAuth(){ try{return JSON.parse(localStorage.getItem("pl_auth"));}catch(e){return null;} }
 function loadLast(){ try{return JSON.parse(localStorage.getItem("pl_last"));}catch(e){return null;} }
 function getSeen(){ return +(localStorage.getItem("pl_seen_"+S.leagueId)||0); }
 function setSeen(v){ localStorage.setItem("pl_seen_"+S.leagueId, v); }
@@ -672,21 +673,26 @@ function viewAuth(){
 async function doLogin(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
   if(!u||!p){showErr(t("Identifiant et mot de passe requis."));return;} busy=true; showErr("");
-  try{ const uid=await q(db.rpc("app_login",{p_username:u,p_password:p}));
-    if(!uid){ showErr(t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
-    AUTH={id:uid,name:u}; saveAuth(); S.view="leagues"; await loadMyLeagues();
-  }catch(e){ showErr("Connexion : "+e.message); } busy=false;
+  const { data, error } = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
+  if(error){ showErr(t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
+  AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u };
+  S.view="leagues"; busy=false; await loadMyLeagues();
 }
 async function doSignup(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
-  if(u.length<2){showErr(t("Choisis un identifiant (2 caractères minimum)."));return;}
+  if(!validUser(u)){showErr(t("Identifiant : 2 à 20 caractères — lettres, chiffres, . _ - (sans espace ni accent)."));return;}
   if(p.length<8){showErr(t("Mot de passe : 8 caractères minimum."));return;} busy=true; showErr("");
-  try{ const uid=await q(db.rpc("app_signup",{p_username:u,p_password:p}));
-    AUTH={id:uid,name:u}; saveAuth(); S.view="leagues"; await loadMyLeagues();
-  }catch(e){ showErr(/WEAK_PASSWORD/.test(e.message)?t("Mot de passe trop court (8 caractères minimum)."):(/USERNAME_TAKEN/.test(e.message)?t("Cet identifiant est déjà pris."):"Création : "+e.message)); } busy=false;
+  const { data, error } = await db.auth.signUp({ email: emailFor(u), password: p, options:{ data:{ username: u } } });
+  if(error){ showErr(/registered|exists|already/i.test(error.message)?t("Cet identifiant est déjà pris."):("Création : "+error.message)); busy=false; return; }
+  if(!data.session){ // filet si la confirmation e-mail est restée activée côté Supabase
+    const r = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
+    if(r.error){ showErr("Config Supabase : désactive la confirmation e-mail (voir runbook Partie A)."); busy=false; return; }
+  }
+  AUTH={ id:data.user.id, name:u };
+  S.view="leagues"; busy=false; await loadMyLeagues();
 }
-function logout(){ if(!confirm(t("Se déconnecter ?")))return; if(poll)clearInterval(poll);
-  localStorage.removeItem("pl_auth"); localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
+async function logout(){ if(!confirm(t("Se déconnecter ?")))return; if(poll)clearInterval(poll);
+  try{ await db.auth.signOut(); }catch(e){} localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
   S={view:"auth",leagueId:null,myId:null,code:null,recap:false,dispDay:0,prevView:"leagues"}; L=null; render(); }
 
 /* ============ MES LIGUES ============ */
@@ -1760,7 +1766,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.48";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.49";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
@@ -1820,9 +1826,11 @@ function viewRules(){
    <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>−2 pts</b> au classement et <b>−25 % du capital</b>.")}</div></div>`;
 }
 /* ============ boot ============ */
-(function boot(){
+(async function boot(){
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
-  AUTH=loadAuth();
+  try{ const { data:{ session } } = await db.auth.getSession();
+    if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"" }; }
+  }catch(e){}
   if(!AUTH){ S.view="auth"; render(); return; }
   const last=loadLast();
   if(last&&last.leagueId){ S.leagueId=last.leagueId; S.myId=last.myId; S.view="game"; startPoll(); refresh(); }
