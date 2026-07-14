@@ -23,13 +23,13 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;}
+    -webkit-font-smoothing:antialiased;overflow-x:hidden;}
   .num,td.num,.big,.code{font-variant-numeric:tabular-nums;}
   .app{max-width:540px;margin:0 auto;padding:20px 16px 64px;}
   h1{font-size:21px;margin:0;letter-spacing:-.4px;font-weight:800;}
   h2{font-size:15px;margin:22px 4px 10px;letter-spacing:.01em;}
   .sub{color:var(--muted);font-size:12.5px;}
-  .bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;}
+  .bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;}
   .box{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin:12px 0;box-shadow:var(--shadow);}
   .row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
   .muted{color:var(--muted);} .green{color:var(--green);} .red{color:var(--red);}
@@ -107,7 +107,7 @@
 <div class="app">
   <div class="bar">
     <div><h1 style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 40 40" width="30" height="30" style="flex:0 0 auto" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#e0a020"/><circle cx="20" cy="20" r="18" fill="none" stroke="#f4c14e" stroke-width="3.6" stroke-dasharray="4.5 5"/><circle cx="20" cy="20" r="12.5" fill="#f7cf87"/><circle cx="20" cy="20" r="12.5" fill="none" stroke="#c68e1e" stroke-width="1.3"/><text x="20" y="24.5" text-anchor="middle" font-size="12.5" font-weight="800" fill="#2a1a05">VS</text></svg><span><span style="color:var(--accent)">B</span>ankroll <span style="color:var(--accent)">B</span>et <span style="color:var(--accent)">B</span>attle</span></h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
-    <div style="display:flex;gap:8px;flex:0 0 auto">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
       <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🇬🇧</button>
       <button class="btn ghost sm" id="themeBtn" onclick="toggleTheme()" title="Basculer clair / sombre">☀️</button>
       <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()">← Mes ligues</button>
@@ -118,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.50</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.52</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -484,7 +484,18 @@ const EN={
   "Les plus grosses perfs sur <b>toutes</b> les ligues ({a} ligues · {b} joueurs). Astuce : une grosse ligue gonfle les gains en €, donc le <b>rendement</b> et la <b>plus grosse cote</b> — indépendants du nombre de joueurs — sont les mesures les plus justes.":"The biggest performances across <b>all</b> leagues ({a} leagues · {b} players). Tip: a big league inflates € gains, so <b>return</b> and <b>biggest odds</b> — independent of the number of players — are the fairest measures.",
   "💥 Plus gros gain sur une journée":"💥 Biggest gain in a day", "📈 Meilleur rendement d'une journée":"📈 Best return in a day",
   "×{r} la mise":"×{r} the stake", "Il faut avoir misé ≥ 5€.":"Must have staked ≥ 5€.",
-  "🎯 Plus grosse cote gagnée":"🎯 Biggest odds won", "💀 Pire dégringolade d'une journée":"💀 Worst crash in a day"
+  "🎯 Plus grosse cote gagnée":"🎯 Biggest odds won", "💀 Pire dégringolade d'une journée":"💀 Worst crash in a day",
+  // — Palmarès : classement des pronostiqueurs (compétence pure) —
+  "🧠 Classement des pronostiqueurs":"🧠 Forecaster rankings",
+  "Compétence de <b>pronostic pur</b> (bons pronos & cotes), <b>indépendante des mises</b>, toutes ligues confondues. Minimum <b>{a} pronostics</b> pour figurer. Touche un joueur pour son profil complet.":"<b>Pure forecasting</b> skill (accuracy & odds), <b>independent of stakes</b>, across all leagues. Minimum <b>{a} predictions</b> to qualify. Tap a player for their full profile.",
+  "🎯 Meilleurs pronostiqueurs — % de réussite":"🎯 Best forecasters — success rate",
+  "📈 Meilleure cote moyenne gagnante":"📈 Highest average winning odds",
+  "💎 Meilleur rendement à mise fixe (bat les cotes)":"💎 Best flat-stake yield (beats the odds)",
+  "💩 Pires pronostiqueurs — % de réussite":"💩 Worst forecasters — success rate",
+  "Pas encore assez de pronostics (min {a}).":"Not enough predictions yet (min {a}).",
+  "Pas encore assez de pronostics gagnants.":"Not enough winning predictions yet.",
+  "{a} pronostics · {b} corrects":"{a} predictions · {b} correct",
+  "réussite":"accuracy", "cote moy. gagnante":"avg winning odds", "rendement mise fixe":"flat-stake yield"
 };
 function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); } return out; }
 function applyLangBtn(){ const b=$("langBtn"); if(b) b.textContent = lang==="en"?"🇫🇷":"🇬🇧"; }
@@ -847,7 +858,7 @@ function prepSummaryBody(){
       <div class="mini muted" style="margin-top:7px;border-top:1px solid var(--border);padding-top:6px">${t("Enchères :")} ${a.bids.map(bd=>`${pName(bd.pid)} <b>${bd.amt}€</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}`).join(' &nbsp;·&nbsp; ')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold">${t("🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:a.amount})}</span>`:''}</div></div>`).join("")
      : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`}
    <h2>${t("💰 Capital de départ")}</h2>
-   <div class="box" style="padding:4px 10px"><table><tr><th>${t("Joueur")}</th><th style="text-align:right">${t("Dépensé")}</th><th style="text-align:right">${t("Capital")}</th><th>${t("Bonus")}</th></tr>
+   <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>${t("Joueur")}</th><th style="text-align:right">${t("Dépensé")}</th><th style="text-align:right">${t("Capital")}</th><th>${t("Bonus")}</th></tr>
      ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</td>
         <td class="num muted">${p.spent}€</td><td class="num"><b>${eur(p.capital)}€</b></td>
         <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>
@@ -1424,7 +1435,7 @@ function recapBody(D){
     ${detail?`<h2>${t("⚔️ Le duel en détail")}</h2>${detail}`:''}
     <h2>${t("Résultats de la journée")}</h2>
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.")}</div>
-    <div class="box" style="padding:4px 12px"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>${t("Carte")}</th></tr>
+    <div class="box" style="padding:4px 12px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>${t("Carte")}</th></tr>
       ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}${forgot(p.id)?' <span class="tag red" title="'+t("Pari non validé à temps : −2 pts et −25 % du capital")+'">⏰ −2</span>':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
         <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
@@ -1631,7 +1642,7 @@ function viewEnd(){
   return `<div style="text-align:center;margin:10px 0"><div style="font-size:46px">🏆</div>
      <div style="font-size:24px;font-weight:800" class="gold">${champ.emoji} ${esc(champ.name)}${t(", Champion !")}</div>
      <div class="mini muted">${champ.points} pts · ${eur(champ.capital)} €</div></div>
-   <div class="box" style="padding:4px 10px"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
+   <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
      ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("hors gage")+'</span>':''}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`).join("")}</table></div>
    ${endRecapHTML()}
    ${capChart()}
@@ -1668,7 +1679,7 @@ function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
     const lgs=await q(db.from("leagues").select("id,name,num_participants,status"));
-    const pls=await q(db.from("players").select("id,name,emoji,league_id"));
+    const pls=await q(db.from("players").select("id,name,emoji,league_id,is_ai,user_id"));
     const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").not("net","is",null));
     const dls=await q(db.from("duels").select("id,fixtures"));
     const lgMap={},plMap={},dlMap={}; lgs.forEach(l=>lgMap[l.id]=l); pls.forEach(p=>plMap[p.id]=p); dls.forEach(d=>dlMap[d.id]=d);
@@ -1681,11 +1692,31 @@ async function loadPalmares(){
         return {m:f.home+"–"+f.away, sel:selNm(f,x.sel), win, odd, stake:+x.stake, g:+g.toFixed(2), cap:i===b.captain}; }).filter(Boolean);
       dayRecs.push({net:+(b.net||0).toFixed(2), staked, ret: staked>0?(b.net||0)/staked:0, name:pl.name, emoji:pl.emoji, lname:lg.name, np:lg.num_participants, day:b.day, cardId:b.card&&b.card.id, lines});
     }
+    // Agrégat de PRONOSTIC PUR par personne (user_id), toutes ligues — indépendant des mises.
+    const agg={};
+    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||!pl.user_id||pl.name==="Joueur IA") continue;
+      const d=dlMap[b.duel_id]; const fx=(d&&d.fixtures)||[]; const c=b.card;
+      let a=agg[pl.user_id]; if(!a){ a=agg[pl.user_id]={name:pl.name,emoji:pl.emoji,picks:0,correct:0,winOddSum:0,wins:0,flat:0}; }
+      a.name=pl.name; a.emoji=pl.emoji;
+      (b.picks||[]).forEach((x,i)=>{ const f=fx[i]; if(!f||f.res==null) return;
+        const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
+        const win=isDC?(f.res===x.sel||f.res===c.sel2):(x.sel===f.res);
+        const odd=isDC?dcOdd(oddF(f,x.sel),oddF(f,c.sel2)):oddF(f,x.sel);
+        a.picks++; if(win){ a.correct++; a.wins++; a.winOddSum+=odd; a.flat+=(odd-1); } else a.flat-=1; });
+    }
+    const MINP=5, MINW=2;
+    const skill=Object.values(agg).filter(a=>a.picks>0).map(a=>({ name:a.name, emoji:a.emoji, picks:a.picks, correct:a.correct,
+      hit:a.correct/a.picks, avgOdd:a.wins?a.winOddSum/a.wins:0, wins:a.wins, flat:a.flat/a.picks }));
     palmares={
       bigGain: [...dayRecs].sort((a,b)=>b.net-a.net).slice(0,5),
       bestRet: [...dayRecs].filter(r=>r.staked>=5).sort((a,b)=>b.ret-a.ret).slice(0,5),
       bestOdd: [...oddRecs].sort((a,b)=>b.odd-a.odd).slice(0,5),
       bigLoss: [...dayRecs].sort((a,b)=>a.net-b.net).slice(0,5),
+      topHit: skill.filter(a=>a.picks>=MINP).sort((x,y)=>y.hit-x.hit).slice(0,10),
+      worstHit: skill.filter(a=>a.picks>=MINP).sort((x,y)=>x.hit-y.hit).slice(0,10),
+      topAvgOdd: skill.filter(a=>a.wins>=MINW).sort((x,y)=>y.avgOdd-x.avgOdd).slice(0,10),
+      topFlat: skill.filter(a=>a.picks>=MINP).sort((x,y)=>y.flat-x.flat).slice(0,10),
+      minP: MINP,
       counts:{leagues:lgs.length, players:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length}
     };
   }catch(e){ palmares={error:e.message}; }
@@ -1701,6 +1732,8 @@ function viewPalmares(){
      ${Math.abs(adj)>=1?`<div class="mini" style="margin-top:4px">🃏 ${t("Bonus &amp; ajustements")} ${r.cardId&&CARDS[r.cardId]?t("({c}, séries…)",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):t("(séries, bonus…)")} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`:''}
      <div class="mini" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><b>${t("Total journée :")} <span class="${r.net>=0?'green':'red'}">${fmt(r.net)}€</span></b></div>`; };
   const oddDetail=r=>`<div class="mini muted">${t("{lg} · J{d}",{lg:esc(r.lname||'?'),d:r.day+1})}</div><div class="mini" style="margin-top:3px">${esc(r.match)} — <b>${esc(t(r.sel))}</b> · ${r.stake}€ @${r.odd} ✓ → <b class="green">+${eur(r.stake*(r.odd-1))}€</b></div>`;
+  const statDetail=r=>`<div class="mini muted">${t("{a} pronostics · {b} corrects",{a:r.picks,b:r.correct})}</div>
+     <div class="mini" style="margin-top:3px">🎯 ${t("réussite")} <b>${(r.hit*100).toFixed(1)}%</b> · 📈 ${t("cote moy. gagnante")} <b>${r.avgOdd?('@'+r.avgOdd.toFixed(2)):'–'}</b> · 💎 ${t("rendement mise fixe")} <b class="${r.flat>=0?'green':'red'}">${r.flat>=0?'+':''}${(r.flat*100).toFixed(0)}%</b></div>`;
   const sec=(title,arr,val,detail,tag,empty)=>`<h2>${title}</h2>${arr.length?arr.map((r,i)=>{const k=tag+i;const op=palmOpen===k;const v=val(r);
      return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="togglePalm('${k}')">
        <div class="row"><div class="row" style="gap:8px"><b style="min-width:22px">${medal(i)}</b><span>${r.emoji||''} ${esc(r.name)}</span></div><b class="${v.cls}">${v.txt} ${op?'▲':'▼'}</b></div>
@@ -1710,7 +1743,12 @@ function viewPalmares(){
     ${sec(t("💥 Plus gros gain sur une journée"), palmares.bigGain, r=>({txt:fmt(r.net)+"€",cls:r.net>=0?'green':'red'}), dayDetail, "g")}
     ${sec(t("📈 Meilleur rendement d'une journée"), palmares.bestRet, r=>({txt:t("×{r} la mise",{r:r.ret.toFixed(2)}),cls:r.ret>=0?'green':'red'}), dayDetail, "r", t("Il faut avoir misé ≥ 5€."))}
     ${sec(t("🎯 Plus grosse cote gagnée"), palmares.bestOdd, r=>({txt:"@"+r.odd,cls:'gold'}), oddDetail, "o")}
-    ${sec(t("💀 Pire dégringolade d'une journée"), palmares.bigLoss, r=>({txt:fmt(r.net)+"€",cls:'red'}), dayDetail, "l")}`;
+    ${sec(t("💀 Pire dégringolade d'une journée"), palmares.bigLoss, r=>({txt:fmt(r.net)+"€",cls:'red'}), dayDetail, "l")}
+    <div class="box" style="border-left:3px solid var(--accent)"><h2 style="margin-top:0">${t("🧠 Classement des pronostiqueurs")}</h2><div class="mini muted">${t("Compétence de <b>pronostic pur</b> (bons pronos & cotes), <b>indépendante des mises</b>, toutes ligues confondues. Minimum <b>{a} pronostics</b> pour figurer. Touche un joueur pour son profil complet.",{a:palmares.minP})}</div></div>
+    ${sec(t("🎯 Meilleurs pronostiqueurs — % de réussite"), palmares.topHit, r=>({txt:(r.hit*100).toFixed(1)+"%",cls:'gold'}), statDetail, "ph", t("Pas encore assez de pronostics (min {a}).",{a:palmares.minP}))}
+    ${sec(t("📈 Meilleure cote moyenne gagnante"), palmares.topAvgOdd, r=>({txt:'@'+r.avgOdd.toFixed(2),cls:'gold'}), statDetail, "pa", t("Pas encore assez de pronostics gagnants."))}
+    ${sec(t("💎 Meilleur rendement à mise fixe (bat les cotes)"), palmares.topFlat, r=>({txt:(r.flat>=0?'+':'')+(r.flat*100).toFixed(0)+"%",cls:r.flat>=0?'green':'red'}), statDetail, "pf", t("Pas encore assez de pronostics (min {a}).",{a:palmares.minP}))}
+    ${sec(t("💩 Pires pronostiqueurs — % de réussite"), palmares.worstHit, r=>({txt:(r.hit*100).toFixed(1)+"%",cls:'red'}), statDetail, "pw", t("Pas encore assez de pronostics (min {a}).",{a:palmares.minP}))}`;
 }
 async function loadAdmin(){
   try{
@@ -1766,7 +1804,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.50";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.52";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
