@@ -118,7 +118,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.47</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.48</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -207,7 +207,7 @@ function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini mute
 let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, prevView:"leagues" };
 let AUTH=null, myLeagues=[], showFinished=false;
 let L=null, players=[], duels=[], bets=[];
-let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1;
+let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null;
 let palmares=null, adminData=null, palmOpen="";
 let adminUsers=null, adminPwd="";
 let endStats=null; // bilan de fin de ligue (calculé une fois quand la ligue est terminée)
@@ -388,6 +388,7 @@ const EN={
   // — Phase 4d : classement & graphique —
   "📅 Résultats par journée":"📅 Results by day", "Classement · J{a}/{b}":"Standings · D{a}/{b}",
   "Pts":"Pts", "Cap.":"Cap.", "hors gage":"no forfeit",
+  "Classement actuel · J{a}/{b}":"Current standings · D{a}/{b}", "Classement après J{a}/{b}":"Standings after D{a}/{b}",
   "🃏 Tes bonus":"🃏 Your bonuses", "(touche un bonus pour sa description · barré = déjà utilisé)":"(tap a bonus for its description · struck through = already used)",
   "🎭 Gage (au dernier humain) :":"🎭 Forfeit (for the last human):",
   "Bonus":"Bonus", "📈 Évolution du capital (départ → bonus → chaque journée)":"📈 Capital over time (start → bonuses → each day)",
@@ -624,8 +625,10 @@ async function refresh(){
       if(await ensureAiBets()){ bets = await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",dispDay)); }
       if(shouldAutoResolve()){ resolveDay(); return; }
     }
-    if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; }
-    if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){ chartBets = await q(db.from("bets").select("player_id,day,net").eq("league_id",S.leagueId).not("net","is",null)); }
+    if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; standDuels=null; }
+    if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){
+      chartBets = await q(db.from("bets").select("player_id,day,net,picks,card,captain,duel_id").eq("league_id",S.leagueId).not("net","is",null));
+      standDuels = await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",S.leagueId)); }
     if(L.status==="done" && endStats===null){ endStats={loading:true}; loadEndStats().then(()=>render()); }
     showErr(""); render(); maybeNotify();
   }catch(e){ showErr("Connexion : "+e.message); }
@@ -726,7 +729,7 @@ function viewLeagues(){
     })()}`;
 }
 function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr(t("Entre un code valide."));return;} joinLeague(c); }
-function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; endStats=null; S.bidLLeague=null; notifKey=null;
+function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standDay=null; endStats=null; S.bidLLeague=null; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
@@ -1015,7 +1018,8 @@ function viewDay(){
   if(!myBet()) return viewBet(d,dayLbl,opp,iAmHome);
   return viewWait(dayLbl);
 }
-function goStandings(){ S.view='standings'; render(); refresh(); }
+function goStandings(){ S.view='standings'; standDay=null; render(); refresh(); }
+function setStandDay(d){ standDay=d; render(); }
 function navBtns(){ return `<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" onclick="goStandings()">📊 Classement</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">📅 Résultats J${L.current_day}</button>`:''}</div>`; }
 function standingsBtn(){ return `<div style="height:8px"></div><button class="btn ghost" onclick="goStandings()">Voir le classement</button>`; }
 // Barre d'accès rapide (icônes) — présente sur Résultats / Recap / Classement
@@ -1468,18 +1472,75 @@ function ackRecap(){ recapOpen=-1; recapFocus=null; setSeen(L.current_day); refr
 
 /* ============ STANDINGS ============ */
 function cmp(a,b){ return b.points-a.points || b.capital-a.capital || b.duel_wins-a.duel_wins || b.best_day-a.best_day || b.best_odd-a.best_odd; }
+// Reconstruit l'historique du classement (état cumulé APRÈS chaque journée résolue) en rejouant les résultats stockés.
+function computeStandHist(){
+  if(!chartBets || !standDuels) return [];
+  const N = (L.status==="done" ? (L.num_days||0) : (L.current_day||0)); // journées résolues
+  if(N<1) return [];
+  const sp = L.prep_summary||{};
+  const st={}; players.forEach(p=>{ const psx=(sp.players||[]).find(x=>x.pid===p.id); st[p.id]={points:0, capital: psx?psx.capital:100, duel_wins:0, best_day:0, best_odd:0, streak_w:0, streak_l:0, star:0}; });
+  const betAt={}; chartBets.forEach(b=>{ betAt[b.day+'|'+b.player_id]=b; });
+  const duelByDay={}; standDuels.forEach(d=>{ (duelByDay[d.day]=duelByDay[d.day]||[]).push(d); });
+  const snaps=[];
+  for(let d=0; d<N; d++){
+    const dz=duelByDay[d]||[];
+    const inDay=pid=>dz.some(du=>du.home_id===pid||du.away_id===pid);
+    // oubli : humain présent ce jour-là sans pari valide (picks vides ou absents)
+    const forgot=new Set();
+    players.forEach(p=>{ if(p.is_ai||!inDay(p.id)) return; const b=betAt[d+'|'+p.id]; if(!b||!Array.isArray(b.picks)||b.picks.length===0) forgot.add(p.id); });
+    // points de duel + séries 🔥/❄️ + victoires
+    dz.forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
+      const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
+      const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
+      const r=duelPts(H,A);
+      if(st[du.home_id]) st[du.home_id].points+=r.h; if(st[du.away_id]) st[du.away_id].points+=r.a;
+      if(r.win==='h'){ if(st[du.home_id]){st[du.home_id].duel_wins++;st[du.home_id].streak_w++;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_l++;st[du.away_id].streak_w=0;} }
+      else if(r.win==='a'){ if(st[du.away_id]){st[du.away_id].duel_wins++;st[du.away_id].streak_w++;st[du.away_id].streak_l=0;} if(st[du.home_id]){st[du.home_id].streak_l++;st[du.home_id].streak_w=0;} }
+      else { if(st[du.home_id]){st[du.home_id].streak_w=0;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_w=0;st[du.away_id].streak_l=0;} } });
+    // ⭐ meilleur pronostiqueur du jour (hors oubli) → +1 pt
+    const rows=[]; players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du||forgot.has(p.id)) return; const b=betAt[d+'|'+p.id]; const gm=gainMise(b&&b.picks, du.fixtures); rows.push({id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}); });
+    const sid=dayStar(rows); if(sid!=null && st[sid]){ st[sid].points+=1; st[sid].star+=1; }
+    // −1 pt si tous les paris faux (picks non vides)
+    players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du) return; const b=betAt[d+'|'+p.id]; if(b&&b.picks&&b.picks.length&&winCount(b,du.fixtures)===0 && st[p.id]) st[p.id].points-=1; });
+    // capital (+ net), meilleure journée, meilleure cote gagnée
+    players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); const b=betAt[d+'|'+p.id]; const net=(b&&b.net)||0; if(st[p.id]){ st[p.id].best_day=Math.max(st[p.id].best_day,net); st[p.id].capital=Math.max(0,Math.round((st[p.id].capital+net)*100)/100); }
+      if(b&&b.picks&&du&&du.fixtures){ b.picks.forEach((pk,i)=>{ const f=du.fixtures[i]; if(!f) return; const c=b.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===pk.sel||f.res===c.sel2):(pk.sel===f.res); const odd=isDC?dcOdd(oddOf(f,pk.sel),oddOf(f,c.sel2)):oddOf(f,pk.sel); if(win&&odd>st[p.id].best_odd) st[p.id].best_odd=odd; }); } });
+    // pénalité oubli : −2 pts, −25 % capital
+    forgot.forEach(pid=>{ if(st[pid]){ st[pid].points-=2; st[pid].capital=Math.max(0,Math.round(st[pid].capital*0.75*100)/100); } });
+    // recapitalisation solidaire : si un humain < seuil → +montant à tout le monde
+    const broke=players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
+    if(broke.length){ players.forEach(p=>{ if(st[p.id]) st[p.id].capital+=RECAP_AMOUNT; }); }
+    snaps.push(players.map(p=>({ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
+      points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star })));
+  }
+  return snaps;
+}
 function viewStandings(){
-  const ord=[...players].sort(cmp); const humans=ord.filter(p=>!p.is_ai); const lastH=humans[humans.length-1];
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
-  // Points bonus ⭐ cumulés (meilleur net de la ligue chaque journée) — reconstitués à partir des résultats.
+  const humansLive=[...players].sort(cmp).filter(p=>!p.is_ai); const lastH=humansLive[humansLive.length-1];
+  const R = (L.status==="done" ? (L.num_days||0) : (L.current_day||0)); // journées résolues
+  const snaps = computeStandHist();
+  // ⭐ cumul (meilleur net de la ligue chaque journée, hors oubli) pour la vue actuelle
   const sc={}; players.forEach(p=>sc[p.id]=0);
-  if(chartBets){ const N=Math.min(L.current_day,L.num_days); const byDay={}; chartBets.forEach(b=>{ if(b.day<N){(byDay[b.day]=byDay[b.day]||[]).push(b);} });
-    for(let d=0;d<N;d++){ const arr=byDay[d]; if(!arr||!arr.length)continue; let best=null,bn=-1e9,bo=1e9; arr.forEach(b=>{ const R=Math.round((b.net||0)*100)/100; const pp=pById(b.player_id); const o=pp?(pp.join_order||0):0; if(R>bn||(R===bn&&o<bo)){bn=R;best=b.player_id;bo=o;} }); if(best!=null)sc[best]++; } }
+  if(chartBets){ const byDay={}; chartBets.forEach(b=>{ if(b.day<R){(byDay[b.day]=byDay[b.day]||[]).push(b);} });
+    for(let d=0;d<R;d++){ const arr=byDay[d]; if(!arr||!arr.length)continue; let best=null,bn=-1e9,bo=1e9; arr.forEach(b=>{ if(Array.isArray(b.picks)&&b.picks.length===0) return; const RR=Math.round((b.net||0)*100)/100; const pp=pById(b.player_id); const o=pp?(pp.join_order||0):0; if(RR>bn||(RR===bn&&o<bo)){bn=RR;best=b.player_id;bo=o;} }); if(best!=null)sc[best]++; } }
+  // journée sélectionnée (défaut = dernière résolue = classement actuel)
+  let sd = (standDay==null)? R-1 : standDay; if(sd>R-1) sd=R-1; if(sd<0) sd=R-1;
+  const useLive = R<1 || sd>=R-1 || !snaps[sd];
+  const rows = useLive
+    ? players.map(p=>({id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,points:p.points,capital:p.capital,duel_wins:p.duel_wins,best_day:p.best_day,best_odd:p.best_odd,streak_w:p.streak_w,streak_l:p.streak_l,star:sc[p.id]||0}))
+    : snaps[sd];
+  const ord=[...rows].sort(cmp);
+  const shownIdx = useLive? Math.max(0,R-1) : sd;
+  const nav = (R>=1) ? `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm" ${shownIdx>0?'':'disabled'} onclick="setStandDay(${shownIdx-1})">${t("◀ Préc.")}</button>
+      <b class="mini" style="text-align:center;flex:1">${useLive?t("Classement actuel · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days}):t("Classement après J{a}/{b}",{a:sd+1,b:L.num_days})}</b>
+      <button class="btn ghost sm" ${shownIdx<R-1?'':'disabled'} onclick="setStandDay(${shownIdx+1})">${t("Suiv. ▶")}</button></div>`
+    : `<h2>${t("Classement · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days})}</h2>`;
   return `<div class="row" style="gap:8px"><button class="btn ghost sm" onclick="S.view='game';render()">${t("← Retour au jeu")}</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">${t("📅 Résultats par journée")}</button>`:''}</div>
     ${quickBar('standings')}
-    <h2>${t("Classement · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days})}</h2>
+    ${nav}
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
-      ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:''); const bp=sc[p.id]||0; const dp=p.points-bp;
+      ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:''); const bp=p.star||0; const dp=p.points-bp;
         return `<tr><td>${p.is_ai?'🤖':i+1}</td><td>${p.emoji} ${esc(p.name)}${s?' <span class="mini muted">'+s+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("hors gage")+'</span>':''}</td>
         <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     ${capChart()}
@@ -1699,7 +1760,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.47";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.48";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
