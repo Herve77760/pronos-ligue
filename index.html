@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.60</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.62</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -143,17 +143,21 @@ const SPORTS=[
 ];
 const GAGES=[
  {t:"Le plongeon givré 🥶", d:"Se baigner en maillot dans une eau bien froide (mer, lac ou douche glacée), vidéo à l'appui."},
- {t:"Karaoké sauvage 🎤", d:"Chanter en public une chanson kitsch choisie par le groupe, sans se dégonfler."},
- {t:"La tenue improbable 🤡", d:"Passer une sortie entière déguisé (poulet, banane, licorne…) au choix du groupe, photos obligatoires."},
+ {t:"Karaoké sauvage 🎤", s:1, d:"Chanter en public une chanson kitsch choisie par le groupe, sans se dégonfler."},
+ {t:"La tenue improbable 🤡", s:1, d:"Passer une sortie entière déguisé (poulet, banane, licorne…) au choix du groupe, photos obligatoires."},
  {t:"Serveur d'un soir 🍽️", d:"Assurer le service (apéro, plats, débarrassage) de la prochaine soirée entre potes, tablier compris."},
  {t:"Chorée TikTok publique 💃", d:"Exécuter une chorégraphie filmée dans un lieu public passant."},
  {t:"L'appel gênant 📞", d:"Appeler un proche et lui déclarer une passion absurde en gardant son sérieux."},
- {t:"La story hommage 📸", d:"Publier pendant 24 h une story qui célèbre pompeusement le champion du tournoi."},
- {t:"Fond d'écran imposé 📱", d:"Garder une semaine un fond d'écran choisi par le groupe (et le prouver sur demande)."},
- {t:"La tournée du perdant 🍹", d:"Offrir la prochaine tournée (boissons ou goûter) à toute la bande."},
- {t:"Photo de profil déléguée 🖼️", d:"Laisser le groupe choisir ta photo de profil pendant 3 jours."},
+ {t:"La story hommage 📸", s:1, d:"Publier pendant 24 h une story qui célèbre pompeusement le champion du tournoi."},
+ {t:"Fond d'écran imposé 📱", s:1, d:"Garder une semaine un fond d'écran choisi par le groupe (et le prouver sur demande)."},
+ {t:"La tournée du perdant 🍹", s:1, d:"Offrir la prochaine tournée (boissons ou goûter) à toute la bande — réglé entre vous, hors application."},
+ {t:"Photo de profil déléguée 🖼️", s:1, d:"Laisser le groupe choisir ta photo de profil pendant 3 jours."},
  {t:"Le défi 50 pompes 💪", d:"Réaliser 50 pompes filmées d'une traite (ou une planche de 3 min), sans tricher."},
  {t:"Diète de réseaux 📵", d:"48 h sans réseaux sociaux — preuve à l'appui (temps d'écran)."},
+ {t:"L'addition du resto 🧾", d:"Régler la prochaine note du groupe au restaurant — réglé entre vous, hors application."},
+ {t:"Café pour tout le monde ☕", s:1, d:"Offrir le café (ou le goûter) à toute la bande la prochaine fois — réglé entre vous, hors application."},
+ {t:"Ciné offert 🎬", d:"Payer les places de cinéma du groupe pour la prochaine sortie — réglé entre vous, hors application."},
+ {t:"La pizza party 🍕", s:1, d:"Offrir les pizzas de la prochaine soirée à toute l'équipe — réglé entre vous, hors application."},
 ];
 // Retrouve la description d'un gage à partir de son titre, en ignorant emoji/espaces/casse
 // (robuste même si l'emoji a changé entre deux versions).
@@ -180,6 +184,14 @@ function forceHTML(id){ const f=(CARDS[id]&&CARDS[id].f)||3; return `<span class
 const COMMON=["assurance","double"];
 const RANDOM_POOL=["miroir","gourmand","face","cadeau","sniper","invest","roi","tout","sangsue","parachute","joker","chance"];
 const CARD_IDS=Object.keys(CARDS).filter(id=>!CARDS[id].retired); // cartes actives (hors retirées) — enchères / règles / IA
+// Mode de contenu : "complet" (tout) ou "simple" (moins de cartes/gages, pour débuter).
+const SIMPLE_CARDS=["assurance","double","invest","roi","parachute","sniper","tout"]; // cartes faciles à comprendre
+function modeCards(m){ return (m==="simple") ? CARD_IDS.filter(id=>SIMPLE_CARDS.includes(id)) : CARD_IDS; }
+function modeGagePool(m){ return (m==="simple") ? GAGES.filter(g=>g.s) : GAGES.slice(); }
+const MODES={
+  complet:{n:"🎛️ Complet", d:"Toutes les cartes bonus et un large choix de gages — le jeu dans toute sa richesse."},
+  simple: {n:"🎯 Simple",  d:"Moins de cartes bonus et de gages — parfait pour débuter ou jouer vite."}
+};
 function handSize(d){ if(d>=18)return 8; if(d>=15)return 6; if(d>=12)return 5; if(d>=9)return 4; if(d>=6)return 3; return 2; }
 function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2); const hand=[];
   for(let i=0;i<nc;i++) hand.push(COMMON[i%COMMON.length]);
@@ -193,6 +205,9 @@ const FORMULAS={
   classique: {n:"🗓️ Classique", sel:24, bet:24, d:"~24h pour choisir, puis ~24h pour miser — 48h en tout (idée : de midi au lendemain midi, deux fois)."}
 };
 function leagueFormula(){ return FORMULAS[(L&&L.formula)||'classique'] || FORMULAS.classique; }
+// Mode de contenu & gage perso : stockés dans le JSON `gage` (lobby puis prépa). Défaut "complet".
+function getMode(){ try{ const o=JSON.parse(L.gage); if(o&&o.mode) return o.mode; }catch(e){} return "complet"; }
+function getCustom(){ try{ const o=JSON.parse(L.gage); if(o&&o.custom) return o.custom; }catch(e){} return ""; }
 // Échéances du jour courant. sel = fin sélection ; bet = clôture des paris.
 // Dès que tous les matchs sont choisis (bet_started_at), la clôture des paris = bet_started_at + delai (max 24h / 12h fast).
 function dayTimes(){ const f=leagueFormula(); const t0=(L&&L.day_started_at)?new Date(L.day_started_at).getTime():0;
@@ -387,7 +402,20 @@ const EN={
   "L'appel gênant 📞":"The awkward call 📞", "Appeler un proche et lui déclarer une passion absurde en gardant son sérieux.":"Call a loved one and declare an absurd passion while keeping a straight face.",
   "La story hommage 📸":"The tribute story 📸", "Publier pendant 24 h une story qui célèbre pompeusement le champion du tournoi.":"Post a story for 24h pompously celebrating the tournament champion.",
   "Fond d'écran imposé 📱":"Imposed wallpaper 📱", "Garder une semaine un fond d'écran choisi par le groupe (et le prouver sur demande).":"Keep a wallpaper chosen by the group for a week (and prove it on request).",
-  "La tournée du perdant 🍹":"The loser's round 🍹", "Offrir la prochaine tournée (boissons ou goûter) à toute la bande.":"Buy the next round (drinks or snacks) for the whole crew.",
+  "La tournée du perdant 🍹":"The loser's round 🍹", "Offrir la prochaine tournée (boissons ou goûter) à toute la bande — réglé entre vous, hors application.":"Buy the next round (drinks or snacks) for the whole crew — settled between you, outside the app.",
+  "L'addition du resto 🧾":"The restaurant bill 🧾", "Régler la prochaine note du groupe au restaurant — réglé entre vous, hors application.":"Cover the group's next restaurant bill — settled between you, outside the app.",
+  "Café pour tout le monde ☕":"Coffee for everyone ☕", "Offrir le café (ou le goûter) à toute la bande la prochaine fois — réglé entre vous, hors application.":"Buy coffee (or a snack) for the whole crew next time — settled between you, outside the app.",
+  "Ciné offert 🎬":"Movie night on you 🎬", "Payer les places de cinéma du groupe pour la prochaine sortie — réglé entre vous, hors application.":"Pay for the group's cinema tickets next outing — settled between you, outside the app.",
+  "La pizza party 🍕":"Pizza party 🍕", "Offrir les pizzas de la prochaine soirée à toute l'équipe — réglé entre vous, hors application.":"Buy the pizzas for the whole team's next night — settled between you, outside the app.",
+  "🎛️ Mode de jeu":"🎛️ Game mode", "🎛️ Complet":"🎛️ Full", "🎯 Simple":"🎯 Simple", "✓ choisi":"✓ chosen",
+  "Toutes les cartes bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus cards and a wide choice of forfeits — the full-featured game.",
+  "Moins de cartes bonus et de gages — parfait pour débuter ou jouer vite.":"Fewer bonus cards and forfeits — perfect to start or play fast.",
+  "🎯 Gage personnalisé (optionnel)":"🎯 Custom forfeit (optional)",
+  "Ajoute ton propre gage — il sera proposé au vote. Ex. « tout le monde doit 5 € au vainqueur ». ⚠️ Réglé <b>entre vous</b> : l'application ne gère aucun argent.":"Add your own forfeit — it'll be offered in the vote. E.g. \"everyone owes 5 € to the winner\". ⚠️ Settled <b>between you</b>: the app handles no money.",
+  "✏️ Modifier":"✏️ Edit", "➕ Ajouter un gage perso":"➕ Add a custom forfeit",
+  "Ton gage personnalisé (réglé entre vous, hors application) :":"Your custom forfeit (settled between you, outside the app):",
+  "Retirer le gage personnalisé ?":"Remove the custom forfeit?",
+  "Gage personnalisé — réglé entre vous, hors application.":"Custom forfeit — settled between you, outside the app.",
   "Photo de profil déléguée 🖼️":"Delegated profile picture 🖼️", "Laisser le groupe choisir ta photo de profil pendant 3 jours.":"Let the group choose your profile picture for 3 days.",
   "Le défi 50 pompes 💪":"The 50 push-ups challenge 💪", "Réaliser 50 pompes filmées d'une traite (ou une planche de 3 min), sans tricher.":"Do 50 push-ups filmed in one go (or a 3-min plank), no cheating.",
   "Diète de réseaux 📵":"Social media detox 📵", "48 h sans réseaux sociaux — preuve à l'appui (temps d'écran).":"48h with no social media — proof required (screen time).",
@@ -901,6 +929,12 @@ function viewLobby(){
     <h2>${t("⏱️ Formule de rythme")}</h2>
     ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
+    <h2>${t("🎛️ Mode de jeu")}</h2>
+    ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b><div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    ${org?`<h2>${t("🎯 Gage personnalisé (optionnel)")}</h2>
+    <div class="box"><div class="mini muted">${t("Ajoute ton propre gage — il sera proposé au vote. Ex. « tout le monde doit 5 € au vainqueur ». ⚠️ Réglé <b>entre vous</b> : l'application ne gère aucun argent.")}</div>
+      ${getCustom()?`<div class="mini" style="margin-top:8px">« <b>${esc(getCustom())}</b> »</div>`:''}
+      <div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost sm" onclick="editCustomGage()">${getCustom()?t("✏️ Modifier"):t("➕ Ajouter un gage perso")}</button>${getCustom()?`<button class="btn ghost sm" onclick="clearCustomGage()">${t("Retirer")}</button>`:''}</div></div>`:''}
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?(t("Clôturer les inscriptions")+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 2 joueurs")}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
@@ -910,6 +944,14 @@ function copyCode(){ navigator.clipboard?.writeText(L.code); toast(t("Code copi�
 async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Formule : "+e.message+" (ajoute la colonne 'formula' — voir schema.sql)"); } busy=false; }
+async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
+  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
+  catch(e){ showErr("Mode : "+e.message); } busy=false; }
+async function setCustomGage(txt){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
+  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.custom=(txt||"").trim().slice(0,120); await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
+  catch(e){ showErr("Gage perso : "+e.message); } busy=false; }
+function editCustomGage(){ const v=prompt(t("Ton gage personnalisé (réglé entre vous, hors application) :"), getCustom()||""); if(v!=null) setCustomGage(v); }
+function clearCustomGage(){ if(confirm(t("Retirer le gage personnalisé ?"))) setCustomGage(""); }
 async function kickPlayer(pid){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
   const p=players.find(x=>x.id===pid)||{}; if(!confirm(t("Retirer {a} du tournoi ?",{a:(p.name||"ce joueur")})))return;
   busy=true; try{ await q(db.from("players").delete().eq("id",pid).eq("league_id",L.id)); await refresh(); }
@@ -934,20 +976,23 @@ async function closeRegistration(){
     const n=ps.length; const sched=makeSchedule(n); const rows=[];
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
-    const pool=[...GAGES]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
-    const options=pool.slice(0,Math.min(4,pool.length));
+    const mode=getMode(); const custom=getCustom();
+    const pool=modeGagePool(mode); for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
+    const nOpt=(mode==="simple")?3:5;
+    const options=pool.slice(0,Math.min(nOpt,pool.length));
+    if(custom&&custom.trim()) options.unshift({t:custom.trim(), d:"Gage personnalisé — réglé entre vous, hors application.", custom:true});
     // l'IA fait sa prépa (vote + enchères) tout de suite
     const votes={},voteTs={},bids={},bidTs={};
-    for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length); votes[p.id]=ap.vote; voteTs[p.id]=Date.now(); bids[p.id]=ap.bids; bidTs[p.id]=Date.now(); await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
+    for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length, mode, options.length); votes[p.id]=ap.vote; voteTs[p.id]=Date.now(); bids[p.id]=ap.bids; bidTs[p.id]=Date.now(); await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
     const deadline=new Date(Date.now()+24*3600*1000).toISOString();
-    await q(db.from("leagues").update({status:"prep",num_days:sched.length,current_day:0,gage:JSON.stringify({options,votes,voteTs,bids,bidTs,deadline})}).eq("id",L.id));
+    await q(db.from("leagues").update({status:"prep",num_days:sched.length,current_day:0,gage:JSON.stringify({options,votes,voteTs,bids,bidTs,deadline,mode})}).eq("id",L.id));
     setSeen(0); await refresh();
   }catch(e){ showErr("Clôture : "+e.message); } busy=false;
 }
-function aiPrep(nDays){ const ids=CARD_IDS.slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
+function aiPrep(nDays, mode, optCount){ const ids=modeCards(mode||"complet").slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
   const maxCards=Math.max(1,nDays); const nb=1+Math.floor(Math.random()*Math.min(maxCards,4)); const budget=Math.round(rnd(15,SHOP_CAP)); const bids={}; let spent=0;
   for(let k=0;k<nb && k<ids.length;k++){ const id=ids[k]; const bid=Math.min(Math.round(rnd(3,12)), budget-spent); if(bid>=1){ bids[id]=bid; spent+=bid; } }
-  return {vote:Math.floor(Math.random()*4), bids}; }
+  return {vote:Math.floor(Math.random()*(optCount||4)), bids}; }
 
 /* ============ PRÉPARATION (vote + enchères bonus) ============ */
 let bidL={};
@@ -967,7 +1012,7 @@ function viewPrep(){
       <h2>${t("Joueurs")}</h2>
       ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("⏳ pas encore")}</span></div>`).join("")}
       <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">${t("✏️ Modifier ma préparation")}</button>`; }
-  const ids=CARD_IDS;
+  const ids=modeCards(getMode());
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   return `<div class="box"><h2 style="margin-top:0">${t("🎬 Préparation")}</h2>
@@ -1782,7 +1827,6 @@ async function loadAdmin(){
     const lgs=await q(db.from("leagues").select("id,status,gage,prep_summary"));
     const pls=await q(db.from("players").select("name,is_ai,user_id"));
     const bts=await q(db.from("bets").select("card,net").not("net","is",null));
-    let users=null; try{ users=await q(db.rpc("app_user_count")); }catch(e){ users=null; }
     const cardCount={}; let withCard=0;
     bts.forEach(b=>{ if(b.card&&b.card.id){ cardCount[b.card.id]=(cardCount[b.card.id]||0)+1; withCard++; } });
     // Gages les plus choisis : cumul des votes (et nombre de fois retenu) sur toutes les ligues démarrées
@@ -1791,7 +1835,7 @@ async function loadAdmin(){
       gageTally[k]=gageTally[k]||{votes:0,wins:0}; gageTally[k].votes+=(g.count||0); if(g.win) gageTally[k].wins++; }); });
     const topGages=Object.keys(gageTally).map(t=>({t,votes:gageTally[t].votes,wins:gageTally[t].wins})).sort((a,b)=> b.votes-a.votes || b.wins-a.wins);
     const activeAccounts=new Set(pls.filter(p=>!p.is_ai&&p.user_id).map(p=>p.user_id)); // 1 personne = 1, même sur plusieurs ligues
-    adminData={ users, leagues:lgs.length,
+    adminData={ leagues:lgs.length,
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
       activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
       resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]), topGages };
@@ -1805,7 +1849,6 @@ function viewAdmin(){
   const a=adminData; const st=(k,v)=>`<div class="box row"><span class="muted">${k}</span><b>${v}</b></div>`;
   return `${back}
     <div class="box"><h2 style="margin-top:0">🛠 Tableau de bord admin</h2><div class="mini muted">Statistiques globales du jeu.</div></div>
-    ${st("👤 Comptes créés", a.users!=null?a.users:("≈ "+a.distinct+" (joueurs uniques)"))}
     ${st("🏆 Ligues créées", a.leagues)}
     <div class="box"><div class="mini muted" style="margin-bottom:8px">Ligues par statut</div>
       <div class="row mini"><span>🕓 Salon <b>${a.byStatus.lobby}</b></span><span>🎬 Prépa <b>${a.byStatus.prep}</b></span><span>▶️ En cours <b>${a.byStatus.running}</b></span><span>🏁 Fini <b>${a.byStatus.done}</b></span></div></div>
@@ -1817,20 +1860,15 @@ function viewAdmin(){
       ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b>${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🎭 Gages les plus choisis <span class="mini">(cumul des votes sur toutes les ligues)</span></div>
       ${(a.topGages&&a.topGages.length)?a.topGages.slice(0,10).map((g,i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${esc(g.t)}</span><b>${g.votes} vote${g.votes>1?'s':''}${g.wins?` · ${g.wins}× retenu`:''}</b></div>`).join(""):`<div class="mini muted">Aucun vote de gage enregistré pour l'instant.</div>`}</div>
-    <div class="box"><div class="mini muted" style="margin-bottom:6px">👤 Comptes joueurs — identifiants & réinitialisation</div>
-      ${adminUsers ? `${adminUsers.length?adminUsers.map(u=>`<div class="row mini" style="margin:6px 0"><span>${esc(u.username)}${u.id===ADMIN_ID?' <span class="tag">(toi, admin)</span>':''}</span>${u.id===ADMIN_ID?'':`<button class="btn ghost sm" onclick="adminResetPwd('${u.id}')">🔑 Réinitialiser le mot de passe</button>`}</div>`).join(""):`<div class="mini muted">Aucun autre compte pour l'instant.</div>`}
-         <button class="btn ghost sm" style="margin-top:8px" onclick="adminUsers=null;render()">Masquer</button>`
-        : `<div class="mini muted">Un joueur a oublié son mot de passe ? Entre ton mot de passe admin pour voir les identifiants et en réinitialiser un.</div>
-           <input id="adminPwd" type="password" placeholder="Ton mot de passe admin" autocomplete="off" style="margin-top:8px" onkeydown="if(event.key==='Enter')adminLoadUsers()">
-           <button class="btn ghost" style="margin-top:6px" onclick="adminLoadUsers()">Afficher les comptes</button>`}
-    </div>`;
+    <div class="box"><div class="mini muted" style="margin-bottom:6px">👤 Gestion des comptes</div>
+      <div class="mini muted">Depuis le passage à <b>Supabase Auth</b>, la gestion des comptes (liste, réinitialisation d'un mot de passe) se fait dans le <b>dashboard Supabase → Authentication → Users</b>. Une gestion intégrée reviendra dans une phase ultérieure.</div></div>`;
 }
 
 /* ============ render / poll ============ */
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.60";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.62";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
