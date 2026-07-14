@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.66</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.70</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -228,17 +228,38 @@ function oddsEventToFixture(ev, group){
   return f;
 }
 // Pool de vrais matchs À VENIR (foot/basket/tennis/rugby), cotes figées. Limité en nb d'appels (quota).
+// Priorité des compétitions : plus le nombre est grand, plus l'affiche est "grosse".
+const LEAGUE_PRIO={
+  soccer_uefa_champs_league:100, soccer_uefa_europa_league:96, soccer_uefa_europa_conference_league:92,
+  soccer_epl:99, soccer_spain_la_liga:97, soccer_germany_bundesliga:95, soccer_italy_serie_a:94, soccer_france_ligue_one:93,
+  soccer_fifa_world_cup:98, soccer_uefa_euro:98,
+  soccer_conmebol_copa_libertadores:88, soccer_conmebol_copa_sudamericana:80,
+  soccer_usa_mls:82, soccer_mexico_ligamx:80, soccer_netherlands_eredivisie:80, soccer_portugal_primeira_liga:80,
+  soccer_brazil_campeonato:76, soccer_argentina_primera_division:74,
+  basketball_nba:98, basketball_euroleague:90, basketball_wnba:70, basketball_nba_summer_league:58,
+  rugbyleague_nrl:66
+};
+function leaguePrio(key,group){ if(LEAGUE_PRIO[key]!=null) return LEAGUE_PRIO[key]; if(group==="Soccer") return 60; if(group==="Tennis") return 55; if(group==="Basketball") return 50; return 45; }
 async function fetchRealPool(){
   const sr=await fetch(`${ODDS_BASE}/sports/?apiKey=${ODDS_KEY}`); if(!sr.ok) throw new Error("sports "+sr.status);
   const sports=await sr.json(); const grp={}; sports.forEach(s=>grp[s.key]=s.group);
-  const keys=sports.filter(s=>REAL_GROUPS.includes(s.group)&&!s.has_outrights).map(s=>s.key).slice(0,6);
-  const out=[]; const now=Date.now();
+  const active=sports.filter(s=>REAL_GROUPS.includes(s.group)&&!s.has_outrights);
+  const keys=active.map(s=>s.key).slice(0,24); // toutes les compétitions actives — le créneau + la priorité trient ensuite
+  // Fenêtre : matchs démarrant APRÈS la clôture des paris (sinon match déjà commencé) ET dans les 24h qui suivent
+  // (pour que les résultats tombent vite après la clôture).
+  const _f=leagueFormula(); const cutoffMin=Date.now()+((_f.sel||24)+(_f.bet||24))*3600000; const cutoffMax=cutoffMin+24*3600000;
+  const out=[];
   for(const k of keys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
     if(!r.ok) continue; const arr=await r.json();
-    arr.forEach(ev=>{ if(new Date(ev.commence_time).getTime()<=now) return; const f=oddsEventToFixture(ev,grp[k]); if(f) out.push(f); });
+    arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; out.push(f); } });
   }catch(e){} }
-  out.sort((a,b)=>String(a.commence).localeCompare(String(b.commence)));
-  return out.slice(0,12);
+  const sortBig=(a,b)=> (b.prio-a.prio) || String(a.commence).localeCompare(String(b.commence));
+  const soc=out.filter(e=>e.grp==="Soccer").sort(sortBig);
+  const oth=out.filter(e=>e.grp!=="Soccer").sort(sortBig);
+  const N=12, socTarget=9; // ~75% de foot, 25% pour la variété (basket/rugby/tennis)
+  const pool=[...soc.slice(0,socTarget), ...oth.slice(0,N-socTarget)];
+  if(pool.length<N){ [...soc.slice(socTarget), ...oth.slice(N-socTarget)].sort(sortBig).forEach(e=>{ if(pool.length<N) pool.push(e); }); }
+  return pool.sort(sortBig).slice(0,N);
 }
 // Échéances du jour courant. sel = fin sélection ; bet = clôture des paris.
 // Dès que tous les matchs sont choisis (bet_started_at), la clôture des paris = bet_started_at + delai (max 24h / 12h fast).
@@ -1920,7 +1941,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.66";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.70";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
