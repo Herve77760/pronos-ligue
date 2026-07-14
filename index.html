@@ -113,12 +113,13 @@
       <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()">← Mes ligues</button>
       <button class="btn ghost sm hide" id="coulissesBtn" onclick="openCoulisses()" title="Coulisses : gage & enchères d'ouverture">🎪</button>
       <button class="btn ghost sm hide" id="rulesBtn" onclick="openRules()">📖 Règles</button>
+      <button class="btn ghost sm hide" id="settingsBtn" onclick="openSettings()" title="Paramètres du compte">⚙️</button>
       <button class="btn ghost sm hide" id="logoutBtn" onclick="logout()">Déconnexion</button>
     </div>
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.54</div>
+  <div class="foot" id="foot">Bankroll Bet Battle · prototype de test · données sportives simulées · v3.55</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -253,6 +254,7 @@ const EN={
   "Capitaine et bonus doivent être sur des matchs différents.":"Captain and bonus must be on different matches.",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : 7XK2P":"e.g. 7XK2P",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
+  "Paramètres":"Settings", "⚙️ Paramètres du compte":"⚙️ Account settings",
   "🏁 Ligues terminées · {a}":"🏁 Finished leagues · {a}", "J{a}/{b}":"D{a}/{b}",
   "Se déconnecter ?":"Log out?",
   // Barre d'accès + flux d'une journée (phase 2)
@@ -733,10 +735,7 @@ async function setAvatar(em){
   }catch(e){ showErr("Avatar : "+e.message); }
 }
 function viewLeagues(){
-  return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px">
-      <b>${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b><span style="font-size:30px;line-height:1">${AUTH.avatar||'🎮'}</span></div>
-    <div class="mini muted" style="margin-top:10px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
-    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${EMOJIS.map(em=>`<button class="btn ghost sm" onclick="setAvatar('${em}')" style="font-size:20px;padding:6px 9px;line-height:1${em===AUTH.avatar?';border-color:var(--accent)':''}">${em}</button>`).join("")}</div></div>
+  return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b><span style="font-size:22px;line-height:1">${AUTH.avatar||'🎮'}</span></div></div>
     <div class="box"><button class="btn" onclick="createLeague()">${t("➕ Créer une ligue")}</button>
       <div style="height:12px"></div><label>${t("Rejoindre avec un code")}</label>
       <input id="joinCode" maxlength="5" placeholder="${t("Ex : 7XK2P")}" style="text-transform:uppercase">
@@ -1816,11 +1815,12 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   $("rulesBtn").textContent=t("📖 Règles"); $("leaguesBtn").textContent=t("← Mes ligues"); $("logoutBtn").textContent=t("Déconnexion");
-  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.54";
+  const fo=$("foot"); if(fo) fo.textContent="Bankroll Bet Battle · "+t("prototype de test · données sportives simulées")+" · v3.55";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("logoutBtn").classList.toggle("hide", S.view!=="leagues");
   $("coulissesBtn").classList.toggle("hide", !(inLeague && L && L.prep_summary && S.view==="game"));
+  $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
   let html="";
   if(S.view==="auth") html=viewAuth();
   else if(S.view==="leagues") html=viewLeagues();
@@ -1830,9 +1830,10 @@ function render(){
   else if(S.view==="results") html=viewResults();
   else if(S.view==="palmares") html=viewPalmares();
   else if(S.view==="admin") html=viewAdmin();
+  else if(S.view==="settings") html=viewSettings();
   else html=viewGame();
   $("root").innerHTML=html;
-  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
+  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
@@ -1845,6 +1846,17 @@ function isComposing(){
   return !myBet();                            // en train de faire ses pronos/mises
 }
 function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings")&&!isComposing()) refresh(); },4000); }
+function openSettings(){ if(S.view==="settings")return; S.prevView=S.view; S.view="settings"; render(); }
+function closeSettings(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
+function viewSettings(){
+  return `<button class="btn ghost sm" onclick="closeSettings()">${t("← Retour")}</button>
+    <div class="box"><h2 style="margin-top:0">${t("⚙️ Paramètres du compte")}</h2>
+      <div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${esc(AUTH.name)}</b><span style="font-size:34px;line-height:1">${AUTH.avatar||'🎮'}</span></div>
+      <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${EMOJIS.map(em=>`<button class="btn ghost sm" onclick="setAvatar('${em}')" style="font-size:20px;padding:6px 9px;line-height:1${em===AUTH.avatar?';border-color:var(--accent)':''}">${em}</button>`).join("")}</div>
+    </div>
+    <button class="btn ghost" onclick="logout()">${t("Déconnexion")}</button>`;
+}
 function openRules(){ if(S.view==="rules")return; S.prevView=S.view; S.view="rules"; render(); }
 function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
 function viewRules(){
