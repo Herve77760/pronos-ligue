@@ -9,14 +9,14 @@
   :root{
     --bg:#0e1220; --panel:#161c2b; --panel2:#1d2537; --border:#2a3350;
     --ink:#eef2fb; --muted:#93a0bd; --faint:#5f6d8c;
-    --accent:#f6b23f; --accent-ink:#241606;
+    --accent:#19c58c; --accent-ink:#052a1e;
     --green:#4bd07f; --red:#f36a60; --gold:#f2c451; --blue:#67a6f2;
     --r:16px; --shadow:0 1px 2px rgba(0,0,0,.28),0 8px 24px rgba(0,0,0,.30);
   }
   :root[data-theme="light"]{
     --bg:#eef1f6; --panel:#ffffff; --panel2:#f4f6fa; --border:#e3e8f1;
     --ink:#161d2b; --muted:#69748c; --faint:#9aa4b8;
-    --accent:#e0921a; --accent-ink:#241606;
+    --accent:#0e9e70; --accent-ink:#ffffff;
     --green:#1f9d54; --red:#d83f36; --gold:#b9820f; --blue:#2f77d6;
     --shadow:0 1px 2px rgba(20,29,43,.05),0 8px 22px rgba(20,29,43,.07);
   }
@@ -108,7 +108,7 @@
 <body>
 <div class="app">
   <div class="bar">
-    <div><h1 style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 40 40" width="30" height="30" style="flex:0 0 auto" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#e0a020"/><circle cx="20" cy="20" r="18" fill="none" stroke="#f4c14e" stroke-width="3.6" stroke-dasharray="4.5 5"/><circle cx="20" cy="20" r="12.5" fill="#f7cf87"/><circle cx="20" cy="20" r="12.5" fill="none" stroke="#c68e1e" stroke-width="1.3"/><text x="20" y="23.6" text-anchor="middle" font-size="9.5" font-weight="800" fill="#2a1a05" letter-spacing="-0.3">OMG</text></svg><span><span style="color:var(--accent)">O</span>h <span style="color:var(--accent)">M</span>y <span style="color:var(--accent)">G</span>ambit</span></h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
+    <div><h1 style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 40 40" width="30" height="30" style="flex:0 0 auto" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#14b88a"/><circle cx="20" cy="20" r="18" fill="none" stroke="#5fe3bf" stroke-width="3.4" stroke-dasharray="4 5"/><circle cx="20" cy="20" r="12.3" fill="#0d3b30"/><text x="20" y="23.8" text-anchor="middle" font-size="9.3" font-weight="800" fill="#5fe3bf" letter-spacing="-0.4">OMG</text></svg><span><span style="color:var(--accent)">O</span>h <span style="color:var(--accent)">M</span>y <span style="color:var(--accent)">G</span>ambit</span></h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
     <div class="topbtns">
       <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()" title="Mes ligues">←</button>
       <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🇬🇧</button>
@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.62</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.65</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -224,7 +224,7 @@ function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini mute
 
 /* ============ STATE ============ */
 let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, prevView:"leagues" };
-let AUTH=null, myLeagues=[], showFinished=false;
+let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[];
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null;
 let palmares=null, adminData=null, palmOpen="";
@@ -1761,7 +1761,7 @@ async function loadPalmares(){
         const odd=isDC?dcOdd(oddF(f,x.sel),oddF(f,c.sel2)):oddF(f,x.sel);
         a.picks++; if(win){ a.correct++; a.wins++; a.winOddSum+=odd; a.flat+=(odd-1); } else a.flat-=1; });
     }
-    const MINP=1, MINW=1; // TEMPORAIRE (aperçu test) — remonter à 5/2 avant usage réel
+    const MINP=5, MINW=2; // min. de pronostics pour figurer au classement des pronostiqueurs
     const skill=Object.values(agg).filter(a=>a.picks>0).map(a=>({ uid:a.uid, name:a.name, emoji:a.emoji, picks:a.picks, correct:a.correct,
       hit:a.correct/a.picks, avgOdd:a.wins?a.winOddSum/a.wins:0, wins:a.wins, flat:a.flat/a.picks }));
     // Classement + position du joueur connecté : renvoie {top: 5 premiers, me: {rank,total,...} ou null}
@@ -1868,7 +1868,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.62";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.65";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
@@ -1884,6 +1884,9 @@ function render(){
   else if(S.view==="settings") html=viewSettings();
   else html=viewGame();
   $("root").innerHTML=html;
+  // Remonter en haut quand on change d'écran (vue / statut de ligue / recap) — pas sur les simples rafraîchissements.
+  const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"");
+  if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
   $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
