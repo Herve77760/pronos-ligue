@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.95</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.96</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -475,6 +475,10 @@ const EN={
   "✅ Pronos clôturés — résolution automatique en cours…":"✅ Picks closed — automatic resolution under way…",
   "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
   "⏰ pronos non faits":"⏰ picks not submitted", "caché (IA)":"hidden (AI)",
+  "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
+  "⏰ Trop tard — pronos non validés":"⏰ Too late — picks not submitted",
+  "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.":"You didn't submit your picks before the close: <b>no bet</b> counts for that day → <b>−2 pts</b> in the standings and <b>−25%</b> of your balance. You can still follow everyone else's bets below.",
+  "Si… gagne":"If… wins", "Gage infligé au dernier":"Forfeit for the last-placed player",
   "déclaré forfait (pronos non faits)":"forfeited (picks not submitted)",
   "🎭 Vote d'abord pour un gage":"🎭 Vote for a forfeit first", "🏆 Vote d'abord pour une récompense":"🏆 Vote for a reward first",
   "Vote d'abord pour un gage.":"Vote for a forfeit first.", "Vote d'abord pour une récompense.":"Vote for a reward first.",
@@ -1112,7 +1116,11 @@ function prepSuperlatives(s){
       t("🧠 <b>Le stratège :</b> {N} — a raflé <b>{w}</b> bonus sur {b} visé{s}. Chirurgical.",{N,w,b,s:b>1?'s':''}),
       t("🎯 <b>Le sniper des enchères :</b> {N} — {w} bonus décroché{w1} sur {b} tenté{s}. Redoutable.",{N,w,b,w1:w>1?'s':'',s:b>1?'s':''}),
       t("🧠 <b>Le cerveau :</b> {N} avait tout calculé — <b>{w}</b> bonus dans la poche. Personne n'a rien vu venir.",{N,w}),
-      t("♟️ <b>Le tacticien :</b> {N} place ses pions et rafle <b>{w}</b> bonus. Échec et mat.",{N,w})
+      t("♟️ <b>Le tacticien :</b> {N} place ses pions et rafle <b>{w}</b> bonus. Échec et mat.",{N,w}),
+      t("🎼 <b>Le maestro :</b> {N} a orchestré ses enchères — <b>{w}</b> bonus au tableau. Du grand art.",{N,w}),
+      t("🕵️ <b>L'opportuniste :</b> {N} a flairé les bons coups : <b>{w}</b> bonus sur {b} tenté{s}.",{N,w,b,s:b>1?'s':''}),
+      t("🎓 <b>Le calculateur :</b> {b} enchère{s}, <b>{w}</b> réussite{w1}. {N} a fait ses devoirs.",{N,w,b,s:b>1?'s':'',w1:w>1?'s':''}),
+      t("🦈 <b>Le requin :</b> {N} a mordu <b>{w}</b> fois sur {b}. Les autres ont suivi le sang.",{N,w,b})
     ], strat.pid+'S')); }
   const poisse=best(bidders,(a,b)=> (st[b.pid].bids-st[b.pid].won)-(st[a.pid].bids-st[a.pid].won));
   if(poisse && (st[poisse.pid].bids-st[poisse.pid].won)>=1 && (!strat||poisse.pid!==strat.pid)){ const N=nm(poisse.pid), b=st[poisse.pid].bids, w=st[poisse.pid].won;
@@ -1120,7 +1128,11 @@ function prepSuperlatives(s){
       t("😭 <b>La poisse :</b> {N} — a misé sur {b} bonus, repart avec <b>{w}</b>. Aïe aïe aïe.",{N,b,w}),
       t("🍀 <b>Pas de bol :</b> {N} a tenté {b} fois, remporté <b>{w}</b>. Ce n'était pas son jour.",{N,b,w}),
       t("😩 <b>Le malchanceux :</b> {b} enchères pour seulement <b>{w}</b> bonus. Dur dur, {N}.",{N,b,w}),
-      t("🎭 <b>Le déçu du soir :</b> {N} visait gros ({b} bonus)… résultat : <b>{w}</b>. La vie est cruelle.",{N,b,w})
+      t("🎭 <b>Le déçu du soir :</b> {N} visait gros ({b} bonus)… résultat : <b>{w}</b>. La vie est cruelle.",{N,b,w}),
+      t("🌧️ <b>La guigne :</b> {N} — {b} tentatives, <b>{w}</b> bonus. Le ciel lui est tombé dessus.",{N,b,w}),
+      t("👻 <b>Le fantôme des enchères :</b> {N} était partout — {b} mises — et repart avec <b>{w}</b>.",{N,b,w}),
+      t("🙃 <b>Le mal inspiré :</b> {b} enchères, <b>{w}</b> bonus. {N} révisera ses calculs.",{N,b,w}),
+      t("🥀 <b>Le perdant magnifique :</b> {N} a tout donné sur {b} bonus. Butin : <b>{w}</b>.",{N,b,w})
     ], poisse.pid+'P')); }
   const radin=best(bidders,(a,b)=> st[a.pid].total-st[b.pid].total);
   if(radin){ const N=nm(radin.pid), tot=st[radin.pid].total;
@@ -1128,7 +1140,11 @@ function prepSuperlatives(s){
       t("🤏 <b>Le radin :</b> {N} — <b>{tot}€</b> lâchés en tout, pas un centime de plus.",{N,tot}),
       t("💰 <b>L'économe :</b> {N} a serré les cordons — <b>{tot}€</b> dépensés, point final.",{N,tot}),
       t("🐭 <b>Le prudent :</b> <b>{tot}€</b> misés par {N}. On ne se refait pas.",{N,tot}),
-      t("🧊 <b>Le pingre :</b> {N} garde son magot — à peine <b>{tot}€</b> de mises.",{N,tot})
+      t("🧊 <b>Le pingre :</b> {N} garde son magot — à peine <b>{tot}€</b> de mises.",{N,tot}),
+      t("🔒 <b>Le coffre-fort :</b> {N} n'a lâché que <b>{tot}€</b>. Bien joué… ou pas.",{N,tot}),
+      t("🐢 <b>Le frileux :</b> <b>{tot}€</b> au total pour {N}. La prudence a un prix.",{N,tot}),
+      t("🧮 <b>Le comptable :</b> {N} a compté chaque euro — <b>{tot}€</b>, pas un de plus.",{N,tot}),
+      t("🪙 <b>Le grippe-sou :</b> <b>{tot}€</b> de mises pour {N}. Le magot est intact.",{N,tot})
     ], radin.pid+'R')); }
   const fou=best(bidders,(a,b)=> st[b.pid].maxBid-st[a.pid].maxBid);
   if(fou && st[fou.pid].maxBid>0 && (!radin||fou.pid!==radin.pid)){ const N=nm(fou.pid), mb=st[fou.pid].maxBid, cl=CARDS[st[fou.pid].maxCard]?CARDS[st[fou.pid].maxCard].e+' '+esc(t(CARDS[st[fou.pid].maxCard].n)):t("un bonus");
@@ -1136,7 +1152,11 @@ function prepSuperlatives(s){
       t("🤪 <b>Le plus fou :</b> {N} — <b>{mb}€</b> d'un coup sur {cl}. Le poker, ça le connaît.",{N,mb,cl}),
       t("🔥 <b>Le flambeur :</b> {N} a balancé <b>{mb}€</b> sur {cl}. Tout ou rien !",{N,mb,cl}),
       t("🎰 <b>Le parieur fou :</b> <b>{mb}€</b> d'un seul coup sur {cl} pour {N}. Respect (ou pas).",{N,mb,cl}),
-      t("💸 <b>Le mégalo :</b> {N} claque <b>{mb}€</b> sur {cl}. Y'a pas de petites économies… sauf là.",{N,mb,cl})
+      t("💸 <b>Le mégalo :</b> {N} claque <b>{mb}€</b> sur {cl}. Y'a pas de petites économies… sauf là.",{N,mb,cl}),
+      t("🚀 <b>Le kamikaze :</b> {N} envoie <b>{mb}€</b> sur {cl}. Sans trembler.",{N,mb,cl}),
+      t("🎪 <b>Le showman :</b> <b>{mb}€</b> sur {cl} — {N} aime le spectacle.",{N,mb,cl}),
+      t("💥 <b>Le va-tout :</b> {N} pose <b>{mb}€</b> sur {cl}. On respire fort.",{N,mb,cl}),
+      t("🐋 <b>La baleine :</b> {N} — <b>{mb}€</b> sur {cl}. Le marché a tremblé.",{N,mb,cl})
     ], fou.pid+'F')); }
   if(!items.length) return '';
   return `<h2>${t("🎭 Le mot des coulisses")}</h2><div class="box"><div class="mini" style="line-height:1.9">${items.join('<br>')}</div></div>`;
@@ -1153,9 +1173,16 @@ function prepSummaryBody(){
         <div class="gauge" style="margin-top:4px"><i style="width:${Math.round(g.count/maxV*100)}%;${g.win?'background:var(--gold)':''}"></i></div></div>`).join("")}</div></div>`
    :`<h2>${t("🎭 L'enjeu du tournoi")}</h2>
    <div class="box"><div class="mini muted">${t("Le <b>gage</b> infligé au dernier sera celui choisi par le <b>vainqueur</b> 🏆. Selon qui gagne :")}</div>
-     ${(s.players||[]).filter(p=>!p.is_ai).map(p=>{const v=(s.voteMap||{})[p.pid]; let it=null, perso=false;
-        if(v==="c"){ it=(s.customs||{})[p.pid]||null; perso=!!it; } else { const opt=(s.options||[])[v]; it=opt?((opt.t)||opt):null; }
-        return `<div class="box row" style="margin-top:8px"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><div><div class="mini muted">${t("si {a} gagne",{a:esc(p.name)})}</div><b>${it?esc(t(it)):t("(pas de vote)")}</b>${perso?' <span class="tag">'+t("perso")+'</span>':''}</div></div></div>`;}).join("")}
+     ${(()=>{ const hs=(s.players||[]).filter(p=>!p.is_ai);
+        const gOf=p=>{ const v=(s.voteMap||{})[p.pid]; if(v==="c") return {txt:(s.customs||{})[p.pid]||null, perso:true};
+          const o=(s.options||[])[v]; return {txt:o?((o.t)||o):null, perso:false}; };
+        const lbl=g=>`${g.txt?'<b>'+esc(t(g.txt))+'</b>':'<span class="muted">'+t("(pas de vote)")+'</span>'}${g.perso?' <span class="tag">'+t("perso")+'</span>':''}`;
+        // Grande ligue : format tableau compact (sinon ça fait une avalanche de blocs).
+        if(hs.length>5) return `<div style="overflow-x:auto;margin-top:8px"><table>
+          <tr><th>${t("Si… gagne")}</th><th>${t("Gage infligé au dernier")}</th></tr>
+          ${hs.map(p=>`<tr><td class="mini">${p.emoji} ${esc(p.name)}</td><td class="mini">${lbl(gOf(p))}</td></tr>`).join("")}</table></div>`;
+        return hs.map(p=>`<div class="box row" style="margin-top:8px"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><div><div class="mini muted">${t("si {a} gagne",{a:esc(p.name)})}</div>${lbl(gOf(p))}</div></div></div>`).join("");
+      })()}
      <div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`}
    <h2>${t("🃏 Enchères — bonus attribués")}</h2>
    ${(s.auction||[]).length? (s.auction||[]).map(a=>`<div class="box"><div class="row"><div class="row" style="gap:10px"><span class="sport" title="${esc(t(CARDS[a.card].d))}">${CARDS[a.card].e}</span>
@@ -1376,7 +1403,8 @@ function viewDay(){
   const iAmHome=d.home_id===S.myId; const opp=pById(iAmHome?d.away_id:d.home_id);
   if(!d.fixtures){ if(iAmHome) return viewSelect(d,dayLbl,opp);
     return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("En attente que {a} (à domicile) choisisse les 5 matchs…",{a:'<b>'+esc(opp.name)+'</b>'})}</div>${selLineHTML()}</div>`; }
-  if(!myBet() || (S.editingBet && !deadlinePassed())) return viewBet(d,dayLbl,opp,iAmHome);
+  // Après la clôture, plus AUCUN accès à la saisie — même pour qui n'a jamais parié (sinon il pourrait miser en retard).
+  if(!deadlinePassed() && (!myBet() || S.editingBet)) return viewBet(d,dayLbl,opp,iAmHome);
   return viewWait(dayLbl);
 }
 function goStandings(){ S.view='standings'; standDay=null; render(); refresh(); }
@@ -1491,6 +1519,8 @@ function setSel2(i,v){ if(!myCard||myCard.id!=="chance"||myCard.target!==i) retu
 function selCard(id){ if(myCard&&myCard.id===id){ myCard=null; } else { myCard={id, target:null}; } render(); }
 async function submitBet(){
   if(busy)return;
+  // Sécurité : si la clôture est tombée pendant la saisie, on refuse le pari (sinon on pourrait miser en retard).
+  if(deadlinePassed()){ toast(t("⏰ Trop tard — les pronos sont clôturés.")); S.editingBet=false; bet={picks:null,captain:-1}; myCard=null; await refresh(); return; }
   if(bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > ((me()||{}).capital||0)+0.001){ toast(t("⚠️ Trop risqué — baisse la mise du Capitaine")); return; } // règle A (sécurité)
   busy=true;
   try{ const d=myDuel();
@@ -1544,13 +1574,16 @@ function viewWait(dayLbl){
   const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">${editable?t("✅ Tes pronos (modifiables jusqu'à la clôture)"):t("🔒 Tes pronos (verrouillés)")}</div>
      ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${oddD}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
      ${mine.card&&mine.card.id?`<div class="mini" style="margin-top:6px">${t("🃏 Bonus joué :")} <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</span> <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:`<div class="mini muted" style="margin-top:6px">${t("Aucun bonus joué ce jour.")}</div>`}</div>` : '';
+  // Joueur qui n'a pas validé ses pronos avant la clôture : plus d'accès à la saisie, on l'informe clairement.
+  const tooLate = (!mine && betPassed) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b>
+     <div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.")}</div></div>` : '';
   const aiSection = players.filter(p=>p.is_ai).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const fx=d&&d.fixtures;
     if(!b||!b.picks||!fx) return '';
     return `<div class="box"><div class="mini muted" style="margin-bottom:4px">${t("🤖 Pronos de {a}",{a:'<b>'+esc(p.name)+'</b>'})} <span class="mini">${t("(l'IA a déjà misé)")}</span></div>
       ${fx.map((f,i)=>{const bp=b.picks[i]; if(!bp)return ''; const sel=bp.sel==="1"?f.home:bp.sel==="2"?f.away:t("Nul"); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${esc(sel)}</b> · ${bp.stake}€${i===b.captain?' 👑':''}</div>`;}).join("")}
       <div class="mini muted" style="margin-top:4px">${t("🃏 bonus caché jusqu'aux résultats")}</div></div>`;}).join("");
   return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
-    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${mySummary}${list}
+    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${tooLate}${mySummary}${list}
     ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${aiSection}${publicBetsHTML()}`:''}
     ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
@@ -2281,7 +2314,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.95";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.96";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
