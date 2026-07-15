@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.04</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.06</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -482,6 +482,7 @@ const EN={
   "✅ Pronos clôturés — résolution automatique en cours…":"✅ Picks closed — automatic resolution under way…",
   "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
   "⏰ pronos non faits":"⏰ picks not submitted", "caché (IA)":"hidden (AI)", "ton duel":"your duel",
+  "Aucune journée terminée pour l'instant — les résultats arriveront après la clôture.":"No matchday finished yet — results will come after the close.",
   "Perte de capital ce jour-là : <b>{a}€</b>.":"Balance lost that day: <b>{a}€</b>.",
   "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
   "⏰ Trop tard — pronos non validés":"⏰ Too late — picks not submitted",
@@ -667,6 +668,7 @@ const EN={
   "🃏 Tes bonus":"🃏 Your bonuses", "(touche un bonus pour sa description · barré = déjà utilisé)":"(tap a bonus for its description · struck through = already used)",
   "🎭 Gage (au dernier humain) :":"🎭 Forfeit (for the last human):",
   "Bonus":"Bonus", "📈 Évolution du capital (départ → bonus → chaque journée)":"📈 Capital over time (start → bonuses → each day)",
+  "📊 Évolution des points (classement)":"📊 Points over time (standings)", "Départ":"Start",
   // — Phase 4d : coulisses (récap d'ouverture) —
   "🎬 C'est parti !":"🎬 Here we go!", "Voici le vote du gage et les enchères de bonus — jette un œil avant ton premier pari.":"Here's the forfeit vote and the bonus auction — take a look before your first bet.",
   "C'est parti ! →":"Let's go! →", "🎪 Les Coulisses de l'ouverture":"🎪 Opening behind the scenes",
@@ -1437,12 +1439,17 @@ function standingsBtn(){ return `<div style="height:8px"></div><button class="bt
 function quickBar(active){
   if(!L) return '';
   const b=(id,icon,label,onclick,show)=> (show===false)?'' : `<button class="qbtn ${active===id?'on':''}" ${active===id?'':`onclick="${onclick}"`}><span class="ic">${icon}</span><span class="lb">${label}</span></button>`;
+  // « Résultats » ouvre la DERNIÈRE journée résolue (current_day-1). À la J1 il n'y en a aucune : on garde le
+  // bouton (cohérence avec 📊 Classement, toujours présent) mais grisé — l'ouvrir sur la journée EN COURS
+  // révélerait les pronos adverses avant la clôture.
   return `<div class="qbar">
     ${b('standings','📊',t("Classement"),'goStandings()')}
-    ${b('results','📅',t("Résultats"),'openResults('+(L.current_day-1)+')', L.current_day>=1)}
+    ${L.current_day>=1 ? b('results','📅',t("Résultats"),'openResults('+(L.current_day-1)+')')
+      : `<button class="qbtn" style="opacity:.45" onclick="noResultsYet()"><span class="ic">📅</span><span class="lb">${t("Résultats")}</span></button>`}
     ${b('coulisses','🎪',t("Coulisses"),'openCoulisses()', !!L.prep_summary)}
   </div>`;
 }
+function noResultsYet(){ toast(t("Aucune journée terminée pour l'instant — les résultats arriveront après la clôture.")); }
 
 /* --- selection --- */
 let selPool=null, selChosen=[], selLoading=false;
@@ -2064,6 +2071,7 @@ function viewStandings(){
       ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:''); const bp=p.star||0; const dp=p.points-bp;
         return `<tr><td>${p.is_ai?'🤖':i+1}</td><td>${p.emoji} ${esc(p.name)}${s?' <span class="mini muted">'+s+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td>
         <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
+    ${ptsChart()}
     ${capChart()}
     ${(hand.length||used.length)?`<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div></div>`:''}
     ${(()=>{const eo=enjeuOutcome(); if(!eo.ok) return ''; return `<div class="box mini"><span class="muted">${eo.rew?t("🏆 Récompense (au premier) :"):t("🎭 Gage projeté (au dernier) :")}</span> <b>${esc(eo.perso?eo.title:t(eo.title))}</b> → ${eo.target.emoji} ${esc(eo.target.name)}${(!eo.rew&&eo.chooser)?' <span class="mini muted">'+t("(choix de {a})",{a:esc(eo.chooser.name)})+'</span>':''}</div>`;})()}`;
@@ -2075,23 +2083,49 @@ function capChart(){
   const N=(L.status==="done"?(L.num_days||0):(L.current_day||0)); if(N<1) return '';
   const sp=L.prep_summary||{};
   const capAfter={}; players.forEach(p=>{ const psx=(sp.players||[]).find(x=>x.pid===p.id); capAfter[p.id]= psx?psx.capital:100; });
-  const netByDay={}; players.forEach(p=>netByDay[p.id]=Array(N).fill(0));
-  chartBets.forEach(b=>{ if(netByDay[b.player_id]!=null && b.day<N) netByDay[b.player_id][b.day]=b.net||0; });
-  const series=players.map(p=>{ let v=capAfter[p.id]; const pts=[100,v]; for(let d=0;d<N;d++){ v=Math.max(0,v+(netByDay[p.id][d]||0)); pts.push(v); } return {p,pts}; });
-  const npts=N+2; const allv=series.flatMap(s=>s.pts); let mn=Math.min(...allv), mx=Math.max(...allv); if(!isFinite(mn)){mn=0;mx=100;}
+  const netByDay={}, legacyPen={};
+  players.forEach(p=>{ netByDay[p.id]=Array(N).fill(0); legacyPen[p.id]=Array(N).fill(false); });
+  // Oubli « ancienne donnée » (journée résolue avant la v4.03) : la pénalité −25 % n'est PAS dans `net`
+  // → sans ça la courbe reste à plat alors que le capital a bien chuté. Depuis la v4.03, net la contient déjà.
+  chartBets.forEach(b=>{ if(netByDay[b.player_id]==null || b.day>=N) return;
+    netByDay[b.player_id][b.day]=b.net||0;
+    legacyPen[b.player_id][b.day]=!!(Array.isArray(b.picks) && b.picks.length===0 && (b.net||0)===0); });
+  const series=players.map(p=>{ let v=capAfter[p.id]; const pts=[100,v];
+    for(let d=0;d<N;d++){ v=Math.max(0,v+(netByDay[p.id][d]||0));
+      if(legacyPen[p.id][d]) v=Math.max(0,Math.round(v*0.75*100)/100);
+      pts.push(v); } return {p,pts}; });
+  const allv=series.flatMap(s=>s.pts); let mn=Math.min(...allv), mx=Math.max(...allv); if(!isFinite(mn)){mn=0;mx=100;}
   const pad=Math.max(5,(mx-mn)*0.12); const lo=Math.max(0,Math.floor((mn-pad)/10)*10), hi=Math.max(lo+10,Math.ceil((mx+pad)/10)*10);
+  const labels=["100€",t("Bonus")]; for(let d=0;d<N;d++) labels.push("J"+(d+1));
+  return lineChart(series, labels, t("📈 Évolution du capital (départ → bonus → chaque journée)"), lo, hi);
+}
+// Évolution des POINTS (le classement) — les points font le championnat, le capital n'est qu'un moyen.
+// S'appuie sur les snapshots par journée de computeStandHist (mêmes règles que le classement : duel, ⭐, malus, oubli).
+function ptsChart(){
+  const snaps=computeStandHist(); if(!snaps.length) return '';
+  const N=snaps.length;
+  const series=players.map(p=>{ const pts=[0];
+    for(let d=0;d<N;d++){ const s=snaps[d].find(x=>x.id===p.id); pts.push(s?s.points:0); } return {p,pts}; });
+  const labels=[t("Départ")]; for(let d=0;d<N;d++) labels.push("J"+(d+1));
+  const allv=series.flatMap(s=>s.pts);
+  const lo=Math.floor(Math.min(0,...allv))-1, hi=Math.ceil(Math.max(1,...allv))+1; // les points peuvent être négatifs
+  return lineChart(series, labels, t("📊 Évolution des points (classement)"), lo, hi);
+}
+// Rendu commun des courbes (capital / points). L'échelle (lo/hi) est fournie par l'appelant :
+// le capital s'arrondit à la dizaine, les points sont des entiers pouvant être négatifs.
+function lineChart(series, labels, title, lo, hi){
+  const npts=labels.length;
   const W=480,H=210,PL=38,PR=10,PT=12,PB=26;
   const X=i=> PL + (W-PL-PR)*(npts<=1?0:i/(npts-1));
   const Y=v=> PT + (H-PT-PB)*(1-(v-lo)/((hi-lo)||1));
   const cols=["#4ade80","#60a5fa","#fbbf24","#f87171","#a78bfa","#f472b6","#22d3ee","#fb923c","#84cc16","#e879f9"];
-  const labels=["100€",t("Bonus")]; for(let d=0;d<N;d++) labels.push("J"+(d+1));
   let grid=""; for(let k=0;k<=3;k++){ const gv=lo+(hi-lo)*k/3; const y=Y(gv); grid+=`<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}" stroke="#242b38"/><text x="${PL-5}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="#8b93a3">${Math.round(gv)}</text>`; }
   let xlab=""; labels.forEach((l,i)=>{ if(npts>9 && i>1 && i%2===0 && i!==npts-1) return; xlab+=`<text x="${X(i).toFixed(1)}" y="${H-PB+14}" text-anchor="middle" font-size="8.5" fill="#8b93a3">${esc(l)}</text>`; });
   const lines=series.map((s,si)=>{ const c=cols[si%cols.length]; const dpath=s.pts.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
     const dots=s.pts.map((v,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2" fill="${c}"/>`).join('');
     return `<path d="${dpath}" fill="none" stroke="${c}" stroke-width="2"/>${dots}`; }).join('');
   const legend=series.map((s,si)=>`<span class="mini" style="margin-right:10px;white-space:nowrap"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${cols[si%cols.length]};vertical-align:middle"></span> ${esc(s.p.emoji)} ${esc(s.p.name)}</span>`).join('');
-  return `<div class="box"><div class="mini muted" style="margin-bottom:6px">${t("📈 Évolution du capital (départ → bonus → chaque journée)")}</div>
+  return `<div class="box"><div class="mini muted" style="margin-bottom:6px">${title}</div>
      <div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:320px;height:auto">${grid}${lines}${xlab}</svg></div>
      <div style="margin-top:6px;line-height:1.9">${legend}</div></div>`;
 }
@@ -2150,6 +2184,7 @@ function viewEnd(){
    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
      ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`).join("")}</table></div>
    ${endRecapHTML()}
+   ${ptsChart()}
    ${capChart()}
    <div class="box"><div class="mini muted">${t("🃏 Bonus de chaque joueur")} <span class="mini">${t("(barré = utilisé · survole pour la description)")}</span></div>
      ${ord.map(p=>{ const owned=[...(p.cards_used||[]),...(p.hand||[])];
@@ -2367,7 +2402,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.04";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.06";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
