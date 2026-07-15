@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.82</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.83</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -303,6 +303,8 @@ function dayTimes(){ const f=leagueFormula(); const t0=(L&&L.day_started_at)?new
   const bs=(L&&L.bet_started_at)?new Date(L.bet_started_at).getTime():0;
   const bet=(bs&&!isNaN(bs))?(bs+f.bet*3600000):(t0+(f.sel+f.bet)*3600000);
   return {ok:true, sel, bet}; }
+// La clôture des pronos est-elle passée ? (au-delà, on ne peut plus modifier et les pronos adverses sont révélés)
+function deadlinePassed(){ const dt=dayTimes(); return !!(dt.ok && Date.now()>=dt.bet); }
 function fmtWhen(ts){ if(!ts) return ""; const d=new Date(ts); const now=new Date(); const loc=lang==="en"?'en-GB':'fr-FR'; const hm=d.toLocaleTimeString(loc,{hour:'2-digit',minute:'2-digit'});
   const sameDay=d.toDateString()===now.toDateString(); const tomorrow=new Date(now.getTime()+86400000).toDateString()===d.toDateString();
   return (sameDay?t("aujourd'hui"):(tomorrow?t("demain"):d.toLocaleDateString(loc,{weekday:'short',day:'2-digit',month:'2-digit'})))+" "+hm; }
@@ -405,6 +407,17 @@ const EN={
   "Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.":"All picks are locked and visible. The 🃏 bonus cards are only revealed after the results.",
   "✅ Tous les pronos sont validés — résolution automatique en cours…":"✅ All picks are in — automatic resolution under way…",
   "✅ Tous les pronos sont validés — on attend les vrais résultats.":"✅ All picks are in — waiting for the real results.",
+  "✅ Tes pronos (modifiables jusqu'à la clôture)":"✅ Your picks (editable until close)",
+  "🔒 Tes pronos (verrouillés)":"🔒 Your picks (locked)",
+  "Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture.":"Your picks are saved ✓ — you can still edit them until close.",
+  "Pronos clôturés.":"Picks closed.",
+  "✏️ Modifier mes pronos":"✏️ Edit my picks",
+  "🔒 Clôturer les pronos maintenant (organisateur)":"🔒 Close picks now (organizer)",
+  "Les pronos des autres joueurs restent cachés jusqu'à la clôture.":"Other players' picks stay hidden until close.",
+  "Clôture dans {a}":"Closes in {a}",
+  "✅ Pronos clôturés — on attend les vrais résultats.":"✅ Picks closed — waiting for the real results.",
+  "✅ Pronos clôturés — résolution automatique en cours…":"✅ Picks closed — automatic resolution under way…",
+  "Clôturer les pronos maintenant ? Plus personne ne pourra modifier ; les pronos sont révélés et la journée est résolue.":"Close picks now? No one can edit anymore; picks are revealed and the day is resolved.",
   "🎲 Les dés sont jetés — y'a plus qu'à prier pour les vrais résultats !":"🎲 The dice are cast — now just pray for the real results!",
   "🕯️ Pronos verrouillés… tu peux aller brûler un cierge.":"🕯️ Picks locked in… time to go light a candle.",
   "😬 On serre les fesses jusqu'au coup de sifflet final !":"😬 Clench tight until the final whistle!",
@@ -835,11 +848,8 @@ async function ensureAiBets(){ let made=false;
 function shouldAutoResolve(){
   const dz=duels; if(!dz.length || dz.some(d=>!d.fixtures)) return false; // sélection pas finie
   if(dz.some(d=>(d.fixtures||[]).some(f=>f&&f.evId))) return false; // matchs réels → résolution sur vrais résultats (Étape 2)
-  const inDay=new Set(); dz.forEach(d=>{inDay.add(d.home_id);inDay.add(d.away_id);});
-  const dayHumans=players.filter(p=>!p.is_ai && inDay.has(p.id));
-  const allBet = dayHumans.length>0 && dayHumans.every(p=>bets.find(b=>b.player_id===p.id));
-  const dt=dayTimes(); const betPassed=dt.ok && Date.now()>=dt.bet;
-  return allBet || betPassed;
+  // Résolution UNIQUEMENT à la clôture des pronos (les joueurs peuvent modifier jusque-là ; les pronos adverses restent cachés avant).
+  return deadlinePassed();
 }
 function me(){ return players.find(p=>p.id===S.myId); }
 function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId); }
@@ -929,7 +939,7 @@ function viewLeagues(){
     })()}`;
 }
 function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr(t("Entre un code valide."));return;} joinLeague(c); }
-function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standDay=null; endStats=null; S.bidLLeague=null; notifKey=null;
+function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
@@ -1239,7 +1249,7 @@ function viewDay(){
   const iAmHome=d.home_id===S.myId; const opp=pById(iAmHome?d.away_id:d.home_id);
   if(!d.fixtures){ if(iAmHome) return viewSelect(d,dayLbl,opp);
     return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("En attente que {a} (à domicile) choisisse les 5 matchs…",{a:'<b>'+esc(opp.name)+'</b>'})}</div>${selLineHTML()}</div>`; }
-  if(!myBet()) return viewBet(d,dayLbl,opp,iAmHome);
+  if(!myBet() || (S.editingBet && !deadlinePassed())) return viewBet(d,dayLbl,opp,iAmHome);
   return viewWait(dayLbl);
 }
 function goStandings(){ S.view='standings'; standDay=null; render(); refresh(); }
@@ -1359,9 +1369,19 @@ async function submitBet(){
   try{ const d=myDuel();
     await q(db.from("bets").upsert({league_id:L.id,day:L.current_day,player_id:S.myId,duel_id:d.id,
       picks:bet.picks,captain:bet.captain,card:myCard,submitted:true},{onConflict:"player_id,day"}));
-    bet={picks:null,captain:-1}; myCard=null; await refresh();
+    bet={picks:null,captain:-1}; myCard=null; S.editingBet=false; await refresh();
   }catch(e){ showErr("Validation : "+e.message); } busy=false;
 }
+// Rouvrir ses pronos pour les modifier (tant que la clôture n'est pas passée). Précharge le pari existant.
+function editBet(){ const mine=myBet(); if(!mine||deadlinePassed())return;
+  bet={picks:JSON.parse(JSON.stringify(mine.picks||[])), captain:(mine.captain!=null?mine.captain:-1)};
+  myCard = mine.card? JSON.parse(JSON.stringify(mine.card)) : null; S.editingBet=true; render(); }
+// Organisateur : clôturer les pronos immédiatement (recule la deadline dans le passé) → verrouillage + révélation + résolution.
+async function forceCloseBets(){ if(!(me()&&me().is_organizer)||busy)return;
+  if(!confirm(t("Clôturer les pronos maintenant ? Plus personne ne pourra modifier ; les pronos sont révélés et la journée est résolue.")))return; busy=true;
+  const f=leagueFormula(); const past=new Date(Date.now()-f.bet*3600000-60000).toISOString();
+  try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
+  catch(e){ showErr("Clôture : "+e.message); } busy=false; }
 
 /* --- waiting / resolve --- */
 function humansToSubmit(){ return players.filter(p=>!p.is_ai).filter(p=>!bets.find(b=>b.player_id===p.id)); }
@@ -1384,9 +1404,9 @@ function viewWait(dayLbl){
   const list=players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
     return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">IA</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div>
       <span class="chip ${done?'g':''}">${done?t("✓ validé"):t("en cours")}</span></div>`;}).join("");
-  const canResolve = waiting.length===0;
+  const betPassed = deadlinePassed(); const editable=!betPassed;
   const mine=myBet(); const md=myDuel();
-  const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">${t("🔒 Tes pronos (verrouillés — consultation seule)")}</div>
+  const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">${editable?t("✅ Tes pronos (modifiables jusqu'à la clôture)"):t("🔒 Tes pronos (verrouillés)")}</div>
      ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?dcOdd(oddOf(f,b.sel),oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${oddD}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
      ${mine.card&&mine.card.id?`<div class="mini" style="margin-top:6px">${t("🃏 Bonus joué :")} <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</span> <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:`<div class="mini muted" style="margin-top:6px">${t("Aucun bonus joué ce jour.")}</div>`}</div>` : '';
   const aiSection = players.filter(p=>p.is_ai).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const fx=d&&d.fixtures;
@@ -1394,10 +1414,11 @@ function viewWait(dayLbl){
     return `<div class="box"><div class="mini muted" style="margin-bottom:4px">${t("🤖 Pronos de {a}",{a:'<b>'+esc(p.name)+'</b>'})} <span class="mini">${t("(l'IA a déjà misé)")}</span></div>
       ${fx.map((f,i)=>{const bp=b.picks[i]; if(!bp)return ''; const sel=bp.sel==="1"?f.home:bp.sel==="2"?f.away:t("Nul"); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${esc(sel)}</b> · ${bp.stake}€${i===b.captain?' 👑':''}</div>`;}).join("")}
       <div class="mini muted" style="margin-top:4px">${t("🃏 bonus caché jusqu'aux résultats")}</div></div>`;}).join("");
-  return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("Tes pronos sont validés ✓. On attend les autres.")}</div>${betLineHTML()}</div>${mySummary}${aiSection}${list}
-    ${canResolve?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
-    ${canResolve?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Tous les pronos sont validés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Tous les pronos sont validés — résolution automatique en cours…")}</div>`
-      :`<div class="box mini muted" style="text-align:center">${t("⏳ On attend les autres — {a} joueur(s) à valider.",{a:waiting.length})}${(()=>{const dt=dayTimes();return dt.ok?` <b>${t("Temps restant : {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}<br>${t("Résolution automatique à l'échéance.")}</div>`}`;
+  return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
+    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${mySummary}${list}
+    ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
+    ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${aiSection}${publicBetsHTML()}`:''}
+    ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Pronos clôturés — résolution automatique en cours…")}</div>`:''}`;
 }
 function publicBetsHTML(){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
@@ -2089,7 +2110,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.82";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.83";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
@@ -2107,7 +2128,7 @@ function render(){
   $("root").innerHTML=html;
   // Remonter en haut à chaque changement d'écran, y compris les sous-étapes d'une journée (choix des matchs → saisie → attente → résultats) — pas sur les simples rafraîchissements de polling.
   let gsub="";
-  if(S.view==="game" && L){ const d=myDuel(); const mb=myBet(); gsub="|"+L.current_day+"|"+((d&&d.fixtures&&d.fixtures.length)?"F":"")+"|"+(mb?"S":"")+"|"+(S.dispDay||0); }
+  if(S.view==="game" && L){ const d=myDuel(); const mb=myBet(); gsub="|"+L.current_day+"|"+((d&&d.fixtures&&d.fixtures.length)?"F":"")+"|"+(mb?"S":"")+"|"+(S.editingBet?"E":"")+"|"+(S.dispDay||0); }
   const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"")+gsub;
   if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
   $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
