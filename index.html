@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.87</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.88</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -189,7 +189,7 @@ const CARDS={
  sangsue:  {e:"🩸",n:"Sangsue",t:false, f:3, d:"Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches)."},
  parachute:{e:"🪂",n:"Parachute",t:false, f:4, d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
  joker:    {e:"🃏",n:"Joker",t:true, f:4, d:"Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien."},
- chance:   {e:"🎲",n:"Double Chance",t:true, f:3, d:"Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à cote combinée (plus basse)."},
+ chance:   {e:"🎲",n:"Double Chance",t:true, f:5, d:"Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à la cote initiale du résultat qui tombe (aucune cote réduite)."},
 };
 // Indicateur de force d'un bonus (1 à 5 muscles) affiché aux enchères / infos.
 function forceHTML(id){ const f=(CARDS[id]&&CARDS[id].f)||3; return `<span class="chip gold" title="Force ${f}/5" style="flex:0 0 auto">💪 ${f}/5</span>`; }
@@ -412,7 +412,7 @@ const EN={
   "Duel vs {a}":"Duel vs {a}", "Capital":"Balance", "Misé":"Staked", "max":"max", "👑 Capitaine ×2":"👑 Captain ×2",
   "Double Chance : uniquement sur un match avec match nul (3 issues)":"Double Chance: only on a match with a draw option (3 outcomes)",
   "🎲 2ᵉ résultat couvert (Double Chance)":"🎲 2nd result covered (Double Chance)",
-  "Cote combinée ≈ {a} pour 1 seule mise":"Combined odds ≈ {a} for a single stake",
+  "Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.":"You win at the odds of whichever result comes in: {a} or {b} — for a single stake.",
   "Mise (€)":"Stake (€)", "min 1€":"min €1",
   "🃏 Carte bonus (1 max/jour)":"🃏 Bonus card (1 max/day)", "✕ retirer":"✕ remove", "optionnel":"optional",
   "→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire cette carte.":"→ no eligible match today (needs a match with a draw option): remove this card.",
@@ -569,7 +569,7 @@ const EN={
   "Sangsue":"Leech", "Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches).":"If the opponent ends in profit, you siphon 15% of their profit (they lose it, you pocket it).",
   "Parachute":"Parachute", "Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie.":"Safety net: if your day is negative, 30% of your loss is cushioned.",
   "Joker":"Joker", "Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien.":"A 2nd bet becomes Captain (gains and losses doubled) on top of yours.",
-  "Double Chance":"Double Chance", "Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à cote combinée (plus basse).":"You pick a 3-outcome match (with a draw) and cover 2 results for a single stake: you win if either comes in, at combined (lower) odds.",
+  "Double Chance":"Double Chance", "Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à la cote initiale du résultat qui tombe (aucune cote réduite).":"You pick a 3-outcome match (with a draw) and cover 2 results for a single stake: you win if either comes in, at the original odds of the result that lands (no reduced odds).",
   // — Phase 4c : gages (titre + description) —
   "Le plongeon givré 🥶":"The frosty plunge 🥶", "Se baigner en maillot dans une eau bien froide (mer, lac ou douche glacée), vidéo à l'appui.":"Take a dip in swimwear in really cold water (sea, lake or an icy shower), with video proof.",
   "Karaoké sauvage 🎤":"Wild karaoke 🎤", "Chanter en public une chanson kitsch choisie par le groupe, sans se dégonfler.":"Sing a cheesy song chosen by the group in public, no chickening out.",
@@ -811,7 +811,9 @@ function genFixture(){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t);
 function genPool(k){ return Array.from({length:k},genFixture); }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
 // Cote « double chance » : combinée de deux issues couvertes pour une seule mise.
-function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); }
+function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); } // (cote combinée « pondérée » — conservée pour référence, plus utilisée pour le gain)
+// Double Chance : on gagne à la cote INITIALE du résultat qui sort (pas de cote combinée pondérée).
+function dcWinOdd(f,sel,sel2){ return (f.res===sel||f.res===sel2) ? oddOf(f,f.res) : oddOf(f,sel); }
 /* ---- Barème d'un duel ---- */
 // gain (retour brut des paris gagnants, à la cote) et mise (total misé) d'un joueur.
 function gainMise(picks,fx){ let gain=0,mise=0; (picks||[]).forEach((b,i)=>{ const st=+b.stake||0; mise+=st; const f=(fx||[])[i]; if(f&&b.sel===f.res) gain+=st*oddOf(f,b.sel); }); return {gain,mise}; }
@@ -1385,7 +1387,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
         <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
         ${koLabel(f)?`<div style="margin-top:3px">${koLabel(f)}</div>`:''}
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
-        ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🎲 2ᵉ résultat couvert (Double Chance)")}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${oddOf(f,v)}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Cote combinée ≈ {a} pour 1 seule mise",{a:'<b>'+dcOdd(oddOf(f,b.sel),oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
+        ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🎲 2ᵉ résultat couvert (Double Chance)")}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${oddOf(f,v)}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+oddOf(f,b.sel)+'</b>',b:'<b>'+oddOf(f,myCard.sel2)+'</b>'})}</div>`:''}</div>`:''}
         ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">💥 ${t("Coup Double")}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("cote combinée ≈ {a}",{a:'<b>'+r2(oddOf(fx[myCard.target],bet.picks[myCard.target].sel)*oddOf(fx[myCard.target2],bet.picks[myCard.target2].sel))+'</b>'}):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
         <div class="row" style="margin-top:9px"><span class="mini muted">${t("Mise (€)")}</span>
           <input type="number" inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="${t("min 1€")}" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
@@ -1465,7 +1467,7 @@ function viewWait(dayLbl){
   const betPassed = deadlinePassed(); const editable=!betPassed;
   const mine=myBet(); const md=myDuel();
   const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">${editable?t("✅ Tes pronos (modifiables jusqu'à la clôture)"):t("🔒 Tes pronos (verrouillés)")}</div>
-     ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?dcOdd(oddOf(f,b.sel),oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${oddD}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
+     ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${oddD}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
      ${mine.card&&mine.card.id?`<div class="mini" style="margin-top:6px">${t("🃏 Bonus joué :")} <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</span> <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:`<div class="mini muted" style="margin-top:6px">${t("Aucun bonus joué ce jour.")}</div>`}</div>` : '';
   const aiSection = players.filter(p=>p.is_ai).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const fx=d&&d.fixtures;
     if(!b||!b.picks||!fx) return '';
@@ -1513,7 +1515,7 @@ function runEngine(pdIn, capStart, dz, N){
     pd.picks.forEach((b,i)=>{ const f=pd.fx[i]; const cc=pd.card;
       const isDC=cc&&cc.id==="chance"&&cc.target===i&&cc.sel2;
       const win = isDC ? (f.res===b.sel||f.res===cc.sel2) : (b.sel===f.res);
-      const odd = isDC ? dcOdd(oddOf(f,b.sel),oddOf(f,cc.sel2)) : oddOf(f,b.sel);
+      const odd = isDC ? dcWinOdd(f,b.sel,cc.sel2) : oddOf(f,b.sel);
       let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===pd.captain) g*=2;
       if(cc&&cc.target===i){ if(cc.id==="double"&&win)g*=2; if(cc.id==="tout")g*=(win?3:2); if(cc.id==="assurance"&&!win)g=0; if(cc.id==="joker")g*=2; }
       if(win&&odd>bestOdd) bestOdd=odd; perBet.push({gain:g,win,odd}); net+=g; });
@@ -1661,7 +1663,7 @@ function recapBody(D){
   const line=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return `<span class="muted">—</span>`;
     const b=bt.picks[i]; const c=bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
-    const odd = isDC ? dcOdd(oddOf(f,b.sel),oddOf(f,c.sel2)) : oddOf(f,b.sel);
+    const odd = isDC ? dcWinOdd(f,b.sel,c.sel2) : oddOf(f,b.sel);
     let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
     if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g=0; if(c.id==="joker")g*=2; }
     let faceCut=false; if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; faceCut=true; }
@@ -1670,7 +1672,7 @@ function recapBody(D){
   const explain=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return t("pari non enregistré pour ce match.");
     const b=bt.picks[i]; const c=bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
-    const odd = isDC ? dcOdd(oddOf(f,b.sel),oddOf(f,c.sel2)) : oddOf(f,b.sel);
+    const odd = isDC ? dcWinOdd(f,b.sel,c.sel2) : oddOf(f,b.sel);
     const base=win?(+b.stake)*(odd-1):-(+b.stake); let g=base; let txt;
     if(isDC){ const out=win?t("l'un est sorti : {a}×({b}−1)={c}€",{a:b.stake,b:odd,c:fmt(base)}):t("aucun des deux → −{a}€",{a:b.stake});
       txt=t("🎲 <b>Double Chance</b> : couvre <b>{a}</b> ou <b>{b}</b> pour {c}€ (cote combinée @{d}) → {e}",{a:esc(selLabel(f,b.sel)),b:esc(selLabel(f,c.sel2)),c:b.stake,d:odd,e:out}); }
@@ -1693,8 +1695,8 @@ function recapBody(D){
       detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(selLabel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
     } else if(c.id==="sangsue"){ detail=(Math.abs(im.opp||0)>=1)?`Tu as siphonné une part du bénéfice de l'adversaire.`:`L'adversaire n'était pas bénéficiaire → rien à siphonner.`;
     } else if(c.id==="parachute"){ detail=((im.self||0)>=1)?`Filet de sécurité déclenché : une partie de ta perte a été amortie.`:`Filet non déclenché (journée non négative).`;
-    } else if(c.id==="chance" && c.sel2 && fxRecap[c.target] && bt.picks && bt.picks[c.target]){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const w=(f.res===b.sel||f.res===c.sel2); const od=dcOdd(oddOf(f,b.sel),oddOf(f,c.sel2));
-      detail=`Sur <b>${esc(f.home)}–${esc(f.away)}</b> : couvre <b>${esc(selLabel(f,b.sel))}</b> ou <b>${esc(selLabel(f,c.sel2))}</b> (cote combinée @${od}) — ${w?'<span class="green">gagné</span>':'<span class="red">perdu</span>'}.`;
+    } else if(c.id==="chance" && c.sel2 && fxRecap[c.target] && bt.picks && bt.picks[c.target]){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const w=(f.res===b.sel||f.res===c.sel2); const od=dcWinOdd(f,b.sel,c.sel2);
+      detail=`Sur <b>${esc(f.home)}–${esc(f.away)}</b> : couvre <b>${esc(selLabel(f,b.sel))}</b> ou <b>${esc(selLabel(f,c.sel2))}</b> — ${w?'<span class="green">gagné</span> à la cote du résultat sorti @'+od:'<span class="red">perdu</span>'}.`;
     } else if(c.target!=null && fxRecap[c.target] && bt.picks){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const win=b.sel===f.res; const nm=`<b>${esc(f.home)}–${esc(f.away)}</b>`;
       // garde-fou : sur d'anciennes parties l'inversion « cadeau » n'était pas enregistrée sur le pari visible → on n'affiche pas une mécanique contradictoire
       const inconsistent = (c.id==="tout"||c.id==="double") && ((win && (im.self||0)<0) || (!win && (im.self||0)>0));
@@ -1791,7 +1793,7 @@ function showGainDetail(pid){
     rows=d.fixtures.map((f,i)=>{ const b=bt.picks[i]; if(!b) return '';
       const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
       const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res);
-      const odd=isDC?dcOdd(oddOf(f,b.sel),oddOf(f,c.sel2)):oddOf(f,b.sel);
+      const odd=isDC?dcWinOdd(f,b.sel,c.sel2):oddOf(f,b.sel);
       let g=win?(+b.stake)*(odd-1):-(+b.stake); const parts=[`${b.stake}€ @${odd}`];
       if(i===bt.captain){ g*=2; parts.push('👑 ×2'); }
       if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;parts.push('🚀 ×2');} else if(c.id==="tout"){g*=(win?3:2);parts.push('🔥 '+(win?'×3':'×2'));} else if(c.id==="joker"){g*=2;parts.push('🃏 ×2');} else if(c.id==="assurance"&&!win){g=0;parts.push('🛡 '+t("remboursé"));} }
@@ -1858,7 +1860,7 @@ function computeStandHist(){
     players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du) return; const b=betAt[d+'|'+p.id]; if(b&&b.picks&&b.picks.length&&winCount(b,du.fixtures)===0 && st[p.id]) st[p.id].points-=1; });
     // capital (+ net), meilleure journée, meilleure cote gagnée
     players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); const b=betAt[d+'|'+p.id]; const net=(b&&b.net)||0; if(st[p.id]){ st[p.id].best_day=Math.max(st[p.id].best_day,net); st[p.id].capital=Math.max(0,Math.round((st[p.id].capital+net)*100)/100); }
-      if(b&&b.picks&&du&&du.fixtures){ b.picks.forEach((pk,i)=>{ const f=du.fixtures[i]; if(!f) return; const c=b.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===pk.sel||f.res===c.sel2):(pk.sel===f.res); const odd=isDC?dcOdd(oddOf(f,pk.sel),oddOf(f,c.sel2)):oddOf(f,pk.sel); if(win&&odd>st[p.id].best_odd) st[p.id].best_odd=odd; }); } });
+      if(b&&b.picks&&du&&du.fixtures){ b.picks.forEach((pk,i)=>{ const f=du.fixtures[i]; if(!f) return; const c=b.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===pk.sel||f.res===c.sel2):(pk.sel===f.res); const odd=isDC?dcWinOdd(f,pk.sel,c.sel2):oddOf(f,pk.sel); if(win&&odd>st[p.id].best_odd) st[p.id].best_odd=odd; }); } });
     // pénalité oubli : −2 pts, −25 % capital
     forgot.forEach(pid=>{ if(st[pid]){ st[pid].points-=2; st[pid].capital=Math.max(0,Math.round(st[pid].capital*0.75*100)/100); } });
     // recapitalisation solidaire : si un humain < seuil → +montant à tout le monde
@@ -2060,7 +2062,7 @@ async function loadPalmares(){
       (b.picks||[]).forEach((x,i)=>{ const f=fx[i]; if(!f||f.res==null) return;
         const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
         const win=isDC?(f.res===x.sel||f.res===c.sel2):(x.sel===f.res);
-        const odd=isDC?dcOdd(oddF(f,x.sel),oddF(f,c.sel2)):oddF(f,x.sel);
+        const odd=isDC?(win?oddF(f,f.res):oddF(f,x.sel)):oddF(f,x.sel); // Double Chance : cote initiale du résultat sorti
         a.picks++; if(win){ a.correct++; a.wins++; a.winOddSum+=odd; a.flat+=(odd-1); } else a.flat-=1; });
     }
     const MINP=5, MINW=2; // min. de pronostics pour figurer au classement des pronostiqueurs
@@ -2200,7 +2202,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.87";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.88";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
