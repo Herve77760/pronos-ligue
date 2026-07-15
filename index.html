@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.76</div>
+  <div class="foot" id="foot">Oh My Gambit · prototype de test · données sportives simulées · v3.80</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -163,26 +163,27 @@ const GAGES=[
 // (robuste même si l'emoji a changé entre deux versions).
 function gageDescOf(t){ const n=s=>(s||'').replace(/[^\p{L}]/gu,'').toLowerCase(); const g=GAGES.find(x=>n(x.t)===n(t)); return g?g.d:''; }
 const CARDS={
- assurance:{e:"🛡",n:"Assurance",t:true, f:2, d:"Un pari choisi : s'il perd, mise remboursée."},
- double:   {e:"🚀",n:"Double Mise",t:true, f:4, d:"Un pari choisi : s'il gagne, gain doublé."},
+ assurance:{e:"🛡",n:"Assurance",t:true, f:5, d:"Un pari choisi : s'il perd, mise remboursée."},
+ double:   {e:"🚀",n:"Double Mise",t:true, f:5, d:"Un pari choisi : s'il gagne, gain doublé."},
+ dbl:      {e:"💥",n:"Coup Double",t:true, two:true, f:5, d:"Bonus GRATUIT (aucune mise, aucun risque) : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien."},
  miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, f:3, d:"Le meilleur pari gagnant des deux joueurs est échangé."},
- gourmand: {e:"🍽️",n:"Gourmand",t:false, f:2, d:"Adversaire positif → tu récupères 20 % de son bénéfice."},
+ gourmand: {e:"🍽️",n:"Gourmand",t:false, f:3, d:"Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus)."},
  face:     {e:"😏",n:"Dans ta face",t:true, f:3, d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
  serge:    {e:"💰",n:"Serge Benamou",t:false, f:2, retired:true, d:"(Bonus retiré du jeu.)"},
  cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:true, f:3, d:"Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement)."},
  sniper:   {e:"🎯",n:"Sniper",t:true, f:3, d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
- invest:   {e:"📈",n:"Investisseur",t:false, f:3, d:"Plafond de mise porté à 70 % du capital ce jour."},
+ invest:   {e:"📈",n:"Investisseur",t:false, f:4, d:"Plafond de mise porté à 70 % du capital ce jour."},
  roi:      {e:"💎",n:"Roi de la cote",t:false, f:2, d:"Un pari gagné à cote ≥ 2,00 → +5 % du capital de départ."},
  tout:     {e:"🔥",n:"Tout ou Rien",t:true, f:5, d:"Un pari choisi : gain ×3, perte ×2."},
  sangsue:  {e:"🩸",n:"Sangsue",t:false, f:3, d:"Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches)."},
- parachute:{e:"🪂",n:"Parachute",t:false, f:2, d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
+ parachute:{e:"🪂",n:"Parachute",t:false, f:4, d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
  joker:    {e:"🃏",n:"Joker",t:true, f:4, d:"Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien."},
  chance:   {e:"🎲",n:"Double Chance",t:true, f:3, d:"Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à cote combinée (plus basse)."},
 };
 // Indicateur de force d'un bonus (1 à 5 muscles) affiché aux enchères / infos.
 function forceHTML(id){ const f=(CARDS[id]&&CARDS[id].f)||3; return `<span class="chip gold" title="Force ${f}/5" style="flex:0 0 auto">💪 ${f}/5</span>`; }
 const COMMON=["assurance","double"];
-const RANDOM_POOL=["miroir","gourmand","face","cadeau","sniper","invest","roi","tout","sangsue","parachute","joker","chance"];
+const RANDOM_POOL=["miroir","gourmand","face","cadeau","sniper","invest","roi","tout","sangsue","parachute","joker","chance","dbl"];
 const CARD_IDS=Object.keys(CARDS).filter(id=>!CARDS[id].retired); // cartes actives (hors retirées) — enchères / règles / IA
 // Mode de contenu : "complet" (tout) ou "simple" (moins de cartes/gages, pour débuter).
 const SIMPLE_CARDS=["assurance","double","invest","roi","parachute","sniper","tout"]; // cartes faciles à comprendre
@@ -198,6 +199,7 @@ function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2
   const pool=[...RANDOM_POOL]; for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
   for(let i=0;i<size-nc;i++) hand.push(pool[i%pool.length]); return hand; }
 const SHOP_CAP=40; // dépense max en bonus sur les 100€ (les bonus n'ont pas de prix fixe : chacun enchérit ce qu'il veut)
+const DBL_FACTOR=1; // Coup Double : 1 = mise prise en compte = moyenne des 2 mises · 0.5 = la moitié (si jugé trop fort)
 const RECAP_THRESHOLD=10, RECAP_AMOUNT=20; // recapitalisation solidaire : sous 10€ un joueur ne peut plus miser → +20€ à lui ET à tout le monde
 // Formules de rythme : délais MAX (heures) pour choisir les matchs puis miser.
 const FORMULAS={
@@ -349,9 +351,12 @@ const EN={
   "Ouvrir →":"Open →", "Salon · inscriptions ouvertes":"Lobby · sign-ups open", "Vote du gage":"Forfeit vote", "En cours":"Ongoing",
   "Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.":"No ongoing league. Create one, or join a friend's with their code.",
   "Entre un code valide.":"Enter a valid code.",
+  "Code de ligue introuvable — vérifie le code saisi.":"League code not found — check the code you entered.",
   "▲ masquer":"▲ hide", "▼ afficher":"▼ show",
   "Salon":"Lobby", "Journée {a}/{b}":"Day {a}/{b}",
   "Capitaine et bonus doivent être sur des matchs différents.":"Captain and bonus must be on different matches.",
+  "⚠️ Trop risqué — baisse la mise du Capitaine":"⚠️ Too risky — lower the Captain stake",
+  "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : 7XK2P":"e.g. 7XK2P",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
   "Paramètres":"Settings", "⚙️ Paramètres du compte":"⚙️ Account settings",
@@ -477,9 +482,12 @@ const EN={
   "Gain réduit de moitié par « Dans ta face » adverse":"Gain halved by the opponent's In Your Face",
   // — Phase 4c : noms & descriptions des cartes bonus —
   "Assurance":"Insurance", "Un pari choisi : s'il perd, mise remboursée.":"A chosen bet: if it loses, stake refunded.",
+  "Coup Double":"Double Strike",
+  "Bonus GRATUIT (aucune mise, aucun risque) : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"FREE bonus (no stake, no risk): pick 2 matches (your Captain is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
+  "cote combinée ≈ {a}":"combined odds ≈ {a}", "touche un 2ᵉ match 💥":"tap a 2nd match 💥", "→ touche les 💥 de tes 2 matchs.":"→ tap the 💥 on your 2 matches.",
   "Double Mise":"Double Stake", "Un pari choisi : s'il gagne, gain doublé.":"A chosen bet: if it wins, gain doubled.",
   "Effet Kiss Cool":"Kiss Cool Effect", "Le meilleur pari gagnant des deux joueurs est échangé.":"The best winning bet of the two players is swapped.",
-  "Gourmand":"Freeloader", "Adversaire positif → tu récupères 20 % de son bénéfice.":"Opponent in profit → you take 20% of their profit.",
+  "Gourmand":"Freeloader", "Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus).":"If your opponent ends in profit, you pocket a bonus of 20% of their profit — without them losing anything (it's added on top).",
   "Dans ta face":"In Your Face", "Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié.":"You pick a match: if the opponent has a winning bet there, their gain on that match is halved.",
   "Serge Benamou":"Serge Benamou", "(Bonus retiré du jeu.)":"(Bonus removed from the game.)",
   "Chérie c'est cadeau":"Sweetie It's a Gift", "Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement).":"You pick a match: the opponent's bet on that match is flipped (1 becomes 2 and vice versa).",
@@ -929,7 +937,9 @@ async function createLeague(){
 async function joinLeague(code){
   if(busy||!AUTH)return; busy=true; showErr("");
   try{
-    const lg=await q(db.from("leagues").select("*").eq("code",code).single());
+    const found=await q(db.from("leagues").select("*").eq("code",code));
+    const lg=Array.isArray(found)?found[0]:found;
+    if(!lg){ showErr(t("Code de ligue introuvable — vérifie le code saisi.")); busy=false; return; }
     const ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
     const mine=ps.find(p=>p.user_id===AUTH.id);
     if(mine){ openLeague(lg.id, mine.id); busy=false; return; } // déjà membre → on rouvre (reconnexion)
@@ -1261,17 +1271,25 @@ async function saveSelection(){ if(busy)return; busy=true;
 
 /* --- betting --- */
 let bet={picks:null,captain:-1}, myCard=null;
+// Règle A : la perte maximale possible du jour ne peut pas dépasser le capital (→ jamais de capital négatif).
+// Multiplicateur de PERTE par match : Capitaine ×2 · Joker/Tout ou rien ×2 · Assurance ×0 (remboursée) · sinon ×1.
+// (Capitaine et bonus ciblé sont toujours sur des matchs différents, donc pas de cumul ×4.)
+function lossMult(i,captainIdx,card){ if(i===captainIdx) return 2;
+  if(card&&card.target===i){ if(card.id==="assurance") return 0; if(card.id==="tout"||card.id==="joker") return 2; } return 1; }
+function worstLoss(picks,captainIdx,card){ return (picks||[]).reduce((s,b,i)=>s+(+b.stake||0)*lossMult(i,captainIdx,card),0); }
 function viewBet(d,dayLbl,opp,iAmHome){
   const fx=d.fixtures;
   if(!bet.picks || bet.picks.length!==fx.length){ bet={picks:fx.map(()=>({sel:"1",stake:0})),captain:-1}; myCard=null; }
   const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=Math.floor(cap*(invest?0.7:0.5)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const pct=Math.min(100,max>0?tot/max*100:0); const over=tot>max+0.001;
   const targetCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].t;
-  const needTarget = targetCard && (myCard.target==null);
+  const twoCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].two; // Coup Double : 2 cibles
+  const needTarget = targetCard && (myCard.target==null || (twoCard && myCard.target2==null));
   const needSel2 = myCard && myCard.id==="chance" && myCard.target!=null && !myCard.sel2;
-  const conflict = targetCard && myCard.target!=null && myCard.target===bet.captain;
+  const conflict = targetCard && !twoCard && myCard.target!=null && myCard.target===bet.captain; // Coup Double : Capitaine autorisé
   const allMin = bet.picks.every(b=>(+b.stake||0)>=1);
-  const ok = allMin && !over && bet.captain>=0 && !needTarget && !needSel2 && !conflict;
+  const risky = bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > cap+0.001; // règle A
+  const ok = allMin && !over && !risky && bet.captain>=0 && !needTarget && !needSel2 && !conflict;
   const hand = meP.hand||[];
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
@@ -1280,37 +1298,51 @@ function viewBet(d,dayLbl,opp,iAmHome){
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${oddOf(f,v)}</b></div>`;
       const canTgt = targetCard && (myCard.id!=="chance" || f.draw);
-      const tgt = canTgt ? `<span class="tog tgt ${myCard.target===i?'on':''}" onclick="setTarget(${i})">🎯</span>` : ((targetCard&&myCard.id==="chance") ? `<span class="tog" style="opacity:.35" title="${t("Double Chance : uniquement sur un match avec match nul (3 issues)")}">🎯</span>` : '');
+      const isTgt = (myCard&&(myCard.target===i||(twoCard&&myCard.target2===i)));
+      const tgtIcon = twoCard ? "💥" : "🎯";
+      const tgt = canTgt ? `<span class="tog tgt ${isTgt?'on':''}" onclick="setTarget(${i})">${tgtIcon}</span>` : ((targetCard&&myCard.id==="chance") ? `<span class="tog" style="opacity:.35" title="${t("Double Chance : uniquement sur un match avec match nul (3 issues)")}">🎯</span>` : '');
       return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
         <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
         ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🎲 2ᵉ résultat couvert (Double Chance)")}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${oddOf(f,v)}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Cote combinée ≈ {a} pour 1 seule mise",{a:'<b>'+dcOdd(oddOf(f,b.sel),oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
+        ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">💥 ${t("Coup Double")}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("cote combinée ≈ {a}",{a:'<b>'+r2(oddOf(fx[myCard.target],bet.picks[myCard.target].sel)*oddOf(fx[myCard.target2],bet.picks[myCard.target2].sel))+'</b>'}):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
         <div class="row" style="margin-top:9px"><span class="mini muted">${t("Mise (€)")}</span>
           <input type="number" inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="${t("min 1€")}" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
     <div class="box"><div class="row"><b class="mini">${t("🃏 Carte bonus (1 max/jour)")}</b>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">${t("✕ retirer")}</span>`:`<span class="mini muted">${t("optionnel")}</span>`}</div>
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" title="${esc(t(CARDS[id].d))}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>
-        ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire cette carte.")+'</b>':(needTarget?' <b class="blue">'+t("→ touche le 🎯 du pari ciblé.")+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
+        ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire cette carte.")+'</b>':(needTarget?' <b class="blue">'+(twoCard?t("→ touche les 💥 de tes 2 matchs."):t("→ touche le 🎯 du pari ciblé."))+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
         :`<div class="mini muted" style="margin-top:6px">${t("Plus de cartes en main.")}</div>`}</div>
-    <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →"))))))}</button>`;
+    <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>`;
 }
 function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCard.target===i&&myCard.sel2===v) myCard.sel2=null; render(); }
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
   const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*(invest?0.7:0.5)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const t=$("tot"); if(t){t.textContent=eur(tot);
     const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
-  const targetCard=myCard&&CARDS[myCard.id].t; const needTarget=targetCard&&myCard.target==null;
+  const targetCard=myCard&&CARDS[myCard.id].t; const twoCard=myCard&&CARDS[myCard.id].two; const needTarget=targetCard&&(myCard.target==null||(twoCard&&myCard.target2==null));
   const needSel2=myCard&&myCard.id==="chance"&&myCard.target!=null&&!myCard.sel2;
-  const conflict=targetCard&&myCard.target!=null&&myCard.target===bet.captain;
+  const conflict=targetCard&&!twoCard&&myCard.target!=null&&myCard.target===bet.captain;
   const btn=$("betSubmit");
-  if(btn){ const over=tot>max+0.001; const allMin=bet.picks.every(b=>(+b.stake||0)>=1); const ok=allMin&&!over&&bet.captain>=0&&!needTarget&&!needSel2&&!conflict; btn.disabled=!ok;
-    btn.textContent = bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))); }
+  if(btn){ const over=tot>max+0.001; const allMin=bet.picks.every(b=>(+b.stake||0)>=1); const risky=bet.captain>=0&&worstLoss(bet.picks,bet.captain,myCard)>(meP.capital)+0.001; const ok=allMin&&!over&&!risky&&bet.captain>=0&&!needTarget&&!needSel2&&!conflict; btn.disabled=!ok;
+    btn.textContent = bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →"))))))); }
 }
-function setCap(i){ const on=bet.captain!==i; if(on && myCard && CARDS[myCard.id] && CARDS[myCard.id].t && myCard.target===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; } bet.captain=bet.captain===i?-1:i; render(); }
-function setTarget(i){ if(!myCard) return; if(bet.captain===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; } if(myCard.id==="chance"){ const d=myDuel(); const f=d&&d.fixtures&&d.fixtures[i]; if(!f||!f.draw) return; } myCard.target=i; if(myCard.id==="chance") myCard.sel2=null; render(); }
+function setCap(i){ const on=bet.captain!==i; if(on && myCard && CARDS[myCard.id] && CARDS[myCard.id].t && !CARDS[myCard.id].two && myCard.target===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; } bet.captain=bet.captain===i?-1:i; render(); }
+function setTarget(i){ if(!myCard) return;
+  if(CARDS[myCard.id]&&CARDS[myCard.id].two){ // Coup Double : bascule parmi 2 cibles max (Capitaine autorisé)
+    if(myCard.target===i){ myCard.target=(myCard.target2!=null?myCard.target2:null); myCard.target2=null; }
+    else if(myCard.target2===i){ myCard.target2=null; }
+    else if(myCard.target==null){ myCard.target=i; }
+    else if(myCard.target2==null){ myCard.target2=i; }
+    else { myCard.target2=i; }
+    render(); return; }
+  if(bet.captain===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; }
+  if(myCard.id==="chance"){ const d=myDuel(); const f=d&&d.fixtures&&d.fixtures[i]; if(!f||!f.draw) return; } myCard.target=i; if(myCard.id==="chance") myCard.sel2=null; render(); }
 function setSel2(i,v){ if(!myCard||myCard.id!=="chance"||myCard.target!==i) return; if(bet.picks[i].sel===v) return; myCard.sel2=v; render(); }
 function selCard(id){ if(myCard&&myCard.id===id){ myCard=null; } else { myCard={id, target:null}; } render(); }
 async function submitBet(){
-  if(busy)return; busy=true;
+  if(busy)return;
+  if(bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > ((me()||{}).capital||0)+0.001){ toast(t("⚠️ Trop risqué — baisse la mise du Capitaine")); return; } // règle A (sécurité)
+  busy=true;
   try{ const d=myDuel();
     await q(db.from("bets").upsert({league_id:L.id,day:L.current_day,player_id:S.myId,duel_id:d.id,
       picks:bet.picks,captain:bet.captain,card:myCard,submitted:true},{onConflict:"player_id,day"}));
@@ -1373,7 +1405,8 @@ function aiPlay(cap,fx,hand){
     const sel=Math.random()<0.7?outs[0][0]:pick(outs)[0]; return {sel,stake:Math.round(budget*ws[i]/sw)}; });
   const captain=Math.floor(Math.random()*fx.length);
   let card=null; if(hand&&hand.length&&Math.random()<0.4){ const id=pick(hand); card={id,target:CARDS[id].t?Math.floor(Math.random()*fx.length):null};
-    if(card.id==="chance"){ const drawIdx=fx.map((f,idx)=>f.draw?idx:-1).filter(x=>x>=0); if(drawIdx.length){ card.target=pick(drawIdx); const opts=["1","N","2"].filter(v=>v!==picks[card.target].sel); card.sel2=pick(opts); } else { card=null; } } }
+    if(card.id==="chance"){ const drawIdx=fx.map((f,idx)=>f.draw?idx:-1).filter(x=>x>=0); if(drawIdx.length){ card.target=pick(drawIdx); const opts=["1","N","2"].filter(v=>v!==picks[card.target].sel); card.sel2=pick(opts); } else { card=null; } }
+    else if(card.id==="dbl"){ const idxs=fx.map((f,idx)=>idx); for(let k=idxs.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[idxs[k],idxs[j]]=[idxs[j],idxs[k]];} if(idxs.length>=2){card.target=idxs[0];card.target2=idxs[1];} else card=null; } }
   return {picks,captain,card};
 }
 // Moteur pur : calcule les gains nets du jour à partir des plays (déterministe via pd.rnd).
@@ -1393,6 +1426,12 @@ function runEngine(pdIn, capStart, dz, N){
       if(cc&&cc.target===i){ if(cc.id==="double"&&win)g*=2; if(cc.id==="tout")g*=(win?3:2); if(cc.id==="assurance"&&!win)g=0; if(cc.id==="joker")g*=2; }
       if(win&&odd>bestOdd) bestOdd=odd; perBet.push({gain:g,win,odd}); net+=g; });
     G[pid]={perBet,net,bestOdd,bonus:0}; }
+  // Phase 2b : Coup Double — combiné GRATUIT et SANS RISQUE sur 2 matchs (Capitaine autorisé). Bonus purement additif :
+  // si les 2 pronos passent, on ajoute (mise moyenne × DBL_FACTOR) × (cote combinée − 1). Sinon rien. Les 2 matchs gardent leur règlement individuel normal.
+  for(const pid in PD){ const pd=PD[pid]; const c=pd.card;
+    if(c&&c.id==="dbl"&&c.target!=null&&c.target2!=null&&c.target!==c.target2){ const g=G[pid]; const bi=g.perBet[c.target], bj=g.perBet[c.target2];
+      if(bi&&bj&&bi.win&&bj.win){ const sI=+pd.picks[c.target].stake||0, sJ=+pd.picks[c.target2].stake||0; const sAvg=(sI+sJ)/2*DBL_FACTOR; const O=bi.odd*bj.odd;
+        g.bonus += sAvg*(O-1); if(O>g.bestOdd) g.bestOdd=O; } } }
   // Phase 3 : Dans ta face puis Miroir
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="face"&&pd.card.target!=null){ const opp=G[pd.oppId];
     if(opp && opp.perBet[pd.card.target]){ const b=opp.perBet[pd.card.target]; if(b.win && b.gain>0){ const cut=b.gain/2; b.gain-=cut; opp.net-=cut; } } } }
@@ -2037,7 +2076,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.76";
+  const fo=$("foot"); if(fo) fo.textContent="Oh My Gambit · "+t("prototype de test · données sportives simulées")+" · v3.80";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
@@ -2053,8 +2092,10 @@ function render(){
   else if(S.view==="settings") html=viewSettings();
   else html=viewGame();
   $("root").innerHTML=html;
-  // Remonter en haut quand on change d'écran (vue / statut de ligue / recap) — pas sur les simples rafraîchissements.
-  const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"");
+  // Remonter en haut à chaque changement d'écran, y compris les sous-étapes d'une journée (choix des matchs → saisie → attente → résultats) — pas sur les simples rafraîchissements de polling.
+  let gsub="";
+  if(S.view==="game" && L){ const d=myDuel(); const mb=myBet(); gsub="|"+L.current_day+"|"+((d&&d.fixtures&&d.fixtures.length)?"F":"")+"|"+(mb?"S":"")+"|"+(S.dispDay||0); }
+  const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"")+gsub;
   if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
   $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
 }
@@ -2094,6 +2135,7 @@ function viewRules(){
        <li>${t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).")}</li>
        <li>${t("Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>50 %</b> du capital (70 % avec la carte Investisseur).")}</li>
        <li>${t("<b>👑 Pari du Capitaine</b> : un pari désigné secrètement — gain <b>et</b> perte <b>doublés</b>.")}</li>
+       <li>${t("🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).")}</li>
        <li>${t("Optionnel : <b>1 carte bonus</b> (voir plus bas), révélée à la résolution.")}</li>
        <li>${t("Gain d'un pari = mise × (cote − 1) ; pari perdu = − mise. Le capital ne descend jamais sous 0.")}</li>
      </ul></div>
