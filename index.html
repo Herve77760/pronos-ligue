@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.96</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.97</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -469,6 +469,8 @@ const EN={
   "Pronos clôturés.":"Picks closed.",
   "✏️ Modifier mes pronos":"✏️ Edit my picks",
   "🔒 Clôturer les pronos maintenant (organisateur)":"🔒 Close picks now (organizer)",
+  "🔒 Clôturer la préparation maintenant (organisateur)":"🔒 Close the preparation now (organizer)",
+  "Clôturer la préparation maintenant ? Les joueurs qui n'ont pas validé démarreront sans bonus, et leur vote ne sera pas pris en compte.":"Close the preparation now? Players who haven't confirmed will start with no bonuses, and their vote won't be counted.",
   "Les pronos des autres joueurs restent cachés jusqu'à la clôture.":"Other players' picks stay hidden until close.",
   "Clôture dans {a}":"Closes in {a}",
   "✅ Pronos clôturés — on attend les vrais résultats.":"✅ Picks closed — waiting for the real results.",
@@ -1306,7 +1308,8 @@ function viewPrep(){
       <div class="box mini" style="margin-top:10px;text-align:center">${waitMsg}</div></div>
       <h2>${t("Joueurs")}</h2>
       ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("⏳ pas encore")}</span></div>`).join("")}
-      <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">${t("✏️ Modifier ma préparation")}</button>`; }
+      <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">${t("✏️ Modifier ma préparation")}</button>
+      ${(me()&&me().is_organizer)?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`; }
   const ids=modeCards(getMode());
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards; const noVote=(myVote==null); // le vote du gage/récompense est OBLIGATOIRE
@@ -1362,6 +1365,16 @@ async function savePrep(){ if(busy)return;
     await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id));
     await q(db.from("players").update({shop_done:true}).eq("id",S.myId)); S.bidLLeague=null; await refresh();
   }catch(e){ showErr("Préparation : "+e.message); } busy=false; }
+// Organisateur : clôturer la préparation sans attendre la deadline (24 h). On recule simplement
+// l'échéance stockée dans le JSON `gage` → refresh déclenche resolvePrep (allDone || dlPassed).
+// Les joueurs qui n'ont pas validé partent sans bonus et sans vote — utile pour tester ce cas.
+async function forcePrepEnd(){ if(!(me()&&me().is_organizer)||busy)return;
+  if(!confirm(t("Clôturer la préparation maintenant ? Les joueurs qui n'ont pas validé démarreront sans bonus, et leur vote ne sera pas pris en compte.")))return; busy=true;
+  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;}
+    if(!st||!Array.isArray(st.options)){ busy=false; return; }
+    st.deadline=new Date(Date.now()-60000).toISOString();
+    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh(); }
+  catch(e){ showErr("Clôture préparation : "+e.message); } busy=false; }
 async function editPrep(){ if(busy)return; busy=true;
   try{ await q(db.from("players").update({shop_done:false}).eq("id",S.myId)); S.bidLLeague=null; await refresh(); }catch(e){ showErr(e.message); } busy=false; }
 async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
@@ -2314,7 +2327,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.96";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.97";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
