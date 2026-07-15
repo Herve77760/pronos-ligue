@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.88</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.91</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -220,7 +220,6 @@ const FORMULAS={
 function leagueFormula(){ return FORMULAS[(L&&L.formula)||'classique'] || FORMULAS.classique; }
 // Mode de contenu & gage perso : stockés dans le JSON `gage` (lobby puis prépa). Défaut "complet".
 function getMode(){ try{ const o=JSON.parse(L.gage); if(o&&o.mode) return o.mode; }catch(e){} return "complet"; }
-function getCustom(){ try{ const o=JSON.parse(L.gage); if(o&&o.custom) return o.custom; }catch(e){} return ""; }
 // Enjeu de la ligue : "gage" (défi au dernier, défaut) ou "reward" (récompense au premier). Stocké dans le JSON `gage` (lobby/prépa) puis recopié dans prep_summary.
 function getEnjeu(){ try{ const o=JSON.parse(L.gage); if(o&&o.enjeu) return o.enjeu; }catch(e){} const s=L&&L.prep_summary; if(s&&s.enjeu) return s.enjeu; return "gage"; }
 function isReward(){ return getEnjeu()==="reward"; }
@@ -232,8 +231,11 @@ function enjeuOutcome(){ const s=(L&&L.prep_summary)||{}; const opts=s.options||
   const ho=[...players].sort(cmp).filter(p=>!p.is_ai); const best=ho[0], worst=ho[ho.length-1];
   if(rew){ // RÉCOMPENSE : vote majoritaire (comme à l'origine), remise au champion (1er)
     const title=s.gage||(L&&L.gage)||''; return {chooser:null, target:best, title, desc:s.gageDesc||gageDescOf(title), rew:true, ok:!!best}; }
-  // GAGE : choisi par le 1er (vainqueur), infligé au dernier
-  let item=null; if(best && votes[best.id]!=null && opts[votes[best.id]]) item=opts[votes[best.id]];
+  // GAGE : choisi par le 1er (vainqueur), infligé au dernier — son vote peut être son gage PERSO ("c")
+  const v=best?votes[best.id]:null;
+  if(best && v==="c" && (s.customs||{})[best.id]){
+    return {chooser:best, target:worst, title:s.customs[best.id], desc:t("Gage personnalisé — réglé entre vous, hors application."), rew:false, ok:!!worst}; }
+  let item=null; if(best && v!=null && opts[v]) item=opts[v];
   if(!item && opts.length) item=opts[0];
   const title=(item&&item.t)||s.gage||(L&&L.gage)||''; const desc=(item&&item.d)||gageDescOf(title);
   return {chooser:best, target:worst, title, desc, rew:false, ok:!!(best&&worst)}; }
@@ -276,15 +278,22 @@ async function fetchRealPool(){
   const keys=active.map(s=>s.key).slice(0,24); // toutes les compétitions actives — le créneau + la priorité trient ensuite
   // Fenêtre : matchs démarrant APRÈS la clôture des paris (sinon match déjà commencé) ET dans les 24h qui suivent
   // (pour que les résultats tombent vite après la clôture).
+  // Fenêtre serrée = rythme de la formule (12h Fast / 24h Classique) : tous les matchs se jouent dans le MÊME créneau,
+  // pour que les résultats tombent groupés (toute la ligue attend le dernier match). On collecte large (24h) puis on resserre,
+  // avec repli sur la fenêtre large si le créneau serré ne contient pas assez de matchs (intersaison).
   const _f=leagueFormula(); const cutoffMin=Date.now()+((_f.sel||24)+(_f.bet||24))*3600000; const cutoffMax=cutoffMin+24*3600000;
+  const winH=(_f.bet||24); const tightMax=cutoffMin+winH*3600000;
   const out=[];
   for(const k of keys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
     if(!r.ok) continue; const arr=await r.json();
     arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; out.push(f); } });
   }catch(e){} }
+  // Resserrage : on ne garde que les matchs du créneau (winH). Repli sur la fenêtre large si trop peu de matchs.
+  const tight=out.filter(e=>{ const tt=new Date(e.commence).getTime(); return !isNaN(tt) && tt<=tightMax; });
+  const src=(tight.length>=5)?tight:out;
   const sortBig=(a,b)=> (b.prio-a.prio) || String(a.commence).localeCompare(String(b.commence));
-  const soc=out.filter(e=>e.grp==="Soccer").sort(sortBig);
-  const oth=out.filter(e=>e.grp!=="Soccer").sort(sortBig);
+  const soc=src.filter(e=>e.grp==="Soccer").sort(sortBig);
+  const oth=src.filter(e=>e.grp!=="Soccer").sort(sortBig);
   const N=12, socTarget=9; // ~75% de foot, 25% pour la variété (basket/rugby/tennis)
   const pool=[...soc.slice(0,socTarget), ...oth.slice(0,N-socTarget)];
   if(pool.length<N){ [...soc.slice(socTarget), ...oth.slice(N-socTarget)].sort(sortBig).forEach(e=>{ if(pool.length<N) pool.push(e); }); }
@@ -310,6 +319,9 @@ async function resolveRealIfReady(){
   if(!L||L.data_mode!=="real"||L.status!=="running"||S.recap||resolving) return;
   const realDuels=duels.filter(d=>Array.isArray(d.fixtures)&&d.fixtures.some(f=>f&&f.evId));
   if(!realDuels.length) return;
+  // Multi-duels : chaque duel a SES propres matchs → on attend que TOUS les duels aient leurs matchs
+  // et que TOUS les matchs de la ligue soient terminés avant d'afficher/calculer quoi que ce soit.
+  if(duels.some(d=>!Array.isArray(d.fixtures)||!d.fixtures.length)) return;
   const times=realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.commence).map(f=>new Date(f.commence).getTime());
   if(!times.length || Math.min.apply(null,times)>Date.now()) return; // aucun match commencé
   if(Date.now()-lastRealCheck < 600000) return; lastRealCheck=Date.now();
@@ -332,6 +344,12 @@ function dayTimes(){ const f=leagueFormula(); const t0=(L&&L.day_started_at)?new
   return {ok:true, sel, bet}; }
 // La clôture des pronos est-elle passée ? (au-delà, on ne peut plus modifier et les pronos adverses sont révélés)
 function deadlinePassed(){ const dt=dayTimes(); return !!(dt.ok && Date.now()>=dt.bet); }
+// Simulé : les matchs fictifs doivent être « joués » (coup d'envoi + 2h) avant de publier les résultats — même
+// déroulé qu'en réel (clôture → écran d'attente → résultats). Fixtures sans horaire (anciennes journées) = ignorées.
+function simMatchesDone(){ const dz=duels||[]; if(!dz.length) return false; const now=Date.now();
+  for(const d of dz){ for(const f of (d.fixtures||[])){ if(!f||f.evId) continue; const ts=fixtureKickoff(f);
+    if(ts!=null && now < ts+2*3600000) return false; } }
+  return true; }
 function fmtWhen(ts){ if(!ts) return ""; const d=new Date(ts); const now=new Date(); const loc=lang==="en"?'en-GB':'fr-FR'; const hm=d.toLocaleTimeString(loc,{hour:'2-digit',minute:'2-digit'});
   const sameDay=d.toDateString()===now.toDateString(); const tomorrow=new Date(now.getTime()+86400000).toDateString()===d.toDateString();
   return (sameDay?t("aujourd'hui"):(tomorrow?t("demain"):d.toLocaleDateString(loc,{weekday:'short',day:'2-digit',month:'2-digit'})))+" "+hm; }
@@ -444,6 +462,9 @@ const EN={
   "Clôture dans {a}":"Closes in {a}",
   "✅ Pronos clôturés — on attend les vrais résultats.":"✅ Picks closed — waiting for the real results.",
   "✅ Pronos clôturés — résolution automatique en cours…":"✅ Picks closed — automatic resolution under way…",
+  "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
+  "▶️ Publier les résultats maintenant (organisateur)":"▶️ Publish the results now (organizer)",
+  "Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.":"Publish the results now? All (simulated) matches will be treated as played.",
   "Clôturer les pronos maintenant ? Plus personne ne pourra modifier ; les pronos sont révélés et la journée est résolue.":"Close picks now? No one can edit anymore; picks are revealed and the day is resolved.",
   "🎲 Les dés sont jetés — y'a plus qu'à prier pour les vrais résultats !":"🎲 The dice are cast — now just pray for the real results!",
   "🕯️ Pronos verrouillés… tu peux aller brûler un cierge.":"🕯️ Picks locked in… time to go light a candle.",
@@ -495,6 +516,14 @@ const EN={
   "Ton gage personnalisé (max {a} car., réglé entre vous) :":"Your custom forfeit (max {a} chars, settled between you):",
   "Retirer la récompense personnalisée ?":"Remove the custom reward?",
   "🏆 Vote de la récompense":"🏆 Reward vote",
+  "✏️ Mon gage perso":"✏️ My custom forfeit", "✏️ Ma récompense perso":"✏️ My custom reward", "Proposer":"Suggest", "perso":"custom",
+  "Écris le tien (max {a} car.) — réglé entre vous, l'application ne gère aucun argent.":"Write your own (max {a} chars) — settled between you, the app handles no money.",
+  "Texte vide — rien n'a été enregistré.":"Empty text — nothing was saved.",
+  "Gage personnalisé — réglé entre vous, hors application.":"Custom forfeit — settled between you, outside the app.",
+  "🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses). La récompense retenue sera celle qui recueille le <b>plus de votes</b>.":"🔒 Others' votes stay hidden until everyone has confirmed (results in the backstage). The chosen reward will be the one with the <b>most votes</b>.",
+  "🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses). 🏆 <b>C'est le gage du vainqueur qui sera infligé au dernier</b> — choisis bien le tien !":"🔒 Others' votes stay hidden until everyone has confirmed (results in the backstage). 🏆 <b>The winner's forfeit is the one the last-placed player will do</b> — choose yours wisely!",
+  "✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation, en plus des options tirées au sort.":"✏️ Each player can suggest <b>their own reward</b> at the preparation step, on top of the drawn options.",
+  "✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier.":"✏️ Each player can suggest <b>their own forfeit</b> at the preparation step. 🏆 The <b>winner's</b> forfeit is the one the last-placed player will do.",
   "Vote pour la récompense <b>et</b> mise sur les bonus — sans attendre les autres.":"Vote for the reward <b>and</b> bid on the bonuses — without waiting for the others.",
   "🏆 Récompense retenue":"🏆 Chosen reward", "pour le champion 🏆":"for the champion 🏆",
   "🏆 <b>Motivation express :</b> le champion repart avec sa récompense — une excellente raison de viser la <b>première</b> place !":"🏆 <b>Quick motivation:</b> the champion walks away with the reward — a great reason to aim for <b>first</b> place!",
@@ -800,15 +829,16 @@ function makeSchedule(n){ let arr=[...Array(n).keys()]; const rounds=[];
   const ret=rounds.map(rd=>rd.map(p=>[p[1],p[0]])); return [...rounds,...ret]; }
 
 /* ============ fixtures ============ */
-function genFixture(){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t); while(b===a) b=pick(s.t);
+function genFixture(maxKo){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t); while(b===a) b=pick(s.t);
   // Cotes COHÉRENTES : on part de probabilités qui somment à 100 %, + une marge bookmaker (~5-9 %), puis cote = 1/(p×marge).
   const M=rnd(1.05,1.09); const odd=p=>Math.max(1.05,+(1/(p*M)).toFixed(2));
-  // Horaire FICTIF : décalage (heures) après la clôture des paris — comme en réel, le match se joue après la deadline, dans les 24h.
-  const ko=+rnd(0.75,23).toFixed(2);
+  // Horaire FICTIF : décalage (heures) après la clôture des paris. Comme en réel, le match se joue APRÈS la deadline
+  // et dans le créneau de la formule (maxKo = 12h Fast / 24h Classique) → tous les matchs du jour sont groupés.
+  const ko=+rnd(0.75,Math.max(2,(maxKo||24)-1)).toFixed(2);
   if(s.draw){ const pd=rnd(0.22,0.30); let ph=rnd(0.22,0.55); let pa=1-ph-pd; if(pa<0.12){pa=0.12;ph=1-pd-pa;} if(ph<0.12){ph=0.12;pa=1-pd-ph;}
     return {sport:s.ic,draw:true,home:a,away:b,oh:odd(ph),od:odd(pd),oa:odd(pa),ko}; }
   const ph=rnd(0.30,0.70); return {sport:s.ic,draw:false,home:a,away:b,oh:odd(ph),oa:odd(1-ph),ko}; }
-function genPool(k){ return Array.from({length:k},genFixture); }
+function genPool(k,maxKo){ return Array.from({length:k},()=>genFixture(maxKo)); }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
 // Cote « double chance » : combinée de deux issues couvertes pour une seule mise.
 function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); } // (cote combinée « pondérée » — conservée pour référence, plus utilisée pour le gain)
@@ -885,7 +915,7 @@ async function ensureFixtures(){
       try{ const r=await q(db.from("duels").update({fixtures:fx}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} }
     return filled;
   }
-  for(const d of todo){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} }
+  for(const d of todo){ try{ const r=await q(db.from("duels").update({fixtures:genPool(5,leagueFormula().bet)}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} }
   return filled; }
 // L'IA mise dès que les 5 matchs sont connus (pour que ses pronos soient visibles pendant l'attente)
 async function ensureAiBets(){ let made=false;
@@ -898,8 +928,9 @@ async function ensureAiBets(){ let made=false;
 function shouldAutoResolve(){
   const dz=duels; if(!dz.length || dz.some(d=>!d.fixtures)) return false; // sélection pas finie
   if(dz.some(d=>(d.fixtures||[]).some(f=>f&&f.evId))) return false; // matchs réels → résolution sur vrais résultats (Étape 2)
-  // Résolution UNIQUEMENT à la clôture des pronos (les joueurs peuvent modifier jusque-là ; les pronos adverses restent cachés avant).
-  return deadlinePassed();
+  // Résolution UNIQUEMENT à la clôture des pronos (les joueurs peuvent modifier jusque-là ; les pronos adverses restent cachés avant)
+  // ET une fois les matchs fictifs « joués » — même déroulé qu'en réel (l'organisateur peut publier tout de suite si besoin).
+  return deadlinePassed() && simMatchesDone();
 }
 function me(){ return players.find(p=>p.id===S.myId); }
 function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId); }
@@ -1098,7 +1129,9 @@ function prepSummaryBody(){
         <div class="gauge" style="margin-top:4px"><i style="width:${Math.round(g.count/maxV*100)}%;${g.win?'background:var(--gold)':''}"></i></div></div>`).join("")}</div></div>`
    :`<h2>${t("🎭 L'enjeu du tournoi")}</h2>
    <div class="box"><div class="mini muted">${t("Le <b>gage</b> infligé au dernier sera celui choisi par le <b>vainqueur</b> 🏆. Selon qui gagne :")}</div>
-     ${(s.players||[]).filter(p=>!p.is_ai).map(p=>{const idx=(s.voteMap||{})[p.pid]; const opt=(s.options||[])[idx]; const it=opt?((opt.t)||opt):null; return `<div class="box row" style="margin-top:8px"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><div><div class="mini muted">${t("si {a} gagne",{a:esc(p.name)})}</div><b>${it?esc(t(it)):t("(pas de vote)")}</b></div></div></div>`;}).join("")}
+     ${(s.players||[]).filter(p=>!p.is_ai).map(p=>{const v=(s.voteMap||{})[p.pid]; let it=null, perso=false;
+        if(v==="c"){ it=(s.customs||{})[p.pid]||null; perso=!!it; } else { const opt=(s.options||[])[v]; it=opt?((opt.t)||opt):null; }
+        return `<div class="box row" style="margin-top:8px"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><div><div class="mini muted">${t("si {a} gagne",{a:esc(p.name)})}</div><b>${it?esc(t(it)):t("(pas de vote)")}</b>${perso?' <span class="tag">'+t("perso")+'</span>':''}</div></div></div>`;}).join("")}
      <div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`}
    <h2>${t("🃏 Enchères — bonus attribués")}</h2>
    ${(s.auction||[]).length? (s.auction||[]).map(a=>`<div class="box"><div class="row"><div class="row" style="gap:10px"><span class="sport" title="${esc(t(CARDS[a.card].d))}">${CARDS[a.card].e}</span>
@@ -1143,10 +1176,7 @@ function viewLobby(){
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎭 Enjeu de la ligue")}</h2>
     ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage voté par le groupe.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense votée par le groupe (aucun gage).")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
-    ${org?`<h2>${isReward()?t("🏆 Récompense personnalisée (optionnel)"):t("🎯 Gage personnalisé (optionnel)")}</h2>
-    <div class="box"><div class="mini muted">${isReward()?t("Ajoute ta propre récompense — elle sera proposée au vote. Ex. « les autres offrent une tournée au champion ». ⚠️ Réglé <b>entre vous</b> : l'application ne gère aucun argent."):t("Ajoute ton propre gage — il sera proposé au vote. Ex. « tout le monde doit 5 € au vainqueur ». ⚠️ Réglé <b>entre vous</b> : l'application ne gère aucun argent.")}</div>
-      ${getCustom()?`<div class="mini" style="margin-top:8px">« <b>${esc(getCustom())}</b> »</div>`:''}
-      <div class="row" style="gap:8px;margin-top:8px"><button class="btn ghost sm" onclick="editCustomGage()">${getCustom()?t("✏️ Modifier"):(isReward()?t("➕ Ajouter une récompense perso"):t("➕ Ajouter un gage perso"))}</button>${getCustom()?`<button class="btn ghost sm" onclick="clearCustomGage()">${t("Retirer")}</button>`:''}</div></div>`:''}
+    <div class="box mini muted">${isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation, en plus des options tirées au sort."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier.")}</div>
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?(t("Clôturer les inscriptions")+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 2 joueurs")}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
@@ -1159,17 +1189,12 @@ async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&
 async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode : "+e.message); } busy=false; }
-async function setCustomGage(txt){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
-  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.custom=(txt||"").trim().slice(0,CUSTOM_MAX); await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
-  catch(e){ showErr("Gage perso : "+e.message); } busy=false; }
 async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ await q(db.from("leagues").update({data_mode:m}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode données : "+e.message+" (ajoute la colonne 'data_mode')"); } busy=false; }
 async function setEnjeu(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.enjeu=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Enjeu : "+e.message); } busy=false; }
-function editCustomGage(){ const rew=isReward(); const v=prompt(t(rew?"Ta récompense personnalisée (max {a} car., réglée entre vous) :":"Ton gage personnalisé (max {a} car., réglé entre vous) :",{a:CUSTOM_MAX}), getCustom()||""); if(v!=null) setCustomGage(v); }
-function clearCustomGage(){ if(confirm(t(isReward()?"Retirer la récompense personnalisée ?":"Retirer le gage personnalisé ?"))) setCustomGage(""); }
 async function kickPlayer(pid){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
   const p=players.find(x=>x.id===pid)||{}; if(!confirm(t("Retirer {a} du tournoi ?",{a:(p.name||"ce joueur")})))return;
   busy=true; try{ await q(db.from("players").delete().eq("id",pid).eq("league_id",L.id)); await refresh(); }
@@ -1194,11 +1219,11 @@ async function closeRegistration(){
     const n=ps.length; const sched=makeSchedule(n); const rows=[];
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
-    const mode=getMode(); const enjeu=getEnjeu(); const custom=getCustom();
+    const mode=getMode(); const enjeu=getEnjeu();
     const pool=itemPool(enjeu,mode); for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];}
     const nOpt=(mode==="simple")?3:5;
     const options=pool.slice(0,Math.min(nOpt,pool.length));
-    if(custom&&custom.trim()) options.unshift({t:custom.trim(), d:(enjeu==="reward"?"Récompense personnalisée — réglée entre vous, hors application.":"Gage personnalisé — réglé entre vous, hors application."), custom:true});
+    // (Plus de gage perso imposé par l'organisateur : chaque joueur propose le sien à la préparation.)
     // l'IA fait sa prépa (vote + enchères) tout de suite
     const votes={},voteTs={},bids={},bidTs={};
     for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length, mode, options.length); votes[p.id]=ap.vote; voteTs[p.id]=Date.now(); bids[p.id]=ap.bids; bidTs[p.id]=Date.now(); await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
@@ -1214,7 +1239,8 @@ function aiPrep(nDays, mode, optCount){ const ids=modeCards(mode||"complet").sli
 
 /* ============ PRÉPARATION (vote + enchères bonus) ============ */
 let bidL={};
-function prepState(){ try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.options)) return {options:o.options,votes:o.votes||{},voteTs:o.voteTs||{},deadline:o.deadline,bids:o.bids||{},bidTs:o.bidTs||{}}; }catch(e){} return {options:[],votes:{},voteTs:{},bids:{},bidTs:{}}; }
+// votes[pid] = index d'une option (nombre) OU "c" = « mon gage perso » (texte dans customs[pid]).
+function prepState(){ try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.options)) return {options:o.options,votes:o.votes||{},voteTs:o.voteTs||{},deadline:o.deadline,bids:o.bids||{},bidTs:o.bidTs||{},customs:o.customs||{}}; }catch(e){} return {options:[],votes:{},voteTs:{},bids:{},bidTs:{},customs:{}}; }
 function fmtLeft(dl){ if(!dl) return ""; const ms=new Date(dl).getTime()-Date.now(); if(ms<=0) return "délai écoulé"; const h=Math.floor(ms/3600000),m=Math.floor((ms%3600000)/60000); return h>0?(h+"h "+m+"min"):(m+"min"); }
 function viewPrep(){
   const st=prepState(); const options=st.options, votes=st.votes; const myVote=votes[S.myId];
@@ -1239,10 +1265,13 @@ function viewPrep(){
    <h2>${t("👥 Joueurs de la ligue · {a}",{a:players.filter(p=>!p.is_ai).length})}</h2>
    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("en cours")}</span></div>`).join("")}
    <h2>${isReward()?t("🏆 Vote de la récompense"):t("🎭 Vote du gage")}</h2>
-   <div class="mini muted" style="margin:-4px 0 6px">${t("🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).")}</div>
+   <div class="mini muted" style="margin:-4px 0 6px">${isReward()?t("🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses). La récompense retenue sera celle qui recueille le <b>plus de votes</b>."):t("🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses). 🏆 <b>C'est le gage du vainqueur qui sera infligé au dernier</b> — choisis bien le tien !")}</div>
    ${options.map((g,i)=>`<div class="box" onclick="prepVote(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
       <div class="row"><b>${esc(t(g.t||g))}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?t("✓ ton vote"):t("Voter")}</span></div>
       ${g.d?`<div class="mini muted" style="margin-top:5px">${esc(t(g.d))}</div>`:''}</div>`).join("")}
+   ${(()=>{const mine=(st.customs||{})[S.myId]||''; const on=(myVote==="c"); return `<div class="box" onclick="prepVoteCustom()" style="cursor:pointer;${on?'border-color:var(--green)':''}">
+      <div class="row"><b>${isReward()?t("✏️ Ma récompense perso"):t("✏️ Mon gage perso")}</b><span class="chip ${on?'g':''}">${on?t("✓ ton vote"):(mine?t("✏️ Modifier"):t("Proposer"))}</span></div>
+      <div class="mini muted" style="margin-top:5px">${mine?'« '+esc(mine)+' »':t("Écris le tien (max {a} car.) — réglé entre vous, l'application ne gère aucun argent.",{a:CUSTOM_MAX})}</div></div>`;})()}
    <h2>${t("🃏 Enchères bonus")}</h2>
    <div class="box"><div class="mini muted">${t("Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.",{a:SHOP_CAP,b:maxCards})}</div>
      <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
@@ -1261,6 +1290,16 @@ async function prepVote(i){ if(busy)return; busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
     st.votes=st.votes||{}; st.votes[S.myId]=i; st.voteTs=st.voteTs||{}; st.voteTs[S.myId]=Date.now(); await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
   }catch(e){ showErr("Vote : "+e.message); } busy=false; }
+// Chacun peut proposer SON gage/récompense perso : il devient son vote (« c »). En mode gage, il s'appliquera s'il gagne.
+async function prepVoteCustom(){ if(busy)return; const rew=isReward();
+  const cur=(prepState().customs||{})[S.myId]||"";
+  const v=prompt(t(rew?"Ta récompense personnalisée (max {a} car., réglée entre vous) :":"Ton gage personnalisé (max {a} car., réglé entre vous) :",{a:CUSTOM_MAX}), cur);
+  if(v==null) return; const txt=(v||"").trim().slice(0,CUSTOM_MAX); if(!txt){ toast(t("Texte vide — rien n'a été enregistré.")); return; }
+  busy=true;
+  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
+    st.customs=st.customs||{}; st.customs[S.myId]=txt; st.votes=st.votes||{}; st.votes[S.myId]="c"; st.voteTs=st.voteTs||{}; st.voteTs[S.myId]=Date.now();
+    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
+  }catch(e){ showErr("Gage perso : "+e.message); } busy=false; }
 async function savePrep(){ if(busy)return; const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1);
   if(tot>SHOP_CAP||cnt>maxCards) return; busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
@@ -1276,7 +1315,7 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
     const claim=await q(db.from("leagues").update({status:"starting"}).eq("id",L.id).eq("status","prep").select("*"));
     if(!claim||!claim.length){ resolving=false; await refresh(); return; }
     const fresh=claim[0];
-    let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} const options=(st&&st.options)||[]; const votes=(st&&st.votes)||{}; const voteTs=(st&&st.voteTs)||{}; const bids=(st&&st.bids)||{}; const bidTs=(st&&st.bidTs)||{}; const enjeu=(st&&st.enjeu)||"gage"; const POOL=(enjeu==="reward")?REWARDS:GAGES;
+    let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} const options=(st&&st.options)||[]; const votes=(st&&st.votes)||{}; const voteTs=(st&&st.voteTs)||{}; const bids=(st&&st.bids)||{}; const bidTs=(st&&st.bidTs)||{}; const enjeu=(st&&st.enjeu)||"gage"; const POOL=(enjeu==="reward")?REWARDS:GAGES; const customs=(st&&st.customs)||{};
     // gage gagnant — égalité : le PREMIER à avoir voté l'option l'emporte
     let gage="", winIdx=-1;
     if(options.length){ const counts=options.map((_,i)=>Object.values(votes).filter(v=>v===i).length); const mx=Math.max(0,...counts);
@@ -1293,7 +1332,7 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
     for(const p of ps){ await q(db.from("players").update({hand:won[p.id],capital:Math.max(0,100-paid[p.id]),shop_done:true}).eq("id",p.id)); }
     // récap de préparation (affiché avant le coup d'envoi)
     const summary={ gage, enjeu, gageDesc:(options[winIdx]&&options[winIdx].d)||gageDescOf(gage),
-      options: options.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})), voteMap: votes, // pour l'enjeu « façon championnat » (choix du 1er/dernier appliqué à la fin)
+      options: options.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})), voteMap: votes, customs, // pour l'enjeu « façon championnat » (choix du 1er appliqué à la fin) + gages perso de chacun
       gageVotes: options.map((o,i)=>({t:(o&&o.t)||o, d:(o&&o.d)||'', count:Object.values(votes).filter(v=>v===i).length, win:i===winIdx})),
       auction,
       players: ps.map(p=>({pid:p.id,name:p.name,emoji:p.emoji,is_ai:!!p.is_ai,spent:paid[p.id],capital:Math.max(0,100-paid[p.id]),hand:won[p.id]})) };
@@ -1334,7 +1373,7 @@ async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
   selLoading=false; render(); }
 function viewSelect(d,dayLbl,opp){
   const real=(L.data_mode==="real");
-  if(!selPool && !selLoading){ if(real){ loadRealPool(); } else { selPool=genPool(9); selChosen=[]; } }
+  if(!selPool && !selLoading){ if(real){ loadRealPool(); } else { selPool=genPool(9,leagueFormula().bet); selChosen=[]; } }
   if(real && (selLoading || !selPool)) return `${quickBar('')}<div class="box">${t("⏳ Chargement des vrais matchs à venir…")}</div>`;
   if(real && selPool.length<5) return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
      <div class="mini muted" style="margin-top:8px">${t("Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.")}</div>
@@ -1442,6 +1481,14 @@ async function forceCloseBets(){ if(!(me()&&me().is_organizer)||busy)return;
   const f=leagueFormula(); const past=new Date(Date.now()-f.bet*3600000-60000).toISOString();
   try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
   catch(e){ showErr("Clôture : "+e.message); } busy=false; }
+// Organisateur (simulé) : publier les résultats sans attendre la fin des matchs fictifs.
+// On recule assez la deadline pour que tous les coups d'envoi (+2h de match) soient passés.
+async function forcePublishResults(){ if(!(me()&&me().is_organizer)||busy)return;
+  if(!confirm(t("Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.")))return; busy=true;
+  const f=leagueFormula(); const back=(2*(f.bet||24)+3)*3600000;
+  const past=new Date(Date.now()-back).toISOString();
+  try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
+  catch(e){ showErr("Publication : "+e.message); } busy=false; }
 
 /* --- waiting / resolve --- */
 function humansToSubmit(){ return players.filter(p=>!p.is_ai).filter(p=>!bets.find(b=>b.player_id===p.id)); }
@@ -1478,7 +1525,8 @@ function viewWait(dayLbl){
     ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${mySummary}${list}
     ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${aiSection}${publicBetsHTML()}`:''}
-    ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Pronos clôturés — résolution automatique en cours…")}</div>`:''}`;
+    ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
+    ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`:''}`;
 }
 function publicBetsHTML(){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
@@ -1561,7 +1609,7 @@ async function resolveDay(){
     const N=ps.length; const pmap={}; ps.forEach(p=>pmap[p.id]=p);
     const capStart={}; ps.forEach(p=>capStart[p.id]=p.capital);
     const PD={}; const aiInserts=[]; const forgot=new Set();
-    for(const d of dz){ let fx=d.fixtures||(fresh.data_mode==="real"?[]:genPool(5)); fx.forEach(f=>{if(!f.res&&!f.evId)f.res=simResult(f);}); d.fixtures=fx;
+    for(const d of dz){ let fx=d.fixtures||(fresh.data_mode==="real"?[]:genPool(5,leagueFormula().bet)); fx.forEach(f=>{if(!f.res&&!f.evId)f.res=simResult(f);}); d.fixtures=fx;
       for(const pid of [d.home_id,d.away_id]){ let bt=bz.find(b=>b.player_id===pid);
         const valid = bt && Array.isArray(bt.picks) && bt.picks.length===fx.length;
         if(!valid){
@@ -2005,7 +2053,7 @@ function closeLeague(){ showFinished=false; backToLeagues(); }
 function showLeagueInfo(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m)return; const lg=m.lg;
   const f=FORMULAS[lg.formula||'classique']||FORMULAS.classique;
-  let mode="complet", custom="", enjeu="gage"; try{ const o=JSON.parse(lg.gage); if(o){ if(o.mode)mode=o.mode; if(o.custom)custom=o.custom; if(o.enjeu)enjeu=o.enjeu; } }catch(e){}
+  let mode="complet", enjeu="gage"; try{ const o=JSON.parse(lg.gage); if(o){ if(o.mode)mode=o.mode; if(o.enjeu)enjeu=o.enjeu; } }catch(e){}
   if(lg.prep_summary&&lg.prep_summary.enjeu) enjeu=lg.prep_summary.enjeu; const rew=(enjeu==="reward");
   const real=(lg.data_mode==="real");
   const row=(lab,val)=>`<div class="box row" style="text-align:left"><b>${lab}</b><span class="chip" style="flex:0 0 auto">${val}</span></div>`;
@@ -2014,7 +2062,6 @@ function showLeagueInfo(lid){
     ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"))}
     ${row(t("🎭 Enjeu"), rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)"))}
     ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"))}
-    ${custom?`<div class="box" style="text-align:left"><b>${rew?t("🏆 Récompense personnalisée"):t("🎯 Gage personnalisé")}</b><div class="mini muted" style="margin-top:5px">« ${esc(custom)} »</div></div>`:''}
     ${(m.org&&lg.status!=="done")?`<div style="height:6px"></div><button class="btn ghost sm" style="border-color:var(--red);color:var(--red);width:100%" onclick="closeLeagueFromHome('${lg.id}')">${t("🛑 Fermer la ligue")}</button><div class="mini muted" style="margin-top:6px">${t("Archive la ligue dans « Ligues terminées ». Action irréversible.")}</div>`:''}`;
   infoModal("⚙️", t("Caractéristiques de la ligue"), body);
 }
@@ -2202,7 +2249,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.88";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.91";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
