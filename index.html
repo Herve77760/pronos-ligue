@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.01</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.04</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -482,6 +482,7 @@ const EN={
   "✅ Pronos clôturés — résolution automatique en cours…":"✅ Picks closed — automatic resolution under way…",
   "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
   "⏰ pronos non faits":"⏰ picks not submitted", "caché (IA)":"hidden (AI)", "ton duel":"your duel",
+  "Perte de capital ce jour-là : <b>{a}€</b>.":"Balance lost that day: <b>{a}€</b>.",
   "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
   "⏰ Trop tard — pronos non validés":"⏰ Too late — picks not submitted",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.":"You didn't submit your picks before the close: <b>no bet</b> counts for that day → <b>−2 pts</b> in the standings and <b>−25%</b> of your balance. You can still follow everyone else's bets below.",
@@ -1615,7 +1616,10 @@ function viewWait(dayLbl){
      <div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.")}</div></div>` : '';
   // (Ancien bloc « Pronos de l'IA » retiré : il affichait TOUS les joueurs IA, même ceux d'un autre duel,
   //  et faisait doublon avec « Paris de la journée (publics) » qui montre déjà chaque duel après la clôture.)
-  return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
+  return `${quickBar('')}<div class="box"><b>${dayLbl}</b>
+    ${(()=>{ if(!md) return ''; const iAmHome=md.home_id===S.myId; const opp=pById(iAmHome?md.away_id:md.home_id)||{};
+      return `<div class="row mini" style="margin-top:6px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+(opp.emoji?opp.emoji+' ':'')+esc(opp.name||'?')+'</b>'})}</span><span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>`; })()}
+    <div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
     ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${missingFx}${tooLate}${mySummary}${list}
     ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
@@ -1726,6 +1730,11 @@ async function resolveDay(){
         PD[pid]={picks:bt.picks.map(x=>({...x})),captain:bt.captain,card:bt.card||null,duelId:d.id,oppId:(pid===d.home_id?d.away_id:d.home_id),fx,rnd:Math.random()}; } }
     // résolution déterministe (moteur en phases), + impact réel de chaque carte
     const {dayNet,dayBest,dayWins}=runEngine(PD,capStart,dz,N);
+    // Pari non validé à temps : la sanction −25 % du capital EST la variation de capital du jour.
+    // On l'inscrit donc dans `net` (au lieu de l'appliquer à part sur le capital) → elle apparaît dans
+    // les résultats de la journée et dans la courbe de capital. Le capital reste identique :
+    // capStart + net = capStart − 25 % = capStart × 0,75.
+    forgot.forEach(pid=>{ dayNet[pid] = -Math.round((capStart[pid]||0)*0.25*100)/100; });
     const impacts={};
     for(const pid in PD){ if(PD[pid].card&&PD[pid].card.id){ const alt=JSON.parse(JSON.stringify(PD)); alt[pid].card=null;
       const wo=runEngine(alt,capStart,dz,N).dayNet; const opp=PD[pid].oppId;
@@ -1746,8 +1755,9 @@ async function resolveDay(){
     const upd={}; ps.forEach(p=>{ upd[p.id]={points:p.points,capital:Math.max(0,Math.round((capStart[p.id]+(dayNet[p.id]||0))*100)/100),
       streak_w:p.streak_w,streak_l:p.streak_l,duel_wins:p.duel_wins,best_day:Math.max(p.best_day,dayNet[p.id]||0),
       best_odd:Math.max(p.best_odd,dayBest[p.id]||0),hand:(p.hand||[]).slice(),cards_used:(p.cards_used||[]).slice()}; });
-    // Pari non validé à temps (humain) : aucun pari pris en compte → −2 pts au classement et −25 % du capital.
-    forgot.forEach(pid=>{ if(upd[pid]){ upd[pid].points-=2; upd[pid].capital=Math.max(0,Math.round(upd[pid].capital*0.75*100)/100); } });
+    // Pari non validé à temps (humain) : −2 pts au classement. Le −25 % de capital est DÉJÀ dans `net`
+    // (voir plus haut) → surtout ne pas le réappliquer ici, ce serait une double peine.
+    forgot.forEach(pid=>{ if(upd[pid]){ upd[pid].points-=2; } });
     // +1 au meilleur pronostiqueur du jour (plus gros gain parmi tous les joueurs)
     const starId=dayStar(ps.filter(p=>!forgot.has(p.id)).map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
     if(starId!=null) upd[starId].points+=1;
@@ -1782,7 +1792,6 @@ async function resolveDay(){
 function recapBody(D){
   const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
   const forgot=pid=>{ const b=bets.find(x=>x.player_id===pid); return !!(b&&Array.isArray(b.picks)&&b.picks.length===0); };
-  const ord=[...players].sort((a,b)=>(netMap[b.id]||0)-(netMap[a.id]||0));
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
     const H=Object.assign({net:netMap[d.home_id]||0}, gainMise(hb&&hb.picks, d.fixtures));
@@ -1792,6 +1801,9 @@ function recapBody(D){
   const starId=dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
   if(starId!=null) dpts[starId]+=1;
   players.forEach(p=>{ if(forgot(p.id)) dpts[p.id]-=2; }); // pénalité d'oubli : −2 pts (alignée sur resolveDay/classement)
+  // Classement de la journée : d'abord les POINTS du jour (duel + ⭐ − malus), puis le gain en cas d'égalité.
+  // (Calculé ici, une fois dpts complet — c'est ce qui compte pour le championnat, pas la cagnotte seule.)
+  const ord=[...players].sort((a,b)=>((dpts[b.id]||0)-(dpts[a.id]||0)) || ((netMap[b.id]||0)-(netMap[a.id]||0)));
   const fp=(recapFocus && players.find(p=>p.id===recapFocus))?recapFocus:S.myId; const isMe=fp===S.myId;
   const fpP=pById(fp)||{}; const fpName=isMe?"Toi":(fpP.name||"?");
   const meB=bets.find(b=>b.player_id===fp); const myD=duels.find(d=>d.home_id===fp||d.away_id===fp);
@@ -1936,7 +1948,7 @@ function showGainDetail(pid){
   const net=(bt&&bt.net)||0; const sel=(f,s)=> s==="1"?f.home:s==="2"?f.away:t("Nul");
   let rows='', sumG=0;
   const isForgot = bt && Array.isArray(bt.picks) && bt.picks.length===0;
-  if(isForgot){ rows=`<div class="mini">${t("⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>−2 pts</b> au classement et <b>−25 %</b> du capital.")}</div>`; }
+  if(isForgot){ rows=`<div class="mini">${t("⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>−2 pts</b> au classement et <b>−25 %</b> du capital.")}</div>${net<0?`<div class="mini" style="margin-top:6px">${t("Perte de capital ce jour-là : <b>{a}€</b>.",{a:fmt(net)})}</div>`:''}`; }
   else if(bt&&bt.picks&&d&&d.fixtures){
     const c=bt.card; const oppId=d.home_id===pid?d.away_id:d.home_id; const oppB=bets.find(b=>b.player_id===oppId); const oppCard=oppB&&oppB.card;
     rows=d.fixtures.map((f,i)=>{ const b=bt.picks[i]; if(!b) return '';
@@ -2010,8 +2022,12 @@ function computeStandHist(){
     // capital (+ net), meilleure journée, meilleure cote gagnée
     players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); const b=betAt[d+'|'+p.id]; const net=(b&&b.net)||0; if(st[p.id]){ st[p.id].best_day=Math.max(st[p.id].best_day,net); st[p.id].capital=Math.max(0,Math.round((st[p.id].capital+net)*100)/100); }
       if(b&&b.picks&&du&&du.fixtures){ b.picks.forEach((pk,i)=>{ const f=du.fixtures[i]; if(!f) return; const c=b.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===pk.sel||f.res===c.sel2):(pk.sel===f.res); const odd=isDC?dcWinOdd(f,pk.sel,c.sel2):oddOf(f,pk.sel); if(win&&odd>st[p.id].best_odd) st[p.id].best_odd=odd; }); } });
-    // pénalité oubli : −2 pts, −25 % capital
-    forgot.forEach(pid=>{ if(st[pid]){ st[pid].points-=2; st[pid].capital=Math.max(0,Math.round(st[pid].capital*0.75*100)/100); } });
+    // pénalité oubli : −2 pts. Le −25 % de capital est inclus dans `net` depuis la v4.03 (déjà appliqué
+    // par `capital += net` juste au-dessus) → on ne le réapplique QUE pour les anciennes journées (net=0),
+    // sinon ce serait une double peine à chaque rejeu de l'historique.
+    forgot.forEach(pid=>{ if(!st[pid]) return; st[pid].points-=2;
+      const bb=betAt[d+'|'+pid]; const penInNet=!!(bb && (bb.net||0)<0);
+      if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*0.75*100)/100); });
     // recapitalisation solidaire : si un humain < seuil → +montant à tout le monde
     const broke=players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
     if(broke.length){ players.forEach(p=>{ if(st[p.id]) st[p.id].capital+=RECAP_AMOUNT; }); }
@@ -2351,7 +2367,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.01";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.04";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
