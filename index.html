@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.00</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.01</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -481,7 +481,7 @@ const EN={
   "✅ Pronos clôturés — on attend les vrais résultats.":"✅ Picks closed — waiting for the real results.",
   "✅ Pronos clôturés — résolution automatique en cours…":"✅ Picks closed — automatic resolution under way…",
   "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
-  "⏰ pronos non faits":"⏰ picks not submitted", "caché (IA)":"hidden (AI)",
+  "⏰ pronos non faits":"⏰ picks not submitted", "caché (IA)":"hidden (AI)", "ton duel":"your duel",
   "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
   "⏰ Trop tard — pronos non validés":"⏰ Too late — picks not submitted",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.":"You didn't submit your picks before the close: <b>no bet</b> counts for that day → <b>−2 pts</b> in the standings and <b>−25%</b> of your balance. You can still follow everyone else's bets below.",
@@ -1624,10 +1624,14 @@ function viewWait(dayLbl){
 }
 function publicBetsHTML(){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
-  return duels.map(d=>{ const fx=d.fixtures||[]; if(!fx.length) return "";
+  const isMine=d=>(d.home_id===S.myId||d.away_id===S.myId);
+  // Ton duel d'abord : c'est celui qu'on vient voir. Les autres suivent dans l'ordre habituel (tri stable).
+  const ord=[...duels].sort((a,b)=>(isMine(a)?0:1)-(isMine(b)?0:1));
+  return ord.map(d=>{ const fx=d.fixtures||[]; if(!fx.length) return "";
     const parts=[d.home_id,d.away_id].map(pid=>[pid, bets.find(b=>b.player_id===pid)]);
     const nm=pid=> pid===S.myId?"toi":esc((pById(pid)||{}).name||"?");
-    return `<div class="box"><div class="mini muted" style="margin-bottom:6px">${nm(d.home_id)} vs ${nm(d.away_id)}</div>
+    const mien=isMine(d);
+    return `<div class="box"${mien?' style="border-color:var(--accent)"':''}><div class="mini muted" style="margin-bottom:6px">${nm(d.home_id)} vs ${nm(d.away_id)}${mien?' <span class="chip b">'+t("ton duel")+'</span>':''}</div>
       ${fx.map((f,i)=>`<div class="mini" style="margin:6px 0"><div class="row" style="gap:8px;justify-content:space-between"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>${koLabel(f)}</div>
         <div class="muted" style="margin-top:2px">${parts.map(([pid,bt])=>{ const hasBet=!!(bt&&bt.picks&&bt.picks.length&&bt.picks[i]);
           if(hasBet) return `${nm(pid)} : ${esc(selLabel(f,bt.picks[i].sel))} · ${bt.picks[i].stake}€`;
@@ -2347,7 +2351,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.00";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.01";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
