@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.91</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.93</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -465,7 +465,7 @@ const EN={
   "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
   "▶️ Publier les résultats maintenant (organisateur)":"▶️ Publish the results now (organizer)",
   "Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.":"Publish the results now? All (simulated) matches will be treated as played.",
-  "Clôturer les pronos maintenant ? Plus personne ne pourra modifier ; les pronos sont révélés et la journée est résolue.":"Close picks now? No one can edit anymore; picks are revealed and the day is resolved.",
+  "Clôturer les pronos maintenant ? Plus personne ne pourra modifier et les pronos de tout le monde seront révélés. Les résultats viendront ensuite (tu pourras les publier toi-même).":"Close picks now? No one can edit anymore and everyone's picks will be revealed. The results come next (you'll be able to publish them yourself).",
   "🎲 Les dés sont jetés — y'a plus qu'à prier pour les vrais résultats !":"🎲 The dice are cast — now just pray for the real results!",
   "🕯️ Pronos verrouillés… tu peux aller brûler un cierge.":"🕯️ Picks locked in… time to go light a candle.",
   "😬 On serre les fesses jusqu'au coup de sifflet final !":"😬 Clench tight until the final whistle!",
@@ -1439,7 +1439,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
 function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCard.target===i&&myCard.sel2===v) myCard.sel2=null; render(); }
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
   const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*(invest?0.7:0.5)*100)/100;
-  const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const t=$("tot"); if(t){t.textContent=eur(tot);
+  const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const totEl=$("tot"); if(totEl){totEl.textContent=eur(tot); // ⚠️ ne pas nommer cette variable `t` : ça masquerait la fonction de traduction t() utilisée plus bas
     const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
   const targetCard=myCard&&CARDS[myCard.id].t; const twoCard=myCard&&CARDS[myCard.id].two; const needTarget=targetCard&&(myCard.target==null||(twoCard&&myCard.target2==null));
   const needSel2=myCard&&myCard.id==="chance"&&myCard.target!=null&&!myCard.sel2;
@@ -1477,7 +1477,7 @@ function editBet(){ const mine=myBet(); if(!mine||deadlinePassed())return;
   myCard = mine.card? JSON.parse(JSON.stringify(mine.card)) : null; S.editingBet=true; render(); }
 // Organisateur : clôturer les pronos immédiatement (recule la deadline dans le passé) → verrouillage + révélation + résolution.
 async function forceCloseBets(){ if(!(me()&&me().is_organizer)||busy)return;
-  if(!confirm(t("Clôturer les pronos maintenant ? Plus personne ne pourra modifier ; les pronos sont révélés et la journée est résolue.")))return; busy=true;
+  if(!confirm(t("Clôturer les pronos maintenant ? Plus personne ne pourra modifier et les pronos de tout le monde seront révélés. Les résultats viendront ensuite (tu pourras les publier toi-même).")))return; busy=true;
   const f=leagueFormula(); const past=new Date(Date.now()-f.bet*3600000-60000).toISOString();
   try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
   catch(e){ showErr("Clôture : "+e.message); } busy=false; }
@@ -2249,7 +2249,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.91";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.93";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
