@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.93</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.95</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -231,14 +231,25 @@ function enjeuOutcome(){ const s=(L&&L.prep_summary)||{}; const opts=s.options||
   const ho=[...players].sort(cmp).filter(p=>!p.is_ai); const best=ho[0], worst=ho[ho.length-1];
   if(rew){ // RÉCOMPENSE : vote majoritaire (comme à l'origine), remise au champion (1er)
     const title=s.gage||(L&&L.gage)||''; return {chooser:null, target:best, title, desc:s.gageDesc||gageDescOf(title), rew:true, ok:!!best}; }
-  // GAGE : choisi par le 1er (vainqueur), infligé au dernier — son vote peut être son gage PERSO ("c")
-  const v=best?votes[best.id]:null;
-  if(best && v==="c" && (s.customs||{})[best.id]){
-    return {chooser:best, target:worst, title:s.customs[best.id], desc:t("Gage personnalisé — réglé entre vous, hors application."), rew:false, ok:!!worst}; }
-  let item=null; if(best && v!=null && opts[v]) item=opts[v];
-  if(!item && opts.length) item=opts[0];
-  const title=(item&&item.t)||s.gage||(L&&L.gage)||''; const desc=(item&&item.d)||gageDescOf(title);
-  return {chooser:best, target:worst, title, desc, rew:false, ok:!!(best&&worst)}; }
+  // GAGE (infligé au dernier) — cascade de choix :
+  //   1. le gage voté par le VAINQUEUR — option de la liste ou son gage perso "c" ;
+  //   2. sinon le gage STRICTEMENT majoritaire — une option devant toutes les autres ;
+  //   3. sinon — égalité, ou personne n'a voté — on descend le classement : 2e, 3e… jusqu'au premier votant ;
+  //   4. ultime repli : la 1re option.
+  const pickOf=p=>{ if(!p) return null; const v=votes[p.id];
+    if(v==="c" && (s.customs||{})[p.id]) return {title:s.customs[p.id], desc:t("Gage personnalisé — réglé entre vous, hors application."), chooser:p};
+    const o=(v!=null)?opts[v]:null; if(o) return {title:(o.t)||o, desc:o.d||'', chooser:p};
+    return null; };
+  let r=pickOf(best);
+  if(!r){ // le vainqueur n'a pas voté → gage majoritaire s'il est strict
+    const counts=opts.map((_,i)=>Object.values(votes).filter(x=>x===i).length);
+    const mx=Math.max(0,...counts); const top=counts.map((c,i)=>c===mx?i:-1).filter(i=>i>=0);
+    if(mx>0 && top.length===1){ const o=opts[top[0]]; r={title:(o.t)||o, desc:o.d||'', chooser:null}; }
+    else { for(let k=1;k<ho.length && !r;k++) r=pickOf(ho[k]); } // pas de majorité → 2e, 3e, …
+  }
+  if(!r && opts.length){ const o=opts[0]; r={title:(o.t)||o, desc:o.d||'', chooser:null}; }
+  if(!r) r={title:s.gage||(L&&L.gage)||'', desc:'', chooser:null};
+  return {chooser:r.chooser, target:worst, title:r.title, desc:r.desc||gageDescOf(r.title), rew:false, ok:!!worst}; }
 /* ===== DONNÉES RÉELLES (mode test) — The Odds API ===== */
 const ODDS_KEY="b03f55cb3edb5b6b0f1e7eefa73ec410"; // clé TEST (plan gratuit) — passera côté serveur en prod
 const ODDS_BASE="https://api.the-odds-api.com/v4";
@@ -463,6 +474,10 @@ const EN={
   "✅ Pronos clôturés — on attend les vrais résultats.":"✅ Picks closed — waiting for the real results.",
   "✅ Pronos clôturés — résolution automatique en cours…":"✅ Picks closed — automatic resolution under way…",
   "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
+  "⏰ pronos non faits":"⏰ picks not submitted", "caché (IA)":"hidden (AI)",
+  "déclaré forfait (pronos non faits)":"forfeited (picks not submitted)",
+  "🎭 Vote d'abord pour un gage":"🎭 Vote for a forfeit first", "🏆 Vote d'abord pour une récompense":"🏆 Vote for a reward first",
+  "Vote d'abord pour un gage.":"Vote for a forfeit first.", "Vote d'abord pour une récompense.":"Vote for a reward first.",
   "▶️ Publier les résultats maintenant (organisateur)":"▶️ Publish the results now (organizer)",
   "Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.":"Publish the results now? All (simulated) matches will be treated as played.",
   "Clôturer les pronos maintenant ? Plus personne ne pourra modifier et les pronos de tout le monde seront révélés. Les résultats viendront ensuite (tu pourras les publier toi-même).":"Close picks now? No one can edit anymore and everyone's picks will be revealed. The results come next (you'll be able to publish them yourself).",
@@ -770,8 +785,9 @@ function showDuelPtsInfo(pid){
   if(d){ const hb=bets.find(x=>x.player_id===d.home_id), ab=bets.find(x=>x.player_id===d.away_id);
     const H=Object.assign({net:(hb&&hb.net)||0},gainMise(hb&&hb.picks,d.fixtures));
     const A=Object.assign({net:(ab&&ab.net)||0},gainMise(ab&&ab.picks,d.fixtures));
-    const r=duelPts(H,A); const iAmHome=d.home_id===pid; const pts=iAmHome?r.h:r.a; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
-    const issue = r.win==null?t("fait match nul") : (((r.win==='h')===iAmHome)?t("gagné son duel"):t("perdu son duel"));
+    const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // pronos non validés à temps → forfait
+    const r=duelPtsF(H,A,fg(hb),fg(ab)); const iAmHome=d.home_id===pid; const pts=iAmHome?r.h:r.a; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
+    const issue = fg(iAmHome?hb:ab) ? t("déclaré forfait (pronos non faits)") : (r.win==null?t("fait match nul") : (((r.win==='h')===iAmHome)?t("gagné son duel"):t("perdu son duel")));
     ctx=`<div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:esc((p.emoji||'')+' '+(p.name||'?')),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+fmt(netMe)+'€</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}</div>`;
   }
   infoModal("🥇",t("Points du duel"), bareme+ctx);
@@ -856,6 +872,14 @@ function duelPts(h,a){ const R=x=>Math.round((+x||0)*100)/100;
   if(c>0) return {h:R(h.net)>0?3:1, a:R(a.net)>0?1:0, win:'h'};
   if(c<0) return {h:R(h.net)>0?1:0, a:R(a.net)>0?3:1, win:'a'};
   return {h:1,a:1,win:null}; }
+// Duel avec FORFAIT : un joueur qui n'a pas validé ses pronos à temps ne marque AUCUN point de duel
+// (sinon son net de 0 lui ferait « battre » un adversaire négatif) ; l'adversaire gagne le duel d'office.
+// Barème du vainqueur inchangé : 3 pts si son net est positif, 1 pt sinon.
+function duelPtsF(H,A,hForgot,aForgot){
+  if(hForgot&&aForgot) return {h:0,a:0,win:null};
+  if(hForgot) return {h:0, a:((+A.net||0)>0?3:1), win:'a'};
+  if(aForgot) return {h:((+H.net||0)>0?3:1), a:0, win:'h'};
+  return duelPts(H,A); }
 // Meilleur pronostiqueur du jour (un SEUL joueur de toute la ligue) : net, puis gain, puis mise, puis 1er inscrit.
 function dayStar(rows){ const R=x=>Math.round((+x||0)*100)/100; let best=null;
   for(const r of rows){ if(!best){ best=r; continue; }
@@ -1258,7 +1282,7 @@ function viewPrep(){
       <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">${t("✏️ Modifier ma préparation")}</button>`; }
   const ids=modeCards(getMode());
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
-  const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
+  const over=tot>SHOP_CAP, tooMany=cnt>maxCards; const noVote=(myVote==null); // le vote du gage/récompense est OBLIGATOIRE
   return `<div class="box"><h2 style="margin-top:0">${t("🎬 Préparation")}</h2>
      <div class="mini muted">${isReward()?t("Vote pour la récompense <b>et</b> mise sur les bonus — sans attendre les autres."):t("Vote pour le gage <b>et</b> mise sur les bonus — sans attendre les autres.")} ⏳ ${fmtLeft(st.deadline)}</div></div>
    ${howItWorksHTML()}
@@ -1278,14 +1302,16 @@ function viewPrep(){
      <div class="gauge ${over?'over':''}" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
-   <button class="btn" id="prepValidate" ${(over||tooMany)?'disabled':''} onclick="savePrep()">${over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →"))}</button>`;
+   <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(isReward()?t("🏆 Vote d'abord pour une récompense"):t("🎭 Vote d'abord pour un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>`;
 }
 function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else delete bidL[id];
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1); const over=tot>SHOP_CAP,tooMany=cnt>maxCards;
   const bt=$("bt"); if(bt){bt.textContent=Math.round(tot); bt.className=over?'red':'';}
   const bc=$("bc"); if(bc){bc.textContent=cnt; bc.className=tooMany?'red':'';}
   const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,tot/SHOP_CAP*100)+"%"; g.classList.toggle("over",over);}
-  const btn=$("prepValidate"); if(btn){ btn.disabled=over||tooMany; btn.textContent=over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")); } }
+  const noVote=(prepState().votes[S.myId]==null); // vote du gage/récompense obligatoire
+  const btn=$("prepValidate"); if(btn){ btn.disabled=over||tooMany||noVote;
+    btn.textContent=noVote?(isReward()?t("🏆 Vote d'abord pour une récompense"):t("🎭 Vote d'abord pour un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →"))); } }
 async function prepVote(i){ if(busy)return; busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
     st.votes=st.votes||{}; st.votes[S.myId]=i; st.voteTs=st.voteTs||{}; st.voteTs[S.myId]=Date.now(); await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
@@ -1300,7 +1326,9 @@ async function prepVoteCustom(){ if(busy)return; const rew=isReward();
     st.customs=st.customs||{}; st.customs[S.myId]=txt; st.votes=st.votes||{}; st.votes[S.myId]="c"; st.voteTs=st.voteTs||{}; st.voteTs[S.myId]=Date.now();
     await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
   }catch(e){ showErr("Gage perso : "+e.message); } busy=false; }
-async function savePrep(){ if(busy)return; const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1);
+async function savePrep(){ if(busy)return;
+  if(prepState().votes[S.myId]==null){ toast(t(isReward()?"Vote d'abord pour une récompense.":"Vote d'abord pour un gage.")); return; } // vote obligatoire (sécurité)
+  const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1);
   if(tot>SHOP_CAP||cnt>maxCards) return; busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
     st.bids=st.bids||{}; st.bidTs=st.bidTs||{}; st.bids[S.myId]=Object.assign({},bidL); if(st.bidTs[S.myId]==null) st.bidTs[S.myId]=Date.now();
@@ -1508,10 +1536,10 @@ const REAL_WAIT_MSGS=[
 function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; for(let i=0;i<id.length;i++) h=(h+id.charCodeAt(i))|0; return t(REAL_WAIT_MSGS[Math.abs(h)%REAL_WAIT_MSGS.length]); }
 function viewWait(dayLbl){
   const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
+  const betPassed = deadlinePassed(); const editable=!betPassed;
   const list=players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
     return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">IA</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div>
-      <span class="chip ${done?'g':''}">${done?t("✓ validé"):t("en cours")}</span></div>`;}).join("");
-  const betPassed = deadlinePassed(); const editable=!betPassed;
+      <span class="chip ${done?'g':(betPassed?'red':'')}">${done?t("✓ validé"):(betPassed?t("⏰ pronos non faits"):t("en cours"))}</span></div>`;}).join("");
   const mine=myBet(); const md=myDuel();
   const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">${editable?t("✅ Tes pronos (modifiables jusqu'à la clôture)"):t("🔒 Tes pronos (verrouillés)")}</div>
      ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${oddD}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
@@ -1535,7 +1563,9 @@ function publicBetsHTML(){
     const nm=pid=> pid===S.myId?"toi":esc((pById(pid)||{}).name||"?");
     return `<div class="box"><div class="mini muted" style="margin-bottom:6px">${nm(d.home_id)} vs ${nm(d.away_id)}</div>
       ${fx.map((f,i)=>`<div class="mini" style="margin:6px 0"><div class="row" style="gap:8px;justify-content:space-between"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>${koLabel(f)}</div>
-        <div class="muted" style="margin-top:2px">${parts.map(([pid,bt])=>`${nm(pid)} : ${bt&&bt.picks?esc(selLabel(f,bt.picks[i].sel))+' · '+bt.picks[i].stake+'€':'<i>caché (IA)</i>'}`).join(' &nbsp;·&nbsp; ')}</div></div>`).join("")}
+        <div class="muted" style="margin-top:2px">${parts.map(([pid,bt])=>{ const hasBet=!!(bt&&bt.picks&&bt.picks.length&&bt.picks[i]);
+          if(hasBet) return `${nm(pid)} : ${esc(selLabel(f,bt.picks[i].sel))} · ${bt.picks[i].stake}€`;
+          const pp=pById(pid)||{}; return `${nm(pid)} : ${pp.is_ai?'<i>'+t("caché (IA)")+'</i>':'<i class="red">'+t("⏰ pronos non faits")+'</i>'}`; }).join(' &nbsp;·&nbsp; ')}</div></div>`).join("")}
       </div>`;
   }).join("");
 }
@@ -1659,7 +1689,7 @@ async function resolveDay(){
     for(const d of dz){ const hp=PD[d.home_id], ap=PD[d.away_id]; if(!hp||!ap) continue;
       const H=Object.assign({net:dayNet[d.home_id]||0}, gainMise(hp.picks,hp.fx));
       const A=Object.assign({net:dayNet[d.away_id]||0}, gainMise(ap.picks,ap.fx));
-      const r=duelPts(H,A); upd[d.home_id].points+=r.h; upd[d.away_id].points+=r.a;
+      const r=duelPtsF(H,A,forgot.has(d.home_id),forgot.has(d.away_id)); upd[d.home_id].points+=r.h; upd[d.away_id].points+=r.a;
       if(r.win==='h'){ upd[d.home_id].duel_wins+=1; upd[d.home_id].streak_w+=1; upd[d.home_id].streak_l=0; upd[d.away_id].streak_l+=1; upd[d.away_id].streak_w=0; }
       else if(r.win==='a'){ upd[d.away_id].duel_wins+=1; upd[d.away_id].streak_w+=1; upd[d.away_id].streak_l=0; upd[d.home_id].streak_l+=1; upd[d.home_id].streak_w=0; }
       else { upd[d.home_id].streak_w=0; upd[d.home_id].streak_l=0; upd[d.away_id].streak_w=0; upd[d.away_id].streak_l=0; } }
@@ -1687,10 +1717,11 @@ function recapBody(D){
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
     const H=Object.assign({net:netMap[d.home_id]||0}, gainMise(hb&&hb.picks, d.fixtures));
     const A=Object.assign({net:netMap[d.away_id]||0}, gainMise(ab&&ab.picks, d.fixtures));
-    const r=duelPts(H,A); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a;
+    const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id)); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a;
     [d.home_id,d.away_id].forEach(pid=>{ const bb=bets.find(x=>x.player_id===pid); if(bb&&bb.picks&&bb.picks.length&&winCount(bb,d.fixtures)===0) dpts[pid]-=1; }); });
-  const starId=dayStar(players.map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
+  const starId=dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
   if(starId!=null) dpts[starId]+=1;
+  players.forEach(p=>{ if(forgot(p.id)) dpts[p.id]-=2; }); // pénalité d'oubli : −2 pts (alignée sur resolveDay/classement)
   const fp=(recapFocus && players.find(p=>p.id===recapFocus))?recapFocus:S.myId; const isMe=fp===S.myId;
   const fpP=pById(fp)||{}; const fpName=isMe?"Toi":(fpP.name||"?");
   const meB=bets.find(b=>b.player_id===fp); const myD=duels.find(d=>d.home_id===fp||d.away_id===fp);
@@ -1700,7 +1731,7 @@ function recapBody(D){
   if(myD){ const hb=bets.find(b=>b.player_id===myD.home_id), ab=bets.find(b=>b.player_id===myD.away_id);
     const H=Object.assign({net:netMap[myD.home_id]||0}, gainMise(hb&&hb.picks, myD.fixtures));
     const A=Object.assign({net:netMap[myD.away_id]||0}, gainMise(ab&&ab.picks, myD.fixtures));
-    const r=duelPts(H,A); const iAmHome=myD.home_id===fp; fpDuelPts=iAmHome?r.h:r.a;
+    const r=duelPtsF(H,A,forgot(myD.home_id),forgot(myD.away_id)); const iAmHome=myD.home_id===fp; fpDuelPts=iAmHome?r.h:r.a;
     fpOutcome = (r.win==null)?'tie':(((r.win==='h')===iAmHome)?'win':'loss'); }
   const won=fpOutcome==='win', tie=fpOutcome==='tie';
   const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
@@ -1896,7 +1927,7 @@ function computeStandHist(){
     dz.forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
       const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
       const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
-      const r=duelPts(H,A);
+      const r=duelPtsF(H,A,forgot.has(du.home_id),forgot.has(du.away_id));
       if(st[du.home_id]) st[du.home_id].points+=r.h; if(st[du.away_id]) st[du.away_id].points+=r.a;
       if(r.win==='h'){ if(st[du.home_id]){st[du.home_id].duel_wins++;st[du.home_id].streak_w++;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_l++;st[du.away_id].streak_w=0;} }
       else if(r.win==='a'){ if(st[du.away_id]){st[du.away_id].duel_wins++;st[du.away_id].streak_w++;st[du.away_id].streak_l=0;} if(st[du.home_id]){st[du.home_id].streak_l++;st[du.home_id].streak_w=0;} }
@@ -1994,7 +2025,8 @@ async function loadEndStats(){
       (duelByDay[d]||[]).forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
         const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
         const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
-        const r=duelPts(H,A); if(cumPts[du.home_id]!=null)cumPts[du.home_id]+=r.h; if(cumPts[du.away_id]!=null)cumPts[du.away_id]+=r.a; });
+        const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // forfait (pronos non validés)
+        const r=duelPtsF(H,A,fg(hb),fg(ab)); if(cumPts[du.home_id]!=null)cumPts[du.home_id]+=r.h; if(cumPts[du.away_id]!=null)cumPts[du.away_id]+=r.a; });
       const rows=players.map(p=>{ const b=betAt[d+'|'+p.id]; const du=(duelByDay[d]||[]).find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, du&&du.fixtures); return {id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; });
       const sid=dayStar(rows); if(sid!=null&&cumPts[sid]!=null)cumPts[sid]+=1;
       const ord=[...players].sort((a,b)=>(cumPts[b.id]-cumPts[a.id])||(b.capital-a.capital)); ord.forEach((p,idx)=>rankHist[p.id][d]=idx+1); leaderByDay.push(ord[0]?ord[0].id:null);
@@ -2249,7 +2281,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.93";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.95";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
