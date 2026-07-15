@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.97</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.99</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -179,9 +179,9 @@ const CARDS={
  dbl:      {e:"💥",n:"Coup Double",t:true, two:true, f:5, d:"Bonus GRATUIT (aucune mise, aucun risque) : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien."},
  miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, f:3, d:"Le meilleur pari gagnant des deux joueurs est échangé."},
  gourmand: {e:"🍽️",n:"Gourmand",t:false, f:3, d:"Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus)."},
- face:     {e:"😏",n:"Dans ta face",t:true, f:3, d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
+ face:     {e:"😏",n:"Dans ta face",t:true, oppT:true, f:3, d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
  serge:    {e:"💰",n:"Serge Benamou",t:false, f:2, retired:true, d:"(Bonus retiré du jeu.)"},
- cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:true, f:3, d:"Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement)."},
+ cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:true, oppT:true, f:3, d:"Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement)."},
  sniper:   {e:"🎯",n:"Sniper",t:true, f:3, d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
  invest:   {e:"📈",n:"Investisseur",t:false, f:4, d:"Plafond de mise porté à 70 % du capital ce jour."},
  roi:      {e:"💎",n:"Roi de la cote",t:false, f:2, d:"Un pari gagné à cote ≥ 2,00 → +5 % du capital de départ."},
@@ -236,9 +236,10 @@ function enjeuOutcome(){ const s=(L&&L.prep_summary)||{}; const opts=s.options||
   //   2. sinon le gage STRICTEMENT majoritaire — une option devant toutes les autres ;
   //   3. sinon — égalité, ou personne n'a voté — on descend le classement : 2e, 3e… jusqu'au premier votant ;
   //   4. ultime repli : la 1re option.
+  // `perso` = texte libre écrit par un joueur → ne doit JAMAIS passer par t() à l'affichage.
   const pickOf=p=>{ if(!p) return null; const v=votes[p.id];
-    if(v==="c" && (s.customs||{})[p.id]) return {title:s.customs[p.id], desc:t("Gage personnalisé — réglé entre vous, hors application."), chooser:p};
-    const o=(v!=null)?opts[v]:null; if(o) return {title:(o.t)||o, desc:o.d||'', chooser:p};
+    if(v==="c" && (s.customs||{})[p.id]) return {title:s.customs[p.id], desc:t("Gage personnalisé — réglé entre vous, hors application."), chooser:p, perso:true};
+    const o=(v!=null)?opts[v]:null; if(o) return {title:(o.t)||o, desc:o.d||'', chooser:p, perso:false};
     return null; };
   let r=pickOf(best);
   if(!r){ // le vainqueur n'a pas voté → gage majoritaire s'il est strict
@@ -249,7 +250,7 @@ function enjeuOutcome(){ const s=(L&&L.prep_summary)||{}; const opts=s.options||
   }
   if(!r && opts.length){ const o=opts[0]; r={title:(o.t)||o, desc:o.d||'', chooser:null}; }
   if(!r) r={title:s.gage||(L&&L.gage)||'', desc:'', chooser:null};
-  return {chooser:r.chooser, target:worst, title:r.title, desc:r.desc||gageDescOf(r.title), rew:false, ok:!!worst}; }
+  return {chooser:r.chooser, target:worst, title:r.title, desc:r.desc||gageDescOf(r.title), rew:false, perso:!!r.perso, ok:!!worst}; }
 /* ===== DONNÉES RÉELLES (mode test) — The Odds API ===== */
 const ODDS_KEY="b03f55cb3edb5b6b0f1e7eefa73ec410"; // clé TEST (plan gratuit) — passera côté serveur en prod
 const ODDS_BASE="https://api.the-odds-api.com/v4";
@@ -470,6 +471,10 @@ const EN={
   "✏️ Modifier mes pronos":"✏️ Edit my picks",
   "🔒 Clôturer les pronos maintenant (organisateur)":"🔒 Close picks now (organizer)",
   "🔒 Clôturer la préparation maintenant (organisateur)":"🔒 Close the preparation now (organizer)",
+  "🎲 Tirer les matchs manquants maintenant (organisateur)":"🎲 Draw the missing matches now (organizer)",
+  "Choisir les matchs à la place des retardataires ? Les duels sans matchs seront remplis automatiquement et les paris pourront commencer.":"Pick the matches on behalf of latecomers? Duels with no matches will be filled automatically and betting can start.",
+  "💡 Pas d'inquiétude : s'il ne choisit pas à temps, les matchs seront tirés automatiquement — et ta fenêtre de paris démarrera seulement à ce moment-là.":"💡 No worries: if they don't pick in time, the matches are drawn automatically — and your betting window only starts then.",
+  "⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).":"⏳ One duel doesn't have its 5 matches yet — the day can't resolve until the home player picks (or the selection deadline passes).",
   "Clôturer la préparation maintenant ? Les joueurs qui n'ont pas validé démarreront sans bonus, et leur vote ne sera pas pris en compte.":"Close the preparation now? Players who haven't confirmed will start with no bonuses, and their vote won't be counted.",
   "Les pronos des autres joueurs restent cachés jusqu'à la clôture.":"Other players' picks stay hidden until close.",
   "Clôture dans {a}":"Closes in {a}",
@@ -1178,7 +1183,8 @@ function prepSummaryBody(){
      ${(()=>{ const hs=(s.players||[]).filter(p=>!p.is_ai);
         const gOf=p=>{ const v=(s.voteMap||{})[p.pid]; if(v==="c") return {txt:(s.customs||{})[p.pid]||null, perso:true};
           const o=(s.options||[])[v]; return {txt:o?((o.t)||o):null, perso:false}; };
-        const lbl=g=>`${g.txt?'<b>'+esc(t(g.txt))+'</b>':'<span class="muted">'+t("(pas de vote)")+'</span>'}${g.perso?' <span class="tag">'+t("perso")+'</span>':''}`;
+        // NB : le texte perso d'un joueur ne passe PAS par t() — c'est du texte libre, pas une clé de traduction.
+        const lbl=g=>`${g.txt?'<b>'+esc(g.perso?g.txt:t(g.txt))+'</b>':'<span class="muted">'+t("(pas de vote)")+'</span>'}${g.perso?' <span class="tag">'+t("perso")+'</span>':''}`;
         // Grande ligue : format tableau compact (sinon ça fait une avalanche de blocs).
         if(hs.length>5) return `<div style="overflow-x:auto;margin-top:8px"><table>
           <tr><th>${t("Si… gagne")}</th><th>${t("Gage infligé au dernier")}</th></tr>
@@ -1415,7 +1421,9 @@ function viewDay(){
   if(!d) return `${quickBar('')}<div class="box">${dayLbl}<br><span class="muted mini">${t("Aucun duel (repos).")}</span></div>`;
   const iAmHome=d.home_id===S.myId; const opp=pById(iAmHome?d.away_id:d.home_id);
   if(!d.fixtures){ if(iAmHome) return viewSelect(d,dayLbl,opp);
-    return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("En attente que {a} (à domicile) choisisse les 5 matchs…",{a:'<b>'+esc(opp.name)+'</b>'})}</div>${selLineHTML()}</div>`; }
+    return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("En attente que {a} (à domicile) choisisse les 5 matchs…",{a:'<b>'+esc(opp.name)+'</b>'})}</div>${selLineHTML()}
+      <div class="mini muted" style="margin-top:8px">${t("💡 Pas d'inquiétude : s'il ne choisit pas à temps, les matchs seront tirés automatiquement — et ta fenêtre de paris démarrera seulement à ce moment-là.")}</div>
+      ${(me()&&me().is_organizer)?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button>`:''}</div>`; }
   // Après la clôture, plus AUCUN accès à la saisie — même pour qui n'a jamais parié (sinon il pourrait miser en retard).
   if(!deadlinePassed() && (!myBet() || S.editingBet)) return viewBet(d,dayLbl,opp,iAmHome);
   return viewWait(dayLbl);
@@ -1474,9 +1482,10 @@ function viewBet(d,dayLbl,opp,iAmHome){
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const pct=Math.min(100,max>0?tot/max*100:0); const over=tot>max+0.001;
   const targetCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].t;
   const twoCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].two; // Coup Double : 2 cibles
+  const oppCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].oppT; // vise le pari ADVERSE → aucun cumul avec ton Capitaine
   const needTarget = targetCard && (myCard.target==null || (twoCard && myCard.target2==null));
   const needSel2 = myCard && myCard.id==="chance" && myCard.target!=null && !myCard.sel2;
-  const conflict = targetCard && !twoCard && myCard.target!=null && myCard.target===bet.captain; // Coup Double : Capitaine autorisé
+  const conflict = targetCard && !twoCard && !oppCard && myCard.target!=null && myCard.target===bet.captain; // Coup Double / cartes anti-adversaire : Capitaine autorisé
   const allMin = bet.picks.every(b=>(+b.stake||0)>=1);
   const risky = bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > cap+0.001; // règle A
   const ok = allMin && !over && !risky && bet.captain>=0 && !needTarget && !needSel2 && !conflict;
@@ -1510,14 +1519,17 @@ function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
   const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*(invest?0.7:0.5)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const totEl=$("tot"); if(totEl){totEl.textContent=eur(tot); // ⚠️ ne pas nommer cette variable `t` : ça masquerait la fonction de traduction t() utilisée plus bas
     const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
-  const targetCard=myCard&&CARDS[myCard.id].t; const twoCard=myCard&&CARDS[myCard.id].two; const needTarget=targetCard&&(myCard.target==null||(twoCard&&myCard.target2==null));
+  const targetCard=myCard&&CARDS[myCard.id].t; const twoCard=myCard&&CARDS[myCard.id].two; const oppCard=myCard&&CARDS[myCard.id].oppT;
+  const needTarget=targetCard&&(myCard.target==null||(twoCard&&myCard.target2==null));
   const needSel2=myCard&&myCard.id==="chance"&&myCard.target!=null&&!myCard.sel2;
-  const conflict=targetCard&&!twoCard&&myCard.target!=null&&myCard.target===bet.captain;
+  const conflict=targetCard&&!twoCard&&!oppCard&&myCard.target!=null&&myCard.target===bet.captain;
   const btn=$("betSubmit");
   if(btn){ const over=tot>max+0.001; const allMin=bet.picks.every(b=>(+b.stake||0)>=1); const risky=bet.captain>=0&&worstLoss(bet.picks,bet.captain,myCard)>(meP.capital)+0.001; const ok=allMin&&!over&&!risky&&bet.captain>=0&&!needTarget&&!needSel2&&!conflict; btn.disabled=!ok;
     btn.textContent = bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →"))))))); }
 }
-function setCap(i){ const on=bet.captain!==i; if(on && myCard && CARDS[myCard.id] && CARDS[myCard.id].t && !CARDS[myCard.id].two && myCard.target===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; } bet.captain=bet.captain===i?-1:i; render(); }
+function setCap(i){ const C=(myCard&&CARDS[myCard.id])||{}; const on=bet.captain!==i;
+  if(on && myCard && C.t && !C.two && !C.oppT && myCard.target===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; }
+  bet.captain=bet.captain===i?-1:i; render(); }
 function setTarget(i){ if(!myCard) return;
   if(CARDS[myCard.id]&&CARDS[myCard.id].two){ // Coup Double : bascule parmi 2 cibles max (Capitaine autorisé)
     if(myCard.target===i){ myCard.target=(myCard.target2!=null?myCard.target2:null); myCard.target2=null; }
@@ -1526,7 +1538,7 @@ function setTarget(i){ if(!myCard) return;
     else if(myCard.target2==null){ myCard.target2=i; }
     else { myCard.target2=i; }
     render(); return; }
-  if(bet.captain===i){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; }
+  if(bet.captain===i && !(CARDS[myCard.id]&&CARDS[myCard.id].oppT)){ toast(t("Capitaine et bonus doivent être sur des matchs différents.")); return; } // les cartes qui visent l'adversaire peuvent partager le match du Capitaine
   if(myCard.id==="chance"){ const d=myDuel(); const f=d&&d.fixtures&&d.fixtures[i]; if(!f||!f.draw) return; } myCard.target=i; if(myCard.id==="chance") myCard.sel2=null; render(); }
 function setSel2(i,v){ if(!myCard||myCard.id!=="chance"||myCard.target!==i) return; if(bet.picks[i].sel===v) return; myCard.sel2=v; render(); }
 function selCard(id){ if(myCard&&myCard.id===id){ myCard=null; } else { myCard={id, target:null}; } render(); }
@@ -1552,6 +1564,14 @@ async function forceCloseBets(){ if(!(me()&&me().is_organizer)||busy)return;
   const f=leagueFormula(); const past=new Date(Date.now()-f.bet*3600000-60000).toISOString();
   try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
   catch(e){ showErr("Clôture : "+e.message); } busy=false; }
+// Organisateur : forcer la fin de la SÉLECTION des matchs. On recule `day_started_at` juste au-delà de
+// l'échéance de sélection → ensureFixtures remplit les duels en attente. La fenêtre de paris démarre
+// ensuite normalement (bet_started_at posé quand tous les matchs sont choisis) : personne n'est lésé.
+async function forceSelectEnd(){ if(!(me()&&me().is_organizer)||busy)return;
+  if(!confirm(t("Choisir les matchs à la place des retardataires ? Les duels sans matchs seront remplis automatiquement et les paris pourront commencer.")))return; busy=true;
+  const f=leagueFormula(); const past=new Date(Date.now()-f.sel*3600000-60000).toISOString();
+  try{ await q(db.from("leagues").update({day_started_at:past}).eq("id",L.id)); L.day_started_at=past; await refresh(); }
+  catch(e){ showErr("Sélection : "+e.message); } busy=false; }
 // Organisateur (simulé) : publier les résultats sans attendre la fin des matchs fictifs.
 // On recule assez la deadline pour que tous les coups d'envoi (+2h de match) soient passés.
 async function forcePublishResults(){ if(!(me()&&me().is_organizer)||busy)return;
@@ -1588,6 +1608,9 @@ function viewWait(dayLbl){
      ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${oddD}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
      ${mine.card&&mine.card.id?`<div class="mini" style="margin-top:6px">${t("🃏 Bonus joué :")} <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</span> <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:`<div class="mini muted" style="margin-top:6px">${t("Aucun bonus joué ce jour.")}</div>`}</div>` : '';
   // Joueur qui n'a pas validé ses pronos avant la clôture : plus d'accès à la saisie, on l'informe clairement.
+  // Un autre duel n'a pas encore ses matchs → la journée ne peut pas se résoudre. L'orga peut débloquer.
+  const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}
+     <div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
   const tooLate = (!mine && betPassed) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b>
      <div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.")}</div></div>` : '';
   const aiSection = players.filter(p=>p.is_ai).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const fx=d&&d.fixtures;
@@ -1596,7 +1619,7 @@ function viewWait(dayLbl){
       ${fx.map((f,i)=>{const bp=b.picks[i]; if(!bp)return ''; const sel=bp.sel==="1"?f.home:bp.sel==="2"?f.away:t("Nul"); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${esc(sel)}</b> · ${bp.stake}€${i===b.captain?' 👑':''}</div>`;}).join("")}
       <div class="mini muted" style="margin-top:4px">${t("🃏 bonus caché jusqu'aux résultats")}</div></div>`;}).join("");
   return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
-    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${tooLate}${mySummary}${list}
+    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${missingFx}${tooLate}${mySummary}${list}
     ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${aiSection}${publicBetsHTML()}`:''}
     ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
@@ -2026,7 +2049,7 @@ function viewStandings(){
         <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     ${capChart()}
     ${(hand.length||used.length)?`<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div></div>`:''}
-    ${(()=>{const eo=enjeuOutcome(); if(!eo.ok) return ''; return `<div class="box mini"><span class="muted">${eo.rew?t("🏆 Récompense (au premier) :"):t("🎭 Gage projeté (au dernier) :")}</span> <b>${esc(t(eo.title))}</b> → ${eo.target.emoji} ${esc(eo.target.name)}${(!eo.rew&&eo.chooser)?' <span class="mini muted">'+t("(choix de {a})",{a:esc(eo.chooser.name)})+'</span>':''}</div>`;})()}`;
+    ${(()=>{const eo=enjeuOutcome(); if(!eo.ok) return ''; return `<div class="box mini"><span class="muted">${eo.rew?t("🏆 Récompense (au premier) :"):t("🎭 Gage projeté (au dernier) :")}</span> <b>${esc(eo.perso?eo.title:t(eo.title))}</b> → ${eo.target.emoji} ${esc(eo.target.name)}${(!eo.rew&&eo.chooser)?' <span class="mini muted">'+t("(choix de {a})",{a:esc(eo.chooser.name)})+'</span>':''}</div>`;})()}`;
 }
 
 /* ============ END ============ */
@@ -2118,7 +2141,7 @@ function viewEnd(){
            ${(p.cards_used||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}
            ${(p.hand||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
    ${(()=>{const eo=enjeuOutcome(); if(!eo.ok) return ''; const rew=eo.rew; return `<div class="box" style="border-color:${rew?'#3d5a2b':'#5a2b2b'}"><div class="row"><b class="${rew?'gold':'red'}">${rew?t("🏆 Récompense"):t("🎭 Gage")}</b><span class="chip ${rew?'gold':'red'}">${eo.target.emoji} ${esc(eo.target.name)}</span></div>
-     <div class="mini muted" style="margin-top:6px">${rew?t("{name} remporte : <b>{item}</b>.",{name:esc(eo.target.name),item:esc(t(eo.title))}):t("{name} doit réaliser : <b>{gage}</b>.",{name:esc(eo.target.name),gage:esc(t(eo.title))})}${(!rew&&eo.chooser)?' <span class="mini muted">'+t("(choisi par {a} 🏆)",{a:esc(eo.chooser.name)})+'</span>':''}</div></div>`;})()}
+     <div class="mini muted" style="margin-top:6px">${rew?t("{name} remporte : <b>{item}</b>.",{name:esc(eo.target.name),item:esc(eo.perso?eo.title:t(eo.title))}):t("{name} doit réaliser : <b>{gage}</b>.",{name:esc(eo.target.name),gage:esc(eo.perso?eo.title:t(eo.title))})}${(!rew&&eo.chooser)?' <span class="mini muted">'+t("(choisi par {a} 🏆)",{a:esc(eo.chooser.name)})+'</span>':''}</div></div>`;})()}
    ${(me()&&me().is_organizer)?`<button class="btn" onclick="relaunchLeague()">${t("🔁 Relancer une compétition avec les mêmes joueurs")}</button>
      <div class="mini muted" style="text-align:center;margin:6px 0 12px">${t("Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.")}</div>`:''}
    <button class="btn ghost" onclick="goStandings()">${t("📊 Classement détaillé (séries, bonus)")}</button><div style="height:8px"></div>
@@ -2327,7 +2350,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.97";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.99";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
