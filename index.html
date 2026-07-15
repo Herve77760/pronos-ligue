@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v3.99</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.00</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -1613,15 +1613,12 @@ function viewWait(dayLbl){
      <div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
   const tooLate = (!mine && betPassed) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b>
      <div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.")}</div></div>` : '';
-  const aiSection = players.filter(p=>p.is_ai).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const fx=d&&d.fixtures;
-    if(!b||!b.picks||!fx) return '';
-    return `<div class="box"><div class="mini muted" style="margin-bottom:4px">${t("🤖 Pronos de {a}",{a:'<b>'+esc(p.name)+'</b>'})} <span class="mini">${t("(l'IA a déjà misé)")}</span></div>
-      ${fx.map((f,i)=>{const bp=b.picks[i]; if(!bp)return ''; const sel=bp.sel==="1"?f.home:bp.sel==="2"?f.away:t("Nul"); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${esc(sel)}</b> · ${bp.stake}€${i===b.captain?' 👑':''}</div>`;}).join("")}
-      <div class="mini muted" style="margin-top:4px">${t("🃏 bonus caché jusqu'aux résultats")}</div></div>`;}).join("");
+  // (Ancien bloc « Pronos de l'IA » retiré : il affichait TOUS les joueurs IA, même ceux d'un autre duel,
+  //  et faisait doublon avec « Paris de la journée (publics) » qui montre déjà chaque duel après la clôture.)
   return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
     ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${missingFx}${tooLate}${mySummary}${list}
     ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
-    ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${aiSection}${publicBetsHTML()}`:''}
+    ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
     ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
     ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`:''}`;
 }
@@ -2350,7 +2347,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v3.99";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.00";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
