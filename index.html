@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.09</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.10</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -405,6 +405,7 @@ let lang=(()=>{ try{ return localStorage.getItem("pl_lang")||"fr"; }catch(e){ re
 const EN={
   // En-tête / navigation
   "← Mes ligues":"← My leagues", "📖 Règles":"📖 Rules", "Déconnexion":"Log out",
+  "Les pronostics font gagner les <b>matchs</b>,<br>la stratégie fait gagner le <b>championnat</b>.":"Picks win you the <b>matches</b>,<br>strategy wins you the <b>championship</b>.",
   "Connexion":"Login", "Mes ligues":"My leagues", "Préparation":"Preparation", "Terminé":"Finished",
   "Coulisses : gage & enchères d'ouverture":"Behind the scenes: forfeit & opening auction",
   // Pied de page
@@ -987,7 +988,12 @@ function pById(id){ return players.find(p=>p.id===id); }
 
 /* ============ AUTH ============ */
 function viewAuth(){
-  return `<div class="box"><h2 style="margin-top:0">${t("Connexion")}</h2>
+  // Le slogan vit sur l'écran de connexion : c'est la vitrine, la 1re page qu'un nouveau joueur voit.
+  // (Pas dans #subtitle : cette ligne sert de fil d'Ariane dynamique — « Connexion », « Journée 3/10 » —
+  //  et vit dans une barre flex avec les boutons, où 79 caractères casseraient la mise en page.)
+  return `<div class="box">
+    <div class="mini" style="text-align:center;font-style:italic;line-height:1.6;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)">${t("Les pronostics font gagner les <b>matchs</b>,<br>la stratégie fait gagner le <b>championnat</b>.")}</div>
+    <h2 style="margin-top:0">${t("Connexion")}</h2>
     <label>${t("Identifiant (pseudo)")}</label><input id="aUser" autocomplete="username" placeholder="${t("ex : herve")}" maxlength="20">
     <label>${t("Mot de passe")}</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••">
     <div style="height:12px"></div>
@@ -1756,10 +1762,17 @@ async function resolveDay(){
     // On l'inscrit donc dans `net` (au lieu de l'appliquer à part sur le capital) → elle apparaît dans
     // les résultats de la journée et dans la courbe de capital. Le capital reste identique :
     // capStart + net = capStart − 25 % = capStart × 0,75.
-    forgot.forEach(pid=>{ dayNet[pid] = -Math.round((capStart[pid]||0)*0.25*100)/100; });
+    const penOubli = pid => -Math.round((capStart[pid]||0)*0.25*100)/100;
+    forgot.forEach(pid=>{ dayNet[pid] = penOubli(pid); });
+    // Impact réel de chaque carte = écart entre le net RÉEL et le net d'un monde SANS cette carte.
+    // Le contrefactuel `wo` sort brut de runEngine : il ignore la pénalité d'oubli, qui est injectée
+    // après coup (juste au-dessus). Il faut donc l'y refléter à l'identique, sinon la soustraction
+    // dayNet − wo impute la pénalité de l'adversaire à la CARTE (« impact adversaire −25 € » alors
+    // qu'elle n'y est pour rien). Les deux mondes doivent différer PAR LA SEULE carte.
     const impacts={};
     for(const pid in PD){ if(PD[pid].card&&PD[pid].card.id){ const alt=JSON.parse(JSON.stringify(PD)); alt[pid].card=null;
-      const wo=runEngine(alt,capStart,dz,N).dayNet; const opp=PD[pid].oppId;
+      const wo=runEngine(alt,capStart,dz,N).dayNet; forgot.forEach(fp=>{ wo[fp]=penOubli(fp); });
+      const opp=PD[pid].oppId;
       impacts[pid]={self:Math.round(((dayNet[pid]||0)-(wo[pid]||0))*100)/100, opp: opp!=null?Math.round(((dayNet[opp]||0)-(wo[opp]||0))*100)/100:0}; } }
     for(const d of dz){ await q(db.from("duels").update({fixtures:d.fixtures,resolved:true}).eq("id",d.id)); }
     if(aiInserts.length) await q(db.from("bets").upsert(aiInserts,{onConflict:"player_id,day"}));
@@ -2420,7 +2433,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.09";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.10";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
