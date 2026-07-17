@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.16</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.17</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -233,6 +233,18 @@ function hasGage(){ const e=getEnjeu(); return e==="gage"||e==="both"; }
 function hasReward(){ const e=getEnjeu(); return e==="reward"||e==="both"; }
 function itemPool(enjeu,mode){ const base=(enjeu==="reward")?REWARDS:GAGES; return (mode==="simple")?base.filter(g=>g.s):base.slice(); }
 const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
+// Règles de mise & sanction — SOURCE UNIQUE (v4.17). Avant, ces valeurs étaient des nombres magiques
+// dupliqués (le plafond était écrit 2 fois, la pénalité 3 fois) et les ~22 textes qui les annoncent
+// aux joueurs les répétaient en dur : changer une règle demandait de penser à tout, et les règles
+// affichées pouvaient mentir. Ces constantes sont injectées dans les textes → elles ne peuvent plus
+// diverger du moteur.
+const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
+const STAKE_CAP_INVEST=0.7; // … 70 % avec la carte Investisseur
+const FORGOT_PENALTY=0.25;  // pari non validé à temps → −25 % du capital
+// Part du capital MAX misable pour un joueur (selon qu'il joue Investisseur ou non).
+function stakeCapOf(card){ return (card && card.id==="invest") ? STAKE_CAP_INVEST : STAKE_CAP; }
+// Les mêmes, en % entier, pour les textes affichés (« 50 % », « 25 % »…).
+function pct(x){ return Math.round(x*100); }
 // Enjeu final — RÈGLE UNIQUE (arrêtée le 2026-07-16, v4.14) : « CELUI QUI CHOISIT N'EST JAMAIS LE
 // DESTINATAIRE ». Le choix vient toujours du pôle OPPOSÉ du classement :
 //   • GAGE       → infligé au DERNIER, choisi par le 1er     (le champion punit le cancre) ;
@@ -751,7 +763,58 @@ const EN={
   "un bonus":"a bonus",
   // — Phase 4d : règles du jeu —
   "← Retour":"← Back", "📖 Règles du jeu":"📖 Game rules",
-  "<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>. Le dernier joueur humain fait le gage voté au départ.":"<b>Goal:</b> a prediction championship among friends, on real events and real odds, <b>no real money</b>. Everyone starts with <b>100 virtual €</b>; the winner is whoever has the most <b>championship points</b>. The last human player does the forfeit voted at the start.",
+  "<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.":"<b>Goal:</b> a prediction championship among friends, on real events and real odds, <b>no real money</b>. Everyone starts with <b>100 virtual €</b>; the winner is whoever has the most <b>championship points</b>.",
+  "📚 Voir les règles détaillées →":"📚 See the detailed rules →", "📚 Règles détaillées":"📚 Detailed rules",
+  "📚 Comment marche le jeu":"📚 How the game works",
+  "Le fonctionnement complet, dans le détail : calendrier, mises, Capitaine, points, cartes bonus, enjeu final.":"How it all works, in detail: schedule, stakes, Captain, points, bonus cards, final stake.",
+  "Le fonctionnement complet du jeu, dans le détail. Pour un aperçu rapide, vois plutôt <b>📖 Règles du jeu</b>.":"How the game works, in full detail. For a quick overview, see <b>📖 Game rules</b> instead.",
+  "🎯 Le principe":"🎯 The principle",
+  "Un championnat de pronostics entre amis. Chacun démarre avec <b>100 € virtuels</b> — <b>aucun argent réel</b> n'est en jeu et l'application n'encaisse rien. Chaque journée t'oppose à un adversaire en <b>duel</b> ; le vainqueur du duel marque des <b>points de championnat</b>. À la fin, c'est le total de <b>points</b> qui désigne le champion — pas le capital.":"A prediction championship among friends. Everyone starts with <b>100 virtual €</b> — <b>no real money</b> is involved and the app never collects anything. Each matchday pits you against one opponent in a <b>duel</b>; the duel winner scores <b>championship points</b>. At the end, the <b>points</b> total crowns the champion — not the balance.",
+  "🗓️ Le calendrier":"🗓️ The schedule",
+  "<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.":"<b>Full home-and-away</b>: everyone meets everyone <b>exactly twice</b>, once at home and once away. A league of <b>n</b> players therefore runs <b>2 × (n − 1) matchdays</b> (e.g. 6 players → 10 matchdays; 12 players → 22). If the number of humans is <b>odd</b>, a 🤖 <b>AI player</b> fills in to balance the draw: it plays normally but never takes a forfeit or a reward.",
+  "⚽ Une journée, étape par étape":"⚽ A matchday, step by step",
+  "Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça.":"The <b>home</b> player picks the duel's <b>5 fixtures</b>. They apply to both players. If they don't pick before the deadline, the fixtures are drawn automatically — <b>their opponent is never penalised</b> for it.",
+  "Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec la carte Investisseur).":"Each player places their <b>picks and stakes</b>, in secret. Total stakes can't exceed <b>{a}% of your balance</b> ({b}% with the Investor card).",
+  "Tu désignes un <b>👑 Capitaine</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>.":"You name a <b>👑 Captain</b>: on that bet, your <b>gain AND your loss are doubled</b>.",
+  "Tu peux jouer <b>une carte bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution.":"You may play <b>one bonus card</b> (only one per matchday). It stays <b>secret</b> until resolution.",
+  "À la <b>clôture</b>, les pronos de tout le monde sont révélés. Les cartes, elles, restent cachées jusqu'aux résultats.":"At the <b>close</b>, everyone's picks are revealed. The cards stay hidden until the results.",
+  "Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement.":"Once the matches are over, the matchday is <b>resolved</b>: winnings, points, standings.",
+  "💰 Gains et pertes":"💰 Winnings and losses",
+  "<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.":"<b>Bet won</b>: you pocket <b>stake × (odds − 1)</b>. <b>Bet lost</b>: you lose your <b>stake</b>.",
+  "<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton Capitaine. <b>Ton capital ne descend jamais sous 0.</b>":"<b>🛟 The safety net:</b> the matchday's <b>maximum possible loss</b> can never exceed your balance. The app refuses a bet that could leave you negative — if the button is blocked, lower your Captain's stake. <b>Your balance never drops below 0.</b>",
+  "<b>💸 Recapitalisation solidaire :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Dans ce cas <b>tout le monde</b> reçoit <b>+{b} €</b> — pas seulement lui — pour que personne ne soit distancé par un accident.":"<b>💸 Solidarity top-up:</b> if a player falls below <b>€{a}</b> they can no longer bet. In that case <b>everyone</b> gets <b>+€{b}</b> — not just them — so nobody is left behind by one bad day.",
+  "🏆 Points et classement":"🏆 Points and standings",
+  "Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.":"The <b>duel winner</b> is the one with the <b>best net result</b> (winnings − stakes). Tie → broken by the biggest <b>gain</b>, then the biggest <b>stake</b>; if everything matches, it's a <b>draw</b>.",
+  "<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.":"<b>Winner</b>: <b>3 pts</b> if their net is positive, <b>1 pt</b> if negative. <b>Loser</b>: <b>1 pt</b> if their net is positive, <b>0 pt</b> if negative. <b>Draw</b>: <b>1 pt</b> each.",
+  "<b>⭐ Meilleur pronostiqueur :</b> chaque journée, le joueur au plus gros net de <b>toute la ligue</b> gagne <b>+1 point</b> en plus.":"<b>⭐ Best forecaster:</b> each matchday, the player with the biggest net in the <b>whole league</b> gets <b>+1 point</b> on top.",
+  "<b>Départage au classement final</b> (à points égaux) : capital, puis victoires en duel, puis plus gros gain, puis plus grosse cote.":"<b>Final standings tie-break</b> (equal points): balance, then duel wins, then biggest gain, then biggest odds.",
+  "<b>🔥/❄️ La dynamique</b> (séries de victoires ou de défaites) est <b>purement indicative</b> : aucun bonus ni malus n'y est associé.":"<b>🔥/❄️ Momentum</b> (winning or losing streaks) is <b>purely indicative</b>: no bonus or penalty is attached to it.",
+  "😴 Le pari non validé à temps":"😴 Picks not submitted in time",
+  "Si tu ne valides pas avant la clôture : <b>aucun pari</b> n'est pris en compte (on ne reprend pas les pronos de l'adversaire).":"If you don't submit before the close: <b>no bet</b> is counted (your opponent's picks are not copied over).",
+  "Tu prends <b>−2 pts</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>−2 pts</b> in the standings and lose <b>{a}%</b> of your balance.",
+  "Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.":"Your opponent <b>wins the duel</b> — but only <b>3 pts</b> if their net is positive, <b>1 pt</b> otherwise. They cannot lose money because of your absence.",
+  "🃏 Les cartes bonus":"🃏 The bonus cards",
+  "Au démarrage, chacun <b>mise en aveugle</b> sur les cartes qu'il veut. Chaque carte revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>.":"At the start, everyone <b>bids blindly</b> on the cards they want. Each card goes to the <b>highest bidder</b> — on a tie, to the <b>first</b> to have bid that amount. <b>Losing bidders pay nothing</b>.",
+  "Total des mises ≤ <b>{a} €</b>, et pas plus de cartes que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.":"Total bids ≤ <b>€{a}</b>, and no more cards than there are matchdays. <b>What you win is deducted from your starting €100</b> — what you don't spend stays as your balance.",
+  "<b>Une carte = un seul propriétaire</b> dans la ligue, et <b>une seule carte jouée par journée</b>. Une carte jouée est consommée.":"<b>One card = one owner</b> in the league, and <b>only one card played per matchday</b>. A played card is consumed.",
+  "Les cartes <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'une carte.":"<b>🎯 Targeted</b> cards require you to name a match when betting. <b>💪 x/5</b> shows a card's <i>indicative</i> strength.",
+  "⚠️ Le <b>👑 Capitaine</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 💥 Coup Double, 🎁 Chérie c'est cadeau et 😏 Dans ta face.":"⚠️ The <b>👑 Captain</b> and a bonus must be on <b>different matches</b> — except 💥 Double Strike, 🎁 Honey I Got You a Gift and 😏 In Your Face.",
+  "Les {a} cartes":"The {a} cards", "🎯 à cible":"🎯 targeted",
+  "🎭 L'enjeu final":"🎭 The final stake",
+  "À l'ouverture, l'organisateur choisit l'enjeu de la ligue : <b>gage</b> au dernier, <b>récompense</b> au champion, ou <b>les deux</b>.":"When opening the league, the organiser picks the stake: <b>forfeit</b> for the last-placed player, <b>reward</b> for the champion, or <b>both</b>.",
+  "<b>La règle est unique : celui qui choisit n'est jamais le destinataire.</b>":"<b>One rule only: whoever chooses is never the one who receives.</b>",
+  "🎭 Le <b>gage</b> est infligé au <b>dernier</b>, et c'est le <b>vainqueur</b> qui l'a voté.":"🎭 The <b>forfeit</b> goes to the <b>last-placed player</b>, and it's the <b>winner</b> who voted for it.",
+  "🏆 La <b>récompense</b> revient au <b>champion</b>, et c'est le <b>dernier</b> qui l'a votée.":"🏆 The <b>reward</b> goes to the <b>champion</b>, and it's the <b>last-placed player</b> who voted for it.",
+  "<i>Pourquoi ce sens :</i> un gage n'est subi que par une personne, alors qu'une récompense est offerte par <b>tous les autres</b>. Faire choisir la récompense par celui qui la paiera évite qu'un joueur impose une dépense au groupe.":"<i>Why this way round:</i> a forfeit is borne by one person, whereas a reward is given by <b>everyone else</b>. Letting the reward be chosen by whoever will pay for it stops one player imposing a cost on the group.",
+  "Le vote a lieu à la <b>préparation</b>, avant la 1re journée : <b>personne ne sait où il finira</b>. Ton vote est donc un pari à l'aveugle, révélé à la fin — c'est ce qui tient le suspense.":"The vote happens at the <b>preparation</b> step, before matchday 1: <b>nobody knows where they'll finish</b>. Your vote is therefore a blind wish, revealed at the end — that's what keeps the suspense.",
+  "Chacun peut proposer <b>son propre texte</b> (max {a} caractères) au lieu d'une option de la liste. <b>Le vote est obligatoire</b> pour valider sa préparation.":"Anyone can suggest <b>their own text</b> (max {a} characters) instead of an option from the list. <b>Voting is mandatory</b> to confirm your preparation.",
+  "Si celui du pôle n'a pas voté : on prend le choix <b>strictement majoritaire</b> ; sinon on avance depuis ce pôle (2ᵉ, 3ᵉ…) jusqu'au premier votant.":"If the player at that end didn't vote: the <b>strict majority</b> choice applies; otherwise we move along from that end (2nd, 3rd…) to the first voter.",
+  "⚠️ Gages et récompenses se règlent <b>entre vous, hors application</b> — elle ne gère aucun argent et n'encaisse rien.":"⚠️ Forfeits and rewards are settled <b>between you, outside the app</b> — it handles no money and collects nothing.",
+  "🎛️ Les options de la ligue":"🎛️ League options",
+  "Mode de jeu":"Game mode", "Formule de rythme":"Pace format", "Données":"Data",
+  "• <b>🎮 Simulé</b> — matchs et cotes fictifs, résolution immédiate. Idéal pour tester.":"• <b>🎮 Simulated</b> — fictional matches and odds, instant resolution. Ideal for testing.",
+  "• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.":"• <b>📡 Real data</b> — real matches, real odds, real results. A matchday only resolves once <b>all</b> matches have actually been played.",
+  "Une ligue accueille jusqu'à <b>12 joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.":"A league holds up to <b>12 players</b>. The organiser can close registrations, the preparation or the picks at any time.",
   "🗓️ Format":"🗓️ Format",
   "Aller-retour entre tous (Round Robin). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.":"Home-and-away against everyone (round robin). If the number of humans is odd, a 🤖 AI player fills in (it isn't subject to the forfeit). Each day = one head-to-head duel.",
   "⚽ Une journée":"⚽ A matchday",
@@ -1636,7 +1699,7 @@ function worstLoss(picks,captainIdx,card){ return (picks||[]).reduce((s,b,i)=>s+
 function viewBet(d,dayLbl,opp,iAmHome){
   const fx=d.fixtures;
   if(!bet.picks || bet.picks.length!==fx.length){ bet={picks:fx.map(()=>({sel:"1",stake:0})),captain:-1}; myCard=null; }
-  const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=Math.floor(cap*(invest?0.7:0.5)*100)/100;
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=Math.floor(cap*stakeCapOf(myCard)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const pct=Math.min(100,max>0?tot/max*100:0); const over=tot>max+0.001;
   const targetCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].t;
   const twoCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].two; // Coup Double : 2 cibles
@@ -1674,7 +1737,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
 }
 function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCard.target===i&&myCard.sel2===v) myCard.sel2=null; render(); }
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
-  const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*(invest?0.7:0.5)*100)/100;
+  const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*stakeCapOf(myCard)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const totEl=$("tot"); if(totEl){totEl.textContent=eur(tot); // ⚠️ ne pas nommer cette variable `t` : ça masquerait la fonction de traduction t() utilisée plus bas
     const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
   const targetCard=myCard&&CARDS[myCard.id].t; const twoCard=myCard&&CARDS[myCard.id].two; const oppCard=myCard&&CARDS[myCard.id].oppT;
@@ -1908,7 +1971,7 @@ async function resolveDay(){
     // On l'inscrit donc dans `net` (au lieu de l'appliquer à part sur le capital) → elle apparaît dans
     // les résultats de la journée et dans la courbe de capital. Le capital reste identique :
     // capStart + net = capStart − 25 % = capStart × 0,75.
-    const penOubli = pid => -Math.round((capStart[pid]||0)*0.25*100)/100;
+    const penOubli = pid => -Math.round((capStart[pid]||0)*FORGOT_PENALTY*100)/100;
     forgot.forEach(pid=>{ dayNet[pid] = penOubli(pid); });
     // Impact réel de chaque carte = écart entre le net RÉEL et le net d'un monde SANS cette carte.
     // Le contrefactuel `wo` sort brut de runEngine : il ignore la pénalité d'oubli, qui est injectée
@@ -2215,7 +2278,7 @@ function computeStandHist(){
     // sinon ce serait une double peine à chaque rejeu de l'historique.
     forgot.forEach(pid=>{ if(!st[pid]) return; st[pid].points-=2;
       const bb=betAt[d+'|'+pid]; const penInNet=!!(bb && (bb.net||0)<0);
-      if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*0.75*100)/100); });
+      if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*(1-FORGOT_PENALTY)*100)/100); });
     // recapitalisation solidaire : si un humain < seuil → +montant à tout le monde
     const broke=players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
     if(broke.length){ players.forEach(p=>{ if(st[p.id]) st[p.id].capital+=RECAP_AMOUNT; }); }
@@ -2286,7 +2349,7 @@ function capChart(){
     legacyPen[b.player_id][b.day]=!!(Array.isArray(b.picks) && b.picks.length===0 && (b.net||0)===0); });
   const series=players.map(p=>{ let v=capAfter[p.id]; const pts=[100,v];
     for(let d=0;d<N;d++){ v=Math.max(0,v+(netByDay[p.id][d]||0));
-      if(legacyPen[p.id][d]) v=Math.max(0,Math.round(v*0.75*100)/100);
+      if(legacyPen[p.id][d]) v=Math.max(0,Math.round(v*(1-FORGOT_PENALTY)*100)/100);
       pts.push(v); } return {p,pts}; });
   const allv=series.flatMap(s=>s.pts); let mn=Math.min(...allv), mx=Math.max(...allv); if(!isFinite(mn)){mn=0;mx=100;}
   const pad=Math.max(5,(mx-mn)*0.12); const lo=Math.max(0,Math.floor((mn-pad)/10)*10), hi=Math.max(lo+10,Math.ceil((mx+pad)/10)*10);
@@ -2598,7 +2661,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.16";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.17";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
@@ -2606,6 +2669,7 @@ function render(){
   if(S.view==="auth") html=viewAuth();
   else if(S.view==="leagues") html=viewLeagues();
   else if(S.view==="rules") html=viewRules();
+  else if(S.view==="rulesfull") html=viewRulesFull();
   else if(S.view==="standings") html=viewStandings();
   else if(S.view==="coulisses") html=viewCoulisses();
   else if(S.view==="results") html=viewResults();
@@ -2623,7 +2687,7 @@ function render(){
   if(S.view==="game" && L && L.status==="prep") gsub+="|p"+prepStep;
   const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"")+gsub;
   if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
-  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
+  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="rulesfull"?t("📚 Règles détaillées") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
@@ -2645,21 +2709,27 @@ function viewSettings(){
       <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${EMOJIS.map(em=>`<button class="btn ghost sm" onclick="setAvatar('${em}')" style="font-size:20px;padding:6px 9px;line-height:1${em===AUTH.avatar?';border-color:var(--accent)':''}">${em}</button>`).join("")}</div>
     </div>
+    <div class="box"><b class="mini">${t("📚 Comment marche le jeu")}</b>
+      <div class="mini muted" style="margin-top:5px">${t("Le fonctionnement complet, dans le détail : calendrier, mises, Capitaine, points, cartes bonus, enjeu final.")}</div>
+      <div style="height:8px"></div><button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button></div>
     <button class="btn ghost" onclick="logout()">${t("Déconnexion")}</button>`;
 }
 function openRules(){ if(S.view==="rules")return; S.prevView=S.view; S.view="rules"; render(); }
 function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
+// ⚠️ RÈGLES DÉTAILLÉES — voir la note en tête de viewRulesFull() avant d'y toucher.
+function openRulesFull(){ if(S.view==="rulesfull")return; S.prevView=(S.view==="rulesfull"?S.prevView:S.view); S.view="rulesfull"; render(); }
+function closeRulesFull(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
 function viewRules(){
   const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><b class="mini">${esc(t(CARDS[id].n))}</b><div class="mini muted">${esc(t(CARDS[id].d))}</div></div></div>`;
   return `<button class="btn ghost sm" onclick="closeRules()">${t("← Retour")}</button>
    <div class="box"><h2 style="margin-top:0">${t("📖 Règles du jeu")}</h2>
-     <p class="mini">${t("<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>. Le dernier joueur humain fait le gage voté au départ.")}</p></div>
+     <p class="mini">${t("<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.")}</p></div>
    <div class="box"><b>${t("🗓️ Format")}</b>
      <div class="mini muted" style="margin-top:6px">${t("Aller-retour entre tous (Round Robin). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.")}</div></div>
    <div class="box"><b>${t("⚽ Une journée")}</b>
      <ul class="mini muted" style="margin:6px 0 0;padding-left:18px">
        <li>${t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).")}</li>
-       <li>${t("Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>50 %</b> du capital (70 % avec la carte Investisseur).")}</li>
+       <li>${t("Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>{a} %</b> du capital ({b} % avec la carte Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</li>
        <li>${t("<b>👑 Pari du Capitaine</b> : un pari désigné secrètement — gain <b>et</b> perte <b>doublés</b>.")}</li>
        <li>${t("🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).")}</li>
        <li>${t("Optionnel : <b>1 carte bonus</b> (voir plus bas), révélée à la résolution.")}</li>
@@ -2675,7 +2745,88 @@ function viewRules(){
    <div class="box"><b>${t("🃏 Cartes bonus (enchères)")}</b>
      <div class="mini muted" style="margin:6px 0">${t("Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.",{a:SHOP_CAP})}</div>
      ${CARD_IDS.map(card).join("")}</div>
-   <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>−2 pts</b> au classement et <b>−25 % du capital</b>.")}</div></div>`;
+   <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>−2 pts</b> au classement et <b>−{a} % du capital</b>.",{a:pct(FORGOT_PENALTY)})}</div></div>
+   <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
+}
+
+/* ============ RÈGLES DÉTAILLÉES ============
+ * ⚠️ À LIRE AVANT DE MODIFIER UNE RÈGLE DU JEU.
+ * Cet écran est la référence complète. Il est écrit pour ne PAS pouvoir mentir sur ce qui est
+ * calculable : toutes les valeurs chiffrées sont INJECTÉES depuis les constantes du moteur
+ * (STAKE_CAP, STAKE_CAP_INVEST, FORGOT_PENALTY, SHOP_CAP, RECAP_THRESHOLD, RECAP_AMOUNT,
+ * CUSTOM_MAX, DBL_FACTOR), les listes viennent des tables (CARDS, GAGES, REWARDS, MODES,
+ * FORMULAS) et les passages qui dépendent du mode se calculent (isBoth/isReward). Changer une
+ * constante ou ajouter une carte met donc ces règles à jour TOUT SEUL.
+ * ⚠️ CE QUI PEUT ENCORE MENTIR : la PROSE — « qui choisit quoi », le barème des duels, l'ordre
+ * des phases. C'est exactement là qu'ont eu lieu toutes les dérives constatées le 2026-07-16
+ * (« le gage voté au départ » = règle d'avant la v4.09 ; « le dernier fait le gage » affiché même
+ * en mode récompense ; le malus « −1 pt » annoncé alors qu'il était supprimé).
+ * → RÈGLE DE TRAVAIL : toute modification d'une règle du jeu se fait DANS LE MÊME COMMIT que la
+ *   mise à jour de cet écran. Aucune automatisation ne remplace ça.
+ */
+function viewRulesFull(){
+  const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start"><b class="mini">${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${CARDS[id].t?'<span class="tag">'+t("🎯 à cible")+'</span>':''}</div><div class="mini muted">${esc(t(CARDS[id].d))}</div></div></div>`;
+  const li=s=>`<li style="margin:4px 0">${s}</li>`;
+  const sec=(titre,corps)=>`<div class="box"><b>${titre}</b><div class="mini muted" style="margin-top:6px;line-height:1.75">${corps}</div></div>`;
+  return `<button class="btn ghost sm" onclick="closeRulesFull()">${t("← Retour")}</button>
+   <div class="box"><h2 style="margin-top:0">${t("📚 Règles détaillées")}</h2>
+     <div class="mini muted">${t("Le fonctionnement complet du jeu, dans le détail. Pour un aperçu rapide, vois plutôt <b>📖 Règles du jeu</b>.")}</div></div>
+
+   ${sec(t("🎯 Le principe"), t("Un championnat de pronostics entre amis. Chacun démarre avec <b>100 € virtuels</b> — <b>aucun argent réel</b> n'est en jeu et l'application n'encaisse rien. Chaque journée t'oppose à un adversaire en <b>duel</b> ; le vainqueur du duel marque des <b>points de championnat</b>. À la fin, c'est le total de <b>points</b> qui désigne le champion — pas le capital."))}
+
+   ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense."))}
+
+   ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
+     ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
+     ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec la carte Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
+     ${li(t("Tu désignes un <b>👑 Capitaine</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>."))}
+     ${li(t("Tu peux jouer <b>une carte bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution."))}
+     ${li(t("À la <b>clôture</b>, les pronos de tout le monde sont révélés. Les cartes, elles, restent cachées jusqu'aux résultats."))}
+     ${li(t("Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement."))}
+   </ol>`)}
+
+   ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
+     ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton Capitaine. <b>Ton capital ne descend jamais sous 0.</b>")}<br>
+     ${t("<b>💸 Recapitalisation solidaire :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Dans ce cas <b>tout le monde</b> reçoit <b>+{b} €</b> — pas seulement lui — pour que personne ne soit distancé par un accident.",{a:RECAP_THRESHOLD,b:RECAP_AMOUNT})}`)}
+
+   ${sec(t("🏆 Points et classement"), `${t("Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.")}<br>
+     ${t("<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.")}<br>
+     ${t("<b>⭐ Meilleur pronostiqueur :</b> chaque journée, le joueur au plus gros net de <b>toute la ligue</b> gagne <b>+1 point</b> en plus.")}<br>
+     ${t("<b>Départage au classement final</b> (à points égaux) : capital, puis victoires en duel, puis plus gros gain, puis plus grosse cote.")}<br>
+     ${t("<b>🔥/❄️ La dynamique</b> (séries de victoires ou de défaites) est <b>purement indicative</b> : aucun bonus ni malus n'y est associé.")}`)}
+
+   ${sec(t("😴 Le pari non validé à temps"), `${t("Si tu ne valides pas avant la clôture : <b>aucun pari</b> n'est pris en compte (on ne reprend pas les pronos de l'adversaire).")}<br>
+     ${t("Tu prends <b>−2 pts</b> au classement et tu perds <b>{a} %</b> de ton capital.",{a:pct(FORGOT_PENALTY)})}<br>
+     ${t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")}`)}
+
+   ${sec(t("🃏 Les cartes bonus"), `${t("Au démarrage, chacun <b>mise en aveugle</b> sur les cartes qu'il veut. Chaque carte revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>.")}<br>
+     ${t("Total des mises ≤ <b>{a} €</b>, et pas plus de cartes que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.",{a:SHOP_CAP})}<br>
+     ${t("<b>Une carte = un seul propriétaire</b> dans la ligue, et <b>une seule carte jouée par journée</b>. Une carte jouée est consommée.")}<br>
+     ${t("Les cartes <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'une carte.")}<br>
+     ${t("⚠️ Le <b>👑 Capitaine</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 💥 Coup Double, 🎁 Chérie c'est cadeau et 😏 Dans ta face.")}
+     <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><b class="mini">${t("Les {a} cartes",{a:CARD_IDS.length})}</b></div>
+     ${CARD_IDS.map(card).join("")}`)}
+
+   ${sec(t("🎭 L'enjeu final"), `${t("À l'ouverture, l'organisateur choisit l'enjeu de la ligue : <b>gage</b> au dernier, <b>récompense</b> au champion, ou <b>les deux</b>.")}<br>
+     ${t("<b>La règle est unique : celui qui choisit n'est jamais le destinataire.</b>")}<br>
+     ${t("🎭 Le <b>gage</b> est infligé au <b>dernier</b>, et c'est le <b>vainqueur</b> qui l'a voté.")}<br>
+     ${t("🏆 La <b>récompense</b> revient au <b>champion</b>, et c'est le <b>dernier</b> qui l'a votée.")}<br>
+     ${t("<i>Pourquoi ce sens :</i> un gage n'est subi que par une personne, alors qu'une récompense est offerte par <b>tous les autres</b>. Faire choisir la récompense par celui qui la paiera évite qu'un joueur impose une dépense au groupe.")}<br>
+     ${t("Le vote a lieu à la <b>préparation</b>, avant la 1re journée : <b>personne ne sait où il finira</b>. Ton vote est donc un pari à l'aveugle, révélé à la fin — c'est ce qui tient le suspense.")}<br>
+     ${t("Chacun peut proposer <b>son propre texte</b> (max {a} caractères) au lieu d'une option de la liste. <b>Le vote est obligatoire</b> pour valider sa préparation.",{a:CUSTOM_MAX})}<br>
+     ${t("Si celui du pôle n'a pas voté : on prend le choix <b>strictement majoritaire</b> ; sinon on avance depuis ce pôle (2ᵉ, 3ᵉ…) jusqu'au premier votant.")}<br>
+     ${t("⚠️ Gages et récompenses se règlent <b>entre vous, hors application</b> — elle ne gère aucun argent et n'encaisse rien.")}`)}
+
+   ${sec(t("🎛️ Les options de la ligue"), `<b>${t("Mode de jeu")}</b><br>
+     ${Object.keys(MODES).map(k=>`• <b>${esc(t(MODES[k].n))}</b> — ${esc(t(MODES[k].d))}`).join("<br>")}<br>
+     <div style="height:6px"></div><b>${t("Formule de rythme")}</b><br>
+     ${Object.keys(FORMULAS).map(k=>`• <b>${esc(t(FORMULAS[k].n))}</b> — ${esc(t(FORMULAS[k].d))}`).join("<br>")}<br>
+     <div style="height:6px"></div><b>${t("Données")}</b><br>
+     ${t("• <b>🎮 Simulé</b> — matchs et cotes fictifs, résolution immédiate. Idéal pour tester.")}<br>
+     ${t("• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.")}<br>
+     <div style="height:6px"></div>${t("Une ligue accueille jusqu'à <b>12 joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.")}`)}
+
+   <button class="btn ghost" onclick="closeRulesFull()">${t("← Retour")}</button>`;
 }
 /* ============ boot ============ */
 (async function boot(){
