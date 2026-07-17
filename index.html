@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.36";
+const APP_VERSION = "v4.37";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -758,6 +758,10 @@ const EN={
   "Un seul déblocage — et moins cher que pris séparément.":"A single unlock — and cheaper than buying them separately.",
   "Le confort maximal, zéro prise de tête.":"Maximum comfort, zero hassle.",
   "Boutique":"Shop", "— ou tout d'un coup —":"— or all at once —",
+  "🔄 Nouvelle version disponible.":"🔄 A new version is available.", "Recharger":"Reload",
+  "(option payante à terme — gratuite pendant les tests)":"(a premium option eventually — free during testing)",
+  "(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)":"(the 🤖 AI player will be a premium option eventually — free during testing)",
+  "<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) sera une option payante à terme — gratuit pendant les tests.</i>":"<i>The <b>full</b> card set (Full mode, with the interaction cards) will be a premium option eventually — free during testing.</i>",
   "Toutes les options premium du jeu. <b>Offertes et accessibles pendant la phase de test</b> — profites-en ! 🎁":"All the game's premium options. <b>Free and available during the test phase</b> — enjoy it! 🎁",
   // --- Stats perso cross-ligue ---
   "Ton dossier complet, toutes tes ligues.":"Your complete file, across all your leagues.",
@@ -3323,7 +3327,7 @@ function viewRules(){
    <div class="box"><h2 style="margin-top:0">${t("📖 Règles du jeu")}</h2>
      <p class="mini">${t("<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.")}</p></div>
    <div class="box"><b>${t("🗓️ Format")}</b>
-     <div class="mini muted" style="margin-top:6px">${t("Aller-retour entre tous (Round Robin). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.")}</div></div>
+     <div class="mini muted" style="margin-top:6px">${t("Aller-retour entre tous (Round Robin). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.")} <i>${t("(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)")}</i></div></div>
    <div class="box"><b>${t("⚽ Une journée")}</b>
      <ul class="mini muted" style="margin:6px 0 0;padding-left:18px">
        <li>${t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).")}</li>
@@ -3343,8 +3347,8 @@ function viewRules(){
    <div class="box"><b>${t("🃏 Cartes bonus (enchères)")}</b>
      <div class="mini muted" style="margin:6px 0">${t("Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.",{a:SHOP_CAP})}</div>
      ${CARD_IDS.map(card).join("")}</div>
-   <div class="box"><b>${t("🤝 Racheter un bonus")}</b>
-     <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})}</div></div>
+   <div class="box"><b>${t("🤝 Racheter un bonus")}</b> <span class="prem" onclick="showPremiumInfo('rachat')">${t("✨ Premium")}</span>
+     <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})} <i>${t("(option payante à terme — gratuite pendant les tests)")}</i></div></div>
    <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>−2 pts</b> au classement et <b>−{a} % du capital</b>.",{a:pct(FORGOT_PENALTY)})}</div></div>
    <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
 }
@@ -3374,7 +3378,7 @@ function viewRulesFull(){
 
    ${sec(t("🎯 Le principe"), t("Un championnat de pronostics entre amis. Chacun démarre avec <b>100 € virtuels</b> — <b>aucun argent réel</b> n'est en jeu et l'application n'encaisse rien. Chaque journée t'oppose à un adversaire en <b>duel</b> ; le vainqueur du duel marque des <b>points de championnat</b>. À la fin, c'est le total de <b>points</b> qui désigne le champion — pas le capital."))}
 
-   ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense."))}
+   ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.")+' <i>'+t("(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)")+'</i>')}
 
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
@@ -3404,6 +3408,7 @@ function viewRulesFull(){
      ${t("<b>Une carte = un seul propriétaire</b> dans la ligue, et <b>une seule carte jouée par journée</b>. Une carte jouée est consommée.")}<br>
      ${t("Les cartes <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'une carte.")}<br>
      ${t("⚠️ Le <b>👑 Capitaine</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 💥 Coup Double, 🎁 Chérie c'est cadeau et 😏 Dans ta face.")}
+     ${t("<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) sera une option payante à terme — gratuit pendant les tests.</i>")}
      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><b class="mini">${t("Les {a} cartes",{a:CARD_IDS.length})}</b></div>
      ${CARD_IDS.map(card).join("")}`)}
 
@@ -3411,7 +3416,8 @@ function viewRulesFull(){
      ${t("Tu proposes un prix ; l'autre est <b>libre d'accepter ou de refuser</b>. S'il accepte, la carte passe dans ta main et le montant lui est <b>transféré</b> — rien n'est créé, rien ne disparaît.")}<br>
      ${t("On ne rachète que des cartes <b>encore en main</b> : jamais une carte déjà jouée, ni une carte engagée pour la journée en cours.")}<br>
      ${t("Tu ne peux pas racheter <b>tant que ton pari du jour est validé</b> (cela protège la règle du capital jamais négatif), et le prix doit te laisser au moins <b>{a} €</b> pour pouvoir encore miser.",{a:TRADE_MIN_CAP})}<br>
-     ${t("Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.")}`)}
+     ${t("Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.")}<br>
+     <i>${t("(option payante à terme — gratuite pendant les tests)")}</i>`)}
 
    ${sec(t("🎭 L'enjeu final"), `${t("À l'ouverture, l'organisateur choisit l'enjeu de la ligue : <b>gage</b> au dernier, <b>récompense</b> au champion, ou <b>les deux</b>.")}<br>
      ${t("<b>La règle est unique : celui qui choisit n'est jamais le destinataire.</b>")}<br>
@@ -3435,8 +3441,31 @@ function viewRulesFull(){
    <button class="btn ghost" onclick="closeRulesFull()">${t("← Retour")}</button>`;
 }
 /* ============ boot ============ */
+// === ANTI-CACHE — détecte une version plus récente en ligne et propose de recharger ===========
+// Problème : les navigateurs (surtout iPhone) gardent l'ancien index.html en cache → le joueur
+// reste sur une vieille version. Solution : au démarrage (et au retour d'onglet), on re-télécharge
+// SA PROPRE page en `no-store` (même origine, donc pas de CORS), on lit l'APP_VERSION servie, et si
+// elle est plus récente que celle en cours d'exécution, on affiche un bandeau « Recharger ».
+function verNum(v){ const p=String(v||"").replace(/^v/,'').split('.').map(n=>parseInt(n,10)||0); return (p[0]||0)*100000+(p[1]||0); }
+let updBannerShown=false;
+async function checkForUpdate(){
+  try{
+    const r=await fetch(location.pathname+"?v="+Date.now(), {cache:"no-store"}); if(!r.ok) return;
+    const txt=await r.text(); const m=txt.match(/APP_VERSION\s*=\s*"(v[\d.]+)"/);
+    if(m && verNum(m[1])>verNum(APP_VERSION)) showUpdateBanner();
+  }catch(e){}
+}
+function showUpdateBanner(){
+  if(updBannerShown || document.getElementById("updBanner")) return; updBannerShown=true;
+  const b=document.createElement("div"); b.id="updBanner";
+  b.style.cssText="position:fixed;left:0;right:0;bottom:0;z-index:60;background:var(--accent);color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;box-shadow:0 -2px 12px rgba(0,0,0,.35)";
+  b.innerHTML=`<span>${t("🔄 Nouvelle version disponible.")}</span><button class="btn" style="background:#fff;color:var(--accent);flex:0 0 auto;padding:6px 12px" onclick="location.replace(location.pathname+'?v='+Date.now())">${t("Recharger")}</button>`;
+  document.body.appendChild(b);
+}
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkForUpdate(); });
 (async function boot(){
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
+  checkForUpdate();
   try{ const { data:{ session } } = await db.auth.getSession();
     if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"" }; }
   }catch(e){}
