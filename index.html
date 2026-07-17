@@ -135,7 +135,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.32";
+const APP_VERSION = "v4.33";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -726,6 +726,24 @@ const EN={
   "✨ Premium":"✨ Premium", "Fonction premium":"Premium feature",
   "Fonction premium — offerte pendant la phase de test":"Premium feature — free during the test phase",
   "Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁":"This feature will be part of the <b>premium options</b> eventually. <b>During the test phase, it's free and available to everyone</b> — enjoy it! 🎁",
+  // --- Fiches de vente premium par option (pitchs) ---
+  "Bonus complets":"Full bonus set", "Résultats en direct":"Live results",
+  "Un bonus te fait de l'œil ? Rachète-le.":"Got your eye on a bonus? Buy it.",
+  "Repère une carte qu'un adversaire garde au chaud, propose ton prix. S'il dit oui, elle est à toi.":"Spot a card an opponent is sitting on, name your price. If they say yes, it's yours.",
+  "La seule option qui te laisse <b>agir en pleine partie</b> : le coup de pouce au bon moment.":"The only option that lets you <b>act mid-game</b>: the boost at just the right moment.",
+  "Échange 100 % consenti : il accepte, il empoche. Disons… de la corruption parfaitement légale.":"A fully consensual trade: they accept, they cash in. Call it… perfectly legal bribery.",
+  "Les 16 cartes. Les vraies vacheries comprises.":"All 16 cards. The nasty ones included.",
+  "Débloque toutes les cartes d'interaction — 🩸 Sangsue, 🎁 Chérie c'est cadeau, 🪞 Effet Kiss Cool.":"Unlocks every interaction card — 🩸 Leech, 🎁 Honey It's a Gift, 🪞 Kiss Cool Effect.",
+  "Payé une fois par l'organisateur → tout le monde y a droit, personne n'est lésé.":"Paid once by the organiser → everyone gets them, nobody's shortchanged.",
+  "Sans elles, le jeu est bien élevé. Avec, c'est la guerre (amicale).":"Without them the game is well-behaved. With them, it's (friendly) war.",
+  "Pas assez de potes ? L'IA ne juge pas.":"Not enough mates? The AI won't judge.",
+  "Envie de t'entraîner en solo — ou, soyons honnêtes, petite panne d'amis ce soir ? L'IA répond présent.":"Fancy some solo practice — or, let's be honest, a little short on friends tonight? The AI's got you.",
+  "Il te manque un joueur pour être pair, et pas envie d'attendre Pierrot qui met 3 plombes à valider ? L'IA complète en deux secondes.":"One player short of an even count, and don't feel like waiting for slowpoke Pierrot? The AI fills in in two seconds.",
+  "Elle joue le jeu à fond, mais ne subit ni gage ni récompense — trop classe pour ça.":"It plays for real, but takes no forfeit or reward — too classy for that.",
+  "Bien plus que le classement : ton dossier perso complet.":"Way more than the standings: your complete personal file.",
+  "Le détail <b>ligue par ligue</b> : la partie en cours et toutes les précédentes.":"The <b>league-by-league</b> breakdown: the current one and all the past ones.",
+  "Ton <b>face-à-face</b> contre chaque pote, tes records compilés, tes tendances.":"Your <b>head-to-head</b> against each mate, your compiled records, your trends.",
+  "Le palmarès montre le top 5 et ton rang ; ici, c'est ton dossier complet, rien que le tien.":"The hall of fame shows the top 5 and your rank; here it's your full file, yours alone.",
   "Mes stats":"My stats", "Ton parcours dans cette ligue.":"Your journey in this league.",
   "Pas encore de journée résolue — reviens après ta première journée.":"No resolved day yet — come back after your first day.",
   "Journées jouées":"Days played", "Pronos gagnés":"Winning picks", "Total misé":"Total staked",
@@ -998,10 +1016,48 @@ function infoModal(emoji,title,bodyHTML){ closeCardInfo();
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, t(c.n), `<div style="margin:4px 0 6px">${t("💪 Force {a}/5",{a:c.f||3})}</div><div class="mini muted">${esc(t(c.d))}</div>`); }
 function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.")}</div>`); }
 function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class="mini muted">${t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.")}</div>`); }
-// ✨ Badge « premium » — apposé sur les fonctions payantes À TERME, offertes pendant la phase de test.
+// ✨ Badge « premium » + fiche de vente PAR OPTION (offertes pendant la phase de test).
+// Les textes passent par t(clé) : ce sont des valeurs (pas des t("...") littéraux), donc l'EN est
+// ajouté à la main dans le dico pour les 4 options branchées. recap/direct : pitchs prêts, EN à
+// ajouter le jour où ils obtiennent un point d'entrée (aujourd'hui non affichés → aucun impact).
+const PITCHES={
+  rachat:{e:"🤝",t:"Rachat de bonus",hook:"Un bonus te fait de l'œil ? Rachète-le.",pts:[
+    "Repère une carte qu'un adversaire garde au chaud, propose ton prix. S'il dit oui, elle est à toi.",
+    "La seule option qui te laisse <b>agir en pleine partie</b> : le coup de pouce au bon moment.",
+    "Échange 100 % consenti : il accepte, il empoche. Disons… de la corruption parfaitement légale."]},
+  bonuscomplets:{e:"🃏",t:"Bonus complets",hook:"Les 16 cartes. Les vraies vacheries comprises.",pts:[
+    "Débloque toutes les cartes d'interaction — 🩸 Sangsue, 🎁 Chérie c'est cadeau, 🪞 Effet Kiss Cool.",
+    "Payé une fois par l'organisateur → tout le monde y a droit, personne n'est lésé.",
+    "Sans elles, le jeu est bien élevé. Avec, c'est la guerre (amicale)."]},
+  ia:{e:"🤖",t:"Joueur IA",hook:"Pas assez de potes ? L'IA ne juge pas.",pts:[
+    "Envie de t'entraîner en solo — ou, soyons honnêtes, petite panne d'amis ce soir ? L'IA répond présent.",
+    "Il te manque un joueur pour être pair, et pas envie d'attendre Pierrot qui met 3 plombes à valider ? L'IA complète en deux secondes.",
+    "Elle joue le jeu à fond, mais ne subit ni gage ni récompense — trop classe pour ça."]},
+  stats:{e:"📊",t:"Mes stats",hook:"Bien plus que le classement : ton dossier perso complet.",pts:[
+    "Le détail <b>ligue par ligue</b> : la partie en cours et toutes les précédentes.",
+    "Ton <b>face-à-face</b> contre chaque pote, tes records compilés, tes tendances.",
+    "Le palmarès montre le top 5 et ton rang ; ici, c'est ton dossier complet, rien que le tien."]},
+  recap:{e:"📤",t:"Partager ma saison",hook:"Ta saison, prête à balancer sur le groupe.",pts:[
+    "Un résumé stylé — classement, points, coups d'éclat — envoyé en un tap sur WhatsApp.",
+    "Pour immortaliser ton titre… ou chambrer le dernier (on sait tous qui c'est).",
+    "L'excuse parfaite pour relancer la bande dans la foulée."]},
+  direct:{e:"📡",t:"Résultats en direct",hook:"Regarde tes pronos vivre (ou mourir) en direct.",pts:[
+    "Dès qu'un vrai match se termine : le résultat + ton prono ✓ ou ✗, sans attendre la fin de la journée.",
+    "Le frisson du direct, montagnes russes comprises.",
+    "Les gains en € restent pour la fin, dévoilés à tous d'un coup — le clou du spectacle."]}
+};
+const PREM_FOOTER="Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁";
 // stopPropagation : le badge est souvent dans une ligne cliquable, on ne veut pas déclencher la ligne.
-function premBadge(){ return `<span class="prem" onclick="event.stopPropagation();showPremiumInfo()" title="${t("Fonction premium — offerte pendant la phase de test")}">${t("✨ Premium")}</span>`; }
-function showPremiumInfo(){ infoModal("✨", t("Fonction premium"), `<div class="mini muted">${t("Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁")}</div>`); }
+function premBadge(key){ return `<span class="prem" onclick="event.stopPropagation();showPremiumInfo('${key||''}')" title="${t("Fonction premium — offerte pendant la phase de test")}">${t("✨ Premium")}</span>`; }
+function showPremiumInfo(key){
+  const p=PITCHES[key];
+  const footer=`<div class="mini" style="text-align:left;margin-top:12px;border-top:1px solid var(--border);padding-top:8px">${t(PREM_FOOTER)}</div>`;
+  if(!p){ infoModal("✨", t("Fonction premium"), `<div class="mini muted" style="text-align:left">${t(PREM_FOOTER)}</div>`); return; }
+  const body=`<div style="font-weight:700;text-align:left;margin:2px 0 10px">${t(p.hook)}</div>`
+    +`<ul class="mini muted" style="text-align:left;margin:0;padding-left:18px">${p.pts.map(x=>`<li style="margin:5px 0">${t(x)}</li>`).join("")}</ul>`
+    +footer;
+  infoModal(p.e, t(p.t), body);
+}
 // Bonus d'un joueur (clic sur son nom au classement) : restants + utilisés (barrés). Données LIVE.
 function showPlayerCards(pid){ const p=pById(pid); if(!p) return;
   const hand=p.hand||[], used=p.cards_used||[];
@@ -1477,12 +1533,12 @@ function viewLobby(){
     ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
         ${p.is_organizer?'<span class="tag">'+t("organisateur")+'</span>':''}${p.id===S.myId?'<span class="chip b">'+t("toi")+'</span>':''}</div>
         ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip g">${t("Prêt")}</span>`}</div>`).join("")}
-    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge()}<div class="mini muted">${t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${t("équilibre")}</span></div>`:""}
+    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${t("équilibre")}</span></div>`:""}
     <h2>${t("⏱️ Formule de rythme")}</h2>
     ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
     <h2>${t("🎛️ Mode de jeu")}</h2>
-    ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge():''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎭 Enjeu de la ligue")}</h2>
@@ -2504,7 +2560,7 @@ function viewStats(){
   const s=myStats();
   const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
-    <div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge()}</h2>
+    <div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge('stats')}</h2>
       <div class="mini muted">${t("Ton parcours dans cette ligue.")}</div></div>`;
   if(!s.days){ h+=`<div class="box mini muted">${t("Pas encore de journée résolue — reviens après ta première journée.")}</div>`; return h; }
   h+=`<div class="box">
@@ -3053,7 +3109,7 @@ function viewTrade(){
   const nm=p=>p?esc((p.emoji||'')+' '+(p.name||'?')):'?';
   const clbl=id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):esc(id);
   let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
-    <div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge()}</h2>
+    <div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge('rachat')}</h2>
       <div class="mini muted">${t("Propose une somme à un adversaire pour lui racheter une de ses cartes bonus encore en main. Il reste libre d'accepter ou de refuser. L'argent (virtuel) lui est transféré.")}</div></div>`;
   // Réponses à MES offres (je suis l'acheteur : on m'a accepté ou refusé) — info persistante, pas un toast fugace
   if(myResolvedOut.length){ h+=`<div class="box"><b class="mini">📨 ${t("Réponses à tes offres")}</b>`;
