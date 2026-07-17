@@ -119,7 +119,7 @@
       <button class="btn ghost sm" id="themeBtn" onclick="toggleTheme()" title="Basculer clair / sombre">☀️</button>
       <button class="btn ghost sm hide" id="rulesBtn" onclick="openRules()" title="Règles">📖</button>
       <button class="btn ghost sm hide" id="tradeBtn" onclick="openTrade()" title="Racheter un bonus">🤝</button>
-      <button class="btn ghost sm hide" id="bugBtn" onclick="openBugReport()" title="Signaler un bug">🐛</button>
+      <button class="btn ghost sm hide" id="bugBtn" onclick="openBugReport()" title="Signaler un bug ou proposer une idée">🐛</button>
       <button class="btn ghost sm hide" id="settingsBtn" onclick="openSettings()" title="Paramètres du compte">⚙️</button>
     </div>
   </div>
@@ -135,7 +135,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.28";
+const APP_VERSION = "v4.32";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -435,11 +435,10 @@ function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini mute
 
 /* ============ STATE ============ */
 let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, nav:[] };
-// showFinished=true par défaut : une ligue terminée doit rester VISIBLE à la connexion — c'est le
-// moment où l'on vient voir le podium. (Le retour direct dans la dernière ligue via `pl_last` couvre
-// déjà le cas principal ; ceci couvre les joueurs qui ont fait « ← Mes ligues » ou qui se sont
-// déconnectés, chemins qui effacent `pl_last`.) La section reste repliable à la main.
-let AUTH=null, myLeagues=[], showFinished=true, lastScreenSig="";
+// showFinished=false par défaut (choix d'Hervé 2026-07-17) : la section « ligues terminées » est
+// REPLIÉE au chargement, pour ne pas noyer les ligues en cours. On la déplie d'un clic. Exception :
+// après avoir fermé soi-même une ligue, `closeLeague()` force l'affichage pour qu'on la retrouve.
+let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[], trades=[], myResolvedOut=[], tradeToasted=new Set();
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null;
 let palmares=null, adminData=null, palmOpen="";
@@ -734,6 +733,7 @@ const EN={
   "Meilleure journée":"Best day", "Pire journée":"Worst day",
   "Plus grosse cote gagnée":"Biggest odds won", "Carte fétiche":"Favourite card", "Face-à-face":"Head-to-head",
   "{w} V · {n} N · {l} D":"{w}W · {n}D · {l}L", "Partager ma saison":"Share my season",
+  "Voici ce que tu vas partager :":"Here's what you'll share:", "Partager":"Share", "Copier":"Copy",
   "Ma saison — {a}":"My season — {a}", "Classement : {a}ᵉ / {b}":"Rank: {a} / {b}",
   "Points : {a} · Capital : {b} €":"Points: {a} · Balance: €{b}",
   "Pronos gagnés : {a}/{b} ({c} %)":"Winning picks: {a}/{b} ({c}%)",
@@ -854,6 +854,10 @@ const EN={
   "Copie le rapport ci-dessous et envoie-le à l'organisateur (WhatsApp, SMS, mail — comme tu veux). Il contient le <b>contexte technique</b> de ton écran : c'est ce qui permet de retrouver le problème.":"Copy the report below and send it to the organiser (WhatsApp, SMS, email — whatever suits you). It carries the <b>technical context</b> of your screen: that's what makes the problem findable.",
   "⚠️ Pense à compléter les 3 lignes du bas : ce que tu faisais, ce que tu attendais, ce qui s'est passé.":"⚠️ Remember to fill in the 3 lines at the bottom: what you were doing, what you expected, what happened.",
   "La copie automatique n'a pas fonctionné. Sélectionne le texte ci-dessous et copie-le à la main.":"Automatic copying didn't work. Select the text below and copy it by hand.",
+  "Envoyer un message":"Send a message", "Que veux-tu envoyer ?":"What do you want to send?",
+  "Un bug":"A bug", "Une idée / un avis":"An idea / feedback", "Proposer une idée / un avis":"Suggest an idea / feedback", "📋 Copier":"📋 Copy",
+  "Écris ton idée ou ton avis dans la dernière ligne, puis copie le tout et envoie-le à l'organisateur. Le <b>contexte technique</b> de ta page est joint automatiquement.":"Write your idea or feedback on the last line, then copy it all and send it to the organiser. The <b>technical context</b> of your page is attached automatically.",
+  "⚠️ Complète la dernière ligne : ton idée ou ton avis.":"⚠️ Fill in the last line: your idea or feedback.",
   "<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.":"<b>Goal:</b> a prediction championship among friends, on real events and real odds, <b>no real money</b>. Everyone starts with <b>100 virtual €</b>; the winner is whoever has the most <b>championship points</b>.",
   "📚 Voir les règles détaillées →":"📚 See the detailed rules →", "📚 Règles détaillées":"📚 Detailed rules",
   "📚 Comment marche le jeu":"📚 How the game works",
@@ -1283,7 +1287,9 @@ function viewLeagues(){
       const row=m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
         <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div></div>
         <div class="row" style="gap:6px;flex:0 0 auto"><button class="btn ghost sm" title="${t("Caractéristiques de la ligue")}" onclick="event.stopPropagation();showLeagueInfo('${m.lg.id}')" style="flex:0 0 auto">⚙️</button><span class="chip b">${t("Ouvrir →")}</span></div></div>`;
-      const active=myLeagues.filter(m=>m.lg.status!=='done'); const finished=myLeagues.filter(m=>m.lg.status==='done');
+      const active=myLeagues.filter(m=>m.lg.status!=='done');
+      // Terminées : les DERNIÈRES finies en haut → tri par finished_at, repli sur created_at (ligues finies avant la migration).
+      const finished=myLeagues.filter(m=>m.lg.status==='done').sort((a,b)=>{ const fa=a.lg.finished_at||a.lg.created_at||''; const fb=b.lg.finished_at||b.lg.created_at||''; return fa<fb?1:(fa>fb?-1:0); });
       let h=`<h2>${t("Mes ligues")}${active.length?' · '+active.length:''}</h2>`;
       h+= active.length? active.map(row).join("") : `<div class="box mini muted">${t("Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.")}</div>`;
       if(finished.length){
@@ -1497,9 +1503,10 @@ function copyCode(){ navigator.clipboard?.writeText(L.code); toast(t("Code copi�
  * qui permet d'aller lire la donnée réelle en base.
  */
 // Le contexte technique de l'écran courant. C'est ça, la valeur du bouton.
-function bugContext(){
+function bugContext(kind){
+  const idea=(kind==="idea");
   const l=[];
-  l.push("--- The Maestro League — rapport de bug ---");
+  l.push(idea ? "--- The Maestro League — idée / avis ---" : "--- The Maestro League — rapport de bug ---");
   l.push("Version : "+APP_VERSION);
   l.push("Quand   : "+new Date().toISOString());
   if(AUTH) l.push("Joueur  : "+(AUTH.name||"?")+"  (uid "+String(AUTH.id||"?").slice(0,8)+"…)");
@@ -1517,30 +1524,51 @@ function bugContext(){
   l.push("Appareil : "+(navigator.userAgent||"?"));
   l.push("Écran    : "+(window.innerWidth||"?")+"×"+(window.innerHeight||"?"));
   l.push("");
-  l.push("--- Décris le problème ci-dessous ---");
-  l.push("Ce que je faisais : ");
-  l.push("Ce que j'attendais : ");
-  l.push("Ce qui s'est passé : ");
+  if(idea){
+    l.push("--- Mon idée / avis ci-dessous ---");
+    l.push("Mon idée / avis : ");
+  } else {
+    l.push("--- Décris le problème ci-dessous ---");
+    l.push("Ce que je faisais : ");
+    l.push("Ce que j'attendais : ");
+    l.push("Ce qui s'est passé : ");
+  }
   return l.join("\n");
 }
-async function copyBugReport(){
-  const txt=bugContext();
+async function copyBugReport(kind){
+  const txt=bugContext(kind);
   // ⚠️ navigator.clipboard est indisponible hors HTTPS et peut être refusé → on ne peut PAS
   // supposer que ça marche (contrairement à copyCode() juste au-dessus, qui ignore l'échec).
   // Repli : on affiche le rapport dans la modale, sélectionnable à la main.
   let ok=false;
   try{ if(navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(txt); ok=true; } }catch(e){}
   if(ok){ toast(t("📋 Rapport copié — colle-le dans ton message.")); return; }
-  infoModal("🐛", t("Signaler un bug"), `<div class="mini muted" style="text-align:left;margin-bottom:8px">${t("La copie automatique n'a pas fonctionné. Sélectionne le texte ci-dessous et copie-le à la main.")}</div>
+  const idea=(kind==="idea");
+  infoModal(idea?"💡":"🐛", idea?t("Proposer une idée / un avis"):t("Signaler un bug"), `<div class="mini muted" style="text-align:left;margin-bottom:8px">${t("La copie automatique n'a pas fonctionné. Sélectionne le texte ci-dessous et copie-le à la main.")}</div>
      <textarea readonly style="width:100%;height:220px;font:12px/1.5 ui-monospace,monospace" onclick="this.select()">${esc(txt)}</textarea>`);
 }
+// Point d'entrée du bouton ✉️ : on choisit d'abord bug ou idée/avis (même contexte technique joint).
 function openBugReport(){
-  infoModal("🐛", t("Signaler un bug"), `<div class="mini muted" style="text-align:left">${t("Copie le rapport ci-dessous et envoie-le à l'organisateur (WhatsApp, SMS, mail — comme tu veux). Il contient le <b>contexte technique</b> de ton écran : c'est ce qui permet de retrouver le problème.")}</div>
-     <div class="mini muted" style="text-align:left;margin-top:6px">${t("⚠️ Pense à compléter les 3 lignes du bas : ce que tu faisais, ce que tu attendais, ce qui s'est passé.")}</div>
+  infoModal("✉️", t("Envoyer un message"), `<div class="mini muted" style="text-align:left;margin-bottom:10px">${t("Que veux-tu envoyer ?")}</div>
+     <div class="row" style="gap:8px">
+       <button class="btn" style="flex:1" onclick="openReport('bug')">🐛 ${t("Un bug")}</button>
+       <button class="btn ghost" style="flex:1" onclick="openReport('idea')">💡 ${t("Une idée / un avis")}</button>
+     </div>`);
+}
+function openReport(kind){
+  const idea=(kind==="idea");
+  const intro = idea
+    ? t("Écris ton idée ou ton avis dans la dernière ligne, puis copie le tout et envoie-le à l'organisateur. Le <b>contexte technique</b> de ta page est joint automatiquement.")
+    : t("Copie le rapport ci-dessous et envoie-le à l'organisateur (WhatsApp, SMS, mail — comme tu veux). Il contient le <b>contexte technique</b> de ton écran : c'est ce qui permet de retrouver le problème.");
+  const hint = idea
+    ? t("⚠️ Complète la dernière ligne : ton idée ou ton avis.")
+    : t("⚠️ Pense à compléter les 3 lignes du bas : ce que tu faisais, ce que tu attendais, ce qui s'est passé.");
+  infoModal(idea?"💡":"🐛", idea?t("Proposer une idée / un avis"):t("Signaler un bug"), `<div class="mini muted" style="text-align:left">${intro}</div>
+     <div class="mini muted" style="text-align:left;margin-top:6px">${hint}</div>
      <div style="height:10px"></div>
-     <textarea readonly id="bugTxt" style="width:100%;height:180px;font:12px/1.5 ui-monospace,monospace" onclick="this.select()">${esc(bugContext())}</textarea>
+     <textarea readonly id="bugTxt" style="width:100%;height:180px;font:12px/1.5 ui-monospace,monospace" onclick="this.select()">${esc(bugContext(kind))}</textarea>
      <div style="height:8px"></div>
-     <button class="btn" onclick="copyBugReport()">${t("📋 Copier le rapport")}</button>`);
+     <button class="btn" onclick="copyBugReport('${kind}')">${t("📋 Copier")}</button>`);
 }
 async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
@@ -2191,6 +2219,7 @@ async function resolveDay(){
     try{ await q(db.from("leagues").update({recap_note:recapNote}).eq("id",L.id)); }catch(e){} // message recapitalisation (défensif si colonne absente)
     const next=D+1; const done=next>=fresh.num_days;
     await q(db.from("leagues").update({current_day:next,status:done?"done":"running"}).eq("id",L.id));
+    if(done){ try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} } // date de fin (défensif si colonne absente) — tri des ligues terminées
     if(!done){ try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} // début journée suivante (défensif si colonne absente)
       try{ await q(db.from("leagues").update({bet_started_at:null}).eq("id",L.id)); }catch(e){} } // remise à zéro du compte à rebours des paris
     resolving=false; await refresh(); toast("Journée résolue ✓");
@@ -2494,7 +2523,7 @@ function viewStats(){
     opps.forEach(id=>{ const p=pById(id); const r=s.h2h[id];
       h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${p?esc((p.emoji||'')+' '+(p.name||'?')):'?'}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
     h+=`</div>`; }
-  h+=`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")} ${premBadge()}</button>`;
+  h+=`<button class="btn" onclick="shareSeason()">✨ 📤 ${t("Partager ma saison")}</button>`;
   return h; }
 // Récap texte partageable (premium, offert en test) — WhatsApp/SMS via l'API de partage, sinon presse-papier, sinon zone de texte.
 function seasonRecapText(){
@@ -2507,10 +2536,18 @@ function seasonRecapText(){
     l.push(t("ROI : {a} % · Meilleure journée : {b} €",{a:s.roi,b:fmt(s.best.net)}));
     if(s.favCard&&CARDS[s.favCard]) l.push(t("Carte fétiche : {a}",{a:CARDS[s.favCard].e+' '+t(CARDS[s.favCard].n)})); }
   l.push("— The Maestro League"); return l.join("\n"); }
-async function shareSeason(){ const txt=seasonRecapText();
-  if(navigator.share){ try{ await navigator.share({text:txt}); }catch(e){} return; }
-  try{ await navigator.clipboard.writeText(txt); toast(t("Récap copié — colle-le où tu veux ! 📋")); return; }catch(e){}
-  infoModal("📤", t("Partager ma saison"), `<textarea readonly onclick="this.select()" style="width:100%;box-sizing:border-box;height:170px;font:12px monospace;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:inherit">${esc(txt)}</textarea>`); }
+// Aperçu D'ABORD (on voit ce qu'on partage), puis Partager (natif mobile) / Copier.
+function shareSeason(){ const txt=seasonRecapText();
+  infoModal("📤", t("Partager ma saison"),
+    `<div class="mini muted" style="margin-bottom:8px">${t("Voici ce que tu vas partager :")}</div>
+     <textarea id="recapTxt" readonly onclick="this.select()" style="width:100%;box-sizing:border-box;height:150px;font:12px monospace;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:inherit">${esc(txt)}</textarea>
+     <div class="row" style="gap:8px;margin-top:10px">
+       ${navigator.share?`<button class="btn" style="flex:1" onclick="doShareSeason()">${t("Partager")}</button>`:''}
+       <button class="btn ${navigator.share?'ghost':''}" style="flex:1" onclick="copySeason()">📋 ${t("Copier")}</button>
+     </div>`); }
+async function doShareSeason(){ const txt=seasonRecapText(); if(navigator.share){ try{ await navigator.share({text:txt}); }catch(e){} } }
+async function copySeason(){ const txt=seasonRecapText();
+  try{ await navigator.clipboard.writeText(txt); toast(t("Récap copié — colle-le où tu veux ! 📋")); }catch(e){ const el=document.getElementById("recapTxt"); if(el){ el.focus(); el.select(); } } }
 function viewStandings(){
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
   const humansLive=[...players].sort(cmp).filter(p=>!p.is_ai); const lastH=humansLive[humansLive.length-1];
@@ -2675,10 +2712,11 @@ function viewEnd(){
            ${(p.cards_used||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}
            ${(p.hand||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
    ${enjeuFinalHTML()}
-   <button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")} ${premBadge()}</button><div style="height:8px"></div>
+   <button class="btn" onclick="shareSeason()">✨ 📤 ${t("Partager ma saison")}</button><div style="height:8px"></div>
    ${(me()&&me().is_organizer)?`<button class="btn" onclick="relaunchLeague()">${t("🔁 Relancer une compétition avec les mêmes joueurs")}</button>
      <div class="mini muted" style="text-align:center;margin:6px 0 12px">${t("Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.")}</div>`:''}
    <button class="btn ghost" onclick="goStandings()">${t("📊 Classement détaillé (séries, bonus)")}</button><div style="height:8px"></div>
+   <button class="btn ghost" onclick="openStats()">✨ 📊 ${t("Mes stats")}</button><div style="height:8px"></div>
    ${L.num_days>=1?`<button class="btn ghost" onclick="openResults(${L.num_days-1})">${t("📅 Revoir les résultats journée par journée")}</button><div style="height:8px"></div>`:''}
    <button class="btn" onclick="closeLeague()">${t("🏁 Fermer la ligue")}</button>
    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.")}</div>`;
@@ -2706,7 +2744,7 @@ function showLeagueInfo(lid){
 async function closeLeagueFromHome(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m||!m.org)return;
   if(!confirm(t("Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible.")))return;
-  try{ await q(db.from("leagues").update({status:"done"}).eq("id",lid)); closeCardInfo(); toast(t("Ligue fermée.")); await loadMyLeagues(); }
+  try{ await q(db.from("leagues").update({status:"done"}).eq("id",lid)); try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",lid)); }catch(e){} closeCardInfo(); toast(t("Ligue fermée.")); await loadMyLeagues(); }
   catch(e){ showErr("Fermeture : "+e.message); } }
 
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
@@ -2824,6 +2862,7 @@ async function loadAdmin(){
        On mappe player_id → user_id car une personne a un `player` par ligue. Les connexions
        simples ne sont pas tracées (il faudrait une table d'événements — cf. Phase 2). */
     const p2u={}; pls.forEach(p=>{ if(!p.is_ai && p.user_id) p2u[p.id]=p.user_id; });
+    const u2name={}; pls.forEach(p=>{ if(!p.is_ai && p.user_id && p.name && u2name[p.user_id]==null) u2name[p.user_id]=p.name; }); // user_id → nom (pour afficher QUI est actif)
     const dayKey=ts=>{ const d=new Date(ts); if(isNaN(d)) return null;
       return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
     const dailyMap={};
@@ -2836,7 +2875,8 @@ async function loadAdmin(){
     Object.keys(firstSeen).forEach(u=>{ const k=dayKey(firstSeen[u]); if(k) slot(k).newp.add(u); });
     const now=Date.now(); const daily=[];
     for(let i=0;i<14;i++){ const k=dayKey(new Date(now-i*86400000)); const s=dailyMap[k];
-      daily.push({d:k, users:s?s.users.size:0, bets:s?s.bets:0, leagues:s?s.leagues:0, newp:s?s.newp.size:0}); }
+      const names=s?[...s.users].map(u=>u2name[u]||('#'+String(u).slice(0,6))).sort((a,b)=>a.localeCompare(b)):[];
+      daily.push({d:k, users:s?s.users.size:0, names, bets:s?s.bets:0, leagues:s?s.leagues:0, newp:s?s.newp.size:0}); }
     const activeSince=days=>{ const cut=now-days*86400000; const set=new Set();
       allBts.forEach(b=>{ const tt=new Date(b.created_at).getTime(); if(!isNaN(tt)&&tt>=cut){ const u=p2u[b.player_id]; if(u) set.add(u); } }); return set.size; };
     const active7=activeSince(7), active30=activeSince(30), everActive=activeSince(36500);
@@ -2853,6 +2893,16 @@ async function loadAdmin(){
       daily, active7, active30, everActive, totalBets:allBts.length };
   }catch(e){ adminData={error:e.message}; }
 }
+// Admin : clic sur le nombre d'actifs d'un jour → la liste des noms (voir qui fait quoi).
+function showActiveNames(d){
+  const row=((adminData&&adminData.daily)||[]).find(x=>x.d===d); if(!row) return;
+  const names=row.names||[];
+  const body = names.length
+    ? `<div class="mini muted" style="margin-bottom:8px;text-align:left">${names.length} personne${names.length>1?'s':''} ayant validé au moins un prono ce jour-là :</div>`
+      + names.map(n=>`<div class="mini" style="text-align:left;padding:5px 0;border-top:1px solid var(--border)">👤 ${esc(n)}</div>`).join("")
+    : `<div class="mini muted">Personne ce jour-là.</div>`;
+  infoModal("📈", "Actifs — "+d, body);
+}
 function viewAdmin(){
   const back=`<button class="btn ghost sm" onclick="S.view='leagues';render()">← Mes ligues</button>`;
   if(!(AUTH&&AUTH.id===ADMIN_ID)) return back+`<div class="box">Accès réservé à l'administrateur.</div>`;
@@ -2868,7 +2918,7 @@ function viewAdmin(){
       <div class="row mini"><span>7 derniers jours <b>${a.active7}</b></span><span>30 derniers jours <b>${a.active30}</b></span><span>Depuis le début <b>${a.everActive}</b></span></div></div>
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table>
       <tr><th>Jour</th><th style="text-align:right">Actifs</th><th style="text-align:right">Paris</th><th style="text-align:right">Ligues</th><th style="text-align:right">Nouveaux</th></tr>
-      ${a.daily.map(r=>`<tr><td class="mini">${r.d}</td><td class="num"><b>${r.users||'–'}</b></td><td class="num muted">${r.bets||'–'}</td><td class="num muted">${r.leagues||'–'}</td><td class="num muted">${r.newp||'–'}</td></tr>`).join("")}</table></div>
+      ${a.daily.map(r=>`<tr><td class="mini">${r.d}</td><td class="num">${r.users?`<b class="clik" onclick="showActiveNames('${r.d}')" title="Voir qui">${r.users}</b>`:'–'}</td><td class="num muted">${r.bets||'–'}</td><td class="num muted">${r.leagues||'–'}</td><td class="num muted">${r.newp||'–'}</td></tr>`).join("")}</table></div>
     <div class="box mini muted">ℹ️ <b>Actifs</b> = personnes distinctes (1 personne = 1, même sur plusieurs ligues) ayant <b>validé un prono</b> ce jour-là. Les simples connexions ne sont pas tracées — il faudrait une table d'événements (prévu avec la Phase 2 backend). <b>Nouveaux</b> = 1ʳᵉ arrivée d'une personne dans une ligue.</div>
     ${st("🎮 Joueurs (comptes distincts ayant rejoint)", a.activeAccounts)}
     ${st("🎫 Participations (joueur × ligue)", a.participations)}
