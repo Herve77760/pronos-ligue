@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.12</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.14</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -225,38 +225,46 @@ function getEnjeu(){ try{ const o=JSON.parse(L.gage); if(o&&o.enjeu) return o.en
 function isReward(){ return getEnjeu()==="reward"; }
 function itemPool(enjeu,mode){ const base=(enjeu==="reward")?REWARDS:GAGES; return (mode==="simple")?base.filter(g=>g.s):base.slice(); }
 const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
-// Enjeu final « façon championnat » — RÈGLE UNIQUE (arrêtée le 2026-07-16) pour le gage ET la
-// récompense : c'est le vote du VAINQUEUR qui s'applique. Seul le destinataire change :
-//   • GAGE       → infligé au DERNIER  (le champion punit le cancre) ;
-//   • RÉCOMPENSE → remise au PREMIER   (le champion réclame ce qu'il avait voté).
-// Pourquoi c'est équitable malgré l'apparence (le vainqueur « choisit sa propre récompense ») :
-// on vote pendant la PRÉPARATION, avant la J1 — personne ne sait où il finira. Le vote est donc un
-// vœu déclaré à l'aveugle, révélé à la fin. C'est aussi ce qui tient le suspense jusqu'au bout.
-// Cascade de choix, IDENTIQUE dans les 2 modes :
-//   1. le vote du VAINQUEUR — option de la liste ou son texte perso "c" ;
+// Enjeu final — RÈGLE UNIQUE (arrêtée le 2026-07-16, v4.14) : « CELUI QUI CHOISIT N'EST JAMAIS LE
+// DESTINATAIRE ». Le choix vient toujours du pôle OPPOSÉ du classement :
+//   • GAGE       → infligé au DERNIER, choisi par le 1er     (le champion punit le cancre) ;
+//   • RÉCOMPENSE → remise au PREMIER, choisie par le DERNIER  (le cancre couronne le champion).
+// ⚠️ Ceci REMPLACE la règle v4.09 (« le vote du vainqueur s'applique », récompense comprise).
+// Pourquoi ce sens et pas l'inverse — l'asymétrie des coûts : le gage est payé par UNE personne (le
+// dernier), la récompense par TOUS LES AUTRES (« les autres offrent une tournée », « chacun met une
+// somme »). Laisser le vainqueur choisir sa récompense revenait à lui laisser imposer un coût à 5
+// personnes, sans aucun frein. Ici, celui qui choisit la récompense est celui qui la PAIERA → seul
+// mécanisme où le décideur du coût le supporte, donc autorégulé sans plafond ni règle en plus.
+// Effet assumé : la récompense sera modeste/symbolique plutôt que matérielle — cohérent avec un jeu
+// entre potes en monnaie virtuelle.
+// Personne ne vote en sachant où il finira (le vote a lieu pendant la PRÉPARATION) → le suspense
+// tient des deux côtés, et le dernier garde une main au lieu de seulement subir.
+// Cascade, identique dans les 2 modes, en partant du pôle QUI CHOISIT :
+//   1. le vote de celui du pôle (1er pour le gage / DERNIER pour la récompense) — option ou texte perso "c" ;
 //   2. sinon le choix STRICTEMENT majoritaire — une option devant toutes les autres ;
-//   3. sinon — égalité, ou personne n'a voté — on descend le classement : 2e, 3e… jusqu'au premier votant ;
+//   3. sinon — égalité, ou personne n'a voté — on avance depuis ce pôle (2e, 3e… / avant-dernier, etc.) ;
 //   4. ultime repli : la 1re option.
 // `perso` = texte libre écrit par un joueur → ne doit JAMAIS passer par t() à l'affichage.
 // Calculé sur le classement COURANT (projeté), figé à la fin de la saison.
 function enjeuOutcome(){ const s=(L&&L.prep_summary)||{}; const opts=s.options||[]; const votes=s.voteMap||{}; const rew=(s.enjeu==="reward");
   const ho=[...players].sort(cmp).filter(p=>!p.is_ai); const best=ho[0], worst=ho[ho.length-1];
-  const target=rew?best:worst;
+  const target = rew ? best : worst;              // qui REÇOIT (récompense) / SUBIT (gage)
+  const ordre  = rew ? [...ho].reverse() : ho;    // d'où part le choix : dernier→1er, ou 1er→dernier
   const pickOf=p=>{ if(!p) return null; const v=votes[p.id];
     if(v==="c" && (s.customs||{})[p.id]) return {title:s.customs[p.id], desc:rew?t("Récompense personnalisée — réglée entre vous, hors application."):t("Gage personnalisé — réglé entre vous, hors application."), chooser:p, perso:true};
     const o=(v!=null)?opts[v]:null; if(o) return {title:(o.t)||o, desc:o.d||'', chooser:p, perso:false};
     return null; };
-  let r=pickOf(best);
-  if(!r){ // le vainqueur n'a pas voté → choix strictement majoritaire
+  let r=pickOf(ordre[0]);
+  if(!r){ // celui du pôle n'a pas voté → choix strictement majoritaire
     const counts=opts.map((_,i)=>Object.values(votes).filter(x=>x===i).length);
     const mx=Math.max(0,...counts); const top=counts.map((c,i)=>c===mx?i:-1).filter(i=>i>=0);
     if(mx>0 && top.length===1){ const o=opts[top[0]]; r={title:(o.t)||o, desc:o.d||'', chooser:null}; }
-    else { for(let k=1;k<ho.length && !r;k++) r=pickOf(ho[k]); } // pas de majorité → 2e, 3e, …
+    else { for(let k=1;k<ordre.length && !r;k++) r=pickOf(ordre[k]); } // pas de majorité → on avance depuis le pôle
   }
   if(!r && opts.length){ const o=opts[0]; r={title:(o.t)||o, desc:o.d||'', chooser:null}; }
   if(!r) r={title:s.gage||(L&&L.gage)||'', desc:'', chooser:null};
-  // On n'affiche le « choisi par » que s'il DIFFÈRE du destinataire : en récompense le vainqueur
-  // choisit pour lui-même (« choisi par lui-même » n'aurait aucun sens), sauf si la cascade est descendue.
+  // Garde-fou : on n'affiche le « choisi par » que s'il DIFFÈRE du destinataire. Par construction la
+  // règle du pôle opposé le garantit — sauf s'il n'y a qu'UN seul humain (best === worst).
   const chooser=(r.chooser && target && r.chooser.id!==target.id)?r.chooser:null;
   return {chooser, target, title:r.title, desc:r.desc||gageDescOf(r.title), rew, perso:!!r.perso, ok:!!target}; }
 /* ===== DONNÉES RÉELLES (mode test) — The Odds API ===== */
@@ -387,7 +395,11 @@ function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini mute
 
 /* ============ STATE ============ */
 let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, prevView:"leagues" };
-let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
+// showFinished=true par défaut : une ligue terminée doit rester VISIBLE à la connexion — c'est le
+// moment où l'on vient voir le podium. (Le retour direct dans la dernière ligue via `pl_last` couvre
+// déjà le cas principal ; ceci couvre les joueurs qui ont fait « ← Mes ligues » ou qui se sont
+// déconnectés, chemins qui effacent `pl_last`.) La section reste repliable à la main.
+let AUTH=null, myLeagues=[], showFinished=true, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[];
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null;
 let palmares=null, adminData=null, palmOpen="";
@@ -558,19 +570,20 @@ const EN={
   "Texte vide — rien n'a été enregistré.":"Empty text — nothing was saved.",
   "Gage personnalisé — réglé entre vous, hors application.":"Custom forfeit — settled between you, outside the app.",
   "🏆 <b>Ton vote ne s'appliquera que si tu finis 1er</b> — c'est le champion qui inflige son gage au dernier. Choisis bien le tien !":"🏆 <b>Your vote only counts if you finish 1st</b> — the champion is the one who hands their forfeit to the last-placed player. Choose yours wisely!",
-  "🏆 <b>Ton vote ne s'appliquera que si tu finis 1er</b> — c'est le champion qui repart avec la récompense qu'il avait votée. Choisis celle qui te ferait vraiment plaisir !":"🏆 <b>Your vote only counts if you finish 1st</b> — the champion walks away with the reward they voted for. Pick the one you'd genuinely enjoy!",
-  "✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🏆 C'est la récompense du <b>vainqueur</b> qui lui sera remise.":"✏️ Each player can suggest <b>their own reward</b> at the preparation step. 🏆 The <b>winner</b> walks away with the reward they voted for.",
+  "🥄 <b>Ton vote ne s'appliquera que si tu finis DERNIER</b> — c'est le dernier qui offre sa récompense au champion. Tu voteras donc pour ce que tu accepterais de donner… en espérant ne pas avoir à le faire !":"🥄 <b>Your vote only counts if you finish LAST</b> — the last-placed player is the one who hands their reward to the champion. So you're voting for what you'd be willing to give… and hoping you won't have to!",
+  "✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense votée par le <b>dernier</b> qui sera remise au champion.":"✏️ Each player can suggest <b>their own reward</b> at the preparation step. 🥄 The reward voted by the <b>last-placed player</b> is the one handed to the champion.",
   "✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier.":"✏️ Each player can suggest <b>their own forfeit</b> at the preparation step. 🏆 The <b>winner's</b> forfeit is the one the last-placed player will do.",
   "Vote pour la récompense <b>et</b> mise sur les bonus — sans attendre les autres.":"Vote for the reward <b>and</b> bid on the bonuses — without waiting for the others.",
   "Récompense personnalisée — réglée entre vous, hors application.":"Custom reward — settled between you, outside the app.",
-  "La <b>récompense</b> remise au champion sera celle qu'il a <b>lui-même votée</b> 🏆. Selon qui gagne :":"The <b>reward</b> handed to the champion is the one <b>they voted for themselves</b> 🏆. Depending on who wins:",
-  "Récompense qu'il remporte":"Reward they walk away with",
+  "La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :":"The <b>reward</b> handed to the champion is the one voted by the <b>last-placed player</b> 🥄 — whoever chooses is never the one who receives. Depending on who finishes last:",
+  "Récompense qu'il offre au champion":"Reward they hand to the champion",
+  "Si… finit dernier":"If… finishes last", "si {a} finit dernier":"if {a} finishes last",
   "🏆 <b>Motivation express :</b> le champion repart avec la récompense qu'il avait votée — une excellente raison de viser la <b>première</b> place !":"🏆 <b>Quick motivation:</b> the champion walks away with the reward they voted for — a great reason to aim for <b>first</b> place!",
   "🏆 Récompense (au premier) :":"🏆 Reward (for the first):",
   "🏆 Récompense":"🏆 Reward", "{name} remporte : <b>{item}</b>.":"{name} wins: <b>{item}</b>.",
   "🎭 Gage projeté (au dernier) :":"🎭 Projected forfeit (for the last):", "(choix de {a})":"({a}'s choice)", "(choisi par {a} 🏆)":"(chosen by {a} 🏆)",
   "🎭 L'enjeu du tournoi":"🎭 The tournament stakes",
-  "Le <b>gage</b> infligé au dernier sera celui choisi par le <b>vainqueur</b> 🏆. Selon qui gagne :":"The <b>forfeit</b> for the last-placed player will be the one chosen by the <b>winner</b> 🏆. Depending on who wins:",
+  "Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :":"The <b>forfeit</b> for the last-placed player is the one voted by the <b>winner</b> 🏆 — whoever chooses is never the one who takes it. Depending on who wins:",
   "si {a} gagne":"if {a} wins", "(pas de vote)":"(no vote)",
   "😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !":"😅 Aim for the win… or get ready to do the winner's forfeit if you finish last!",
   "🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).":"🔒 Other players' votes stay hidden until everyone has confirmed (results in the backstage).",
@@ -725,7 +738,6 @@ const EN={
   "🏆 Points & classement":"🏆 Points & standings",
   "Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.":"Each day, in your <b>duel</b>, the <b>winner</b> is whoever has the <b>best net result</b> (gains − stakes). Tie → broken by the biggest <b>gain</b>, then the biggest <b>stake</b>; if everything is identical, it's a <b>draw</b>.",
   "Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.":"Points: <b>winner</b> = <b>3 pts</b> if their net is positive, <b>1 pt</b> if negative; <b>loser</b> = <b>1 pt</b> if their net is positive, <b>0 pt</b> if negative; <b>draw</b> = <b>1 pt</b> each.",
-  "<b>Malus</b> : <b>−1 pt</b> si <b>tous</b> tes paris du jour sont perdants (le total au classement peut donc devenir négatif).":"<b>Penalty</b>: <b>−1 pt</b> if <b>all</b> your bets that day lose (so your standings total can go negative).",
   "Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.":"Bonus: the <b>best forecaster</b> ⭐ (biggest net among <b>all</b> players) earns <b>+1 point</b>.",
   "Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.":"Standings tiebreakers: capital, then duel wins, biggest gain, biggest odds.",
   "🔥 Dynamique":"🔥 Momentum",
@@ -1200,7 +1212,7 @@ function prepSummaryBody(){
   // « si X gagne → … ». (L'ancien histogramme des votes du mode récompense est retiré : la majorité
   // ne décide plus, l'afficher laisserait croire le contraire.)
   return `<h2>${t("🎭 L'enjeu du tournoi")}</h2>
-   <div class="box"><div class="mini muted">${rew?t("La <b>récompense</b> remise au champion sera celle qu'il a <b>lui-même votée</b> 🏆. Selon qui gagne :"):t("Le <b>gage</b> infligé au dernier sera celui choisi par le <b>vainqueur</b> 🏆. Selon qui gagne :")}</div>
+   <div class="box"><div class="mini muted">${rew?t("La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :"):t("Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :")}</div>
      ${(()=>{ const hs=(s.players||[]).filter(p=>!p.is_ai);
         const gOf=p=>{ const v=(s.voteMap||{})[p.pid]; if(v==="c") return {txt:(s.customs||{})[p.pid]||null, perso:true};
           const o=(s.options||[])[v]; return {txt:o?((o.t)||o):null, perso:false}; };
@@ -1208,9 +1220,9 @@ function prepSummaryBody(){
         const lbl=g=>`${g.txt?'<b>'+esc(g.perso?g.txt:t(g.txt))+'</b>':'<span class="muted">'+t("(pas de vote)")+'</span>'}${g.perso?' <span class="tag">'+t("perso")+'</span>':''}`;
         // Grande ligue : format tableau compact (sinon ça fait une avalanche de blocs).
         if(hs.length>5) return `<div style="overflow-x:auto;margin-top:8px"><table>
-          <tr><th>${t("Si… gagne")}</th><th>${rew?t("Récompense qu'il remporte"):t("Gage infligé au dernier")}</th></tr>
+          <tr><th>${rew?t("Si… finit dernier"):t("Si… gagne")}</th><th>${rew?t("Récompense qu'il offre au champion"):t("Gage infligé au dernier")}</th></tr>
           ${hs.map(p=>`<tr><td class="mini">${p.emoji} ${esc(p.name)}</td><td class="mini">${lbl(gOf(p))}</td></tr>`).join("")}</table></div>`;
-        return hs.map(p=>`<div class="box row" style="margin-top:8px"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><div><div class="mini muted">${t("si {a} gagne",{a:esc(p.name)})}</div>${lbl(gOf(p))}</div></div></div>`).join("");
+        return hs.map(p=>`<div class="box row" style="margin-top:8px"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><div><div class="mini muted">${rew?t("si {a} finit dernier",{a:esc(p.name)}):t("si {a} gagne",{a:esc(p.name)})}</div>${lbl(gOf(p))}</div></div></div>`).join("");
       })()}
      <div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${rew?t("🏆 <b>Motivation express :</b> le champion repart avec la récompense qu'il avait votée — une excellente raison de viser la <b>première</b> place !"):t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>
    <h2>${t("🃏 Enchères — bonus attribués")}</h2>
@@ -1256,7 +1268,7 @@ function viewLobby(){
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎭 Enjeu de la ligue")}</h2>
     ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage voté par le groupe.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense votée par le groupe (aucun gage).")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
-    <div class="box mini muted">${isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🏆 C'est la récompense du <b>vainqueur</b> qui lui sera remise."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier.")}</div>
+    <div class="box mini muted">${isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense votée par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier.")}</div>
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?(t("Clôturer les inscriptions")+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 2 joueurs")}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
@@ -1346,7 +1358,7 @@ function viewPrep(){
    <h2>${t("👥 Joueurs de la ligue · {a}",{a:players.filter(p=>!p.is_ai).length})}</h2>
    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("en cours")}</span></div>`).join("")}
    <h2>${isReward()?t("🏆 Vote de la récompense"):t("🎭 Vote du gage")}</h2>
-   <div class="mini muted" style="margin:-4px 0 6px">${t("🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).")} ${isReward()?t("🏆 <b>Ton vote ne s'appliquera que si tu finis 1er</b> — c'est le champion qui repart avec la récompense qu'il avait votée. Choisis celle qui te ferait vraiment plaisir !"):t("🏆 <b>Ton vote ne s'appliquera que si tu finis 1er</b> — c'est le champion qui inflige son gage au dernier. Choisis bien le tien !")}</div>
+   <div class="mini muted" style="margin:-4px 0 6px">${t("🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).")} ${isReward()?t("🥄 <b>Ton vote ne s'appliquera que si tu finis DERNIER</b> — c'est le dernier qui offre sa récompense au champion. Tu voteras donc pour ce que tu accepterais de donner… en espérant ne pas avoir à le faire !"):t("🏆 <b>Ton vote ne s'appliquera que si tu finis 1er</b> — c'est le champion qui inflige son gage au dernier. Choisis bien le tien !")}</div>
    ${options.map((g,i)=>`<div class="box" onclick="prepVote(${i})" style="cursor:pointer;${myVote===i?'border-color:var(--green)':''}">
       <div class="row"><b>${esc(t(g.t||g))}</b><span class="chip ${myVote===i?'g':''}">${myVote===i?t("✓ ton vote"):t("Voter")}</span></div>
       ${g.d?`<div class="mini muted" style="margin-top:5px">${esc(t(g.d))}</div>`:''}</div>`).join("")}
@@ -1813,8 +1825,11 @@ async function resolveDay(){
     // +1 au meilleur pronostiqueur du jour (plus gros gain parmi tous les joueurs)
     const starId=dayStar(ps.filter(p=>!forgot.has(p.id)).map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
     if(starId!=null) upd[starId].points+=1;
-    // Malus : -1 point si TOUS les paris du joueur sont faux (aucun gagnant) → possible d'être en négatif.
-    ps.forEach(p=>{ if(PD[p.id] && PD[p.id].picks && PD[p.id].picks.length && (dayWins[p.id]||0)===0) upd[p.id].points-=1; });
+    // (v4.13 — malus « −1 pt si tous les paris faux » SUPPRIMÉ.) C'était une TROISIÈME peine pour le
+    // même échec : le joueur a déjà perdu toutes ses mises ET son duel. Mesuré sur les données réelles :
+    // 5,2 % des paris joués (1 sur 20) — ce n'était pas un cas rare. Retiré aussi de recapBody() et
+    // computeStandHist() : les 3 doivent rester cohérents, sinon le classement affiché diverge des
+    // points écrits en base.
     // Duel : vainqueur = meilleur net (gain−mise), puis gain, puis mise, sinon nul.
     // Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
     // Les séries 🔥/❄️ ne servent que d'indicateur de dynamique (aucun avantage).
@@ -1848,8 +1863,8 @@ function recapBody(D){
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
     const H=Object.assign({net:netMap[d.home_id]||0}, gainMise(hb&&hb.picks, d.fixtures));
     const A=Object.assign({net:netMap[d.away_id]||0}, gainMise(ab&&ab.picks, d.fixtures));
-    const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id)); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a;
-    [d.home_id,d.away_id].forEach(pid=>{ const bb=bets.find(x=>x.player_id===pid); if(bb&&bb.picks&&bb.picks.length&&winCount(bb,d.fixtures)===0) dpts[pid]-=1; }); });
+    const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id)); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a; });
+    // (v4.13 — le malus « −1 pt si tous les paris faux » qui s'appliquait ici est supprimé, cf. resolveDay.)
   const starId=dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
   if(starId!=null) dpts[starId]+=1;
   players.forEach(p=>{ if(forgot(p.id)) dpts[p.id]-=2; }); // pénalité d'oubli : −2 pts (alignée sur resolveDay/classement)
@@ -2069,8 +2084,9 @@ function computeStandHist(){
     // ⭐ meilleur pronostiqueur du jour (hors oubli) → +1 pt
     const rows=[]; players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du||forgot.has(p.id)) return; const b=betAt[d+'|'+p.id]; const gm=gainMise(b&&b.picks, du.fixtures); rows.push({id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}); });
     const sid=dayStar(rows); if(sid!=null && st[sid]){ st[sid].points+=1; st[sid].star+=1; }
-    // −1 pt si tous les paris faux (picks non vides)
-    players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du) return; const b=betAt[d+'|'+p.id]; if(b&&b.picks&&b.picks.length&&winCount(b,du.fixtures)===0 && st[p.id]) st[p.id].points-=1; });
+    // (v4.13 — le malus « −1 pt si tous les paris faux » est supprimé, cf. resolveDay. ⚠️ Cette fonction
+    // REJOUE tout l'historique : ne pas le retirer ici aurait fait diverger le classement affiché des
+    // points réellement écrits en base par resolveDay.)
     // capital (+ net), meilleure journée, meilleure cote gagnée
     players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); const b=betAt[d+'|'+p.id]; const net=(b&&b.net)||0; if(st[p.id]){ st[p.id].best_day=Math.max(st[p.id].best_day,net); st[p.id].capital=Math.max(0,Math.round((st[p.id].capital+net)*100)/100); }
       if(b&&b.picks&&du&&du.fixtures){ b.picks.forEach((pk,i)=>{ const f=du.fixtures[i]; if(!f) return; const c=b.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===pk.sel||f.res===c.sel2):(pk.sel===f.res); const odd=isDC?dcWinOdd(f,pk.sel,c.sel2):oddOf(f,pk.sel); if(win&&odd>st[p.id].best_odd) st[p.id].best_odd=odd; }); } });
@@ -2246,7 +2262,10 @@ function viewEnd(){
    <button class="btn" onclick="closeLeague()">${t("🏁 Fermer la ligue")}</button>
    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.")}</div>`;
 }
-function closeLeague(){ showFinished=false; backToLeagues(); }
+// On garde la section « terminées » DÉPLIÉE en sortant : on vient de fermer la ligue, c'est
+// exactement le moment où l'on veut la voir. (Avant : showFinished=false → la ligue qu'on venait
+// de terminer disparaissait dans la section repliée, au moment où elle avait le plus d'intérêt.)
+function closeLeague(){ showFinished=true; backToLeagues(); }
 // Fiche « Caractéristiques de la ligue » depuis l'accueil (format, options, + fermeture pour l'organisateur)
 function showLeagueInfo(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m)return; const lg=m.lg;
@@ -2447,7 +2466,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.12";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.14";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
@@ -2513,7 +2532,6 @@ function viewRules(){
    <div class="box"><b>${t("🏆 Points & classement")}</b>
      <div class="mini muted" style="margin-top:6px">${t("Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.")}
      <br>${t("Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.")}
-     <br>${t("<b>Malus</b> : <b>−1 pt</b> si <b>tous</b> tes paris du jour sont perdants (le total au classement peut donc devenir négatif).")}
      <br>${t("Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.")}
      <br>${t("Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.")}</div></div>
    <div class="box"><b>${t("🔥 Dynamique")}</b>
