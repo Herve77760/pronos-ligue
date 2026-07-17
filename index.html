@@ -114,18 +114,23 @@
       <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🇬🇧</button>
       <button class="btn ghost sm" id="themeBtn" onclick="toggleTheme()" title="Basculer clair / sombre">☀️</button>
       <button class="btn ghost sm hide" id="rulesBtn" onclick="openRules()" title="Règles">📖</button>
+      <button class="btn ghost sm hide" id="bugBtn" onclick="openBugReport()" title="Signaler un bug">🐛</button>
       <button class="btn ghost sm hide" id="settingsBtn" onclick="openSettings()" title="Paramètres du compte">⚙️</button>
     </div>
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.17</div>
+  <div class="foot" id="foot">The Maestro League</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 "use strict";
 /* ============ CONFIG ============ */
+// Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
+// JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
+// Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
+const APP_VERSION = "v4.20";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -184,7 +189,7 @@ const CARDS={
  cadeau:   {e:"🎁",n:"Chérie c'est cadeau",t:true, oppT:true, f:3, d:"Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement)."},
  sniper:   {e:"🎯",n:"Sniper",t:true, f:3, d:"Si le pari désigné est ton meilleur gain → +10 % capital."},
  invest:   {e:"📈",n:"Investisseur",t:false, f:4, d:"Plafond de mise porté à 70 % du capital ce jour."},
- roi:      {e:"💎",n:"Roi de la cote",t:false, f:2, d:"Un pari gagné à cote ≥ 2,00 → +5 % du capital de départ."},
+ roi:      {e:"💎",n:"Roi de la cote",t:false, f:3, d:"Un pari gagné à cote ≥ 2,00 → +10 % de ton capital en début de journée."},
  tout:     {e:"🔥",n:"Tout ou Rien",t:true, f:5, d:"Un pari choisi : gain ×3, perte ×2."},
  sangsue:  {e:"🩸",n:"Sangsue",t:false, f:3, d:"Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches)."},
  parachute:{e:"🪂",n:"Parachute",t:false, f:4, d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
@@ -424,7 +429,7 @@ function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini mute
 function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ ${t("Clôture des paris {a}",{a:'<b>'+fmtWhen(dt.bet)+'</b>'})} · ${leagueFormula().n}</div>`:''; }
 
 /* ============ STATE ============ */
-let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, prevView:"leagues" };
+let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, nav:[] };
 // showFinished=true par défaut : une ligue terminée doit rester VISIBLE à la connexion — c'est le
 // moment où l'on vient voir le podium. (Le retour direct dans la dernière ligue via `pl_last` couvre
 // déjà le cas principal ; ceci couvre les joueurs qui ont fait « ← Mes ligues » ou qui se sont
@@ -682,7 +687,7 @@ const EN={
   "Chérie c'est cadeau":"Sweetie It's a Gift", "Tu désignes un match : le pari de l'adversaire sur ce match est inversé (le 1 devient 2 et inversement).":"You pick a match: the opponent's bet on that match is flipped (1 becomes 2 and vice versa).",
   "Sniper":"Sniper", "Si le pari désigné est ton meilleur gain → +10 % capital.":"If the chosen bet is your best gain → +10% capital.",
   "Investisseur":"Investor", "Plafond de mise porté à 70 % du capital ce jour.":"Stake cap raised to 70% of capital that day.",
-  "Roi de la cote":"Odds King", "Un pari gagné à cote ≥ 2,00 → +5 % du capital de départ.":"A bet won at odds ≥ 2.00 → +5% of starting capital.",
+  "Roi de la cote":"Odds King", "Un pari gagné à cote ≥ 2,00 → +10 % de ton capital en début de journée.":"A bet won at odds ≥ 2.00 → +10% of your capital at the start of the day.",
   "Tout ou Rien":"All or Nothing", "Un pari choisi : gain ×3, perte ×2.":"A chosen bet: gain ×3, loss ×2.",
   "Sangsue":"Leech", "Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches).":"If the opponent ends in profit, you siphon 15% of their profit (they lose it, you pocket it).",
   "Parachute":"Parachute", "Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie.":"Safety net: if your day is negative, 30% of your loss is cushioned.",
@@ -780,6 +785,11 @@ const EN={
   "un bonus":"a bonus",
   // — Phase 4d : règles du jeu —
   "← Retour":"← Back", "📖 Règles du jeu":"📖 Game rules",
+  "Signaler un bug":"Report a bug", "📋 Copier le rapport":"📋 Copy the report",
+  "📋 Rapport copié — colle-le dans ton message.":"📋 Report copied — paste it into your message.",
+  "Copie le rapport ci-dessous et envoie-le à l'organisateur (WhatsApp, SMS, mail — comme tu veux). Il contient le <b>contexte technique</b> de ton écran : c'est ce qui permet de retrouver le problème.":"Copy the report below and send it to the organiser (WhatsApp, SMS, email — whatever suits you). It carries the <b>technical context</b> of your screen: that's what makes the problem findable.",
+  "⚠️ Pense à compléter les 3 lignes du bas : ce que tu faisais, ce que tu attendais, ce qui s'est passé.":"⚠️ Remember to fill in the 3 lines at the bottom: what you were doing, what you expected, what happened.",
+  "La copie automatique n'a pas fonctionné. Sélectionne le texte ci-dessous et copie-le à la main.":"Automatic copying didn't work. Select the text below and copy it by hand.",
   "<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.":"<b>Goal:</b> a prediction championship among friends, on real events and real odds, <b>no real money</b>. Everyone starts with <b>100 virtual €</b>; the winner is whoever has the most <b>championship points</b>.",
   "📚 Voir les règles détaillées →":"📚 See the detailed rules →", "📚 Règles détaillées":"📚 Detailed rules",
   "📚 Comment marche le jeu":"📚 How the game works",
@@ -1147,7 +1157,7 @@ async function doSignup(){
 }
 async function logout(){ if(!confirm(t("Se déconnecter ?")))return; if(poll)clearInterval(poll);
   try{ await db.auth.signOut(); }catch(e){} localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
-  S={view:"auth",leagueId:null,myId:null,code:null,recap:false,dispDay:0,prevView:"leagues"}; L=null; render(); }
+  S={view:"auth",leagueId:null,myId:null,code:null,recap:false,dispDay:0,nav:[]}; L=null; render(); }
 
 /* ============ MES LIGUES ============ */
 async function loadMyLeagues(){
@@ -1206,13 +1216,13 @@ function viewLeagues(){
     })()}`;
 }
 function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr(t("Entre un code valide."));return;} joinLeague(c); }
-function openLeague(lid,pid,fresh){ S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
+function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
 }
 function backToLeagues(){ if(poll)clearInterval(poll); localStorage.removeItem("pl_last");
-  S.leagueId=null; S.myId=null; L=null; S.view="leagues"; loadMyLeagues(); }
+  navRoot(); S.leagueId=null; S.myId=null; L=null; S.view="leagues"; loadMyLeagues(); }
 
 async function createLeague(){
   if(busy||!AUTH)return; busy=true; showErr("");
@@ -1400,6 +1410,60 @@ function viewLobby(){
       : `<div class="box mini muted" style="text-align:center">${t("En attente que l'organisateur clôture les inscriptions…")}</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast(t("Code copié : {a}",{a:L.code})); }
+
+/* ============ SIGNALEMENT DE BUG ============
+ * Le testeur copie un rapport et le colle où il veut (WhatsApp, SMS, mail). Choix d'Hervé
+ * (2026-07-16) : PAS de mailto: — une adresse de destination serait écrite en dur dans index.html,
+ * fichier PUBLIC sur GitHub → adresse perso exposée aux robots à spam. Et pas de capture d'écran
+ * non plus : sur mobile c'est pénible, et le CONTEXTE TECHNIQUE vaut mieux qu'une image — c'est lui
+ * qui permet d'aller lire la donnée réelle en base.
+ */
+// Le contexte technique de l'écran courant. C'est ça, la valeur du bouton.
+function bugContext(){
+  const l=[];
+  l.push("--- The Maestro League — rapport de bug ---");
+  l.push("Version : "+APP_VERSION);
+  l.push("Quand   : "+new Date().toISOString());
+  if(AUTH) l.push("Joueur  : "+(AUTH.name||"?")+"  (uid "+String(AUTH.id||"?").slice(0,8)+"…)");
+  l.push("Écran   : "+(S.view||"?")+(S.editingBet?" (édition des pronos)":"")+(S.recap?" (récap)":""));
+  if(L){
+    l.push("Ligue   : "+(L.name||"?")+"  · code "+(L.code||"?"));
+    l.push("Statut  : "+(L.status||"?")+"  · journée "+((L.current_day|0)+1)+"/"+(L.num_days||"?"));
+    l.push("Options : mode="+getMode()+" · enjeu="+getEnjeu()+" · données="+(L.data_mode||"sim")+" · formule="+(L.formula||"classique"));
+    if(S.myId) l.push("player_id : "+S.myId);
+    const d=(typeof myDuel==="function")?myDuel():null;
+    if(d){ const o=pById(d.home_id===S.myId?d.away_id:d.home_id); l.push("Duel    : vs "+((o&&o.name)||"?")+"  · "+(d.home_id===S.myId?"à domicile":"à l'extérieur")+"  · "+((d.fixtures&&d.fixtures.length)?d.fixtures.length+" matchs choisis":"matchs pas encore choisis")); }
+    const b=(typeof myBet==="function")?myBet():null;
+    if(b) l.push("Mon pari : "+((b.picks&&b.picks.length)?b.picks.length+" pronos":"aucun prono")+(b.card&&b.card.id?" · carte "+b.card.id:"")+(b.net!=null?" · net "+b.net+"€":" · non résolu"));
+  }
+  l.push("Appareil : "+(navigator.userAgent||"?"));
+  l.push("Écran    : "+(window.innerWidth||"?")+"×"+(window.innerHeight||"?"));
+  l.push("");
+  l.push("--- Décris le problème ci-dessous ---");
+  l.push("Ce que je faisais : ");
+  l.push("Ce que j'attendais : ");
+  l.push("Ce qui s'est passé : ");
+  return l.join("\n");
+}
+async function copyBugReport(){
+  const txt=bugContext();
+  // ⚠️ navigator.clipboard est indisponible hors HTTPS et peut être refusé → on ne peut PAS
+  // supposer que ça marche (contrairement à copyCode() juste au-dessus, qui ignore l'échec).
+  // Repli : on affiche le rapport dans la modale, sélectionnable à la main.
+  let ok=false;
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(txt); ok=true; } }catch(e){}
+  if(ok){ toast(t("📋 Rapport copié — colle-le dans ton message.")); return; }
+  infoModal("🐛", t("Signaler un bug"), `<div class="mini muted" style="text-align:left;margin-bottom:8px">${t("La copie automatique n'a pas fonctionné. Sélectionne le texte ci-dessous et copie-le à la main.")}</div>
+     <textarea readonly style="width:100%;height:220px;font:12px/1.5 ui-monospace,monospace" onclick="this.select()">${esc(txt)}</textarea>`);
+}
+function openBugReport(){
+  infoModal("🐛", t("Signaler un bug"), `<div class="mini muted" style="text-align:left">${t("Copie le rapport ci-dessous et envoie-le à l'organisateur (WhatsApp, SMS, mail — comme tu veux). Il contient le <b>contexte technique</b> de ton écran : c'est ce qui permet de retrouver le problème.")}</div>
+     <div class="mini muted" style="text-align:left;margin-top:6px">${t("⚠️ Pense à compléter les 3 lignes du bas : ce que tu faisais, ce que tu attendais, ce qui s'est passé.")}</div>
+     <div style="height:10px"></div>
+     <textarea readonly id="bugTxt" style="width:100%;height:180px;font:12px/1.5 ui-monospace,monospace" onclick="this.select()">${esc(bugContext())}</textarea>
+     <div style="height:8px"></div>
+     <button class="btn" onclick="copyBugReport()">${t("📋 Copier le rapport")}</button>`);
+}
 async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Formule : "+e.message+" (ajoute la colonne 'formula' — voir schema.sql)"); } busy=false; }
@@ -1943,7 +2007,7 @@ function runEngine(pdIn, capStart, dz, N){
   // Phase 4 : Sniper, Roi de la cote
   for(const pid in PD){ const pd=PD[pid]; const g=G[pid];
     if(pd.card&&pd.card.id==="sniper"&&pd.card.target!=null){ let bi=-1,bv=-1e9; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); if(bi===pd.card.target&&g.perBet[bi].gain>0) g.bonus+=capStart[pid]*0.10; }
-    if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>=2.0)) g.bonus+=capStart[pid]*0.05; } }
+    if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>=2.0)) g.bonus+=capStart[pid]*0.10; } }
   // Phase 5 : Gourmand, Sangsue, Serge Benamou
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="sangsue"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0){ const t=0.15*on; G[pid].bonus+=t; opp.bonus-=t; } } } }
@@ -2501,7 +2565,7 @@ async function closeLeagueFromHome(lid){
   catch(e){ showErr("Fermeture : "+e.message); } }
 
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
-function openCoulisses(){ if(S.view==="coulisses")return; S.prevView=S.view; S.view="coulisses"; render(); }
+function openCoulisses(){ navOpen("coulisses"); }
 async function openPalmares(){ S.view="palmares"; palmares=null; palmOpen=""; render(); await loadPalmares(); render(); }
 async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; render(); await loadAdmin(); render(); }
 async function adminLoadUsers(){ const el=$("adminPwd"); const pwd=el?el.value:""; if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
@@ -2678,8 +2742,10 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.17";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · "+APP_VERSION;
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
+  // 🐛 visible dès qu'on est connecté (comme les règles) : un bug peut survenir n'importe où.
+  $("bugBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
   let html="";
@@ -2717,8 +2783,21 @@ function isComposing(){
   return !myBet();                            // en train de faire ses pronos/mises
 }
 function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings")&&!isComposing()) refresh(); },4000); }
-function openSettings(){ if(S.view==="settings")return; S.prevView=S.view; S.view="settings"; render(); }
-function closeSettings(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
+// === NAVIGATION — une pile, PAS une case unique =======================================
+// v4.19. Avant : S.prevView, UNE seule case partagée par rules/rulesfull/settings/coulisses.
+// accueil → règles → paramètres écrasait "leagues" par "rules" → le retour des paramètres
+// ramenait aux règles, dont le retour relisait "rules"… et bouclait À L'INFINI (bug d'Hervé,
+// 2026-07-17). Une pile est le seul modèle correct : chaque ouverture EMPILE l'écran quitté.
+// navRoot() vide la pile : on change de racine (ligue / liste), l'historique d'avant n'a plus
+// de sens — un retour vers "game" après avoir quitté la ligue afficherait une ligue nulle.
+function navOpen(v){ if(S.view===v) return; S.nav.push(S.view); if(S.nav.length>12) S.nav.shift(); S.view=v; render(); }
+function navHome(){ return S.leagueId ? "game" : "leagues"; }
+function navBack(){ let v=S.nav.pop();
+  while(v==="auth" || (v==="game" && !S.leagueId)) v=S.nav.pop();   // entrées devenues invalides
+  S.view = v || navHome(); render(); }
+function navRoot(){ S.nav=[]; }
+function openSettings(){ navOpen("settings"); }
+function closeSettings(){ navBack(); }
 function viewSettings(){
   return `<button class="btn ghost sm" onclick="closeSettings()">${t("← Retour")}</button>
     <div class="box"><h2 style="margin-top:0">${t("⚙️ Paramètres du compte")}</h2>
@@ -2731,11 +2810,11 @@ function viewSettings(){
       <div style="height:8px"></div><button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button></div>
     <button class="btn ghost" onclick="logout()">${t("Déconnexion")}</button>`;
 }
-function openRules(){ if(S.view==="rules")return; S.prevView=S.view; S.view="rules"; render(); }
-function closeRules(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
+function openRules(){ navOpen("rules"); }
+function closeRules(){ navBack(); }
 // ⚠️ RÈGLES DÉTAILLÉES — voir la note en tête de viewRulesFull() avant d'y toucher.
-function openRulesFull(){ if(S.view==="rulesfull")return; S.prevView=(S.view==="rulesfull"?S.prevView:S.view); S.view="rulesfull"; render(); }
-function closeRulesFull(){ S.view=S.prevView||(S.leagueId?"game":"leagues"); render(); }
+function openRulesFull(){ navOpen("rulesfull"); }
+function closeRulesFull(){ navBack(); }
 function viewRules(){
   const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><b class="mini">${esc(t(CARDS[id].n))}</b><div class="mini muted">${esc(t(CARDS[id].d))}</div></div></div>`;
   return `<button class="btn ghost sm" onclick="closeRules()">${t("← Retour")}</button>
