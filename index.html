@@ -134,7 +134,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.25";
+const APP_VERSION = "v4.26";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -722,6 +722,9 @@ const EN={
   "Vendu ! +{b} € reçus.":"Sold! +€{b} received.",
   "Offre refusée.":"Offer declined.", "Offre annulée.":"Offer cancelled.",
   "Réponses à tes offres":"Responses to your offers", "Rachat 🤝":"Buyback 🤝",
+  "👉 Touche un joueur pour voir ses bonus (restants et utilisés).":"👉 Tap a player to see their bonuses (remaining and used).",
+  "Aucun bonus.":"No bonus.",
+  "Restants en couleur · barré = déjà utilisé. Touche un bonus pour sa description.":"Remaining in colour · struck through = already used. Tap a bonus for its description.",
   "{a} a accepté : {c} est à toi (−{b} €).":"{a} accepted: {c} is yours (−€{b}).",
   "{a} a refusé ton offre pour {c}.":"{a} declined your offer for {c}.",
   "Tout ou Rien":"All or Nothing", "Un pari choisi : gain ×3, perte ×2.":"A chosen bet: gain ×3, loss ×2.",
@@ -966,6 +969,14 @@ function infoModal(emoji,title,bodyHTML){ closeCardInfo();
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, t(c.n), `<div style="margin:4px 0 6px">${t("💪 Force {a}/5",{a:c.f||3})}</div><div class="mini muted">${esc(t(c.d))}</div>`); }
 function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.")}</div>`); }
 function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class="mini muted">${t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.")}</div>`); }
+// Bonus d'un joueur (clic sur son nom au classement) : restants + utilisés (barrés). Données LIVE.
+function showPlayerCards(pid){ const p=pById(pid); if(!p) return;
+  const hand=p.hand||[], used=p.cards_used||[];
+  let body;
+  if(!hand.length && !used.length) body=`<div class="mini muted">${t("Aucun bonus.")}</div>`;
+  else body=`<div class="mini muted" style="margin-bottom:6px">${t("Restants en couleur · barré = déjà utilisé. Touche un bonus pour sa description.")}</div>
+    <div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div>`;
+  infoModal(p.emoji||"🃏", p.name||"?", body); }
 function showDuelPtsInfo(pid){
   const p=pById(pid)||{}; const d=duels.find(x=>x.home_id===pid||x.away_id===pid);
   const bareme=`<div class="mini muted" style="text-align:left">${t("Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>• <b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> si négatif.<br>• <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> si négatif.<br>• <b>Match nul</b> : <b>1 pt</b> chacun.")}</div>`;
@@ -2432,8 +2443,9 @@ function viewStandings(){
     ${nav}
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
       ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:''); const bp=p.star||0; const dp=p.points-bp;
-        return `<tr><td>${p.is_ai?'🤖':i+1}</td><td>${p.emoji} ${esc(p.name)}${s?' <span class="mini muted">'+s+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td>
+        return `<tr><td>${p.is_ai?'🤖':i+1}</td><td><span class="clik" onclick="showPlayerCards('${p.id}')">${p.emoji} ${esc(p.name)}</span>${s?' <span class="mini muted">'+s+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td>
         <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
+    <div class="mini muted" style="margin:-2px 2px 8px">${t("👉 Touche un joueur pour voir ses bonus (restants et utilisés).")}</div>
     ${ptsChart()}
     ${capChart()}
     ${(hand.length||used.length)?`<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div></div>`:''}
