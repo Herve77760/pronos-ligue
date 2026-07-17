@@ -89,6 +89,7 @@
   @keyframes tradepulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.35);opacity:.5}}
   .tradebadge{display:inline-block;margin-left:1px;padding:0 5px;border-radius:9px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;line-height:16px;vertical-align:super;animation:tradepulse 1s ease-in-out infinite;}
   @media (prefers-reduced-motion:reduce){.tradebadge{animation:none}}
+  .prem{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.3px;padding:2px 7px;border-radius:999px;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);white-space:nowrap;vertical-align:middle;cursor:pointer;}
   a{color:var(--blue);}
   .big{font-size:30px;font-weight:800;letter-spacing:-.5px;}
   .recaphero{border-radius:var(--r);padding:18px;border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow);margin:12px 0;}
@@ -134,7 +135,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.27";
+const APP_VERSION = "v4.28";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -722,6 +723,23 @@ const EN={
   "Vendu ! +{b} € reçus.":"Sold! +€{b} received.",
   "Offre refusée.":"Offer declined.", "Offre annulée.":"Offer cancelled.",
   "Réponses à tes offres":"Responses to your offers", "Rachat 🤝":"Buyback 🤝",
+  // --- Premium (badge + fiche stats + récap) ---
+  "✨ Premium":"✨ Premium", "Fonction premium":"Premium feature",
+  "Fonction premium — offerte pendant la phase de test":"Premium feature — free during the test phase",
+  "Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁":"This feature will be part of the <b>premium options</b> eventually. <b>During the test phase, it's free and available to everyone</b> — enjoy it! 🎁",
+  "Mes stats":"My stats", "Ton parcours dans cette ligue.":"Your journey in this league.",
+  "Pas encore de journée résolue — reviens après ta première journée.":"No resolved day yet — come back after your first day.",
+  "Journées jouées":"Days played", "Pronos gagnés":"Winning picks", "Total misé":"Total staked",
+  "Résultat net cumulé":"Cumulative net result", "Rentabilité (ROI)":"Return (ROI)",
+  "Meilleure journée":"Best day", "Pire journée":"Worst day",
+  "Plus grosse cote gagnée":"Biggest odds won", "Carte fétiche":"Favourite card", "Face-à-face":"Head-to-head",
+  "{w} V · {n} N · {l} D":"{w}W · {n}D · {l}L", "Partager ma saison":"Share my season",
+  "Ma saison — {a}":"My season — {a}", "Classement : {a}ᵉ / {b}":"Rank: {a} / {b}",
+  "Points : {a} · Capital : {b} €":"Points: {a} · Balance: €{b}",
+  "Pronos gagnés : {a}/{b} ({c} %)":"Winning picks: {a}/{b} ({c}%)",
+  "ROI : {a} % · Meilleure journée : {b} €":"ROI: {a}% · Best day: €{b}",
+  "Carte fétiche : {a}":"Favourite card: {a}",
+  "Récap copié — colle-le où tu veux ! 📋":"Recap copied — paste it anywhere! 📋",
   "🤝 Racheter un bonus":"🤝 Buy back a bonus",
   "En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.":"During the championship, you can offer an opponent a sum to <b>buy back a card</b> they still hold. They accept or decline; if they accept, the card is yours and the amount is paid to them. Possible as long as you haven't locked your bet for the day, keeping at least <b>€{a}</b> to keep betting.",
   "En cours de championnat, tu peux <b>racheter une carte bonus</b> à un adversaire, contre une somme de ton capital (monnaie virtuelle).":"During the championship, you can <b>buy back a bonus card</b> from an opponent, for a sum of your (virtual) capital.",
@@ -976,6 +994,10 @@ function infoModal(emoji,title,bodyHTML){ closeCardInfo();
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, t(c.n), `<div style="margin:4px 0 6px">${t("💪 Force {a}/5",{a:c.f||3})}</div><div class="mini muted">${esc(t(c.d))}</div>`); }
 function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.")}</div>`); }
 function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class="mini muted">${t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.")}</div>`); }
+// ✨ Badge « premium » — apposé sur les fonctions payantes À TERME, offertes pendant la phase de test.
+// stopPropagation : le badge est souvent dans une ligne cliquable, on ne veut pas déclencher la ligne.
+function premBadge(){ return `<span class="prem" onclick="event.stopPropagation();showPremiumInfo()" title="${t("Fonction premium — offerte pendant la phase de test")}">${t("✨ Premium")}</span>`; }
+function showPremiumInfo(){ infoModal("✨", t("Fonction premium"), `<div class="mini muted">${t("Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁")}</div>`); }
 // Bonus d'un joueur (clic sur son nom au classement) : restants + utilisés (barrés). Données LIVE.
 function showPlayerCards(pid){ const p=pById(pid); if(!p) return;
   const hand=p.hand||[], used=p.cards_used||[];
@@ -1449,12 +1471,12 @@ function viewLobby(){
     ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
         ${p.is_organizer?'<span class="tag">'+t("organisateur")+'</span>':''}${p.id===S.myId?'<span class="chip b">'+t("toi")+'</span>':''}</div>
         ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip g">${t("Prêt")}</span>`}</div>`).join("")}
-    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b><div class="mini muted">${t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${t("équilibre")}</span></div>`:""}
+    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge()}<div class="mini muted">${t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${t("équilibre")}</span></div>`:""}
     <h2>${t("⏱️ Formule de rythme")}</h2>
     ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
     <h2>${t("🎛️ Mode de jeu")}</h2>
-    ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b><div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge():''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎭 Enjeu de la ligue")}</h2>
@@ -2424,6 +2446,71 @@ function computeStandHist(){
   }
   return snaps;
 }
+// ✨ FICHE STATS PERSO (premium, offert en test) — calculée depuis chartBets + standDuels (données déjà chargées).
+function myStats(){
+  const my=(chartBets||[]).filter(b=>b.player_id===S.myId && Array.isArray(b.picks));
+  const duelOf=day=>(standDuels||[]).find(d=>d.day===day && (d.home_id===S.myId||d.away_id===S.myId));
+  const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0);
+  let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0;
+  let best={net:-1e9,day:-1}, worst={net:1e9,day:-1};
+  const cardCount={}, h2h={};
+  my.forEach(b=>{ const d=duelOf(b.day); const fx=d&&d.fixtures; days++;
+    if(fx){ picks+=b.picks.length; won+=winCount(b,fx);
+      b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; } }); }
+    staked+=gainMise(b.picks,fx).mise;
+    const n=(b.net!=null)?b.net:0; net+=n;
+    if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
+    if(b.card&&b.card.id) cardCount[b.card.id]=(cardCount[b.card.id]||0)+1;
+    if(d){ const oppId=d.home_id===S.myId?d.away_id:d.home_id;
+      const ob=(chartBets||[]).find(x=>x.player_id===oppId && x.day===b.day);
+      const H=Object.assign({net:n},gainMise(b.picks,fx));
+      const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
+      const r=duelPtsF(H,A,fg(b),fg(ob)); h2h[oppId]=h2h[oppId]||{w:0,l:0,d:0};
+      if(r.win==='h') h2h[oppId].w++; else if(r.win==='a') h2h[oppId].l++; else h2h[oppId].d++; } });
+  const favCard=Object.keys(cardCount).sort((a,b)=>cardCount[b]-cardCount[a])[0]||null;
+  return {days,picks,won,staked:Math.round(staked),net,bestOdd,best,worst,favCard,h2h,
+          hit:picks?Math.round(won/picks*100):0, roi:staked?Math.round(net/staked*100):0}; }
+function openStats(){ navOpen("stats"); }
+function viewStats(){
+  const s=myStats();
+  const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
+  let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
+    <div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge()}</h2>
+      <div class="mini muted">${t("Ton parcours dans cette ligue.")}</div></div>`;
+  if(!s.days){ h+=`<div class="box mini muted">${t("Pas encore de journée résolue — reviens après ta première journée.")}</div>`; return h; }
+  h+=`<div class="box">
+    ${line(t("Journées jouées"), s.days)}
+    ${line(t("Pronos gagnés"), s.won+"/"+s.picks+" ("+s.hit+" %)")}
+    ${line(t("Total misé"), eur(s.staked)+" €")}
+    ${line(t("Résultat net cumulé"), `<span class="${s.net>=0?'green':'red'}">${fmt(s.net)} €</span>`)}
+    ${line(t("Rentabilité (ROI)"), `<span class="${s.roi>=0?'green':'red'}">${s.roi} %</span>`)}
+    ${line(t("Meilleure journée"), s.best.day>=0?`<span class="green">${fmt(s.best.net)} €</span> (J${s.best.day+1})`:'–')}
+    ${line(t("Pire journée"), s.worst.day>=0?`<span class="red">${fmt(s.worst.net)} €</span> (J${s.worst.day+1})`:'–')}
+    ${line(t("Plus grosse cote gagnée"), s.bestOdd?s.bestOdd.toFixed(2):'–')}
+    ${line(t("Carte fétiche"), s.favCard&&CARDS[s.favCard]?CARDS[s.favCard].e+' '+esc(t(CARDS[s.favCard].n)):'–')}
+  </div>`;
+  const opps=Object.keys(s.h2h);
+  if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face")}</b>`;
+    opps.forEach(id=>{ const p=pById(id); const r=s.h2h[id];
+      h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${p?esc((p.emoji||'')+' '+(p.name||'?')):'?'}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
+    h+=`</div>`; }
+  h+=`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")} ${premBadge()}</button>`;
+  return h; }
+// Récap texte partageable (premium, offert en test) — WhatsApp/SMS via l'API de partage, sinon presse-papier, sinon zone de texte.
+function seasonRecapText(){
+  const s=myStats(); const meP=me(); const ord=[...players].filter(p=>!p.is_ai).sort(cmp);
+  const rank=ord.findIndex(p=>p.id===S.myId)+1; const tot=ord.length; const l=[];
+  l.push("🏆 "+t("Ma saison — {a}",{a:(L&&L.name)||"The Maestro League"}));
+  if(rank>0) l.push(t("Classement : {a}ᵉ / {b}",{a:rank,b:tot}));
+  if(meP) l.push(t("Points : {a} · Capital : {b} €",{a:meP.points,b:eur(meP.capital)}));
+  if(s.days){ l.push(t("Pronos gagnés : {a}/{b} ({c} %)",{a:s.won,b:s.picks,c:s.hit}));
+    l.push(t("ROI : {a} % · Meilleure journée : {b} €",{a:s.roi,b:fmt(s.best.net)}));
+    if(s.favCard&&CARDS[s.favCard]) l.push(t("Carte fétiche : {a}",{a:CARDS[s.favCard].e+' '+t(CARDS[s.favCard].n)})); }
+  l.push("— The Maestro League"); return l.join("\n"); }
+async function shareSeason(){ const txt=seasonRecapText();
+  if(navigator.share){ try{ await navigator.share({text:txt}); }catch(e){} return; }
+  try{ await navigator.clipboard.writeText(txt); toast(t("Récap copié — colle-le où tu veux ! 📋")); return; }catch(e){}
+  infoModal("📤", t("Partager ma saison"), `<textarea readonly onclick="this.select()" style="width:100%;box-sizing:border-box;height:170px;font:12px monospace;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:inherit">${esc(txt)}</textarea>`); }
 function viewStandings(){
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
   const humansLive=[...players].sort(cmp).filter(p=>!p.is_ai); const lastH=humansLive[humansLive.length-1];
@@ -2445,7 +2532,7 @@ function viewStandings(){
       <b class="mini" style="text-align:center;flex:1">${useLive?t("Classement actuel · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days}):t("Classement après J{a}/{b}",{a:sd+1,b:L.num_days})}</b>
       <button class="btn ghost sm" ${shownIdx<R-1?'':'disabled'} onclick="setStandDay(${shownIdx+1})">${t("Suiv. ▶")}</button></div>`
     : `<h2>${t("Classement · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days})}</h2>`;
-  return `<div class="row" style="gap:8px"><button class="btn ghost sm" onclick="S.view='game';render()">${t("← Retour au jeu")}</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">${t("📅 Résultats par journée")}</button>`:''}</div>
+  return `<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" onclick="S.view='game';render()">${t("← Retour au jeu")}</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">${t("📅 Résultats par journée")}</button><button class="btn ghost sm" onclick="openStats()">✨ 📊 ${t("Mes stats")}</button>`:''}</div>
     ${quickBar('standings')}
     ${nav}
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
@@ -2588,6 +2675,7 @@ function viewEnd(){
            ${(p.cards_used||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}
            ${(p.hand||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
    ${enjeuFinalHTML()}
+   <button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")} ${premBadge()}</button><div style="height:8px"></div>
    ${(me()&&me().is_organizer)?`<button class="btn" onclick="relaunchLeague()">${t("🔁 Relancer une compétition avec les mêmes joueurs")}</button>
      <div class="mini muted" style="text-align:center;margin:6px 0 12px">${t("Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.")}</div>`:''}
    <button class="btn ghost" onclick="goStandings()">${t("📊 Classement détaillé (séries, bonus)")}</button><div style="height:8px"></div>
@@ -2821,6 +2909,7 @@ function render(){
   else if(S.view==="admin") html=viewAdmin();
   else if(S.view==="settings") html=viewSettings();
   else if(S.view==="trade") html=viewTrade();
+  else if(S.view==="stats") html=viewStats();
   else html=viewGame();
   $("root").innerHTML=html;
   // Remonter en haut à chaque changement d'écran, y compris les sous-étapes d'une journée (choix des matchs → saisie → attente → résultats) — pas sur les simples rafraîchissements de polling.
@@ -2914,7 +3003,7 @@ function viewTrade(){
   const nm=p=>p?esc((p.emoji||'')+' '+(p.name||'?')):'?';
   const clbl=id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):esc(id);
   let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
-    <div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")}</h2>
+    <div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge()}</h2>
       <div class="mini muted">${t("Propose une somme à un adversaire pour lui racheter une de ses cartes bonus encore en main. Il reste libre d'accepter ou de refuser. L'argent (virtuel) lui est transféré.")}</div></div>`;
   // Réponses à MES offres (je suis l'acheteur : on m'a accepté ou refusé) — info persistante, pas un toast fugace
   if(myResolvedOut.length){ h+=`<div class="box"><b class="mini">📨 ${t("Réponses à tes offres")}</b>`;
