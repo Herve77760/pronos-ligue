@@ -119,7 +119,7 @@
   </div>
   <div id="err"></div>
   <div id="root"><div class="box">Chargement…</div></div>
-  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.11</div>
+  <div class="foot" id="foot">The Maestro League · prototype de test · données sportives simulées · v4.12</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -177,7 +177,7 @@ const CARDS={
  assurance:{e:"🛡",n:"Assurance",t:true, f:5, d:"Un pari choisi : s'il perd, mise remboursée."},
  double:   {e:"🚀",n:"Double Mise",t:true, f:5, d:"Un pari choisi : s'il gagne, gain doublé."},
  dbl:      {e:"💥",n:"Coup Double",t:true, two:true, f:5, d:"Bonus GRATUIT (aucune mise, aucun risque) : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien."},
- miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, f:3, d:"Le meilleur pari gagnant des deux joueurs est échangé."},
+ miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, f:3, d:"Le meilleur pari gagnant des deux joueurs est échangé. La question à se poser : ton adversaire va-t-il gagner plus que toi ? ⚠️ Sans effet si l'un des deux n'a aucun pari gagnant."},
  gourmand: {e:"🍽️",n:"Gourmand",t:false, f:3, d:"Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus)."},
  face:     {e:"😏",n:"Dans ta face",t:true, oppT:true, f:3, d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
  serge:    {e:"💰",n:"Serge Benamou",t:false, f:2, retired:true, d:"(Bonus retiré du jeu.)"},
@@ -625,7 +625,7 @@ const EN={
   "Bonus GRATUIT (aucune mise, aucun risque) : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"FREE bonus (no stake, no risk): pick 2 matches (your Captain is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
   "cote combinée ≈ {a}":"combined odds ≈ {a}", "touche un 2ᵉ match 💥":"tap a 2nd match 💥", "→ touche les 💥 de tes 2 matchs.":"→ tap the 💥 on your 2 matches.",
   "Double Mise":"Double Stake", "Un pari choisi : s'il gagne, gain doublé.":"A chosen bet: if it wins, gain doubled.",
-  "Effet Kiss Cool":"Kiss Cool Effect", "Le meilleur pari gagnant des deux joueurs est échangé.":"The best winning bet of the two players is swapped.",
+  "Effet Kiss Cool":"Kiss Cool Effect", "Le meilleur pari gagnant des deux joueurs est échangé. La question à se poser : ton adversaire va-t-il gagner plus que toi ? ⚠️ Sans effet si l'un des deux n'a aucun pari gagnant.":"The best winning bet of the two players is swapped. The question to ask yourself: will your opponent win more than you? ⚠️ No effect if either player has no winning bet.",
   "Gourmand":"Freeloader", "Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus).":"If your opponent ends in profit, you pocket a bonus of 20% of their profit — without them losing anything (it's added on top).",
   "Dans ta face":"In Your Face", "Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié.":"You pick a match: if the opponent has a winning bet there, their gain on that match is halved.",
   "Serge Benamou":"Serge Benamou", "(Bonus retiré du jeu.)":"(Bonus removed from the game.)",
@@ -1717,9 +1717,17 @@ function runEngine(pdIn, capStart, dz, N){
     if(opp && opp.perBet[pd.card.target]){ const b=opp.perBet[pd.card.target]; if(b.win && b.gain>0){ const cut=b.gain/2; b.gain-=cut; opp.net-=cut; } } } }
   for(const d of dz){ const a=d.home_id,b=d.away_id; if(!PD[a]||!PD[b])continue; const useM=(PD[a].card&&PD[a].card.id==="miroir")||(PD[b].card&&PD[b].card.id==="miroir");
     if(useM){ const best=g=>{let bi=-1,bv=0; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); return {bi,bv};};
-      const ba=best(G[a]), bb=best(G[b]); const va=ba.bv, vb=bb.bv;
-      if(ba.bi>=0){ G[a].perBet[ba.bi].gain+=(vb-va); G[a].net+=(vb-va); }
-      if(bb.bi>=0){ G[b].perBet[bb.bi].gain+=(va-vb); G[b].net+=(va-vb); } } }
+      const ba=best(G[a]), bb=best(G[b]);
+      // GARDE-FOU : l'échange n'a de sens que si les DEUX joueurs ont un pari gagnant.
+      // Sinon (adversaire absent, ou qui rate TOUS ses pronos) il n'existe aucune case où
+      // déposer le gain de l'autre : l'ancien code appliquait quand même le `-va` au joueur
+      // et sautait le `+va` de l'adversaire (bi=-1) → le joueur perdait son meilleur pari et
+      // l'argent s'ÉVAPORAIT au lieu d'être échangé. Mesuré : −24 € face à un absent.
+      // Désormais : carte gâchée mais inoffensive, comme les autres cartes anti-adversaire.
+      // Le pari du joueur reste entier : « mon adversaire va-t-il gagner plus que moi ? »
+      if(ba.bi>=0 && bb.bi>=0){ const va=ba.bv, vb=bb.bv;
+        G[a].perBet[ba.bi].gain+=(vb-va); G[a].net+=(vb-va);
+        G[b].perBet[bb.bi].gain+=(va-vb); G[b].net+=(va-vb); } } }
   // Phase 4 : Sniper, Roi de la cote
   for(const pid in PD){ const pd=PD[pid]; const g=G[pid];
     if(pd.card&&pd.card.id==="sniper"&&pd.card.target!=null){ let bi=-1,bv=-1e9; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); if(bi===pd.card.target&&g.perBet[bi].gain>0) g.bonus+=capStart[pid]*0.10; }
@@ -2439,7 +2447,7 @@ function viewAdmin(){
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
-  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.11";
+  const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · v4.12";
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
   $("leaguesBtn").classList.toggle("hide", !inLeague);
   $("settingsBtn").classList.toggle("hide", S.view==="auth" || !AUTH);
