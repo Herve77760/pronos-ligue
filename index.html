@@ -118,6 +118,7 @@
       <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🇬🇧</button>
       <button class="btn ghost sm" id="themeBtn" onclick="toggleTheme()" title="Basculer clair / sombre">☀️</button>
       <button class="btn ghost sm hide" id="rulesBtn" onclick="openRules()" title="Règles">📖</button>
+      <button class="btn ghost sm hide" id="shopBtn" onclick="openShop()" title="Boutique (options premium)">🛒</button>
       <button class="btn ghost sm hide" id="tradeBtn" onclick="openTrade()" title="Racheter un bonus">🤝</button>
       <button class="btn ghost sm hide" id="bugBtn" onclick="openBugReport()" title="Signaler un bug ou proposer une idée">🐛</button>
       <button class="btn ghost sm hide" id="settingsBtn" onclick="openSettings()" title="Paramètres du compte">⚙️</button>
@@ -135,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.33";
+const APP_VERSION = "v4.36";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -441,7 +442,7 @@ let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0
 let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[], trades=[], myResolvedOut=[], tradeToasted=new Set();
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null;
-let palmares=null, adminData=null, palmOpen="";
+let palmares=null, adminData=null, palmOpen="", myStatsData=null;
 let adminUsers=null, adminPwd="";
 let endStats=null; // bilan de fin de ligue (calculé une fois quand la ligue est terminée)
 
@@ -744,6 +745,28 @@ const EN={
   "Le détail <b>ligue par ligue</b> : la partie en cours et toutes les précédentes.":"The <b>league-by-league</b> breakdown: the current one and all the past ones.",
   "Ton <b>face-à-face</b> contre chaque pote, tes records compilés, tes tendances.":"Your <b>head-to-head</b> against each mate, your compiled records, your trends.",
   "Le palmarès montre le top 5 et ton rang ; ici, c'est ton dossier complet, rien que le tien.":"The hall of fame shows the top 5 and your rank; here it's your full file, yours alone.",
+  "Regarde tes pronos vivre (ou mourir) en direct.":"Watch your picks come alive (or die) live.",
+  "Dès qu'un vrai match se termine : le résultat + ton prono ✓ ou ✗, sans attendre la fin de la journée.":"The moment a real match ends: the result + your pick ✓ or ✗, without waiting for the day to finish.",
+  "Le frisson du direct, montagnes russes comprises.":"The thrill of live — rollercoaster included.",
+  "Les gains en € restent pour la fin, dévoilés à tous d'un coup — le clou du spectacle.":"The € winnings stay for the end, revealed to everyone at once — the grand finale.",
+  "Ta saison, prête à balancer sur le groupe.":"Your season, ready to drop in the group chat.",
+  "Un résumé stylé — classement, points, coups d'éclat — envoyé en un tap sur WhatsApp.":"A slick recap — standings, points, highlights — sent in one tap on WhatsApp.",
+  "Pour immortaliser ton titre… ou chambrer le dernier (on sait tous qui c'est).":"To immortalise your title… or roast the last-placed one (we all know who).",
+  "L'excuse parfaite pour relancer la bande dans la foulée.":"The perfect excuse to rally the crew for the next one.",
+  "Pack complet":"Full pack", "Tout débloquer d'un coup.":"Unlock everything at once.",
+  "Toutes les options premium réunies : rachat, bonus complets, joueur IA, stats perso, partage et résultats en direct.":"Every premium option in one: buyback, full bonus set, AI player, personal stats, sharing and live results.",
+  "Un seul déblocage — et moins cher que pris séparément.":"A single unlock — and cheaper than buying them separately.",
+  "Le confort maximal, zéro prise de tête.":"Maximum comfort, zero hassle.",
+  "Boutique":"Shop", "— ou tout d'un coup —":"— or all at once —",
+  "Toutes les options premium du jeu. <b>Offertes et accessibles pendant la phase de test</b> — profites-en ! 🎁":"All the game's premium options. <b>Free and available during the test phase</b> — enjoy it! 🎁",
+  // --- Stats perso cross-ligue ---
+  "Ton dossier complet, toutes tes ligues.":"Your complete file, across all your leagues.",
+  "Chargement…":"Loading…", "Pas encore de partie jouée.":"No game played yet.",
+  "Ma carrière":"My career", "Ligues jouées":"Leagues played", "Titres 🥇 / podiums 🏆":"Titles 🥇 / podiums 🏆",
+  "Par ligue":"By league", "Touche une ligue pour son détail.":"Tap a league for its details.",
+  "Terminée":"Finished", "En cours":"In progress",
+  "{a}ᵉ/{b}":"{a} / {b}", "Classement : {a}ᵉ/{b}":"Rank: {a} / {b}",
+  "Points / capital":"Points / balance", "Résultat net":"Net result",
   "Mes stats":"My stats", "Ton parcours dans cette ligue.":"Your journey in this league.",
   "Pas encore de journée résolue — reviens après ta première journée.":"No resolved day yet — come back after your first day.",
   "Journées jouées":"Days played", "Pronos gagnés":"Winning picks", "Total misé":"Total staked",
@@ -1044,7 +1067,11 @@ const PITCHES={
   direct:{e:"📡",t:"Résultats en direct",hook:"Regarde tes pronos vivre (ou mourir) en direct.",pts:[
     "Dès qu'un vrai match se termine : le résultat + ton prono ✓ ou ✗, sans attendre la fin de la journée.",
     "Le frisson du direct, montagnes russes comprises.",
-    "Les gains en € restent pour la fin, dévoilés à tous d'un coup — le clou du spectacle."]}
+    "Les gains en € restent pour la fin, dévoilés à tous d'un coup — le clou du spectacle."]},
+  pack:{e:"🎁",t:"Pack complet",hook:"Tout débloquer d'un coup.",pts:[
+    "Toutes les options premium réunies : rachat, bonus complets, joueur IA, stats perso, partage et résultats en direct.",
+    "Un seul déblocage — et moins cher que pris séparément.",
+    "Le confort maximal, zéro prise de tête."]}
 };
 const PREM_FOOTER="Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁";
 // stopPropagation : le badge est souvent dans une ligne cliquable, on ne veut pas déclencher la ligne.
@@ -1057,6 +1084,20 @@ function showPremiumInfo(key){
     +`<ul class="mini muted" style="text-align:left;margin:0;padding-left:18px">${p.pts.map(x=>`<li style="margin:5px 0">${t(x)}</li>`).join("")}</ul>`
     +footer;
   infoModal(p.e, t(p.t), body);
+}
+// 🛒 BOUTIQUE — toutes les options premium en un endroit + le Pack complet (souscrire à tout d'un coup).
+const SHOP_ORDER=["rachat","bonuscomplets","ia","stats","recap","direct"];
+function openShop(){ navOpen("shop"); }
+function viewShop(){
+  const card=(k,hi)=>{ const p=PITCHES[k]; return `<div class="box clik" ${hi?'style="border-color:var(--accent)"':''} onclick="showPremiumInfo('${k}')">
+    <div class="row" style="justify-content:space-between;align-items:center;gap:8px"><b>${p.e} ${t(p.t)}</b>${premBadge(k)}</div>
+    <div class="mini muted" style="margin-top:4px">${t(p.hook)}</div></div>`; };
+  return `<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
+    <div class="box"><h2 style="margin-top:0">🛒 ${t("Boutique")}</h2>
+      <div class="mini muted">${t("Toutes les options premium du jeu. <b>Offertes et accessibles pendant la phase de test</b> — profites-en ! 🎁")}</div></div>
+    ${SHOP_ORDER.map(k=>card(k,false)).join("")}
+    <div class="mini muted" style="text-align:center;margin:10px 0 4px">${t("— ou tout d'un coup —")}</div>
+    ${card("pack",true)}`;
 }
 // Bonus d'un joueur (clic sur son nom au classement) : restants + utilisés (barrés). Données LIVE.
 function showPlayerCards(pid){ const p=pById(pid); if(!p) return;
@@ -2087,6 +2128,7 @@ function viewWait(dayLbl){
     ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
     ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
+    ${(L&&L.data_mode==="real")?`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Résultats en direct")}</span>${premBadge('direct')}</div>`:''}
     ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`:''}`;
 }
 function publicBetsHTML(){
@@ -2555,32 +2597,99 @@ function myStats(){
   const favCard=Object.keys(cardCount).sort((a,b)=>cardCount[b]-cardCount[a])[0]||null;
   return {days,picks,won,staked:Math.round(staked),net,bestOdd,best,worst,favCard,h2h,
           hit:picks?Math.round(won/picks*100):0, roi:staked?Math.round(net/staked*100):0}; }
-function openStats(){ navOpen("stats"); }
+// ✨ STATS PERSO CROSS-LIGUE — dossier complet sur TOUTES les ligues du joueur (chargé à l'ouverture).
+async function loadMyStats(){
+  try{
+    if(!AUTH){ myStatsData={leagues:[],agg:{},h2h:{}}; return; }
+    const mine=await q(db.from("players").select("id,league_id").eq("user_id",AUTH.id));
+    const ids=[...new Set(mine.map(m=>m.league_id))];
+    if(!ids.length){ myStatsData={leagues:[],agg:{},h2h:{}}; return; }
+    const lgs=await q(db.from("leagues").select("id,name,status,num_days,created_at,finished_at").in("id",ids));
+    const pls=await q(db.from("players").select("id,name,emoji,is_ai,user_id,league_id,points,capital,duel_wins,best_day,best_odd").in("league_id",ids));
+    const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").in("league_id",ids).not("net","is",null));
+    const dls=await q(db.from("duels").select("id,league_id,day,home_id,away_id,fixtures").in("league_id",ids));
+    const lgMap={}; lgs.forEach(l=>lgMap[l.id]=l);
+    const plMap={}; pls.forEach(p=>plMap[p.id]=p);
+    const myPid={}; mine.forEach(m=>myPid[m.league_id]=m.id);
+    const dlById={}; dls.forEach(d=>dlById[d.id]=d);
+    const betsByLg={}, plsByLg={}; bts.forEach(b=>{(betsByLg[b.league_id]=betsByLg[b.league_id]||[]).push(b);}); pls.forEach(p=>{(plsByLg[p.league_id]=plsByLg[p.league_id]||[]).push(p);});
+    const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0);
+    const leagues=[]; const h2h={};
+    let tPicks=0,tWon=0,tStaked=0,tNet=0,titles=0,podiums=0,gBestOdd=0; let gBest={net:-1e9,lg:null};
+    ids.forEach(lid=>{ const mp=myPid[lid]; if(!mp) return; const lg=lgMap[lid]||{};
+      const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp);
+      let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
+      myBets.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures; days++;
+        if(fx){ picks+=b.picks.length; won+=winCount(b,fx);
+          b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; if(o>gBestOdd)gBestOdd=o; } }); }
+        staked+=gainMise(b.picks,fx).mise; const n=(b.net!=null)?b.net:0; net+=n;
+        if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
+        if(n>gBest.net) gBest={net:n,lg:lg.name};
+        if(b.card&&b.card.id) cc[b.card.id]=(cc[b.card.id]||0)+1;
+        if(d){ const oppId=d.home_id===mp?d.away_id:d.home_id; const opp=plMap[oppId];
+          if(opp&&!opp.is_ai){ const ob=(betsByLg[lid]||[]).find(x=>x.player_id===oppId&&x.day===b.day);
+            const H=Object.assign({net:n},gainMise(b.picks,fx)); const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
+            const r=duelPtsF(H,A,fg(b),fg(ob)); const key=opp.user_id||opp.name;
+            h2h[key]=h2h[key]||{name:opp.name,emoji:opp.emoji,w:0,l:0,d:0};
+            if(r.win==='h') h2h[key].w++; else if(r.win==='a') h2h[key].l++; else h2h[key].d++; } } });
+      const humans=(plsByLg[lid]||[]).filter(p=>!p.is_ai).sort(cmp);
+      const rank=humans.findIndex(p=>p.id===mp)+1, total=humans.length; const me=plMap[mp]||{};
+      if(lg.status==="done"&&rank>=1){ if(rank===1) titles++; if(rank<=3) podiums++; }
+      tPicks+=picks; tWon+=won; tStaked+=staked; tNet+=net;
+      const favCard=Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||null;
+      leagues.push({id:lid,name:lg.name||'?',status:lg.status,created_at:lg.created_at,finished_at:lg.finished_at,
+        rank,total,points:me.points||0,capital:me.capital||0,days,picks,won,hit:picks?Math.round(won/picks*100):0,
+        staked:Math.round(staked),net,roi:staked?Math.round(net/staked*100):0,bestOdd,best,worst,favCard}); });
+    leagues.sort((a,b)=>{ const fa=a.finished_at||a.created_at||'',fb=b.finished_at||b.created_at||''; return fa<fb?1:(fa>fb?-1:0); });
+    myStatsData={ agg:{leagues:leagues.length,titles,podiums,picks:tPicks,won:tWon,hit:tPicks?Math.round(tWon/tPicks*100):0,
+      staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest}, leagues, h2h };
+  }catch(e){ myStatsData={error:e.message}; }
+}
+async function openStats(){ myStatsData=null; navOpen("stats"); await loadMyStats(); render(); }
 function viewStats(){
-  const s=myStats();
-  const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
+  const d=myStatsData; const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
     <div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge('stats')}</h2>
-      <div class="mini muted">${t("Ton parcours dans cette ligue.")}</div></div>`;
-  if(!s.days){ h+=`<div class="box mini muted">${t("Pas encore de journée résolue — reviens après ta première journée.")}</div>`; return h; }
-  h+=`<div class="box">
-    ${line(t("Journées jouées"), s.days)}
-    ${line(t("Pronos gagnés"), s.won+"/"+s.picks+" ("+s.hit+" %)")}
-    ${line(t("Total misé"), eur(s.staked)+" €")}
-    ${line(t("Résultat net cumulé"), `<span class="${s.net>=0?'green':'red'}">${fmt(s.net)} €</span>`)}
-    ${line(t("Rentabilité (ROI)"), `<span class="${s.roi>=0?'green':'red'}">${s.roi} %</span>`)}
-    ${line(t("Meilleure journée"), s.best.day>=0?`<span class="green">${fmt(s.best.net)} €</span> (J${s.best.day+1})`:'–')}
-    ${line(t("Pire journée"), s.worst.day>=0?`<span class="red">${fmt(s.worst.net)} €</span> (J${s.worst.day+1})`:'–')}
-    ${line(t("Plus grosse cote gagnée"), s.bestOdd?s.bestOdd.toFixed(2):'–')}
-    ${line(t("Carte fétiche"), s.favCard&&CARDS[s.favCard]?CARDS[s.favCard].e+' '+esc(t(CARDS[s.favCard].n)):'–')}
+      <div class="mini muted">${t("Ton dossier complet, toutes tes ligues.")}</div></div>`;
+  if(!d) return h+`<div class="box mini muted">${t("Chargement…")}</div>`;
+  if(d.error) return h+`<div class="err">${esc(d.error)}</div>`;
+  if(!d.leagues.length) return h+`<div class="box mini muted">${t("Pas encore de partie jouée.")}</div>`;
+  const a=d.agg;
+  h+=`<div class="box"><b class="mini">🏅 ${t("Ma carrière")}</b>
+    ${line(t("Ligues jouées"), a.leagues)}
+    ${line(t("Titres 🥇 / podiums 🏆"), a.titles+" / "+a.podiums)}
+    ${line(t("Pronos gagnés"), a.won+"/"+a.picks+" ("+a.hit+" %)")}
+    ${line(t("Rentabilité (ROI)"), `<span class="${a.roi>=0?'green':'red'}">${a.roi} %</span>`)}
+    ${line(t("Résultat net cumulé"), `<span class="${a.net>=0?'green':'red'}">${fmt(a.net)} €</span>`)}
+    ${line(t("Plus grosse cote gagnée"), a.bestOdd?a.bestOdd.toFixed(2):'–')}
+    ${line(t("Meilleure journée"), (a.best&&a.best.net>-1e8)?`<span class="green">${fmt(a.best.net)} €</span>${a.best.lg?' ('+esc(a.best.lg)+')':''}`:'–')}
   </div>`;
-  const opps=Object.keys(s.h2h);
+  const opps=Object.keys(d.h2h);
   if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face")}</b>`;
-    opps.forEach(id=>{ const p=pById(id); const r=s.h2h[id];
-      h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${p?esc((p.emoji||'')+' '+(p.name||'?')):'?'}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
+    opps.map(k=>d.h2h[k]).sort((x,y)=>(y.w+y.l+y.d)-(x.w+x.l+x.d)).forEach(r=>{
+      h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${esc((r.emoji||'')+' '+(r.name||'?'))}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
     h+=`</div>`; }
-  h+=`<button class="btn" onclick="shareSeason()">✨ 📤 ${t("Partager ma saison")}</button>`;
+  h+=`<div class="box"><b class="mini">📋 ${t("Par ligue")}</b>
+    <div class="mini muted" style="margin:4px 0 6px">${t("Touche une ligue pour son détail.")}</div>
+    ${d.leagues.map(l=>`<div class="box row clik" style="margin:6px 0" onclick="showLeagueStat('${l.id}')"><div><b class="mini">${esc(l.name)}</b><div class="mini muted">${l.status==='done'?t("Terminée"):t("En cours")}${l.rank?' · '+t("{a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div></div><span class="chip">${l.points} pts →</span></div>`).join("")}
+  </div>
+  <button class="btn" onclick="shareSeason()">✨ 📤 ${t("Partager ma saison")}</button>`;
   return h; }
+function showLeagueStat(lid){
+  const l=((myStatsData&&myStatsData.leagues)||[]).find(x=>x.id===lid); if(!l) return;
+  const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:6px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
+  const body=`<div class="mini muted" style="text-align:left;margin-bottom:8px">${l.status==='done'?t("Terminée"):t("En cours")}${l.rank?' · '+t("Classement : {a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div>`
+    +line(t("Points / capital"), l.points+" pts · "+eur(l.capital)+" €")
+    +line(t("Journées jouées"), l.days)
+    +line(t("Pronos gagnés"), l.won+"/"+l.picks+" ("+l.hit+" %)")
+    +line(t("Rentabilité (ROI)"), `<span class="${l.roi>=0?'green':'red'}">${l.roi} %</span>`)
+    +line(t("Résultat net"), `<span class="${l.net>=0?'green':'red'}">${fmt(l.net)} €</span>`)
+    +line(t("Meilleure journée"), l.best.day>=0?`<span class="green">${fmt(l.best.net)} €</span> (J${l.best.day+1})`:'–')
+    +line(t("Pire journée"), l.worst.day>=0?`<span class="red">${fmt(l.worst.net)} €</span> (J${l.worst.day+1})`:'–')
+    +line(t("Plus grosse cote gagnée"), l.bestOdd?l.bestOdd.toFixed(2):'–')
+    +line(t("Carte fétiche"), l.favCard&&CARDS[l.favCard]?CARDS[l.favCard].e+' '+esc(t(CARDS[l.favCard].n)):'–');
+  infoModal("📋", l.name, body);
+}
 // Récap texte partageable (premium, offert en test) — WhatsApp/SMS via l'API de partage, sinon presse-papier, sinon zone de texte.
 function seasonRecapText(){
   const s=myStats(); const meP=me(); const ord=[...players].filter(p=>!p.is_ai).sort(cmp);
@@ -2995,6 +3104,7 @@ function render(){
   applyThemeBtn(); applyLangBtn();
   const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · "+APP_VERSION;
   $("rulesBtn").classList.toggle("hide", S.view==="auth");
+  $("shopBtn").classList.toggle("hide", S.view==="auth");
   // 🐛 visible dès qu'on est connecté (comme les règles) : un bug peut survenir n'importe où.
   $("bugBtn").classList.toggle("hide", S.view==="auth");
   // 🤝 rachat de bonus : visible en cours de championnat ; pastille = nb d'offres reçues à traiter.
@@ -3016,6 +3126,7 @@ function render(){
   else if(S.view==="settings") html=viewSettings();
   else if(S.view==="trade") html=viewTrade();
   else if(S.view==="stats") html=viewStats();
+  else if(S.view==="shop") html=viewShop();
   else html=viewGame();
   $("root").innerHTML=html;
   // Remonter en haut à chaque changement d'écran, y compris les sous-étapes d'une journée (choix des matchs → saisie → attente → résultats) — pas sur les simples rafraîchissements de polling.
