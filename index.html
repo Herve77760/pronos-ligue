@@ -131,7 +131,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.21";
+const APP_VERSION = "v4.22";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -701,6 +701,9 @@ const EN={
   "Tu ne peux pas racheter tant que ton pari du jour est validé — attends la résolution de la journée.":"You can't buy while your bet for the day is locked in — wait for the day to be resolved.",
   "Ton capital est trop faible : il faut pouvoir garder au moins {a} € après le rachat.":"Your capital is too low: you must be able to keep at least €{a} after the buyback.",
   "Aucune carte à racheter pour le moment.":"No card to buy back right now.",
+  "Aucun adversaire pour l'instant.":"No opponent yet.",
+  "Aucune carte à racheter pour le moment — les autres joueurs ont déjà joué leurs bonus (ou n'en ont pas en main).":"No card to buy back right now — the other players have already used their bonuses (or hold none).",
+  "aucune carte libre (toutes jouées ou aucune en main)":"no free card (all played, or none in hand)",
   "Ton capital : <b>{a} €</b> — tu peux dépenser jusqu'à <b>{b} €</b> (garder {c} € pour parier).":"Your capital: <b>€{a}</b> — you can spend up to <b>€{b}</b> (keep €{c} to bet).",
   "Ton capital est trop faible pour proposer un rachat.":"Your capital is too low to propose a buyback.",
   "Racheter {c}":"Buy back {c}", "à {a}":"from {a}",
@@ -2861,7 +2864,7 @@ function closeRulesFull(){ navBack(); }
 const TRADE_MIN_CAP = RECAP_THRESHOLD;   // 10 € : plancher pour pouvoir encore miser
 function tr2(x){ return Math.round(x*100)/100; }
 function tradeRunning(){ return !!(L && L.status==="running"); }
-function opponentsWithCards(){ return players.filter(p=>!p.is_ai && p.id!==S.myId && (p.hand||[]).length>0); }
+function humanOpponents(){ return players.filter(p=>!p.is_ai && p.id!==S.myId); }
 function myPendingIn(){  return trades.filter(x=>x.to_player===S.myId   && x.status==="pending"); }
 function myPendingOut(){ return trades.filter(x=>x.from_player===S.myId && x.status==="pending"); }
 function openTrade(){ navOpen("trade"); }
@@ -2900,13 +2903,16 @@ function viewTrade(){
   if(!tradeRunning()) h+=`<div class="mini muted" style="margin-top:6px">${t("Le rachat n'est possible qu'en cours de championnat.")}</div>`;
   else if(!S.recap && myBet()) h+=`<div class="mini muted" style="margin-top:6px">${t("Tu ne peux pas racheter tant que ton pari du jour est validé — attends la résolution de la journée.")}</div>`;
   else if(cap < TRADE_MIN_CAP+1) h+=`<div class="mini muted" style="margin-top:6px">${t("Ton capital est trop faible : il faut pouvoir garder au moins {a} € après le rachat.",{a:TRADE_MIN_CAP})}</div>`;
-  else { const opps=opponentsWithCards();
-    if(!opps.length) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucune carte à racheter pour le moment.")}</div>`;
+  else { const opps=humanOpponents();
+    if(!opps.length) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucun adversaire pour l'instant.")}</div>`;
+    else if(!opps.some(p=>(p.hand||[]).length)) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucune carte à racheter pour le moment — les autres joueurs ont déjà joué leurs bonus (ou n'en ont pas en main).")}</div>`;
     else { h+=`<div class="mini muted" style="margin-top:4px">${t("Ton capital : <b>{a} €</b> — tu peux dépenser jusqu'à <b>{b} €</b> (garder {c} € pour parier).",{a:Math.round(cap),b:Math.round(cap-TRADE_MIN_CAP),c:TRADE_MIN_CAP})}</div>`;
-      opps.forEach(p=>{ h+=`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><div class="mini"><b>${nm(p)}</b></div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${(p.hand||[]).map(id=>{ const already=outOff.some(o=>o.to_player===p.id && o.card_id===id);
-          return `<button class="btn ghost sm" ${already?'disabled style="opacity:.5"':''} onclick="proposeTrade('${p.id}','${id}')">${CARDS[id]?CARDS[id].e:'?'} ${esc(t(CARDS[id]?CARDS[id].n:id))}${already?' ⏳':''}</button>`; }).join("")}</div></div>`; });
-    } }
+      opps.forEach(p=>{ const hand=(p.hand||[]);
+        h+=`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><div class="mini"><b>${nm(p)}</b></div>`;
+        if(hand.length) h+=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${hand.map(id=>{ const already=outOff.some(o=>o.to_player===p.id && o.card_id===id);
+          return `<button class="btn ghost sm" ${already?'disabled style="opacity:.5"':''} onclick="proposeTrade('${p.id}','${id}')">${CARDS[id]?CARDS[id].e:'?'} ${esc(t(CARDS[id]?CARDS[id].n:id))}${already?' ⏳':''}</button>`; }).join("")}</div>`;
+        else h+=`<div class="mini muted" style="margin-top:4px">${t("aucune carte libre (toutes jouées ou aucune en main)")}</div>`;
+        h+=`</div>`; }); } }
   h+=`</div>`;
   return h;
 }
