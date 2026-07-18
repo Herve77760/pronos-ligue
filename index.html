@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.40";
+const APP_VERSION = "v4.41";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -737,6 +737,8 @@ const EN={
   "Choisis un joueur.":"Pick a player.", "La carte n'est plus disponible.":"The card is no longer available.",
   "Capital insuffisant pour cet achat — offre annulée.":"Not enough capital for this purchase — offer cancelled.",
   "Impossible : le pari du jour de l'acheteur est déjà validé — attends la résolution.":"Not possible: the buyer's bet for the day is already locked — wait for resolution.",
+  "Tu ne peux pas vendre tant que ton pari du jour est validé — attends la résolution de la journée.":"You can't sell while your bet for the day is locked in — wait for the day to be resolved.",
+  "Le vendeur a un pari en cours ce jour-là (il pourrait jouer cette carte) — échange impossible pour l'instant.":"The seller has a bet in play that day (they might use this card) — trade not possible right now.",
   "Acheté ! {c} est à toi (−{b} €).":"Bought! {c} is yours (−€{b}).",
   "{a} a accepté : {c} vendue (+{b} €).":"{a} accepted: {c} sold (+€{b}).",
   // --- Premium (badge + fiche stats + récap) ---
@@ -806,6 +808,9 @@ const EN={
   "En cours de championnat, tu peux <b>racheter une carte bonus</b> à un adversaire, contre une somme de ton capital (monnaie virtuelle).":"During the championship, you can <b>buy back a bonus card</b> from an opponent, for a sum of your (virtual) capital.",
   "Tu proposes un prix ; l'autre est <b>libre d'accepter ou de refuser</b>. S'il accepte, la carte passe dans ta main et le montant lui est <b>transféré</b> — rien n'est créé, rien ne disparaît.":"You propose a price; the other player is <b>free to accept or decline</b>. If they accept, the card moves to your hand and the amount is <b>transferred</b> to them — nothing is created, nothing disappears.",
   "On ne rachète que des cartes <b>encore en main</b> : jamais une carte déjà jouée, ni une carte engagée pour la journée en cours.":"Only cards <b>still in hand</b> can be bought back: never an already-played card, nor a card committed for the current day.",
+  "Tu peux aussi <b>vendre</b> une de tes cartes à un joueur (il paie, il la reçoit) — pratique pour te refaire du capital.":"You can also <b>sell</b> one of your cards to a player (they pay, they receive it) — handy to rebuild your capital.",
+  "⏳ <b>Quand ?</b> Un échange n'est possible <b>qu'entre deux journées</b> : tant que <b>ni le vendeur ni l'acheteur</b> n'a validé son pari du jour. Dès qu'un pari est verrouillé, les échanges le concernant sont gelés jusqu'à la résolution (ça protège la règle du capital jamais négatif et évite qu'une carte soit vendue et jouée en même temps).":"⏳ <b>When?</b> A trade is only possible <b>between days</b>: as long as <b>neither the seller nor the buyer</b> has locked their bet for the day. Once a bet is locked, trades involving that player are frozen until resolution (this protects the never-negative-capital rule and prevents a card being sold and played at the same time).",
+  "On n'échange que des cartes <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.":"Only cards <b>still in hand</b> can be traded, and the buyer must keep at least <b>€{a}</b> to be able to bet.",
   "Tu ne peux pas racheter <b>tant que ton pari du jour est validé</b> (cela protège la règle du capital jamais négatif), et le prix doit te laisser au moins <b>{a} €</b> pour pouvoir encore miser.":"You can't buy back <b>while your bet for the day is locked</b> (this protects the never-negative-capital rule), and the price must leave you at least <b>€{a}</b> to keep betting.",
   "Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.":"You are <b>notified</b> when your offer is accepted or declined, and the 🤝 button flags the offers made to you.",
   "👉 Touche un joueur pour voir ses bonus (restants et utilisés).":"👉 Tap a player to see their bonuses (remaining and used).",
@@ -3299,7 +3304,8 @@ function viewTrade(){
   // --- VENDRE (je propose une de MES cartes) ---
   h+=`<div class="box"><b class="mini">💰 ${t("Vendre une de mes cartes")}</b>`;
   const myHand=(meP&&meP.hand)||[];
-  if(!humanOpponents().length) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucun adversaire pour l'instant.")}</div>`;
+  if(!S.recap && myBet()) h+=`<div class="mini muted" style="margin-top:6px">${t("Tu ne peux pas vendre tant que ton pari du jour est validé — attends la résolution de la journée.")}</div>`;
+  else if(!humanOpponents().length) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucun adversaire pour l'instant.")}</div>`;
   else if(!myHand.length) h+=`<div class="mini muted" style="margin-top:6px">${t("Tu n'as aucune carte en main à vendre.")}</div>`;
   else { h+=`<div class="mini muted" style="margin-top:4px">${t("Choisis une carte à proposer aux autres (leur cagnotte est indiquée).")}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${myHand.map(id=>{ const eng=cardEngaged(id);
@@ -3367,6 +3373,7 @@ async function submitSell(cardId){
   closeCardInfo();
   try{
     const meP=me(); if(!meP || !((meP.hand||[]).includes(cardId))){ toast(t("Tu ne détiens plus cette carte.")); await refresh(); return; }
+    if(await hasBetForDay(S.myId, L.current_day)){ toast(t("Tu ne peux pas vendre tant que ton pari du jour est validé — attends la résolution de la journée.")); return; }
     if(await cardHasPendingTrade(cardId)){ toast(t("Cette carte fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
     await q(db.from("trades").insert({league_id:L.id, kind:"sell", from_player:S.myId, to_player:target, card_id:cardId, price:price, msg:msg||null}));
     toast(t("Offre envoyée.")); await refresh();
@@ -3385,6 +3392,7 @@ async function acceptTrade(id){
     if(!owner||!buyer){ toast(t("Offre introuvable.")); await refresh(); return; }
     if(!(owner.hand||[]).includes(o.card_id)){ toast(t("La carte n'est plus disponible.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
     if((buyer.capital||0)-price < TRADE_MIN_CAP){ toast(t("Capital insuffisant pour cet achat — offre annulée.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
+    if(await hasBetForDay(ownerId, L.current_day)){ toast(t("Le vendeur a un pari en cours ce jour-là (il pourrait jouer cette carte) — échange impossible pour l'instant.")); return; }
     if(await hasBetForDay(buyerId, L.current_day)){ toast(t("Impossible : le pari du jour de l'acheteur est déjà validé — attends la résolution.")); return; }
     const oHand=(owner.hand||[]).filter(x=>x!==o.card_id); const bHand=[...(buyer.hand||[]), o.card_id];
     await q(db.from("players").update({hand:oHand, capital:tr2((owner.capital||0)+price)}).eq("id",ownerId));
@@ -3489,8 +3497,9 @@ function viewRulesFull(){
 
    ${sec(t("🤝 Racheter un bonus"), `${t("En cours de championnat, tu peux <b>racheter une carte bonus</b> à un adversaire, contre une somme de ton capital (monnaie virtuelle).")}<br>
      ${t("Tu proposes un prix ; l'autre est <b>libre d'accepter ou de refuser</b>. S'il accepte, la carte passe dans ta main et le montant lui est <b>transféré</b> — rien n'est créé, rien ne disparaît.")}<br>
-     ${t("On ne rachète que des cartes <b>encore en main</b> : jamais une carte déjà jouée, ni une carte engagée pour la journée en cours.")}<br>
-     ${t("Tu ne peux pas racheter <b>tant que ton pari du jour est validé</b> (cela protège la règle du capital jamais négatif), et le prix doit te laisser au moins <b>{a} €</b> pour pouvoir encore miser.",{a:TRADE_MIN_CAP})}<br>
+     ${t("Tu peux aussi <b>vendre</b> une de tes cartes à un joueur (il paie, il la reçoit) — pratique pour te refaire du capital.")}<br>
+     ${t("⏳ <b>Quand ?</b> Un échange n'est possible <b>qu'entre deux journées</b> : tant que <b>ni le vendeur ni l'acheteur</b> n'a validé son pari du jour. Dès qu'un pari est verrouillé, les échanges le concernant sont gelés jusqu'à la résolution (ça protège la règle du capital jamais négatif et évite qu'une carte soit vendue et jouée en même temps).")}<br>
+     ${t("On n'échange que des cartes <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.",{a:TRADE_MIN_CAP})}<br>
      ${t("Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.")}<br>
      <i>${t("(option payante à terme — gratuite pendant les tests)")}</i>`)}
 
