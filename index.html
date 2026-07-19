@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.48";
+const APP_VERSION = "v4.50";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -369,6 +369,16 @@ async function fetchRealPool(){
   return pool.sort(sortBig).slice(0,N);
 }
 let lastRealCheck=0, lastRealFill=0;
+// 💰 CACHE DU POOL (mitigation quota, en attendant le stockage serveur de la Phase 2).
+// Construire le pool coûte ~24 crédits (1 par compétition interrogée) et c'était refait à chaque
+// ouverture de l'écran de sélection ET par le remplissage auto — dans CHAQUE navigateur ouvert.
+// Les matchs des prochaines heures ne bougent pas d'une minute à l'autre : on garde le résultat
+// POOL_TTL puis on le réutilise. Copie renvoyée (les appelants mélangent/tronquent la liste).
+let poolCache=null, poolCacheAt=0; const POOL_TTL=30*60*1000; // 30 min
+async function fetchRealPoolCached(){
+  if(poolCache && (Date.now()-poolCacheAt)<POOL_TTL) return poolCache.slice();
+  const p=await fetchRealPool(); poolCache=p; poolCacheAt=Date.now(); return p.slice();
+}
 const STALE_MATCH_H=24; // h après le coup d'envoi prévu → match non terminé réputé ANNULÉ (mises rendues)
 // Récupère les résultats réels (scores) par compétition → map evId -> {completed, res(1/N/2)}.
 async function fetchRealResults(sportKeys){
@@ -394,7 +404,7 @@ async function resolveRealIfReady(){
   if(duels.some(d=>!Array.isArray(d.fixtures)||!d.fixtures.length)) return;
   const times=realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.commence).map(f=>new Date(f.commence).getTime());
   if(!times.length || Math.min.apply(null,times)>Date.now()) return; // aucun match commencé
-  if(Date.now()-lastRealCheck < 600000) return; lastRealCheck=Date.now();
+  if(Date.now()-lastRealCheck < 1200000) return; lastRealCheck=Date.now(); // 20 min (était 10) — mitigation quota
   const keys=[...new Set(realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.evId).map(f=>f.sportKey))];
   const results=await fetchRealResults(keys);
   // ⏱️ AUTO-ANNULATION (v4.46) : un match toujours pas terminé plus de STALE_MATCH_H heures après son
@@ -796,6 +806,8 @@ const EN={
   "Le confort maximal, zéro prise de tête.":"Maximum comfort, zero hassle.",
   "Boutique":"Shop", "— ou tout d'un coup —":"— or all at once —",
   "Créer une nouvelle ligue ? Tu en seras l'organisateur et tu pourras inviter tes amis avec le code.":"Create a new league? You'll be the organiser and can invite your friends with the code.",
+  "Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b>, depuis n'importe quel appareil.":"No email needed: pick a username + a password. Your account lets you <b>find all your leagues</b>, from any device.",
+  "📖 Découvrir le jeu (règles)":"📖 Discover the game (rules)", "Tu peux lire les règles avant de créer un compte.":"You can read the rules before creating an account.",
   // --- Mode solo contre l'IA ---
   "🤖 Format du solo":"🤖 Solo format", "solo":"solo", "ton adversaire pour cette partie en solo":"your opponent for this solo game",
   "1 aller-retour — 2 journées":"1 home-and-away — 2 days", "2 allers-retours — 4 journées":"2 home-and-away rounds — 4 days",
@@ -1338,7 +1350,7 @@ async function ensureFixtures(){
   if(!todo.length) return false;
   if(L&&L.data_mode==="real"){
     if(Date.now()-lastRealFill < 300000) return false; lastRealFill=Date.now(); // throttle quota (5 min)
-    let pool=[]; try{ pool=await fetchRealPool(); }catch(e){}
+    let pool=[]; try{ pool=await fetchRealPoolCached(); }catch(e){}
     if(pool.length<5) return false; // pas assez de vrais matchs → on attend (jamais de simulé en réel)
     for(const d of todo){ const cp=pool.slice(); for(let i=cp.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cp[i],cp[j]]=[cp[j],cp[i]];}
       const fx=cp.slice(0,5);
@@ -1386,7 +1398,9 @@ function viewAuth(){
     <div style="height:12px"></div>
     <button class="btn" onclick="doLogin()">${t("Se connecter")}</button>
     <button class="btn ghost" style="margin-top:8px" onclick="doSignup()">${t("Créer un compte")}</button>
-    <div class="mini muted" style="margin-top:12px">${t("Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b> et d'en jouer <b>plusieurs à la fois</b>, depuis n'importe quel appareil.")}</div></div>`;
+    <div class="mini muted" style="margin-top:12px">${t("Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b>, depuis n'importe quel appareil.")}</div></div>
+    <button class="btn ghost" onclick="openRules()">${t("📖 Découvrir le jeu (règles)")}</button>
+    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Tu peux lire les règles avant de créer un compte.")}</div>`;
 }
 async function doLogin(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
@@ -2052,7 +2066,7 @@ function noResultsYet(){ toast(t("Aucune journée terminée pour l'instant — l
 /* --- selection --- */
 let selPool=null, selChosen=[], selLoading=false;
 async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
-  try{ selPool=await fetchRealPool(); }catch(e){ selPool=[]; showErr("Vrais matchs : "+e.message); }
+  try{ selPool=await fetchRealPoolCached(); }catch(e){ selPool=[]; showErr("Vrais matchs : "+e.message); }
   selLoading=false; render(); }
 function viewSelect(d,dayLbl,opp){
   const real=(L.data_mode==="real");
@@ -3224,7 +3238,7 @@ function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   const fo=$("foot"); if(fo) fo.textContent="The Maestro League · "+t("prototype de test · données sportives simulées")+" · "+APP_VERSION;
-  $("rulesBtn").classList.toggle("hide", S.view==="auth");
+  $("rulesBtn").classList.remove("hide"); // 📖 visible même AVANT connexion (découvrir le jeu)
   $("shopBtn").classList.toggle("hide", S.view==="auth");
   // 🐛 visible dès qu'on est connecté (comme les règles) : un bug peut survenir n'importe où.
   $("bugBtn").classList.toggle("hide", S.view==="auth");
@@ -3280,9 +3294,12 @@ function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S
 // navRoot() vide la pile : on change de racine (ligue / liste), l'historique d'avant n'a plus
 // de sens — un retour vers "game" après avoir quitté la ligue afficherait une ligue nulle.
 function navOpen(v){ if(S.view===v) return; S.nav.push(S.view); if(S.nav.length>12) S.nav.shift(); S.view=v; render(); }
-function navHome(){ return S.leagueId ? "game" : "leagues"; }
+// ⚠️ « auth » n'est une entrée invalide QUE si l'on est connecté (on ne revient pas au login après
+// s'être connecté). Non connecté, c'est au contraire la seule destination valide : depuis la v4.50 on
+// peut lire les règles AVANT de créer un compte — le retour doit ramener à l'écran de connexion.
+function navHome(){ return !AUTH ? "auth" : (S.leagueId ? "game" : "leagues"); }
 function navBack(){ let v=S.nav.pop();
-  while(v==="auth" || (v==="game" && !S.leagueId)) v=S.nav.pop();   // entrées devenues invalides
+  while((v==="auth" && AUTH) || (v==="game" && !S.leagueId)) v=S.nav.pop();   // entrées devenues invalides
   S.view = v || navHome(); render(); }
 function navRoot(){ S.nav=[]; }
 function openSettings(){ navOpen("settings"); }
