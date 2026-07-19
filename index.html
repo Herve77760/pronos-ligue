@@ -82,10 +82,11 @@
   .cardchip.on{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue);}
   .cardchip .em{font-size:19px;display:block;margin-bottom:2px;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
-  /* `anywhere` et non `break-word` : seul `anywhere` reduit la largeur MINIMALE calculee de la
-     cellule. Sans lui, un pseudo long elargit tout le tableau au-dela de l'ecran (classement,
-     resultats, ecran de fin) et la page se met a defiler lateralement. */
-  td,th{overflow-wrap:anywhere;}
+  /* Les 6 tableaux vivent deja dans un conteneur `overflow-x:auto` : ils defilent CHEZ EUX et ne
+     peuvent pas elargir la page. Donc surtout PAS de `overflow-wrap:anywhere` ici — ca coupait les
+     mots n'importe ou dans des colonnes etroites (« DU/EL », « P/T/S », « 11 » sur deux lignes,
+     « 109.7 / 1€ »). Entetes et nombres restent insecables. */
+  th,td.num{white-space:nowrap;}
   th,td{padding:9px 6px;border-bottom:1px solid var(--border);text-align:left;}
   tr:last-child td{border-bottom:none;}
   th{color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;}
@@ -148,7 +149,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.54";
+const APP_VERSION = "v4.56";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -195,7 +196,7 @@ function gageDescOf(t){ const n=s=>(s||'').replace(/[^\p{L}]/gu,'').toLowerCase(
 const CARDS={
  assurance:{e:"🛡",n:"Assurance",t:true, f:5, d:"Un pari choisi : s'il perd, mise remboursée."},
  double:   {e:"🚀",n:"Double Mise",t:true, f:5, d:"Un pari choisi : s'il gagne, gain doublé."},
- dbl:      {e:"💥",n:"Coup Double",t:true, two:true, f:5, d:"Bonus GRATUIT (aucune mise, aucun risque) : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien."},
+ dbl:      {e:"💥",n:"Coup Double",t:true, two:true, f:5, d:"Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien."},
  miroir:   {e:"🪞",n:"Effet Kiss Cool",t:false, f:3, d:"Le meilleur pari gagnant des deux joueurs est échangé. La question à se poser : ton adversaire va-t-il gagner plus que toi ? ⚠️ Sans effet si l'un des deux n'a aucun pari gagnant."},
  gourmand: {e:"🍽️",n:"Gourmand",t:false, f:3, d:"Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus)."},
  face:     {e:"😏",n:"Dans ta face",t:true, oppT:true, f:3, d:"Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié."},
@@ -263,7 +264,29 @@ const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
 // diverger du moteur.
 const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
 const STAKE_CAP_INVEST=0.7; // … 70 % avec la carte Investisseur
-const FORGOT_PENALTY=0.25;  // pari non validé à temps → −25 % du capital
+const FORGOT_PENALTY=0.25;  // ANCIEN barème : pari non validé à temps → −25 % du capital
+// ─── Barème v2 (décision d'Hervé, 19/07/2026) ────────────────────────────────────────────────
+// Points du duel = RÉSULTAT (V=2, N=1, D=0) + 1 pt si le net du joueur est positif.
+// Il remplace l'ancien barème, irrégulier : « victoire à net négatif » et « défaite à net positif »
+// y valaient tous deux 1 pt — gagner son duel ne rapportait alors rien de plus que le perdre.
+// Oubli : −1 pt (au lieu de −2) et −10 % du capital (au lieu de −25 %). Motif du recul sur le
+// capital : la pénalité n'empêchait rien (miser 1 € protège déjà son capital, tout en jouant) mais
+// se composait — le plafond de mise étant un % du capital, deux oublis mettaient un joueur hors
+// course pour la saison.
+// APPLICATION : aux ligues créées à partir de cette date SEULEMENT. Les ligues en cours gardent
+// leur barème d'origine, sinon le total écrit en base (ancien barème) divergerait de l'historique
+// recalculé (nouveau). On se base sur `created_at` : aucune migration SQL nécessaire.
+const SCORING2_FROM="2026-07-19T00:00:00.000Z";
+const FORGOT_PENALTY2=0.10, FORGOT_PTS2=-1, FORGOT_PTS1=-2;
+function isScoring2(lg){ const x=(lg!==undefined?lg:(typeof L!=="undefined"?L:null)); return !!(x && x.created_at && x.created_at>=SCORING2_FROM); }
+function forgotPtsOf(lg){ return isScoring2(lg)?FORGOT_PTS2:FORGOT_PTS1; }
+function forgotPenOf(lg){ return isScoring2(lg)?FORGOT_PENALTY2:FORGOT_PENALTY; }
+// Pour les ÉCRANS DE RÈGLES : hors ligue (avant connexion, accueil) il n'y a pas de `L` — on
+// documente alors le barème v2, puisque c'est celui de toute ligue créée désormais. Dans une
+// ligue, on affiche évidemment le barème de CETTE ligue.
+function scoringShown(){ return (typeof L!=="undefined" && L) ? isScoring2(L) : true; }
+function forgotPtsShown(){ return scoringShown()?FORGOT_PTS2:FORGOT_PTS1; }
+function forgotPenShown(){ return scoringShown()?FORGOT_PENALTY2:FORGOT_PENALTY; }
 // Part du capital MAX misable pour un joueur (selon qu'il joue Investisseur ou non).
 function stakeCapOf(card){ return (card && card.id==="invest") ? STAKE_CAP_INVEST : STAKE_CAP; }
 // Les mêmes, en % entier, pour les textes affichés (« 50 % », « 25 % »…).
@@ -720,7 +743,7 @@ const EN={
   // — Phase 4c : noms & descriptions des cartes bonus —
   "Assurance":"Insurance", "Un pari choisi : s'il perd, mise remboursée.":"A chosen bet: if it loses, stake refunded.",
   "Coup Double":"Double Strike",
-  "Bonus GRATUIT (aucune mise, aucun risque) : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"FREE bonus (no stake, no risk): pick 2 matches (your Captain is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
+  "Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"No extra stake, no risk: pick 2 matches (your Captain is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
   "cote combinée ≈ {a}":"combined odds ≈ {a}", "touche un 2ᵉ match 💥":"tap a 2nd match 💥", "→ touche les 💥 de tes 2 matchs.":"→ tap the 💥 on your 2 matches.",
   "Double Mise":"Double Stake", "Un pari choisi : s'il gagne, gain doublé.":"A chosen bet: if it wins, gain doubled.",
   "Effet Kiss Cool":"Kiss Cool Effect", "Le meilleur pari gagnant des deux joueurs est échangé. La question à se poser : ton adversaire va-t-il gagner plus que toi ? ⚠️ Sans effet si l'un des deux n'a aucun pari gagnant.":"The best winning bet of the two players is swapped. The question to ask yourself: will your opponent win more than you? ⚠️ No effect if either player has no winning bet.",
@@ -822,6 +845,12 @@ const EN={
   "Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b>, depuis n'importe quel appareil.":"No email needed: pick a username + a password. Your account lets you <b>find all your leagues</b>, from any device.",
   "📖 Découvrir le jeu (règles)":"📖 Discover the game (rules)", "Tu peux lire les règles avant de créer un compte.":"You can read the rules before creating an account.",
   // --- Mode solo contre l'IA ---
+  "Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>Points = <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif.<br>• Victoire : <b>3 pts</b> (net positif) ou <b>2 pts</b>.<br>• Match nul : <b>2 pts</b> (net positif) ou <b>1 pt</b>.<br>• Défaite : <b>1 pt</b> (net positif) ou <b>0 pt</b>.<br>• Oubli des pronos : <b>−1 pt</b>.":"The duel is won by the <b>best net result</b> (winnings − stakes).<br>Points = <b>result</b> (win <b>2</b>, draw <b>1</b>, loss <b>0</b>) <b>+ 1 pt</b> if your net is positive.<br>• Win: <b>3 pts</b> (positive net) or <b>2 pts</b>.<br>• Draw: <b>2 pts</b> (positive net) or <b>1 pt</b>.<br>• Loss: <b>1 pt</b> (positive net) or <b>0 pt</b>.<br>• Missed picks: <b>−1 pt</b>.",
+  "Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>{b} pt</b> au classement et <b>−{a} % du capital</b>.":"No confirmation in time → <b>no bet counted</b> (your opponent's picks are not reused), <b>{b} pt</b> in the standings and <b>−{a} % of your balance</b>.",
+  "Points : <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif. Soit <b>3 pts</b> au mieux, <b>0</b> au pire.":"Points: <b>result</b> (win <b>2</b>, draw <b>1</b>, loss <b>0</b>) <b>+ 1 pt</b> if your net is positive. So <b>3 pts</b> at best, <b>0</b> at worst.",
+  "Points = <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif.<br>Soit : victoire <b>3</b> ou <b>2</b> · nul <b>2</b> ou <b>1</b> · défaite <b>1</b> ou <b>0</b>. ⚠️ Un net de <b>0 €</b> (par exemple si tous les matchs du jour sont annulés) ne donne <b>pas</b> le point de bonus.":"Points = <b>result</b> (win <b>2</b>, draw <b>1</b>, loss <b>0</b>) <b>+ 1 pt</b> if your net is positive.<br>So: win <b>3</b> or <b>2</b> · draw <b>2</b> or <b>1</b> · loss <b>1</b> or <b>0</b>. ⚠️ A net of <b>€0</b> (for example if every match of the day is cancelled) does <b>not</b> earn the bonus point.",
+  "Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>2 pts</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.":"Your opponent <b>wins the duel</b> — but only <b>3 pts</b> if their net is positive, <b>2 pts</b> otherwise. They cannot lose money because of your absence.",
+  "Tu prends <b>{b} pt</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>{b} pt</b> in the standings and lose <b>{a} %</b> of your balance.",
   "🤖 Format du solo":"🤖 Solo format", "solo":"solo",
   "En attente d'autres joueurs":"Waiting for more players", "libre":"open", "si solo":"if solo",
   "Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.":"Registrations are open: share the code <b>{a}</b>. Nothing is locked in until you close them.",
@@ -1211,13 +1240,15 @@ function showPlayerCards(pid){ const p=pById(pid); if(!p) return;
   infoModal(p.emoji||"🃏", p.name||"?", body); }
 function showDuelPtsInfo(pid){
   const p=pById(pid)||{}; const d=duels.find(x=>x.home_id===pid||x.away_id===pid);
-  const bareme=`<div class="mini muted" style="text-align:left">${t("Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>• <b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> si négatif.<br>• <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> si négatif.<br>• <b>Match nul</b> : <b>1 pt</b> chacun.")}</div>`;
+  const bareme=`<div class="mini muted" style="text-align:left">${isScoring2()
+    ? t("Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>Points = <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif.<br>• Victoire : <b>3 pts</b> (net positif) ou <b>2 pts</b>.<br>• Match nul : <b>2 pts</b> (net positif) ou <b>1 pt</b>.<br>• Défaite : <b>1 pt</b> (net positif) ou <b>0 pt</b>.<br>• Oubli des pronos : <b>−1 pt</b>.")
+    : t("Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>• <b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> si négatif.<br>• <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> si négatif.<br>• <b>Match nul</b> : <b>1 pt</b> chacun.")}</div>`;
   let ctx='';
   if(d){ const hb=bets.find(x=>x.player_id===d.home_id), ab=bets.find(x=>x.player_id===d.away_id);
     const H=Object.assign({net:(hb&&hb.net)||0},gainMise(hb&&hb.picks,d.fixtures));
     const A=Object.assign({net:(ab&&ab.net)||0},gainMise(ab&&ab.picks,d.fixtures));
     const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // pronos non validés à temps → forfait
-    const r=duelPtsF(H,A,fg(hb),fg(ab)); const iAmHome=d.home_id===pid; const pts=iAmHome?r.h:r.a; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
+    const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); const iAmHome=d.home_id===pid; const pts=iAmHome?r.h:r.a; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
     const issue = fg(iAmHome?hb:ab) ? t("déclaré forfait (pronos non faits)") : (r.win==null?t("fait match nul") : (((r.win==='h')===iAmHome)?t("gagné son duel"):t("perdu son duel")));
     ctx=`<div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:esc((p.emoji||'')+' '+(p.name||'?')),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+fmt(netMe)+'€</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}</div>`;
   }
@@ -1298,20 +1329,29 @@ function gainMise(picks,fx){ let gain=0,mise=0; (picks||[]).forEach((b,i)=>{ con
 // Nombre de paris gagnants d'un joueur (gère la Double Chance)
 function winCount(bt,fx){ if(!bt||!bt.picks||!fx) return 0; const c=bt.card; let w=0; bt.picks.forEach((b,i)=>{ const f=fx[i]; if(!f||f.canceled)return; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res); if(win)w++; }); return w; }
 // Compare deux joueurs {net,gain,mise} : vainqueur = meilleur net, puis gain, puis mise, sinon nul.
-// Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
-function duelPts(h,a){ const R=x=>Math.round((+x||0)*100)/100;
+// v2 : RÉSULTAT (V=2, N=1, D=0) + 1 pt si net > 0.  ANCIEN : vainqueur 3 (net>0) ou 1 ; perdant
+// 1 (net>0) ou 0 ; nul 1/1.  ⚠️ « net > 0 » strictement : un net de 0 (p. ex. tous les matchs du
+// jour annulés) ne donne PAS le point de bonus.
+function duelPts(h,a,v2){ const R=x=>Math.round((+x||0)*100)/100;
   const c=(R(h.net)-R(a.net)) || (R(h.gain)-R(a.gain)) || (R(h.mise)-R(a.mise));
+  if(v2){ const bh=R(h.net)>0?1:0, ba=R(a.net)>0?1:0;
+    if(c>0) return {h:2+bh, a:0+ba, win:'h'};
+    if(c<0) return {h:0+bh, a:2+ba, win:'a'};
+    return {h:1+bh, a:1+ba, win:null}; }
   if(c>0) return {h:R(h.net)>0?3:1, a:R(a.net)>0?1:0, win:'h'};
   if(c<0) return {h:R(h.net)>0?1:0, a:R(a.net)>0?3:1, win:'a'};
   return {h:1,a:1,win:null}; }
 // Duel avec FORFAIT : un joueur qui n'a pas validé ses pronos à temps ne marque AUCUN point de duel
 // (sinon son net de 0 lui ferait « battre » un adversaire négatif) ; l'adversaire gagne le duel d'office.
-// Barème du vainqueur inchangé : 3 pts si son net est positif, 1 pt sinon.
-function duelPtsF(H,A,hForgot,aForgot){
+// Barème du vainqueur : v2 → 2 + 1 si net>0 (soit 3 ou 2) ; ancien → 3 si net>0, 1 sinon.
+// Le 0 rendu ici n'est PAS la sanction complète : la pénalité d'oubli (−1 pt en v2, −2 avant) est
+// ajoutée séparément par resolveDay / recapBody / computeStandHist.
+function duelPtsF(H,A,hForgot,aForgot,v2){
+  const gagne=X=>{ const n=(+X.net||0); return v2 ? (2+(n>0?1:0)) : (n>0?3:1); };
   if(hForgot&&aForgot) return {h:0,a:0,win:null};
-  if(hForgot) return {h:0, a:((+A.net||0)>0?3:1), win:'a'};
-  if(aForgot) return {h:((+H.net||0)>0?3:1), a:0, win:'h'};
-  return duelPts(H,A); }
+  if(hForgot) return {h:0, a:gagne(A), win:'a'};
+  if(aForgot) return {h:gagne(H), a:0, win:'h'};
+  return duelPts(H,A,v2); }
 // Meilleur pronostiqueur du jour (un SEUL joueur de toute la ligue) : net, puis gain, puis mise, puis 1er inscrit.
 function dayStar(rows){ const R=x=>Math.round((+x||0)*100)/100; let best=null;
   for(const r of rows){ if(!best){ best=r; continue; }
@@ -2399,7 +2439,7 @@ async function resolveDay(){
     // On l'inscrit donc dans `net` (au lieu de l'appliquer à part sur le capital) → elle apparaît dans
     // les résultats de la journée et dans la courbe de capital. Le capital reste identique :
     // capStart + net = capStart − 25 % = capStart × 0,75.
-    const penOubli = pid => -Math.round((capStart[pid]||0)*FORGOT_PENALTY*100)/100;
+    const penOubli = pid => -Math.round((capStart[pid]||0)*forgotPenOf()*100)/100;
     forgot.forEach(pid=>{ dayNet[pid] = penOubli(pid); });
     // Impact réel de chaque carte = écart entre le net RÉEL et le net d'un monde SANS cette carte.
     // Le contrefactuel `wo` sort brut de runEngine : il ignore la pénalité d'oubli, qui est injectée
@@ -2432,7 +2472,7 @@ async function resolveDay(){
       best_odd:Math.max(p.best_odd,dayBest[p.id]||0),hand:(p.hand||[]).slice(),cards_used:(p.cards_used||[]).slice()}; });
     // Pari non validé à temps (humain) : −2 pts au classement. Le −25 % de capital est DÉJÀ dans `net`
     // (voir plus haut) → surtout ne pas le réappliquer ici, ce serait une double peine.
-    forgot.forEach(pid=>{ if(upd[pid]){ upd[pid].points-=2; } });
+    forgot.forEach(pid=>{ if(upd[pid]){ upd[pid].points+=forgotPtsOf(); } });
     // +1 au meilleur pronostiqueur du jour (plus gros gain parmi tous les joueurs)
     // ⚠️ `mise>0` : un joueur dont TOUS les paris ont été annulés a un net de 0 ARTIFICIEL (mises rendues).
     // Il n'a rien pronostiqué ce jour-là → il ne peut pas rafler l'étoile devant des joueurs en négatif.
@@ -2449,7 +2489,7 @@ async function resolveDay(){
     for(const d of dz){ const hp=PD[d.home_id], ap=PD[d.away_id]; if(!hp||!ap) continue;
       const H=Object.assign({net:dayNet[d.home_id]||0}, gainMise(hp.picks,hp.fx));
       const A=Object.assign({net:dayNet[d.away_id]||0}, gainMise(ap.picks,ap.fx));
-      const r=duelPtsF(H,A,forgot.has(d.home_id),forgot.has(d.away_id)); upd[d.home_id].points+=r.h; upd[d.away_id].points+=r.a;
+      const r=duelPtsF(H,A,forgot.has(d.home_id),forgot.has(d.away_id),isScoring2()); upd[d.home_id].points+=r.h; upd[d.away_id].points+=r.a;
       if(r.win==='h'){ upd[d.home_id].duel_wins+=1; upd[d.home_id].streak_w+=1; upd[d.home_id].streak_l=0; upd[d.away_id].streak_l+=1; upd[d.away_id].streak_w=0; }
       else if(r.win==='a'){ upd[d.away_id].duel_wins+=1; upd[d.away_id].streak_w+=1; upd[d.away_id].streak_l=0; upd[d.home_id].streak_l+=1; upd[d.home_id].streak_w=0; }
       else { upd[d.home_id].streak_w=0; upd[d.home_id].streak_l=0; upd[d.away_id].streak_w=0; upd[d.away_id].streak_l=0; } }
@@ -2483,11 +2523,11 @@ function recapBody(D){
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
     const H=Object.assign({net:netMap[d.home_id]||0}, gainMise(hb&&hb.picks, d.fixtures));
     const A=Object.assign({net:netMap[d.away_id]||0}, gainMise(ab&&ab.picks, d.fixtures));
-    const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id)); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a; });
+    const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id),isScoring2()); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a; });
     // (v4.13 — le malus « −1 pt si tous les paris faux » qui s'appliquait ici est supprimé, cf. resolveDay.)
   const starId=dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
   if(starId!=null) dpts[starId]+=1;
-  players.forEach(p=>{ if(forgot(p.id)) dpts[p.id]-=2; }); // pénalité d'oubli : −2 pts (alignée sur resolveDay/classement)
+  players.forEach(p=>{ if(forgot(p.id)) dpts[p.id]+=forgotPtsOf(); }); // pénalité d'oubli (alignée sur resolveDay/classement)
   // Classement de la journée : d'abord les POINTS du jour (duel + ⭐ − malus), puis le gain en cas d'égalité.
   // (Calculé ici, une fois dpts complet — c'est ce qui compte pour le championnat, pas la cagnotte seule.)
   const ord=[...players].sort((a,b)=>((dpts[b.id]||0)-(dpts[a.id]||0)) || ((netMap[b.id]||0)-(netMap[a.id]||0)));
@@ -2500,7 +2540,7 @@ function recapBody(D){
   if(myD){ const hb=bets.find(b=>b.player_id===myD.home_id), ab=bets.find(b=>b.player_id===myD.away_id);
     const H=Object.assign({net:netMap[myD.home_id]||0}, gainMise(hb&&hb.picks, myD.fixtures));
     const A=Object.assign({net:netMap[myD.away_id]||0}, gainMise(ab&&ab.picks, myD.fixtures));
-    const r=duelPtsF(H,A,forgot(myD.home_id),forgot(myD.away_id)); const iAmHome=myD.home_id===fp; fpDuelPts=iAmHome?r.h:r.a;
+    const r=duelPtsF(H,A,forgot(myD.home_id),forgot(myD.away_id),isScoring2()); const iAmHome=myD.home_id===fp; fpDuelPts=iAmHome?r.h:r.a;
     fpOutcome = (r.win==null)?'tie':(((r.win==='h')===iAmHome)?'win':'loss'); }
   const won=fpOutcome==='win', tie=fpOutcome==='tie';
   const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
@@ -2568,7 +2608,7 @@ function recapBody(D){
     const hP=pById(homeId)||{}, aP=pById(awayId)||{};
     const hB=bets.find(b=>b.player_id===homeId), aB=bets.find(b=>b.player_id===awayId);
     const hNet=netMap[homeId]||0, aNet=netMap[awayId]||0;
-    const rr=duelPts(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)));
+    const rr=duelPts(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)), isScoring2());
     const nameCell=(p,side)=>`<span class="mini muted">${side}</span> <b>${esc((p.emoji||'')+' '+(p.name||'?'))}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}`;
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
@@ -2696,7 +2736,7 @@ function computeStandHist(){
     dz.forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
       const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
       const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
-      const r=duelPtsF(H,A,forgot.has(du.home_id),forgot.has(du.away_id));
+      const r=duelPtsF(H,A,forgot.has(du.home_id),forgot.has(du.away_id),isScoring2());
       if(st[du.home_id]) st[du.home_id].points+=r.h; if(st[du.away_id]) st[du.away_id].points+=r.a;
       if(r.win==='h'){ if(st[du.home_id]){st[du.home_id].duel_wins++;st[du.home_id].streak_w++;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_l++;st[du.away_id].streak_w=0;} }
       else if(r.win==='a'){ if(st[du.away_id]){st[du.away_id].duel_wins++;st[du.away_id].streak_w++;st[du.away_id].streak_l=0;} if(st[du.home_id]){st[du.home_id].streak_l++;st[du.home_id].streak_w=0;} }
@@ -2715,9 +2755,9 @@ function computeStandHist(){
     // pénalité oubli : −2 pts. Le −25 % de capital est inclus dans `net` depuis la v4.03 (déjà appliqué
     // par `capital += net` juste au-dessus) → on ne le réapplique QUE pour les anciennes journées (net=0),
     // sinon ce serait une double peine à chaque rejeu de l'historique.
-    forgot.forEach(pid=>{ if(!st[pid]) return; st[pid].points-=2;
+    forgot.forEach(pid=>{ if(!st[pid]) return; st[pid].points+=forgotPtsOf();
       const bb=betAt[d+'|'+pid]; const penInNet=!!(bb && (bb.net||0)<0);
-      if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*(1-FORGOT_PENALTY)*100)/100); });
+      if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*(1-forgotPenOf())*100)/100); });
     // recapitalisation solidaire : si un humain < seuil → +montant à tout le monde
     const broke=players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
     if(broke.length){ players.forEach(p=>{ if(st[p.id]) st[p.id].capital+=RECAP_AMOUNT; }); }
@@ -2745,7 +2785,7 @@ function myStats(){
       const ob=(chartBets||[]).find(x=>x.player_id===oppId && x.day===b.day);
       const H=Object.assign({net:n},gainMise(b.picks,fx));
       const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
-      const r=duelPtsF(H,A,fg(b),fg(ob)); h2h[oppId]=h2h[oppId]||{w:0,l:0,d:0};
+      const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2()); h2h[oppId]=h2h[oppId]||{w:0,l:0,d:0};
       if(r.win==='h') h2h[oppId].w++; else if(r.win==='a') h2h[oppId].l++; else h2h[oppId].d++; } });
   const favCard=Object.keys(cardCount).sort((a,b)=>cardCount[b]-cardCount[a])[0]||null;
   return {days,picks,won,staked:Math.round(staked),net,bestOdd,best,worst,favCard,h2h,
@@ -2782,7 +2822,7 @@ async function loadMyStats(){
         if(d){ const oppId=d.home_id===mp?d.away_id:d.home_id; const opp=plMap[oppId];
           if(opp&&!opp.is_ai){ const ob=(betsByLg[lid]||[]).find(x=>x.player_id===oppId&&x.day===b.day);
             const H=Object.assign({net:n},gainMise(b.picks,fx)); const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
-            const r=duelPtsF(H,A,fg(b),fg(ob)); const key=opp.user_id||opp.name;
+            const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2(lg)); const key=opp.user_id||opp.name;
             h2h[key]=h2h[key]||{name:opp.name,emoji:opp.emoji,w:0,l:0,d:0};
             if(r.win==='h') h2h[key].w++; else if(r.win==='a') h2h[key].l++; else h2h[key].d++; } } });
       const humans=(plsByLg[lid]||[]).filter(p=>!p.is_ai).sort(cmp);
@@ -2985,7 +3025,7 @@ async function loadEndStats(){
         const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
         const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
         const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // forfait (pronos non validés)
-        const r=duelPtsF(H,A,fg(hb),fg(ab)); if(cumPts[du.home_id]!=null)cumPts[du.home_id]+=r.h; if(cumPts[du.away_id]!=null)cumPts[du.away_id]+=r.a; });
+        const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); if(cumPts[du.home_id]!=null)cumPts[du.home_id]+=r.h; if(cumPts[du.away_id]!=null)cumPts[du.away_id]+=r.a; });
       const rows=players.map(p=>{ const b=betAt[d+'|'+p.id]; const du=(duelByDay[d]||[]).find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, du&&du.fixtures); return {id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; });
       const sid=dayStar(rows); if(sid!=null&&cumPts[sid]!=null)cumPts[sid]+=1;
       const ord=[...players].sort((a,b)=>(cumPts[b.id]-cumPts[a.id])||(b.capital-a.capital)); ord.forEach((p,idx)=>rankHist[p.id][d]=idx+1); leaderByDay.push(ord[0]?ord[0].id:null);
@@ -3548,7 +3588,9 @@ function viewRules(){
      </ul></div>
    <div class="box"><b>${t("🏆 Points & classement")}</b>
      <div class="mini muted" style="margin-top:6px">${t("Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.")}
-     <br>${t("Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.")}
+     <br>${scoringShown()
+       ? t("Points : <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif. Soit <b>3 pts</b> au mieux, <b>0</b> au pire.")
+       : t("Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.")}
      <br>${t("Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.")}
      <br>${t("Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.")}</div></div>
    <div class="box"><b>${t("🔥 Dynamique")}</b>
@@ -3558,7 +3600,7 @@ function viewRules(){
      ${CARD_IDS.map(card).join("")}</div>
    <div class="box"><b>${t("🤝 Racheter un bonus")}</b> <span class="prem" onclick="showPremiumInfo('rachat')">${t("✨ Premium")}</span>
      <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})} <i>${t("(option payante à terme — gratuite pendant les tests)")}</i></div></div>
-   <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>−2 pts</b> au classement et <b>−{a} % du capital</b>.",{a:pct(FORGOT_PENALTY)})}</div></div>
+   <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>{b} pt</b> au classement et <b>−{a} % du capital</b>.",{a:pct(forgotPenShown()),b:forgotPtsShown()})}</div></div>
    <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
 }
 
@@ -3605,14 +3647,18 @@ function viewRulesFull(){
      ${t("⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.")}`)}
 
    ${sec(t("🏆 Points et classement"), `${t("Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.")}<br>
-     ${t("<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.")}<br>
+     ${scoringShown()
+       ? t("Points = <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif.<br>Soit : victoire <b>3</b> ou <b>2</b> · nul <b>2</b> ou <b>1</b> · défaite <b>1</b> ou <b>0</b>. ⚠️ Un net de <b>0 €</b> (par exemple si tous les matchs du jour sont annulés) ne donne <b>pas</b> le point de bonus.")
+       : t("<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.")}<br>
      ${t("<b>⭐ Meilleur pronostiqueur :</b> chaque journée, le joueur au plus gros net de <b>toute la ligue</b> gagne <b>+1 point</b> en plus.")}<br>
      ${t("<b>Départage au classement final</b> (à points égaux) : capital, puis victoires en duel, puis plus gros gain, puis plus grosse cote.")}<br>
      ${t("<b>🔥/❄️ La dynamique</b> (séries de victoires ou de défaites) est <b>purement indicative</b> : aucun bonus ni malus n'y est associé.")}`)}
 
    ${sec(t("😴 Le pari non validé à temps"), `${t("Si tu ne valides pas avant la clôture : <b>aucun pari</b> n'est pris en compte (on ne reprend pas les pronos de l'adversaire).")}<br>
-     ${t("Tu prends <b>−2 pts</b> au classement et tu perds <b>{a} %</b> de ton capital.",{a:pct(FORGOT_PENALTY)})}<br>
-     ${t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")}`)}
+     ${t("Tu prends <b>{b} pt</b> au classement et tu perds <b>{a} %</b> de ton capital.",{a:pct(forgotPenShown()),b:forgotPtsShown()})}<br>
+     ${scoringShown()
+       ? t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>2 pts</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")
+       : t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")}`)}
 
    ${sec(t("🃏 Les cartes bonus"), `${t("Au démarrage, chacun <b>mise en aveugle</b> sur les cartes qu'il veut. Chaque carte revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>.")}<br>
      ${t("Total des mises ≤ <b>{a} €</b>, et pas plus de cartes que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.",{a:SHOP_CAP})}<br>
