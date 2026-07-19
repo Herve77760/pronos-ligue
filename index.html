@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.41";
+const APP_VERSION = "v4.43";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -776,6 +776,9 @@ const EN={
   "Un seul déblocage — et moins cher que pris séparément.":"A single unlock — and cheaper than buying them separately.",
   "Le confort maximal, zéro prise de tête.":"Maximum comfort, zero hassle.",
   "Boutique":"Shop", "— ou tout d'un coup —":"— or all at once —",
+  "Créer une nouvelle ligue ? Tu en seras l'organisateur et tu pourras inviter tes amis avec le code.":"Create a new league? You'll be the organiser and can invite your friends with the code.",
+  "Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera.":"Close registrations? Nobody else will be able to join, and the preparation (vote + bonus auction) will begin.",
+  "Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.":"Close registrations? Nobody else will be able to join. You're an odd number: a 🤖 AI player will be added to balance things out, then the preparation will begin.",
   "🔄 Nouvelle version disponible.":"🔄 A new version is available.", "Recharger":"Reload",
   "(option payante à terme — gratuite pendant les tests)":"(a premium option eventually — free during testing)",
   "(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)":"(the 🤖 AI player will be a premium option eventually — free during testing)",
@@ -1439,7 +1442,9 @@ function backToLeagues(){ if(poll)clearInterval(poll); localStorage.removeItem("
   navRoot(); S.leagueId=null; S.myId=null; L=null; S.view="leagues"; loadMyLeagues(); }
 
 async function createLeague(){
-  if(busy||!AUTH)return; busy=true; showErr("");
+  if(busy||!AUTH)return;
+  if(!confirm(t("Créer une nouvelle ligue ? Tu en seras l'organisateur et tu pourras inviter tes amis avec le code.")))return;
+  busy=true; showErr("");
   try{
     const code=genCode();
     const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+AUTH.name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
@@ -1728,7 +1733,12 @@ async function relaunchLeague(){
     openLeague(lg.id, mine.id, true); toast("Nouveau tournoi créé — même équipe ✓");
   }catch(e){ showErr("Relance : "+e.message); } busy=false; }
 async function closeRegistration(){
-  if(busy)return; busy=true;
+  if(busy)return;
+  const nH=players.filter(p=>!p.is_ai).length;
+  if(!confirm(nH%2===1
+    ? t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.")
+    : t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera."))) return;
+  busy=true;
   try{
     let ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
     if(ps.length%2===1){ await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"🤖",is_ai:true,join_order:ps.length}));
