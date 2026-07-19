@@ -166,7 +166,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.78";
+const APP_VERSION = "v4.79";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -237,6 +237,8 @@ const CARDS={
  parachute:{e:"🪂",n:"Parachute",t:false, f:3, d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
  joker:    {e:"🃏",n:"Joker",t:true, f:2, d:"Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien."},
  chance:   {e:"🎲",n:"Double Chance",t:true, f:5, d:"Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à la cote initiale du résultat qui tombe (aucune cote réduite)."},
+ voleur:   {e:"🥷",n:"Voleur",t:false, f:5, d:"Tu prends le bonus que ton adversaire a joué ce jour-là : il ne s'applique pas, et la carte passe dans <b>ta main</b> pour une prochaine journée. ⚠️ Sans effet s'il n'a joué aucun bonus — et sans intérêt à la dernière journée, puisque tu n'auras plus l'occasion de jouer ta prise."},
+ clone:    {e:"🧬",n:"Clone",t:false, f:3, d:"Tu rejoues à l'identique le bonus que ton adversaire a joué ce jour-là — sur le <b>même match</b> s'il était ciblé. ⚠️ Sans effet s'il n'a joué aucun bonus, s'il a joué le 🥷 Voleur, ou s'il a joué 📈 Investisseur (dont l'effet se joue au moment de miser, pas à la résolution)."},
 };
 // Indicateur de force d'un bonus (1 à 5 muscles) affiché aux enchères / infos.
 function forceHTML(id){ const f=(CARDS[id]&&CARDS[id].f)||3; return `<span class="chip gold" title="Force ${f}/5" style="flex:0 0 auto">💪 ${f}/5</span>`; }
@@ -985,6 +987,13 @@ const EN={
   "Sangsue":"Leech", "Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches).":"If the opponent ends in profit, you siphon 15% of their profit (they lose it, you pocket it).",
   "Parachute":"Parachute", "Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie.":"Safety net: if your day is negative, 30% of your loss is cushioned.",
   "Joker":"Joker", "Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien.":"A 2nd bet becomes Captain (gains and losses doubled) on top of yours.",
+  "Voleur":"Thief", "Tu prends le bonus que ton adversaire a joué ce jour-là : il ne s'applique pas, et la carte passe dans <b>ta main</b> pour une prochaine journée. ⚠️ Sans effet s'il n'a joué aucun bonus — et sans intérêt à la dernière journée, puisque tu n'auras plus l'occasion de jouer ta prise.":"You take the bonus your opponent played that day: it doesn't apply, and the card moves into <b>your hand</b> for a future matchday. ⚠️ No effect if they played no bonus — and pointless on the last matchday, since you'll never get to play what you took.",
+  "Clone":"Clone", "Tu rejoues à l'identique le bonus que ton adversaire a joué ce jour-là — sur le <b>même match</b> s'il était ciblé. ⚠️ Sans effet s'il n'a joué aucun bonus, s'il a joué le 🥷 Voleur, ou s'il a joué 📈 Investisseur (dont l'effet se joue au moment de miser, pas à la résolution).":"You replay the exact bonus your opponent played that day — on the <b>same match</b> if it was targeted. ⚠️ No effect if they played no bonus, if they played 🥷 Thief, or if they played 📈 Investor (whose effect happens when betting, not at resolution).",
+  "🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et la carte est passée dans ta main.":"🥷 Bonus taken from {a}: their {b} was not applied, and the card moved into your hand.",
+  "🥷 Rien à prendre : ton adversaire n'a joué aucun bonus ce jour-là.":"🥷 Nothing to take: your opponent played no bonus that day.",
+  "🧬 Bonus copié : tu as rejoué son {a} à l'identique.":"🧬 Bonus copied: you replayed their {a} exactly.",
+  "🧬 Rien à copier : ton adversaire n'a joué aucun bonus clonable ce jour-là.":"🧬 Nothing to copy: your opponent played no clonable bonus that day.",
+  "🥷 Ce bonus t'a été <b>pris</b> par {a} : il ne s'est pas appliqué.":"🥷 This bonus was <b>taken</b> from you by {a}: it did not apply.",
   "Double Chance":"Double Chance", "Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à la cote initiale du résultat qui tombe (aucune cote réduite).":"You pick a 3-outcome match (with a draw) and cover 2 results for a single stake: you win if either comes in, at the original odds of the result that lands (no reduced odds).",
   // — Phase 4c : gages (titre + description) —
   "Le plongeon givré 🥶":"The frosty plunge 🥶", "Se baigner en maillot dans une eau bien froide (mer, lac ou douche glacée), vidéo à l'appui.":"Take a dip in swimwear in really cold water (sea, lake or an icy shower), with video proof.",
@@ -1345,6 +1354,17 @@ function showBonusImpact(pid){
   const hasSelf=im.self!=null&&Math.abs(im.self)>=0.01, hasOpp=im.opp!=null&&Math.abs(im.opp)>=0.01;
   let body=`<div class="mini muted" style="text-align:left">${esc(t(C.d))}</div>
     <div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("L'<b>effet</b> = le gain <b>avec</b> la carte moins le gain qu'il y aurait eu <b>sans</b> la carte.")}</div>`;
+  // 🥷 / 🧬 : sans cette ligne, l'impact chiffré est incompréhensible — on ne sait ni ce qui a été
+  // pris, ni ce qui a été copié, ni pourquoi la carte n'a rien donné.
+  const nomC=id=>(CARDS[id]?CARDS[id].e+" "+t(CARDS[id].n):id);
+  const nomJ=p=>{ const x=pById(p); return x?esc((x.emoji?x.emoji+" ":"")+x.name):"?"; };
+  let mot="";
+  if(c.stole) mot=t("🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et la carte est passée dans ta main.",{a:nomJ(oppId),b:nomC(c.stole)});
+  else if(c.id==="voleur") mot=t("🥷 Rien à prendre : ton adversaire n'a joué aucun bonus ce jour-là.");
+  else if(c.cloned) mot=t("🧬 Bonus copié : tu as rejoué son {a} à l'identique.",{a:nomC(c.cloned)});
+  else if(c.id==="clone") mot=t("🧬 Rien à copier : ton adversaire n'a joué aucun bonus clonable ce jour-là.");
+  if(c.stolenBy) mot=t("🥷 Ce bonus t'a été <b>pris</b> par {a} : il ne s'est pas appliqué.",{a:nomJ(c.stolenBy)});
+  if(mot) body+=`<div class="mini" style="text-align:left;margin-top:8px">${mot}</div>`;
   if(hasSelf){ const wo=r2(net-im.self); body+=`<div class="mini" style="text-align:left;margin-top:7px">🧑 <b>${t("Sur son gain du jour :")}</b><br>${t("• avec la carte :")} <b>${fmt(net)}€</b><br>${t("• sans la carte :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b></div>`; }
   if(hasOpp){ const wo=r2(oppNet-im.opp); body+=`<div class="mini" style="text-align:left;margin-top:7px">🥊 <b>${t("Sur le gain de l'adversaire :")}</b><br>${t("• avec la carte :")} <b>${fmt(oppNet)}€</b><br>${t("• sans la carte :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b></div>`; }
   if(!hasSelf&&!hasOpp) body+=`<div class="mini muted" style="text-align:left;margin-top:8px">${t("Aucun effet chiffré ce jour-là.")}</div>`;
@@ -2525,6 +2545,27 @@ function aiPlay(cap,fx,hand){
 // Moteur pur : calcule les gains nets du jour à partir des plays (déterministe via pd.rnd).
 function runEngine(pdIn, capStart, dz, N){
   const PD=JSON.parse(JSON.stringify(pdIn));
+  // Phase 0 : 🥷 Voleur puis 🧬 Clone — les deux seules cartes qui agissent sur la CARTE adverse
+  // et non sur ses paris. L'ordre est imposé : le vol fait DISPARAÎTRE la carte, le clone ne lit
+  // ensuite que ce qui a survécu (il se retrouve donc face à rien si sa carte source a été volée).
+  const stolen={}, cloned={};
+  for(const pid in PD){ const pd=PD[pid];
+    if(!(pd.card&&pd.card.id==="voleur")) continue;
+    const opp=PD[pd.oppId]; if(!(opp&&opp.card&&opp.card.id)) continue;
+    // Carte visant un match ANNULÉ : la règle existante la REND à son propriétaire (elle reste en
+    // main). On ne peut donc pas la voler, sinon elle existerait en double — dans sa main ET dans
+    // celle du voleur — ce qui casserait l'unicité d'un bonus dans la ligue.
+    const ofx=opp.fx||[]; const annule=i=>(i!=null&&ofx[i]&&ofx[i].canceled);
+    if(annule(opp.card.target)||annule(opp.card.target2)) continue;
+    stolen[pid]=opp.card.id; opp.card=null; }
+  for(const pid in PD){ const pd=PD[pid];
+    if(!(pd.card&&pd.card.id==="clone")) continue;
+    const src=PD[pd.oppId]&&PD[pd.oppId].card;
+    // Un clone ne copie jamais un vol (règle : sinon aller-retour de cartes illisible au récap).
+    // Ni un clone — impossible de toute façon, chaque bonus étant UNIQUE dans une ligue : filet.
+    if(src&&src.id&&src.id!=="voleur"&&src.id!=="clone"){ const {impact,flip,...c}=src; pd.card={...c}; cloned[pid]=src.id; }
+    // sinon : clone gâché, sa carte reste "clone" — aucune phase ne réagit à cet id.
+  }
   // Phase 1 : Chérie c'est cadeau (inverse le pari adverse du match CIBLÉ)
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"&&pd.card.target!=null){ const opp=PD[pd.oppId]; const i=pd.card.target;
     if(opp&&opp.picks[i]){ if(opp.picks[i].sel==="1")opp.picks[i].sel="2"; else if(opp.picks[i].sel==="2")opp.picks[i].sel="1"; } } }
@@ -2570,12 +2611,20 @@ function runEngine(pdIn, capStart, dz, N){
     if(pd.card&&pd.card.id==="roi"){ if(g.perBet.some(x=>x.win&&x.odd>=2.0)) g.bonus+=capStart[pid]*0.10; } }
   // Phase 5 : Gourmand, Sangsue, Serge Benamou
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="gourmand"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0) G[pid].bonus+=0.2*on; } } }
-  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="sangsue"){ const opp=G[pd.oppId]; if(opp){ const on=opp.net+opp.bonus; if(on>0){ const t=0.15*on; G[pid].bonus+=t; opp.bonus-=t; } } } }
+  // 🩸 Sangsue — les DEUX ponctions se calculent sur les nets de DÉPART, puis s'appliquent ensemble.
+  // Deux Sangsue peuvent désormais se croiser (via 🧬 Clone). En siphonnant au fil de la boucle, le
+  // second prenait 15 % d'un net déjà amputé ET GONFLÉ du butin du premier — l'argent volé était volé
+  // une seconde fois — et le résultat dépendait de l'ordre des clés de l'objet, un hasard technique :
+  // deux joueurs à +100 € finissaient 97,75 / 102,25 selon qui passait en premier, au lieu de 100/100.
+  const leech=[];
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="sangsue"){ const opp=G[pd.oppId];
+    if(opp){ const on=opp.net+opp.bonus; if(on>0) leech.push({pid, oppId:pd.oppId, amt:0.15*on}); } } }
+  leech.forEach(x=>{ G[x.pid].bonus+=x.amt; G[x.oppId].bonus-=x.amt; });
   // Serge Benamou : si le joueur qui l'a jouée finit dans le vert, il partage 10 % de SON net avec tous les autres.
   // Phase 6 : Parachute (amortit 30 % de la perte nette du jour)
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="parachute"){ const cur=G[pid].net+G[pid].bonus; if(cur<0) G[pid].bonus += (-0.3*cur); } }
   const dayNet={},dayBest={},dayWins={}; for(const pid in G){ dayNet[pid]=Math.round((G[pid].net+G[pid].bonus)*100)/100; dayBest[pid]=G[pid].bestOdd; dayWins[pid]=G[pid].perBet.filter(x=>x.win).length; }
-  return {dayNet,dayBest,dayWins};
+  return {dayNet,dayBest,dayWins,stolen,cloned};
 }
 async function resolveDay(){
   if(resolving)return; resolving=true; showErr("");
@@ -2607,7 +2656,7 @@ async function resolveDay(){
         }
         PD[pid]={picks:bt.picks.map(x=>({...x})),captain:bt.captain,card:bt.card||null,duelId:d.id,oppId:(pid===d.home_id?d.away_id:d.home_id),fx,rnd:Math.random()}; } }
     // résolution déterministe (moteur en phases), + impact réel de chaque carte
-    const {dayNet,dayBest,dayWins}=runEngine(PD,capStart,dz,N);
+    const {dayNet,dayBest,dayWins,stolen,cloned}=runEngine(PD,capStart,dz,N);
     // Pari non validé à temps : la sanction −25 % du capital EST la variation de capital du jour.
     // On l'inscrit donc dans `net` (au lieu de l'appliquer à part sur le capital) → elle apparaît dans
     // les résultats de la journée et dans la courbe de capital. Le capital reste identique :
@@ -2631,11 +2680,18 @@ async function resolveDay(){
     for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"&&pd.card.target!=null){ const vId=pd.oppId; const opp=PD[vId]; const i=pd.card.target;
       if(opp&&opp.picks[i]){ const from=opp.picks[i].sel; let to=from; if(from==="1")to="2"; else if(from==="2")to="1";
         if(to!==from) cadeauFlips[pid]={victim:vId, match:i, from, to}; } } }
+    // Table inverse du vol : victime → voleur, pour afficher « ton bonus t'a été pris » côté victime.
+    const volePar={}; for(const pid in stolen){ const v=PD[pid].oppId; if(v!=null) volePar[v]=pid; }
     // On CONSERVE la carte telle que le joueur l'a jouée (on ne la reconstruit surtout pas champ par
     // champ : `target2` du Coup Double avait été oublié → 2ᵉ match perdu à la résolution). On retire
     // juste les champs calculés d'une résolution précédente, puis on les recalcule.
     for(const pid in dayNet){ const c=PD[pid].card; const u2={net:dayNet[pid]};
-      if(c&&c.id){ const {impact,flip,...joue}=c; u2.card={...joue, impact:impacts[pid]}; if(cadeauFlips[pid]) u2.card.flip=cadeauFlips[pid]; }
+      if(c&&c.id){ const {impact,flip,...joue}=c; u2.card={...joue, impact:impacts[pid]}; if(cadeauFlips[pid]) u2.card.flip=cadeauFlips[pid];
+        // 🥷 / 🧬 : on trace ce que la carte a réellement fait, sinon le joueur voit un impact chiffré
+        // sans savoir ce qui a été pris ou copié (« Clone : −12 € » n'explique rien tout seul).
+        if(stolen[pid]) u2.card.stole=stolen[pid];
+        if(cloned[pid]) u2.card.cloned=cloned[pid];
+        if(volePar[pid]) u2.card.stolenBy=volePar[pid]; }
       await q(db.from("bets").update(u2).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }
     // persiste l'inversion sur le pari de la victime (choix initial → final visibles dans le détail)
     for(const pid in cadeauFlips){ const fl=cadeauFlips[pid]; const picks=PD[fl.victim].picks.map(x=>({...x})); picks[fl.match]={...picks[fl.match],sel:fl.to,orig:fl.from,flipBy:pid};
@@ -2673,6 +2729,10 @@ async function resolveDay(){
       const fxx=pd.fx||[]; const vise=i=>(i!=null && fxx[i] && fxx[i].canceled);
       if(vise(pd.card.target) || vise(pd.card.target2)) continue; // carte rendue (reste en main)
       const h=upd[pid].hand; const idx=h.indexOf(pd.card.id); if(idx>=0){ h.splice(idx,1); upd[pid].cards_used.push(pd.card.id); } } }
+    // 🥷 Voleur : la prise entre dans la main du voleur, jouable dès la journée suivante. Placé APRÈS
+    // la boucle de consommation ci-dessus : sinon celle-ci pourrait retirer la carte tout juste volée.
+    // La victime, elle, a bien joué la sienne — elle est consommée normalement (barrée chez elle).
+    for(const pid in stolen){ if(upd[pid]) upd[pid].hand.push(stolen[pid]); }
     // Recapitalisation solidaire : si un humain n'a plus assez pour miser (< seuil), +20€ à lui ET à tout le monde
     let recapNote=null;
     const broke=ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
