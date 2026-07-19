@@ -156,7 +156,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.64";
+const APP_VERSION = "v4.66";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -275,6 +275,10 @@ const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
 // aux joueurs les répétaient en dur : changer une règle demandait de penser à tout, et les règles
 // affichées pouvaient mentir. Ces constantes sont injectées dans les textes → elles ne peuvent plus
 // diverger du moteur.
+// Composition du pool de matchs proposé au choix. Une seule source pour les DEUX modes (réel et
+// simulé) et pour les règles affichées : sans ça, le simulé tirait uniformément entre les sports
+// (≈33 % de foot) alors que le réel visait 75 % — deux jeux différents sous le même nom.
+const POOL_N=12, POOL_FOOT=9;   // 12 matchs proposés, dont 9 de foot (75 %)
 const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
 const STAKE_CAP_INVEST=0.7; // … 70 % avec la carte Investisseur
 const FORGOT_PENALTY=0.25;  // ANCIEN barème : pari non validé à temps → −25 % du capital
@@ -411,7 +415,7 @@ async function fetchRealPool(){
   const sortBig=(a,b)=> (b.prio-a.prio) || String(a.commence).localeCompare(String(b.commence));
   const soc=src.filter(e=>e.grp==="Soccer").sort(sortBig);
   const oth=src.filter(e=>e.grp!=="Soccer").sort(sortBig);
-  const N=12, socTarget=9; // ~75% de foot, 25% pour la variété (basket/rugby/tennis)
+  const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/rugby/tennis)
   const pool=[...soc.slice(0,socTarget), ...oth.slice(0,N-socTarget)];
   if(pool.length<N){ [...soc.slice(socTarget), ...oth.slice(N-socTarget)].sort(sortBig).forEach(e=>{ if(pool.length<N) pool.push(e); }); }
   return pool.sort(sortBig).slice(0,N);
@@ -871,6 +875,19 @@ const EN={
   "Tu prends <b>{b} pt</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>{b} pt</b> in the standings and lose <b>{a} %</b> of your balance.",
   "Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.":"Each day, the player with the <b>best net result in the whole league</b> earns a <b>+1 bonus point</b> (on top of the duel points). Ties are broken by the biggest winnings.",
   "<b>Départage au classement final</b> (à points égaux) : <b>cagnotte</b>, puis le <b>résultat des confrontations directes</b> entre les joueurs concernés, puis plus gros gain, puis plus grosse cote.":"<b>Final standings tie-break</b> (equal points): <b>balance</b>, then the <b>head-to-head record</b> between the players involved, then biggest win, then biggest odds.",
+  "La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. ⚽ étant le seul sport à <b>3 issues</b>, c'est lui qui rend la carte 🎲 Double Chance jouable.":"The list offers <b>{a} fixtures</b>, of which about <b>{b} % football</b> — the rest (tennis, basketball, rugby) for variety. If there isn't enough football available, the remainder comes from the other sports. ⚽ being the only sport with <b>3 outcomes</b>, it is what makes the 🎲 Double Chance card playable.",
+  "Échange impossible pour l'instant":"Exchange not possible right now",
+  "<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas proposer un rachat maintenant.":"<b>Your bet for today is already confirmed.</b> So you can't offer a buyback right now.",
+  "<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas mettre une carte en vente maintenant.":"<b>Your bet for today is already confirmed.</b> So you can't put a card up for sale right now.",
+  "<b>Le détenteur de la carte a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.":"<b>The card's owner has already confirmed today's bet.</b> They could still play it today, so the exchange is blocked.",
+  "<b>L'acheteur a déjà validé son pari du jour.</b> L'échange est donc bloqué jusqu'à la résolution.":"<b>The buyer has already confirmed today's bet.</b> The exchange is therefore blocked until the day is resolved.",
+  "Un échange n'est possible qu'<b>entre deux journées</b> : tant qu'un pari du jour est validé, la carte pourrait encore être jouée le même jour — elle serait alors utilisée deux fois.":"An exchange is only possible <b>between two matchdays</b>: while a bet for the day is confirmed, the card could still be played that same day — it would then be used twice.",
+  "➡️ Ce sera de nouveau possible dès que la <b>journée {j}</b> sera résolue.":"➡️ It will be possible again as soon as <b>matchday {j}</b> is resolved.",
+  "Elle se résout une fois <b>tous les matchs réellement joués</b>.":"It resolves once <b>every match has actually been played</b>.",
+  "Clôture des pronos : <b>{a}</b>.":"Picks close: <b>{a}</b>.",
+  "Pari non validé à temps : {b} pt au classement et −{a} % du capital":"Bet not confirmed in time: {b} pt in the standings and −{a} % of your balance",
+  "⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>{b} pt</b> au classement et <b>−{a} %</b> du capital.":"⏰ <b>Bet not confirmed in time.</b> No bet counted → <b>{b} pt</b> in the standings and <b>−{a} %</b> of your balance.",
+  "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.":"You didn't confirm your picks before the deadline: <b>no bet</b> counts that day → <b>{b} pt</b> in the standings and <b>−{a} %</b> of your balance. You can still follow everyone else's bets below.",
   "🤖 Format du solo":"🤖 Solo format", "solo":"solo",
   "En attente d'autres joueurs":"Waiting for more players", "libre":"open", "si solo":"if solo",
   "Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.":"Registrations are open: share the code <b>{a}</b>. Nothing is locked in until you close them.",
@@ -1339,7 +1356,7 @@ function makeSchedule(n){ let arr=[...Array(n).keys()]; const rounds=[];
   const ret=rounds.map(rd=>rd.map(p=>[p[1],p[0]])); return [...rounds,...ret]; }
 
 /* ============ fixtures ============ */
-function genFixture(maxKo){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(s.t); while(b===a) b=pick(s.t);
+function genFixture(maxKo,sportImpose){ const s=sportImpose||pick(SPORTS); const a=pick(s.t); let b=pick(s.t); while(b===a) b=pick(s.t);
   // Cotes COHÉRENTES : on part de probabilités qui somment à 100 %, + une marge bookmaker (~5-9 %), puis cote = 1/(p×marge).
   const M=rnd(1.05,1.09); const odd=p=>Math.max(1.05,+(1/(p*M)).toFixed(2));
   // Horaire FICTIF : décalage (heures) après la clôture des paris. Comme en réel, le match se joue APRÈS la deadline
@@ -1348,7 +1365,22 @@ function genFixture(maxKo){ const s=pick(SPORTS); const a=pick(s.t); let b=pick(
   if(s.draw){ const pd=rnd(0.22,0.30); let ph=rnd(0.22,0.55); let pa=1-ph-pd; if(pa<0.12){pa=0.12;ph=1-pd-pa;} if(ph<0.12){ph=0.12;pa=1-pd-ph;}
     return {sport:s.ic,draw:true,home:a,away:b,oh:odd(ph),od:odd(pd),oa:odd(pa),ko}; }
   const ph=rnd(0.30,0.70); return {sport:s.ic,draw:false,home:a,away:b,oh:odd(ph),oa:odd(1-ph),ko}; }
-function genPool(k,maxKo){ return Array.from({length:k},()=>genFixture(maxKo)); }
+// Même dosage qu'en données réelles : ~75 % de foot, le reste pour la variété (cf. socTarget dans
+// fetchRealPool). Le mode simulé sert à répéter le vrai jeu — sans ce quota le sport était tiré
+// UNIFORMÉMENT entre les 3 (≈33 % de foot), d'où des journées à un seul match de foot (signalé par
+// Hervé sur XKWJ2). Effet de bord utile : le foot est le seul sport à 3 issues, donc c'est aussi lui
+// qui rend la carte 🎲 Double Chance jouable.
+const SPORT_FOOT=SPORTS.find(s=>s.draw)||SPORTS[0]; // ⚽ = le seul sport à 3 issues (draw:true)
+function genPool(k,maxKo){
+  const nFoot=Math.round(k*(POOL_FOOT/POOL_N));
+  // Les places « variété » excluent le foot — comme en réel, où elles sont prises dans `oth`
+  // (tout sauf Soccer). Sans cette exclusion elles retombaient parfois sur du foot : 83 % au lieu
+  // de 75 %, soit une proportion qui ne correspondait ni à la règle ni au mode réel.
+  const autres=SPORTS.filter(s=>s!==SPORT_FOOT);
+  const out=[]; for(let i=0;i<k;i++) out.push(genFixture(maxKo, i<nFoot?SPORT_FOOT:pick(autres)));
+  // Mélange (Fisher-Yates) : sinon les matchs de foot seraient toujours groupés en tête de liste.
+  for(let i=out.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const tmp=out[i]; out[i]=out[j]; out[j]=tmp; }
+  return out; }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
 // Cote « double chance » : combinée de deux issues couvertes pour une seule mise.
 function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); } // (cote combinée « pondérée » — conservée pour référence, plus utilisée pour le gain)
@@ -1809,6 +1841,25 @@ function bugContext(kind){
   l.push("Quand   : "+new Date().toISOString());
   if(AUTH) l.push("Joueur  : "+(AUTH.name||"?")+"  (uid "+String(AUTH.id||"?").slice(0,8)+"…)");
   l.push("Écran   : "+(S.view||"?")+(S.editingBet?" (édition des pronos)":"")+(S.recap?" (récap)":""));
+  // --- Diagnostic de MISE EN PAGE ---------------------------------------------------------
+  // Un débordement horizontal signalé sur iPhone n'a jamais pu être reproduit sous Chrome. Sans
+  // mesure, « ça déborde » n'est pas exploitable : ces lignes donnent la largeur réelle, le ZOOM
+  // Safari (un pincement suffit à créer un défilement latéral) et l'élément fautif s'il y en a un.
+  try{
+    const de=document.documentElement;
+    l.push("Fenêtre : "+window.innerWidth+"×"+window.innerHeight+" css · dpr "+(window.devicePixelRatio||1));
+    const vv=window.visualViewport;
+    if(vv) l.push("Zoom    : ×"+(Math.round((vv.scale||1)*100)/100)+" · zone visible "+Math.round(vv.width)+"px"+((vv.scale||1)>1.01?"  ⚠️ page zoomée":""));
+    const trop=de.scrollWidth-de.clientWidth;
+    l.push("Largeur : contenu "+de.scrollWidth+"px / fenêtre "+de.clientWidth+"px"+(trop>0?("  ⚠️ déborde de "+trop+"px"):"  (ok)"));
+    if(trop>0){
+      let pire=null, px=0;
+      document.querySelectorAll(".app *").forEach(el=>{ const r=el.getBoundingClientRect();
+        if(r.right>de.clientWidth+0.5 && r.right>px){ px=r.right; pire=el; } });
+      if(pire) l.push("Coupable: <"+pire.tagName.toLowerCase()+" class=\""+(pire.className||"—")+"\"> va jusqu'à "+Math.round(px)+"px · « "+(pire.textContent||"").trim().slice(0,40).replace(/\s+/g," ")+" »");
+    }
+  }catch(e){ l.push("Largeur : (mesure impossible : "+e.message+")"); }
+  // ---------------------------------------------------------------------------------------
   if(L){
     l.push("Ligue   : "+(L.name||"?")+"  · code "+(L.code||"?"));
     l.push("Statut  : "+(L.status||"?")+"  · journée "+((L.current_day|0)+1)+"/"+(L.num_days||"?"));
@@ -2340,7 +2391,7 @@ function viewWait(dayLbl){
   const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}
      <div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
   const tooLate = (!mine && betPassed) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b>
-     <div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.")}</div></div>` : '';
+     <div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div></div>` : '';
   // (Ancien bloc « Pronos de l'IA » retiré : il affichait TOUS les joueurs IA, même ceux d'un autre duel,
   //  et faisait doublon avec « Paris de la journée (publics) » qui montre déjà chaque duel après la clôture.)
   return `${quickBar('')}<div class="box"><b>${dayLbl}</b>
@@ -2707,7 +2758,7 @@ function recapBody(D){
     <h2>${t("Résultats de la journée")}</h2>
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.")}</div>
     <div class="box" style="padding:4px 12px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>${t("Carte")}</th></tr>
-      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}${forgot(p.id)?' <span class="tag red" title="'+t("Pari non validé à temps : −2 pts et −25 % du capital")+'">⏰ −2</span>':''}</td>
+      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}${forgot(p.id)?' <span class="tag red" title="'+t("Pari non validé à temps : {b} pt au classement et −{a} % du capital",{b:forgotPtsShown(),a:pct(forgotPenShown())})+'">⏰ '+forgotPtsShown()+'</span>':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
         <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
         <td class="num">${isStar?'+1':'–'}</td>
@@ -2719,7 +2770,7 @@ function showGainDetail(pid){
   const net=(bt&&bt.net)||0; const sel=(f,s)=> s==="1"?f.home:s==="2"?f.away:t("Nul");
   let rows='', sumG=0;
   const isForgot = bt && Array.isArray(bt.picks) && bt.picks.length===0;
-  if(isForgot){ rows=`<div class="mini">${t("⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>−2 pts</b> au classement et <b>−25 %</b> du capital.")}</div>${net<0?`<div class="mini" style="margin-top:6px">${t("Perte de capital ce jour-là : <b>{a}€</b>.",{a:fmt(net)})}</div>`:''}`; }
+  if(isForgot){ rows=`<div class="mini">${t("⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>{b} pt</b> au classement et <b>−{a} %</b> du capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div>${net<0?`<div class="mini" style="margin-top:6px">${t("Perte de capital ce jour-là : <b>{a}€</b>.",{a:fmt(net)})}</div>`:''}`; }
   else if(bt&&bt.picks&&d&&d.fixtures){
     const c=bt.card; const oppId=d.home_id===pid?d.away_id:d.home_id; const oppB=bets.find(b=>b.player_id===oppId); const oppCard=oppB&&oppB.card;
     rows=d.fixtures.map((f,i)=>{ const b=bt.picks[i]; if(!b) return '';
@@ -3530,6 +3581,20 @@ function tradeRunning(){ return !!(L && L.status==="running"); }
 function humanOpponents(){ return players.filter(p=>!p.is_ai && p.id!==S.myId); }
 function myPendingIn(){  return trades.filter(x=>x.to_player===S.myId   && x.status==="pending"); }
 function myPendingOut(){ return trades.filter(x=>x.from_player===S.myId && x.status==="pending"); }
+// Refus d'un échange parce que la fenêtre est fermée. Volontairement une MODALE et non un toast :
+// le message disparaissait avant d'être lu (signalé par Hervé), et surtout il ne disait pas QUAND
+// l'échange redeviendrait possible — l'utilisateur restait sans rien à faire de l'information.
+function tradeBloque(raison){
+  const j=((L&&L.current_day)||0)+1;
+  const dt=dayTimes();
+  let quand="";
+  if(L&&L.data_mode==="real") quand=t("Elle se résout une fois <b>tous les matchs réellement joués</b>.");
+  else if(dt.ok&&dt.bet) quand=t("Clôture des pronos : <b>{a}</b>.",{a:fmtWhen(dt.bet)});
+  infoModal("⏳", t("Échange impossible pour l'instant"),
+    `<div class="mini" style="text-align:left">${raison}</div>
+     <div class="mini muted" style="text-align:left;margin-top:10px">${t("Un échange n'est possible qu'<b>entre deux journées</b> : tant qu'un pari du jour est validé, la carte pourrait encore être jouée le même jour — elle serait alors utilisée deux fois.")}</div>
+     <div class="mini" style="text-align:left;margin-top:10px">${t("➡️ Ce sera de nouveau possible dès que la <b>journée {j}</b> sera résolue.",{j:j})} ${quand}</div>`);
+}
 // Même garde que openShop : le rachat déplace du capital et des cartes. Le bouton est déjà masqué
 // hors ligue (canTrade), mais on ne s'appuie pas sur l'affichage pour protéger une transaction.
 function openTrade(){ if(!AUTH || !S.leagueId) return; tradeAckAll(); navOpen("trade"); }  // ouvrir l'écran = « j'ai vu les réponses » → éteint le badge
@@ -3652,7 +3717,7 @@ async function submitBuy(sellerId, cardId, maxP){
   try{
     const meP=me(); if(!meP) return;
     if((meP.capital||0)-price < TRADE_MIN_CAP){ toast(t("Prix trop élevé : il te resterait moins de {a} €.",{a:TRADE_MIN_CAP})); return; }
-    if(await hasBetForDay(S.myId, L.current_day)){ toast(t("Tu ne peux pas racheter tant que ton pari du jour est validé — attends la résolution de la journée.")); return; }
+    if(await hasBetForDay(S.myId, L.current_day)){ tradeBloque(t("<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas proposer un rachat maintenant.")); return; }
     const seller=await q(db.from("players").select("hand").eq("id",sellerId).single());
     if(!seller || !(seller.hand||[]).includes(cardId)){ toast(t("Cette carte n'est plus disponible.")); await refresh(); return; }
     if(await cardHasPendingTrade(cardId)){ toast(t("Cette carte fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
@@ -3679,7 +3744,7 @@ async function submitSell(cardId){
   closeCardInfo();
   try{
     const meP=me(); if(!meP || !((meP.hand||[]).includes(cardId))){ toast(t("Tu ne détiens plus cette carte.")); await refresh(); return; }
-    if(await hasBetForDay(S.myId, L.current_day)){ toast(t("Tu ne peux pas vendre tant que ton pari du jour est validé — attends la résolution de la journée.")); return; }
+    if(await hasBetForDay(S.myId, L.current_day)){ tradeBloque(t("<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas mettre une carte en vente maintenant.")); return; }
     if(await cardHasPendingTrade(cardId)){ toast(t("Cette carte fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
     await q(db.from("trades").insert({league_id:L.id, kind:"sell", from_player:S.myId, to_player:target, card_id:cardId, price:price, msg:msg||null}));
     toast(t("Offre envoyée.")); await refresh();
@@ -3698,8 +3763,8 @@ async function acceptTrade(id){
     if(!owner||!buyer){ toast(t("Offre introuvable.")); await refresh(); return; }
     if(!(owner.hand||[]).includes(o.card_id)){ toast(t("La carte n'est plus disponible.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
     if((buyer.capital||0)-price < TRADE_MIN_CAP){ toast(t("Capital insuffisant pour cet achat — offre annulée.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
-    if(await hasBetForDay(ownerId, L.current_day)){ toast(t("Le vendeur a un pari en cours ce jour-là (il pourrait jouer cette carte) — échange impossible pour l'instant.")); return; }
-    if(await hasBetForDay(buyerId, L.current_day)){ toast(t("Impossible : le pari du jour de l'acheteur est déjà validé — attends la résolution.")); return; }
+    if(await hasBetForDay(ownerId, L.current_day)){ tradeBloque(t("<b>Le détenteur de la carte a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.")); return; }
+    if(await hasBetForDay(buyerId, L.current_day)){ tradeBloque(t("<b>L'acheteur a déjà validé son pari du jour.</b> L'échange est donc bloqué jusqu'à la résolution.")); return; }
     const oHand=(owner.hand||[]).filter(x=>x!==o.card_id); const bHand=[...(buyer.hand||[]), o.card_id];
     await q(db.from("players").update({hand:oHand, capital:tr2((owner.capital||0)+price)}).eq("id",ownerId));
     await q(db.from("players").update({hand:bHand, capital:tr2((buyer.capital||0)-price)}).eq("id",buyerId));
@@ -3773,6 +3838,7 @@ function viewRulesFull(){
    ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.")+' <i>'+t("(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)")+'</i>')}
 
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
+     ${li(t("La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. ⚽ étant le seul sport à <b>3 issues</b>, c'est lui qui rend la carte 🎲 Double Chance jouable.",{a:POOL_N,b:Math.round(POOL_FOOT/POOL_N*100)}))}
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
      ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec la carte Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
      ${li(t("Tu désignes un <b>👑 Capitaine</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>."))}
