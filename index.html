@@ -86,7 +86,14 @@
      peuvent pas elargir la page. Donc surtout PAS de `overflow-wrap:anywhere` ici — ca coupait les
      mots n'importe ou dans des colonnes etroites (« DU/EL », « P/T/S », « 11 » sur deux lignes,
      « 109.7 / 1€ »). Entetes et nombres restent insecables. */
-  th,td.num{white-space:nowrap;}
+  /* Les nombres ne se coupent JAMAIS — dans un tableau comme ailleurs. Sans `.num` ici, une valeur
+     placée dans une .row (dont les enfants peuvent rétrécir depuis la v4.53) se faisait couper par
+     `overflow-wrap:break-word` : « 13 » s'affichait sur deux lignes (repéré par Hervé sur l'admin). */
+  /* `flex-shrink:0` en plus du nowrap : dans une .row, c'est le LIBELLÉ qui doit céder de la place,
+     jamais la valeur. Sans ça, le libellé long pousse et la valeur se fait comprimer sous sa propre
+     largeur (les enfants de .row peuvent rétrécir depuis la v4.53). Inerte sur un <td>. */
+  th,.num{white-space:nowrap;}
+  .row>.num{flex:0 0 auto;}
   th,td{padding:9px 6px;border-bottom:1px solid var(--border);text-align:left;}
   tr:last-child td{border-bottom:none;}
   th{color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;}
@@ -149,7 +156,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.60";
+const APP_VERSION = "v4.62";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3276,12 +3283,16 @@ async function loadAdmin(){
   try{
     const lgs=await q(db.from("leagues").select("id,status,gage,prep_summary,created_at"));
     const pls=await q(db.from("players").select("id,name,is_ai,user_id,created_at"));
-    const allBts=await q(db.from("bets").select("card,net,created_at,player_id"));
+    const allBts=await q(db.from("bets").select("card,net,created_at,player_id,submitted"));
+    // Rachats de bonus : 2 actions humaines datées par ligne (proposition, puis réponse).
+    // Table absente sur une base pas encore migrée → on continue sans, plutôt que de tout casser.
+    let trs=[]; try{ trs=await q(db.from("trades").select("from_player,to_player,created_at,resolved_at")); }catch(e){ trs=[]; }
     const bts=allBts.filter(b=>b.net!=null); // paris résolus (stats de jeu)
     const cardCount={}; let withCard=0;
     bts.forEach(b=>{ if(b.card&&b.card.id){ cardCount[b.card.id]=(cardCount[b.card.id]||0)+1; withCard++; } });
     /* ---- Activité par jour ----
-       « Joueur actif » = PERSONNE distincte (user_id) ayant validé au moins un prono ce jour-là.
+       « Joueur actif » = PERSONNE distincte (user_id) ayant fait au moins UNE ACTION DATÉE ce
+       jour-là : prono validé, arrivée en ligue, rachat proposé ou répondu, enchère/vote de prépa.
        On mappe player_id → user_id car une personne a un `player` par ligue. Les connexions
        simples ne sont pas tracées (il faudrait une table d'événements — cf. Phase 2). */
     const p2u={}; pls.forEach(p=>{ if(!p.is_ai && p.user_id) p2u[p.id]=p.user_id; });
@@ -3290,7 +3301,25 @@ async function loadAdmin(){
       return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
     const dailyMap={};
     const slot=k=>{ dailyMap[k]=dailyMap[k]||{users:new Set(),bets:0,leagues:0,newp:new Set()}; return dailyMap[k]; };
-    allBts.forEach(b=>{ const k=dayKey(b.created_at); if(!k) return; const s=slot(k); s.bets++; const u=p2u[b.player_id]; if(u) s.users.add(u); });
+    // Enregistre une ACTION HUMAINE datée : c'est la seule chose qui rend quelqu'un « actif ».
+    const actes=[]; // {ts, uid} — sert aussi aux cumuls 7 / 30 jours, pour qu'ils disent la même chose
+    const acte=(ts,pid)=>{ const u=p2u[pid]; if(!u||ts==null) return; const tt=new Date(ts).getTime(); if(isNaN(tt)) return;
+      const k=dayKey(tt); if(k) slot(k).users.add(u); actes.push({tt,u}); };
+    // 1) Pronos VALIDÉS. `submitted:false` = ligne vide créée par resolveDay pour un joueur qui a
+    //    OUBLIÉ : la compter revient à déclarer actif quelqu'un qui n'a précisément rien fait.
+    allBts.forEach(b=>{ if(b.submitted===false) return; const k=dayKey(b.created_at); if(!k) return;
+      slot(k).bets++; acte(b.created_at,b.player_id); });
+    // 2) Arrivée dans une ligue (couvre aussi la création : l'organisateur y a sa ligne `players`).
+    pls.forEach(p=>{ if(p.is_ai) return; acte(p.created_at,p.id); });
+    // 3) Rachats de bonus : `created_at` = celui qui propose, `resolved_at` = celui qui répond.
+    trs.forEach(tr=>{ acte(tr.created_at,tr.from_player); if(tr.resolved_at) acte(tr.resolved_at,tr.to_player); });
+    // 4) Préparation : horodatages des enchères et des votes, rangés dans `leagues.gage` (JSON).
+    //    ⚠️ Visible seulement PENDANT la prépa : au démarrage, `gage` est remplacé par le texte du
+    //    gage retenu, et ces dates sont perdues. Rien à en tirer rétroactivement.
+    lgs.forEach(l=>{ let stp=null; try{ stp=JSON.parse(l.gage); }catch(e){ return; }
+      if(!stp||typeof stp!=="object") return;
+      ["bidTs","voteTs","voteTsR"].forEach(cle=>{ const m=stp[cle]; if(!m||typeof m!=="object") return;
+        Object.keys(m).forEach(pid=>acte(m[pid],pid)); }); });
     lgs.forEach(l=>{ const k=dayKey(l.created_at); if(!k) return; slot(k).leagues++; });
     // Nouveaux joueurs = 1re apparition d'un user_id (plus ancienne ligne `players`)
     const firstSeen={}; pls.forEach(p=>{ if(p.is_ai||!p.user_id||!p.created_at) return; const tt=new Date(p.created_at).getTime();
@@ -3300,8 +3329,9 @@ async function loadAdmin(){
     for(let i=0;i<14;i++){ const k=dayKey(new Date(now-i*86400000)); const s=dailyMap[k];
       const names=s?[...s.users].map(u=>u2name[u]||('#'+String(u).slice(0,6))).sort((a,b)=>a.localeCompare(b)):[];
       daily.push({d:k, users:s?s.users.size:0, names, bets:s?s.bets:0, leagues:s?s.leagues:0, newp:s?s.newp.size:0}); }
+    // Mêmes actes que le tableau jour par jour : les cumuls ne peuvent donc pas le contredire.
     const activeSince=days=>{ const cut=now-days*86400000; const set=new Set();
-      allBts.forEach(b=>{ const tt=new Date(b.created_at).getTime(); if(!isNaN(tt)&&tt>=cut){ const u=p2u[b.player_id]; if(u) set.add(u); } }); return set.size; };
+      actes.forEach(a=>{ if(a.tt>=cut) set.add(a.u); }); return set.size; };
     const active7=activeSince(7), active30=activeSince(30), everActive=activeSince(36500);
     // Gages les plus choisis : cumul des votes (et nombre de fois retenu) sur toutes les ligues démarrées
     const gageTally={};
@@ -3321,7 +3351,7 @@ function showActiveNames(d){
   const row=((adminData&&adminData.daily)||[]).find(x=>x.d===d); if(!row) return;
   const names=row.names||[];
   const body = names.length
-    ? `<div class="mini muted" style="margin-bottom:8px;text-align:left">${names.length} personne${names.length>1?'s':''} ayant validé au moins un prono ce jour-là :</div>`
+    ? `<div class="mini muted" style="margin-bottom:8px;text-align:left">${names.length} personne${names.length>1?'s':''} ayant fait au moins une action ce jour-là :</div>`
       + names.map(n=>`<div class="mini" style="text-align:left;padding:5px 0;border-top:1px solid var(--border)">👤 ${esc(n)}</div>`).join("")
     : `<div class="mini muted">Personne ce jour-là.</div>`;
   infoModal("📈", "Actifs — "+d, body);
@@ -3331,25 +3361,25 @@ function viewAdmin(){
   if(!(AUTH&&AUTH.id===ADMIN_ID)) return back+`<div class="box">Accès réservé à l'administrateur.</div>`;
   if(!adminData) return back+`<div class="box">Chargement des stats…</div>`;
   if(adminData.error) return back+`<div class="err">${esc(adminData.error)}</div>`;
-  const a=adminData; const st=(k,v)=>`<div class="box row"><span class="muted">${k}</span><b>${v}</b></div>`;
+  const a=adminData; const st=(k,v)=>`<div class="box row"><span class="muted">${k}</span><b class="num">${v}</b></div>`;
   return `${back}
     <div class="box"><h2 style="margin-top:0">🛠 Tableau de bord admin</h2><div class="mini muted">Statistiques globales du jeu.</div></div>
     ${st("🏆 Ligues créées", a.leagues)}
     <div class="box"><div class="mini muted" style="margin-bottom:8px">Ligues par statut</div>
-      <div class="row mini"><span>🕓 Salon <b>${a.byStatus.lobby}</b></span><span>🎬 Prépa <b>${a.byStatus.prep}</b></span><span>▶️ En cours <b>${a.byStatus.running}</b></span><span>🏁 Fini <b>${a.byStatus.done}</b></span></div></div>
-    <div class="box"><div class="mini muted" style="margin-bottom:8px">📈 Personnes actives <span class="mini">(ayant validé au moins un prono)</span></div>
-      <div class="row mini"><span>7 derniers jours <b>${a.active7}</b></span><span>30 derniers jours <b>${a.active30}</b></span><span>Depuis le début <b>${a.everActive}</b></span></div></div>
+      <div class="row mini"><span>🕓 Salon <b class="num">${a.byStatus.lobby}</b></span><span>🎬 Prépa <b class="num">${a.byStatus.prep}</b></span><span>▶️ En cours <b class="num">${a.byStatus.running}</b></span><span>🏁 Fini <b class="num">${a.byStatus.done}</b></span></div></div>
+    <div class="box"><div class="mini muted" style="margin-bottom:8px">📈 Personnes actives <span class="mini">(au moins une action datée)</span></div>
+      <div class="row mini"><span>7 derniers jours <b class="num">${a.active7}</b></span><span>30 derniers jours <b class="num">${a.active30}</b></span><span>Depuis le début <b class="num">${a.everActive}</b></span></div></div>
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table>
       <tr><th>Jour</th><th style="text-align:right">Actifs</th><th style="text-align:right">Paris</th><th style="text-align:right">Ligues</th><th style="text-align:right">Nouveaux</th></tr>
       ${a.daily.map(r=>`<tr><td class="mini">${r.d}</td><td class="num">${r.users?`<b class="clik" onclick="showActiveNames('${r.d}')" title="Voir qui">${r.users}</b>`:'–'}</td><td class="num muted">${r.bets||'–'}</td><td class="num muted">${r.leagues||'–'}</td><td class="num muted">${r.newp||'–'}</td></tr>`).join("")}</table></div>
-    <div class="box mini muted">ℹ️ <b>Actifs</b> = personnes distinctes (1 personne = 1, même sur plusieurs ligues) ayant <b>validé un prono</b> ce jour-là. Les simples connexions ne sont pas tracées — il faudrait une table d'événements (prévu avec la Phase 2 backend). <b>Nouveaux</b> = 1ʳᵉ arrivée d'une personne dans une ligue.</div>
+    <div class="box mini muted">ℹ️ <b>Actifs</b> = personnes distinctes (1 personne = 1, même sur plusieurs ligues) ayant fait <b>au moins une action datée</b> ce jour-là : valider un prono, rejoindre ou créer une ligue, proposer ou répondre à un rachat, enchérir ou voter à la préparation.<br>⚠️ Restent <b>invisibles</b> : les simples connexions, et la <b>modification</b> d'un prono déjà enregistré (la date de création ne bouge pas). Une table d'événements les rendrait visibles — prévu en Phase 2. Les horodatages de préparation ne sont lisibles que <b>pendant</b> la préparation.<br>Les journées <b>oubliées</b> ne comptent pas : la ligne vide créée à la résolution n'est pas une activité. <b>Nouveaux</b> = 1ʳᵉ arrivée d'une personne dans une ligue.</div>
     ${st("🎮 Joueurs (comptes distincts ayant rejoint)", a.activeAccounts)}
     ${st("🎫 Participations (joueur × ligue)", a.participations)}
     ${st("🧾 Paris enregistrés (total)", a.totalBets)}
     ${st("🧮 Journées résolues (paris)", a.resolvedBets)}
     ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués</div>
-      ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b>${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
+      ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b class="num">${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🎭 Gages les plus choisis <span class="mini">(cumul des votes sur toutes les ligues)</span></div>
       ${(a.topGages&&a.topGages.length)?a.topGages.slice(0,10).map((g,i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${esc(g.t)}</span><b>${g.votes} vote${g.votes>1?'s':''}${g.wins?` · ${g.wins}× retenu`:''}</b></div>`).join(""):`<div class="mini muted">Aucun vote de gage enregistré pour l'instant.</div>`}</div>
     <div class="box"><div class="mini muted" style="margin-bottom:6px">👤 Gestion des comptes</div>
