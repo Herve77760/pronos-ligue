@@ -156,7 +156,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.62";
+const APP_VERSION = "v4.63";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1171,7 +1171,13 @@ const EN={
   "Ta position, sur {a} pronostiqueurs classés":"Your position, out of {a} ranked forecasters",
   "🏆 Autres records (en €)":"🏆 Other records (in €)", "Les plus grosses perfs par journée, toutes ligues confondues.":"The biggest single-day performances across all leagues."
 };
-function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); } return out; }
+function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); }
+  // Espace INSÉCABLE entre un nombre et son unité : « 10 € » ne doit jamais se retrouver coupé en
+  // fin de ligne (constaté à 320 px dans les règles). C'est aussi la typographie française correcte.
+  // Fait ici plutôt que dans chaque chaîne : les montants sont injectés via {a}, donc l'espace ne
+  // devient visible qu'après substitution.
+  if(out.indexOf("€")>=0 || out.indexOf("%")>=0) out=out.replace(/(\d)\s+([€%])/g,"$1 $2");
+  return out; }
 function applyLangBtn(){ const b=$("langBtn"); if(b) b.textContent = lang==="en"?"🇫🇷":"🇬🇧"; }
 function toggleLang(){ lang=lang==="en"?"fr":"en"; try{ localStorage.setItem("pl_lang",lang); }catch(e){} applyLangBtn(); render(); }
 const rnd=(a,b)=>a+Math.random()*(b-a);
@@ -3287,7 +3293,12 @@ async function loadAdmin(){
     // Rachats de bonus : 2 actions humaines datées par ligne (proposition, puis réponse).
     // Table absente sur une base pas encore migrée → on continue sans, plutôt que de tout casser.
     let trs=[]; try{ trs=await q(db.from("trades").select("from_player,to_player,created_at,resolved_at")); }catch(e){ trs=[]; }
-    const bts=allBts.filter(b=>b.net!=null); // paris résolus (stats de jeu)
+    // Joueurs HUMAINS (le 🤖 joueur IA parie automatiquement : ses paris ne sont pas de l'usage).
+    const humain={}; pls.forEach(p=>{ if(!p.is_ai && p.user_id) humain[p.id]=true; });
+    // Base commune à TOUS les compteurs de paris : humain ET prono réellement validé.
+    // `submitted:false` = ligne vide créée par resolveDay pour un oubli — ce n'est pas un pari.
+    const btsH=allBts.filter(b=>humain[b.player_id] && b.submitted!==false);
+    const bts=btsH.filter(b=>b.net!=null); // paris humains résolus (stats de jeu)
     const cardCount={}; let withCard=0;
     bts.forEach(b=>{ if(b.card&&b.card.id){ cardCount[b.card.id]=(cardCount[b.card.id]||0)+1; withCard++; } });
     /* ---- Activité par jour ----
@@ -3307,7 +3318,7 @@ async function loadAdmin(){
       const k=dayKey(tt); if(k) slot(k).users.add(u); actes.push({tt,u}); };
     // 1) Pronos VALIDÉS. `submitted:false` = ligne vide créée par resolveDay pour un joueur qui a
     //    OUBLIÉ : la compter revient à déclarer actif quelqu'un qui n'a précisément rien fait.
-    allBts.forEach(b=>{ if(b.submitted===false) return; const k=dayKey(b.created_at); if(!k) return;
+    btsH.forEach(b=>{ const k=dayKey(b.created_at); if(!k) return;
       slot(k).bets++; acte(b.created_at,b.player_id); });
     // 2) Arrivée dans une ligue (couvre aussi la création : l'organisateur y a sa ligne `players`).
     pls.forEach(p=>{ if(p.is_ai) return; acte(p.created_at,p.id); });
@@ -3343,7 +3354,7 @@ async function loadAdmin(){
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
       activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
       resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]), topGages,
-      daily, active7, active30, everActive, totalBets:allBts.length };
+      daily, active7, active30, everActive, totalBets:btsH.length };
   }catch(e){ adminData={error:e.message}; }
 }
 // Admin : clic sur le nombre d'actifs d'un jour → la liste des noms (voir qui fait quoi).
@@ -3372,13 +3383,13 @@ function viewAdmin(){
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table>
       <tr><th>Jour</th><th style="text-align:right">Actifs</th><th style="text-align:right">Paris</th><th style="text-align:right">Ligues</th><th style="text-align:right">Nouveaux</th></tr>
       ${a.daily.map(r=>`<tr><td class="mini">${r.d}</td><td class="num">${r.users?`<b class="clik" onclick="showActiveNames('${r.d}')" title="Voir qui">${r.users}</b>`:'–'}</td><td class="num muted">${r.bets||'–'}</td><td class="num muted">${r.leagues||'–'}</td><td class="num muted">${r.newp||'–'}</td></tr>`).join("")}</table></div>
-    <div class="box mini muted">ℹ️ <b>Actifs</b> = personnes distinctes (1 personne = 1, même sur plusieurs ligues) ayant fait <b>au moins une action datée</b> ce jour-là : valider un prono, rejoindre ou créer une ligue, proposer ou répondre à un rachat, enchérir ou voter à la préparation.<br>⚠️ Restent <b>invisibles</b> : les simples connexions, et la <b>modification</b> d'un prono déjà enregistré (la date de création ne bouge pas). Une table d'événements les rendrait visibles — prévu en Phase 2. Les horodatages de préparation ne sont lisibles que <b>pendant</b> la préparation.<br>Les journées <b>oubliées</b> ne comptent pas : la ligne vide créée à la résolution n'est pas une activité. <b>Nouveaux</b> = 1ʳᵉ arrivée d'une personne dans une ligue.</div>
+    <div class="box mini muted">ℹ️ <b>Actifs</b> = personnes distinctes (1 personne = 1, même sur plusieurs ligues) ayant fait <b>au moins une action datée</b> ce jour-là : valider un prono, rejoindre ou créer une ligue, proposer ou répondre à un rachat, enchérir ou voter à la préparation.<br>⚠️ Restent <b>invisibles</b> : les simples connexions, et la <b>modification</b> d'un prono déjà enregistré (la date de création ne bouge pas). Une table d'événements les rendrait visibles — prévu en Phase 2. Les horodatages de préparation ne sont lisibles que <b>pendant</b> la préparation.<br>Les journées <b>oubliées</b> ne comptent pas : la ligne vide créée à la résolution n'est pas une activité. <b>Nouveaux</b> = 1ʳᵉ arrivée d'une personne dans une ligue.<br>🤖 Tous les compteurs de paris et de bonus <b>excluent le joueur IA</b> : il joue automatiquement, ce n'est pas de l'usage.</div>
     ${st("🎮 Joueurs (comptes distincts ayant rejoint)", a.activeAccounts)}
     ${st("🎫 Participations (joueur × ligue)", a.participations)}
-    ${st("🧾 Paris enregistrés (total)", a.totalBets)}
-    ${st("🧮 Journées résolues (paris)", a.resolvedBets)}
+    ${st("🧾 Paris enregistrés — humains", a.totalBets)}
+    ${st("🧮 Journées résolues — humains", a.resolvedBets)}
     ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
-    <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués</div>
+    <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués <span class="mini">(par des humains)</span></div>
       ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b class="num">${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🎭 Gages les plus choisis <span class="mini">(cumul des votes sur toutes les ligues)</span></div>
       ${(a.topGages&&a.topGages.length)?a.topGages.slice(0,10).map((g,i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${esc(g.t)}</span><b>${g.votes} vote${g.votes>1?'s':''}${g.wins?` · ${g.wins}× retenu`:''}</b></div>`).join(""):`<div class="mini muted">Aucun vote de gage enregistré pour l'instant.</div>`}</div>
