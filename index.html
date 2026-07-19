@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.45";
+const APP_VERSION = "v4.47";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -365,6 +365,7 @@ async function fetchRealPool(){
   return pool.sort(sortBig).slice(0,N);
 }
 let lastRealCheck=0, lastRealFill=0;
+const STALE_MATCH_H=24; // h après le coup d'envoi prévu → match non terminé réputé ANNULÉ (mises rendues)
 // Récupère les résultats réels (scores) par compétition → map evId -> {completed, res(1/N/2)}.
 async function fetchRealResults(sportKeys){
   const map={};
@@ -392,6 +393,19 @@ async function resolveRealIfReady(){
   if(Date.now()-lastRealCheck < 600000) return; lastRealCheck=Date.now();
   const keys=[...new Set(realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.evId).map(f=>f.sportKey))];
   const results=await fetchRealResults(keys);
+  // ⏱️ AUTO-ANNULATION (v4.46) : un match toujours pas terminé plus de STALE_MATCH_H heures après son
+  // coup d'envoi PRÉVU est réputé ANNULÉ (reporté / abandonné / jamais joué). Seuil très au-delà de la
+  // durée d'un match (foot 2 h, tennis ≤ 5 h) et de tout retard de flux → aucun risque d'annuler un
+  // match réellement joué. Rend le traitement AUTOMATIQUE : plus aucun geste de l'organisateur, qui
+  // aurait pu s'avantager en annulant un match où il perdait.
+  const nowT=Date.now();
+  for(const d of realDuels){ let touched=false;
+    const nf=(d.fixtures||[]).map(f=>{ if(!f||!f.evId||f.canceled) return f;
+      const r=results[f.evId]; if(r&&r.completed) return f;
+      const t0=f.commence?new Date(f.commence).getTime():NaN;
+      if(!isNaN(t0) && nowT > t0 + STALE_MATCH_H*3600000){ touched=true; return Object.assign({},f,{canceled:true,res:null}); }
+      return f; });
+    if(touched){ try{ await q(db.from("duels").update({fixtures:nf}).eq("id",d.id)); d.fixtures=nf; }catch(e){} } }
   let allDone=true;
   // Un match ANNULÉ compte comme terminé : sinon une journée resterait bloquée indéfiniment.
   realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId&&!f.canceled){ const r=results[f.evId]; if(!r||!r.completed) allDone=false; } }));
@@ -784,7 +798,10 @@ const EN={
   "Choisis le match annulé ou reporté. Les mises de tous les joueurs qui l'avaient joué seront <b>remboursées</b>, et le bonus qui le visait leur sera <b>rendu</b>.":"Pick the cancelled or postponed match. The stakes of every player who bet on it will be <b>refunded</b>, and the bonus that targeted it will be <b>given back</b>.",
   "Annuler ce match ? Les mises seront remboursées et les bonus qui le visaient rendus. Action irréversible.":"Cancel this match? Stakes will be refunded and the bonuses targeting it given back. This cannot be undone.",
   "Match annulé — mises remboursées.":"Match cancelled — stakes refunded.",
-  "🚫 <b>Match annulé ou reporté</b> : la <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. L'organisateur déclare l'annulation depuis l'écran d'attente des résultats.":"🚫 <b>Cancelled or postponed match</b>: the <b>stake is refunded</b> (no gain, no loss — as if the bet never happened) and the <b>bonus that targeted it is given back</b>. The organiser declares the cancellation from the results waiting screen.",
+  "🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.":"🚫 <b>Cancelled, postponed or abandoned match</b>: if a match still isn't finished <b>{a} h</b> after its scheduled kick-off, it is <b>automatically</b> treated as cancelled. The <b>stake is refunded</b> (no gain, no loss — as if the bet never happened) and the <b>bonus that targeted it is given back</b>. It's automatic: nobody decides, so nobody can take advantage of it.",
+  "🚫 Si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.":"🚫 If a match still isn't finished <b>{a} h</b> after its scheduled kick-off, it is <b>automatically treated as cancelled</b>: stakes are refunded, and so is the bonus that targeted it. No action needed.",
+  "⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.":"⚠️ <b>A deliberate trade-off</b>: a match that is <b>postponed and replayed later</b> (weather, unplayable pitch, federation decision…) is also treated as cancelled. It <b>will not count</b> for that day, even if it eventually gets played — the championship doesn't wait.",
+  "🚫 Match non terminé <b>{a} h</b> après l'heure prévue (annulé, reporté, abandonné) : <b>mise rendue</b> et bonus rendu. Il ne compte pas, <b>même s'il est rejoué plus tard</b>.":"🚫 A match not finished <b>{a} h</b> after its scheduled time (cancelled, postponed, abandoned): <b>stake refunded</b> and bonus given back. It doesn't count, <b>even if it's replayed later</b>.",
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera.":"Close registrations? Nobody else will be able to join, and the preparation (vote + bonus auction) will begin.",
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.":"Close registrations? Nobody else will be able to join. You're an odd number: a 🤖 AI player will be added to balance things out, then the preparation will begin.",
   "🔄 Nouvelle version disponible.":"🔄 A new version is available.", "Recharger":"Reload",
@@ -2153,27 +2170,10 @@ const REAL_WAIT_MSGS=[
   "🍿 Sors le pop-corn : le reste se joue sur le terrain.",
   "🤞 Tes pronos sont scellés. À toi de trouver un trèfle à quatre feuilles."
 ];
-// 🚫 MATCH ANNULÉ — l'organisateur déclare un match annulé/reporté (l'API ne sait pas distinguer
-// « annulé » de « pas encore fini » : sans cette main humaine, la journée resterait bloquée).
-// Effet : mise RENDUE pour tous ceux qui l'avaient joué, et carte RENDUE si elle visait ce match.
-function openCancelMatch(){
-  const seen={}, list=[];
-  (duels||[]).forEach(d=>(d.fixtures||[]).forEach(f=>{ if(f&&f.evId&&!f.canceled&&!seen[f.evId]){ seen[f.evId]=1; list.push(f); } }));
-  if(!list.length){ toast(t("Aucun match à annuler.")); return; }
-  infoModal("🚫", t("Un match a été annulé ?"),
-    `<div class="mini muted" style="text-align:left;margin-bottom:8px">${t("Choisis le match annulé ou reporté. Les mises de tous les joueurs qui l'avaient joué seront <b>remboursées</b>, et le bonus qui le visait leur sera <b>rendu</b>.")}</div>`
-    + list.map(f=>`<button class="btn ghost sm" style="width:100%;margin:4px 0" onclick="cancelMatch('${f.evId}')">${esc(f.home||'?')} – ${esc(f.away||'?')}</button>`).join(""));
-}
-async function cancelMatch(evId){
-  if(!confirm(t("Annuler ce match ? Les mises seront remboursées et les bonus qui le visaient rendus. Action irréversible."))) return;
-  closeCardInfo();
-  try{
-    for(const d of (duels||[])){ const fx=d.fixtures||[]; if(!fx.some(f=>f&&f.evId===evId)) continue;
-      const nf=fx.map(f=>(f&&f.evId===evId)?Object.assign({},f,{canceled:true,res:null}):f);
-      await q(db.from("duels").update({fixtures:nf}).eq("id",d.id)); }
-    toast(t("Match annulé — mises remboursées.")); await refresh();
-  }catch(e){ toast("Erreur : "+e.message); }
-}
+// 🚫 MATCH ANNULÉ — traitement 100 % AUTOMATIQUE (cf. STALE_MATCH_H dans resolveRealIfReady).
+// ⚠️ Le bouton manuel « annuler ce match » de la v4.44 a été RETIRÉ en v4.46 : il donnait à
+// l'organisateur un pouvoir discrétionnaire dont il pouvait s'avantager (annuler un match où il
+// perdait). Ne pas le réintroduire sans mécanisme neutre.
 function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; for(let i=0;i<id.length;i++) h=(h+id.charCodeAt(i))|0; return t(REAL_WAIT_MSGS[Math.abs(h)%REAL_WAIT_MSGS.length]); }
 function viewWait(dayLbl){
   const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
@@ -2202,7 +2202,7 @@ function viewWait(dayLbl){
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
     ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
     ${(L&&L.data_mode==="real")?`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Résultats en direct")}</span>${premBadge('direct')}</div>`:''}
-    ${(org&&L&&L.data_mode==="real")?`<button class="btn ghost sm" onclick="openCancelMatch()">${t("🚫 Un match a été annulé ? (organisateur)")}</button>`:''}
+    ${(L&&L.data_mode==="real")?`<div class="box mini muted">${t("🚫 Si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:STALE_MATCH_H})}</div>`:''}
     ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`:''}`;
 }
 function publicBetsHTML(){
@@ -3473,6 +3473,7 @@ function viewRules(){
        <li>${t("🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).")}</li>
        <li>${t("Optionnel : <b>1 carte bonus</b> (voir plus bas), révélée à la résolution.")}</li>
        <li>${t("Gain d'un pari = mise × (cote − 1) ; pari perdu = − mise. Le capital ne descend jamais sous 0.")}</li>
+       <li>${t("🚫 Match non terminé <b>{a} h</b> après l'heure prévue (annulé, reporté, abandonné) : <b>mise rendue</b> et bonus rendu. Il ne compte pas, <b>même s'il est rejoué plus tard</b>.",{a:STALE_MATCH_H})}</li>
      </ul></div>
    <div class="box"><b>${t("🏆 Points & classement")}</b>
      <div class="mini muted" style="margin-top:6px">${t("Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.")}
@@ -3529,7 +3530,8 @@ function viewRulesFull(){
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
      ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton Capitaine. <b>Ton capital ne descend jamais sous 0.</b>")}<br>
      ${t("<b>💸 Recapitalisation solidaire :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Dans ce cas <b>tout le monde</b> reçoit <b>+{b} €</b> — pas seulement lui — pour que personne ne soit distancé par un accident.",{a:RECAP_THRESHOLD,b:RECAP_AMOUNT})}<br>
-     ${t("🚫 <b>Match annulé ou reporté</b> : la <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. L'organisateur déclare l'annulation depuis l'écran d'attente des résultats.")}`)}
+     ${t("🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.",{a:STALE_MATCH_H})}<br>
+     ${t("⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.")}`)}
 
    ${sec(t("🏆 Points et classement"), `${t("Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.")}<br>
      ${t("<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.")}<br>
