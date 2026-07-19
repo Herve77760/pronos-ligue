@@ -166,7 +166,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.75";
+const APP_VERSION = "v4.78";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -897,6 +897,12 @@ const EN={
   "Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.":"Each day, the player with the <b>best net result in the whole league</b> earns a <b>+1 bonus point</b> (on top of the duel points). Ties are broken by the biggest winnings.",
   "<b>Départage au classement final</b> (à points égaux) : <b>cagnotte</b>, puis le <b>résultat des confrontations directes</b> entre les joueurs concernés, puis plus gros gain, puis plus grosse cote.":"<b>Final standings tie-break</b> (equal points): <b>balance</b>, then the <b>head-to-head record</b> between the players involved, then biggest win, then biggest odds.",
   "La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. ⚽ étant le seul sport à <b>3 issues</b>, c'est lui qui rend la carte 🎲 Double Chance jouable.":"The list offers <b>{a} fixtures</b>, of which about <b>{b} % football</b> — the rest (tennis, basketball, rugby) for variety. If there isn't enough football available, the remainder comes from the other sports. ⚽ being the only sport with <b>3 outcomes</b>, it is what makes the 🎲 Double Chance card playable.",
+  "Étape précédente d'abord":"Previous step first",
+  "⏳ Étape précédente d'abord : tous les duels doivent avoir leurs 5 matchs.":"⏳ Previous step first: every duel must have its 5 matches.",
+  "Un duel n'a pas encore ses 5 matchs. Clôturer maintenant empêcherait les joueurs concernés de parier, et la journée ne pourrait pas se résoudre.":"One duel doesn't have its 5 matches yet. Closing now would stop those players from betting, and the matchday couldn't be resolved.",
+  "➡️ Utilise d'abord « 🎲 Tirer les matchs manquants ».":"➡️ Use « 🎲 Draw the missing matches » first.",
+  "Un duel n'a pas encore ses 5 matchs — tire-les d'abord.":"One duel doesn't have its 5 matches yet — draw them first.",
+  "Les pronos ne sont pas encore clôturés — clôture-les d'abord.":"Picks aren't closed yet — close them first.",
   "Échange impossible pour l'instant":"Exchange not possible right now",
   "<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas proposer un rachat maintenant.":"<b>Your bet for today is already confirmed.</b> So you can't offer a buyback right now.",
   "<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas mettre une carte en vente maintenant.":"<b>Your bet for today is already confirmed.</b> So you can't put a card up for sale right now.",
@@ -1503,7 +1509,7 @@ async function refresh(){
     }
     if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; standDuels=null; standTrades=null; }
     if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){
-      chartBets = await q(db.from("bets").select("player_id,day,net,picks,card,captain,duel_id").eq("league_id",S.leagueId).not("net","is",null));
+      chartBets = await q(db.from("bets").select("player_id,day,net,picks,card,captain,duel_id,submitted").eq("league_id",S.leagueId).not("net","is",null));
       standDuels = await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",S.leagueId));
       // Rachats ACCEPTÉS : ils déplacent du capital sans être le gain de personne. Sans eux, le
       // classement historique et la courbe divergent du capital réel (écart mesuré : ±5 €).
@@ -2379,7 +2385,13 @@ function editBet(){ const mine=myBet(); if(!mine||deadlinePassed())return;
   bet={picks:JSON.parse(JSON.stringify(mine.picks||[])), captain:(mine.captain!=null?mine.captain:-1)};
   myCard = mine.card? JSON.parse(JSON.stringify(mine.card)) : null; S.editingBet=true; render(); }
 // Organisateur : clôturer les pronos immédiatement (recule la deadline dans le passé) → verrouillage + révélation + résolution.
+// Garde DANS la fonction, pas seulement sur le bouton : désactiver un bouton ne protège rien,
+// la fonction reste appelable. Clôturer avant que tous les duels aient leurs matchs bloquerait
+// la journée — les joueurs concernés ne pourraient plus parier sur des matchs inexistants.
 async function forceCloseBets(){ if(!(me()&&me().is_organizer)||busy)return;
+  if(duels.some(d=>!d.fixtures)){ infoModal("⏳", t("Étape précédente d'abord"),
+      `<div class="mini" style="text-align:left">${t("Un duel n'a pas encore ses 5 matchs. Clôturer maintenant empêcherait les joueurs concernés de parier, et la journée ne pourrait pas se résoudre.")}</div>
+       <div class="mini muted" style="text-align:left;margin-top:8px">${t("➡️ Utilise d'abord « 🎲 Tirer les matchs manquants ».")}</div>`); return; }
   if(!confirm(t("Clôturer les pronos maintenant ? Plus personne ne pourra modifier et les pronos de tout le monde seront révélés. Les résultats viendront ensuite (tu pourras les publier toi-même).")))return; busy=true;
   const f=leagueFormula(); const past=new Date(Date.now()-f.bet*3600000-60000).toISOString();
   try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
@@ -2394,7 +2406,13 @@ async function forceSelectEnd(){ if(!(me()&&me().is_organizer)||busy)return;
   catch(e){ showErr("Sélection : "+e.message); } busy=false; }
 // Organisateur (simulé) : publier les résultats sans attendre la fin des matchs fictifs.
 // On recule assez la deadline pour que tous les coups d'envoi (+2h de match) soient passés.
+// Même garde : publier les résultats suppose les 2 étapes précédentes faites (matchs tirés, pronos
+// clôturés). Sans ça on résoudrait une journée où certains n'ont pas pu parier.
 async function forcePublishResults(){ if(!(me()&&me().is_organizer)||busy)return;
+  if(duels.some(d=>!d.fixtures) || !deadlinePassed()){ infoModal("⏳", t("Étape précédente d'abord"),
+      `<div class="mini" style="text-align:left">${duels.some(d=>!d.fixtures)
+        ? t("Un duel n'a pas encore ses 5 matchs — tire-les d'abord.")
+        : t("Les pronos ne sont pas encore clôturés — clôture-les d'abord.")}</div>`); return; }
   if(!confirm(t("Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.")))return; busy=true;
   const f=leagueFormula(); const back=(2*(f.bet||24)+3)*3600000;
   const past=new Date(Date.now()-back).toISOString();
@@ -2424,6 +2442,12 @@ function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; 
 function viewWait(dayLbl){
   const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
   const betPassed = deadlinePassed(); const editable=!betPassed;
+  // Les 3 actions d'organisateur s'enchaînent : ① tirer les matchs manquants → ② clôturer les
+  // pronos → ③ publier les résultats. Clôturer avant que TOUS les duels aient leurs 5 matchs
+  // condamnait la journée : les joueurs concernés ne pouvaient plus parier, mais la résolution
+  // attendait quand même des matchs qui n'existaient pas (signalé par Hervé).
+  // (③ est déjà conditionnée : elle ne s'affiche qu'une fois les pronos clôturés.)
+  const tousMatchs = duels.length>0 && duels.every(d=>!!d.fixtures);
   // « en cours » était trop vague : un joueur (même une IA) ne PEUT PAS parier tant que les 5
   // rencontres de son duel ne sont pas choisies — et c'est le joueur à domicile qui les choisit.
   // Sans cette distinction, on croit que l'IA ne joue pas, alors qu'elle attend (signalé par Hervé).
@@ -2452,7 +2476,7 @@ function viewWait(dayLbl){
     ${(()=>{ if(!md) return ''; const iAmHome=md.home_id===S.myId; const opp=pById(iAmHome?md.away_id:md.home_id)||{};
       return `<div class="row mini" style="margin-top:6px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+(opp.emoji?opp.emoji+' ':'')+esc(opp.name||'?')+'</b>'})}</span><span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>`; })()}
     <div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
-    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>`:''}`:''}</div>${missingFx}${tooLate}${mySummary}${list}
+    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" ${tousMatchs?'':'disabled'} onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>${tousMatchs?'':`<div class="mini muted" style="text-align:center;margin-top:5px">${t("⏳ Étape précédente d'abord : tous les duels doivent avoir leurs 5 matchs.")}</div>`}`:''}`:''}</div>${missingFx}${tooLate}${mySummary}${list}
     ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
     ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
@@ -2803,8 +2827,9 @@ function recapBody(D){
     </div>`;
   }
   return `${quickBar('results')}${recapNav(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
-      <div class="row"><div><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:esc((fpP.emoji||'')+' '+fpName)})}</div><div class="big ${myNet>=0?'green':'red'}">${fmt(myNet)} €</div></div>
-      <div style="text-align:right">${oppId!=null?`<div class="mini muted">${t("DUEL vs {a}",{a:pById(oppId).emoji+' '+esc(oppName)})}</div><b class="${won?'green':(tie?'muted':'red')}">${won?t("Gagné"):(tie?t("Match nul"):t("Perdu"))} (${fpDuelPts} pt${fpDuelPts>1?'s':''})</b>`:''}</div></div></div>
+      <div class="row">
+      <div>${oppId!=null?`<div class="mini muted">${t("DUEL vs {a}",{a:pById(oppId).emoji+' '+esc(oppName)})}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:22px">${won?t("Gagné"):(tie?t("Match nul"):t("Perdu"))} (${fpDuelPts} pt${fpDuelPts>1?'s':''})</div>`:''}</div>
+      <div style="text-align:right"><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:esc((fpP.emoji||'')+' '+fpName)})}</div><div class="big num ${myNet>=0?'green':'red'}" style="font-size:22px">${fmt(myNet)} €</div></div></div></div>
     ${forgot(fp)?`<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Pari non validé à temps")}</b><div class="mini" style="margin-top:4px">${isMe?t("Aucun pari pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital."):t("Aucun pari pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> du capital.")}</div></div>`:''}
     ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">${t("← Revenir à mes résultats")}</button>`:''}
     ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">${t("💸 Recapitalisation solidaire")}</b><div class="mini" style="margin-top:4px">${t("<b>{a}</b> n'avaient plus assez pour miser → <b>+{b} €</b> pour tout le monde, histoire de rester équitable. Tout le monde repart avec un coup de pouce ! 🤝",{a:esc((L.recap_note.names||[]).join(', ')),b:L.recap_note.amount})}</div></div>`:''}
@@ -2925,7 +2950,16 @@ function computeStandHist(){
     const inDay=pid=>dz.some(du=>du.home_id===pid||du.away_id===pid);
     // oubli : humain présent ce jour-là sans pari valide (picks vides ou absents)
     const forgot=new Set();
-    players.forEach(p=>{ if(p.is_ai||!inDay(p.id)) return; const b=betAt[d+'|'+p.id]; if(!b||!Array.isArray(b.picks)||b.picks.length===0) forgot.add(p.id); });
+    // L'oubli se LIT dans la donnée, il ne se déduit pas de l'état courant du joueur.
+    // `submitted:false` est la marque écrite par resolveDay au moment de la résolution : c'est la
+    // seule source fidèle. L'ancien test s'appuyait sur `p.is_ai` d'AUJOURD'HUI — or l'historique
+    // est rejoué bien plus tard : si le statut d'un joueur change, tout le passé se réécrit
+    // faussement (constaté sur VOTE8 : 3 duels et 12 points d'écart avec la base).
+    // Le repli sur les pronos vides couvre les journées antérieures à la colonne `submitted`.
+    players.forEach(p=>{ if(!inDay(p.id)) return; const b=betAt[d+'|'+p.id];
+      if(b && b.submitted===false){ forgot.add(p.id); return; }
+      if(p.is_ai) return;                       // repli : une IA jouée automatiquement n'oublie pas
+      if(!b||!Array.isArray(b.picks)||b.picks.length===0) forgot.add(p.id); });
     // points de duel + séries 🔥/❄️ + victoires
     dz.forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
       const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
