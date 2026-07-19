@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.47";
+const APP_VERSION = "v4.48";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -233,6 +233,10 @@ function getMode(){ try{ const o=JSON.parse(L.gage); if(o&&o.mode) return o.mode
 // suffixé R (`optionsR`/`votesR`/`customsR`) porte la RÉCOMPENSE. Ce suffixe est ADDITIF : une ligue
 // d'avant la v4.15 n'a pas de bloc R → elle reste en mode simple, strictement inchangée.
 function getEnjeu(){ try{ const o=JSON.parse(L.gage); if(o&&o.enjeu) return o.enjeu; }catch(e){} const s=L&&L.prep_summary; if(s&&s.enjeu) return s.enjeu; return "gage"; }
+// SOLO : un seul humain (le reste = le 🤖 joueur IA). Pas de gage ni de récompense — il n'y a
+// ni « dernier » ni « champion » à départager entre humains → on saute tout le volet enjeu.
+function isSolo(){ return (players||[]).filter(p=>!p.is_ai).length===1; }
+function getSoloAR(){ try{ const o=JSON.parse(L.gage); if(o&&o.soloAR) return +o.soloAR; }catch(e){} return 2; } // 1 ou 2 allers-retours
 function isReward(){ return getEnjeu()==="reward"; }
 function isBoth(){ return getEnjeu()==="both"; }
 // Y a-t-il un gage / une récompense dans cette ligue ?
@@ -792,6 +796,15 @@ const EN={
   "Le confort maximal, zéro prise de tête.":"Maximum comfort, zero hassle.",
   "Boutique":"Shop", "— ou tout d'un coup —":"— or all at once —",
   "Créer une nouvelle ligue ? Tu en seras l'organisateur et tu pourras inviter tes amis avec le code.":"Create a new league? You'll be the organiser and can invite your friends with the code.",
+  // --- Mode solo contre l'IA ---
+  "🤖 Format du solo":"🤖 Solo format", "solo":"solo", "ton adversaire pour cette partie en solo":"your opponent for this solo game",
+  "1 aller-retour — 2 journées":"1 home-and-away — 2 days", "2 allers-retours — 4 journées":"2 home-and-away rounds — 4 days",
+  "Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur.":"Lightning game: you face the AI once at home, once away.",
+  "Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal.":"A bit longer: time to play your bonuses and recover if you start badly.",
+  "🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça. L'étape de vote est donc sautée : tu passes directement aux enchères sur les bonus.":"🎭 In solo there's <b>no forfeit and no reward</b> — that needs at least two humans. The vote step is skipped: you go straight to the bonus auction.",
+  "Lancer la partie solo":"Start the solo game", "Il faut au moins 1 joueur":"You need at least 1 player",
+  "Tu joues <b>seul contre l'IA</b>. Tu peux encore inviter des amis avec le code <b>{a}</b> — dès qu'un deuxième joueur rejoint, la partie redevient normale (avec gage/récompense).":"You're playing <b>solo against the AI</b>. You can still invite friends with code <b>{a}</b> — as soon as a second player joins, the game becomes a normal one (with forfeit/reward).",
+  "Lancer la partie en SOLO contre le 🤖 joueur IA ? Personne d'autre ne pourra rejoindre. Pas de gage ni de récompense, et {a} journées à jouer.":"Start the game SOLO against the 🤖 AI player? Nobody else will be able to join. No forfeit or reward, and {a} days to play.",
   // --- Match annulé ---
   "🚫 Un match a été annulé ? (organisateur)":"🚫 A match was cancelled? (organiser)", "Un match a été annulé ?":"A match was cancelled?",
   "Aucun match à annuler.":"No match to cancel.",
@@ -1291,7 +1304,7 @@ async function refresh(){
     try{ myResolvedOut = await q(db.from("trades").select("*").eq("league_id",S.leagueId).eq("from_player",S.myId).in("status",["accepted","refused"]).order("resolved_at",{ascending:false}).limit(20)); }catch(e){ myResolvedOut=[]; } // réponses à MES offres (acheteur prévenu)
     // fin de préparation AUTOMATIQUE : dès que tous ont validé (ou délai écoulé), on démarre sans clic
     if(L.status==="prep" && !resolving){
-      const humans=players.filter(p=>!p.is_ai); const allDone=humans.length>=2 && humans.every(p=>p.shop_done);
+      const humans=players.filter(p=>!p.is_ai); const allDone=humans.length>=1 && humans.every(p=>p.shop_done); // >=1 : le SOLO doit pouvoir démarrer
       const st=prepState(); const dlPassed=st.deadline && new Date(st.deadline).getTime()<=Date.now();
       if(allDone||dlPassed){ resolvePrep(); return; }
     }
@@ -1628,9 +1641,18 @@ function viewCoulisses(){
    <div class="box"><h2 style="margin-top:0">${t("🎪 Les Coulisses de l'ouverture")}</h2><div class="mini muted">${t("Comment tout a commencé : le vote du gage et la grande vente aux enchères des bonus.")}</div></div>
    ${L.prep_summary?prepSummaryBody():`<div class="box mini muted">${t("La ligue n'a pas encore démarré : le tirage arrive bientôt !")}</div>`}`;
 }
+// Choix du format en SOLO : 1 ou 2 allers-retours contre l'IA (2 ou 4 journées).
+function soloFormatHTML(org){
+  const opts=[[1,t("1 aller-retour — 2 journées"),t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur.")],
+              [2,t("2 allers-retours — 4 journées"),t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal.")]];
+  return `<h2>${t("🤖 Format du solo")}</h2>`
+    + opts.map(o=>{ const k=o[0], cur=(getSoloAR()===k);
+        return `<div class="box row ${org?'clik':''}" ${org?`onclick="setSoloAR(${k})"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${o[1]}</b><div class="mini muted">${o[2]}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`; }).join("")
+    + `<div class="box mini muted">${t("🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça. L'étape de vote est donc sautée : tu passes directement aux enchères sur les bonus.")}</div>`;
+}
 function viewLobby(){
   const humans=players.filter(p=>!p.is_ai); const n=humans.length; const org=me()&&me().is_organizer;
-  const canLaunch=n>=2; const addAI=n%2===1;
+  const solo=(n===1); const canLaunch=n>=1; const addAI=n%2===1;
   return `<div class="box" style="text-align:center"><div class="mini muted">${t("CODE D'INVITATION")}</div><div class="code">${esc(L.code)}</div>
       <div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">${t("📋 Copier le code")}</button></div></div>
     ${howItWorksHTML()}
@@ -1638,7 +1660,7 @@ function viewLobby(){
     ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
         ${p.is_organizer?'<span class="tag">'+t("organisateur")+'</span>':''}${p.id===S.myId?'<span class="chip b">'+t("toi")+'</span>':''}</div>
         ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip g">${t("Prêt")}</span>`}</div>`).join("")}
-    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${t("équilibre")}</span></div>`:""}
+    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${solo?t("ton adversaire pour cette partie en solo"):t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${solo?t("solo"):t("équilibre")}</span></div>`:""}
     <h2>${t("⏱️ Formule de rythme")}</h2>
     ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
@@ -1646,12 +1668,12 @@ function viewLobby(){
     ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
-    <h2>${t("🎭 Enjeu de la ligue")}</h2>
+    ${solo?soloFormatHTML(org):`<h2>${t("🎭 Enjeu de la ligue")}</h2>
     ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage voté par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense votée par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun vote deux fois à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
-    <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux votes</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense votée par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>
+    <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux votes</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense votée par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>`}
     <div style="height:8px"></div>
-    ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?(t("Clôturer les inscriptions")+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 2 joueurs")}</button>
-        <div class="mini muted" style="text-align:center;margin-top:8px">${t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
+    ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?((solo?t("Lancer la partie solo"):t("Clôturer les inscriptions"))+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 1 joueur")}</button>
+        <div class="mini muted" style="text-align:center;margin-top:8px">${solo?t("Tu joues <b>seul contre l'IA</b>. Tu peux encore inviter des amis avec le code <b>{a}</b> — dès qu'un deuxième joueur rejoint, la partie redevient normale (avec gage/récompense).",{a:esc(L.code)}):t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
       : `<div class="box mini muted" style="text-align:center">${t("En attente que l'organisateur clôture les inscriptions…")}</div>`}`;
 }
 function copyCode(){ navigator.clipboard?.writeText(L.code); toast(t("Code copié : {a}",{a:L.code})); }
@@ -1740,6 +1762,9 @@ async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me
 async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ await q(db.from("leagues").update({data_mode:m}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode données : "+e.message+" (ajoute la colonne 'data_mode')"); } busy=false; }
+async function setSoloAR(k){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
+  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.soloAR=+k; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
+  catch(e){ showErr("Format : "+e.message); } busy=false; }
 async function setEnjeu(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.enjeu=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Enjeu : "+e.message); } busy=false; }
@@ -1760,16 +1785,21 @@ async function relaunchLeague(){
   }catch(e){ showErr("Relance : "+e.message); } busy=false; }
 async function closeRegistration(){
   if(busy)return;
-  const nH=players.filter(p=>!p.is_ai).length;
-  if(!confirm(nH%2===1
-    ? t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.")
-    : t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera."))) return;
+  const nH=players.filter(p=>!p.is_ai).length; const soloNow=(nH===1);
+  if(!confirm(soloNow
+    ? t("Lancer la partie en SOLO contre le 🤖 joueur IA ? Personne d'autre ne pourra rejoindre. Pas de gage ni de récompense, et {a} journées à jouer.",{a:getSoloAR()*2})
+    : (nH%2===1
+      ? t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.")
+      : t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera.")))) return;
   busy=true;
   try{
     let ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
     if(ps.length%2===1){ await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"🤖",is_ai:true,join_order:ps.length}));
       ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order")); }
-    const n=ps.length; const sched=makeSchedule(n); const rows=[];
+    const n=ps.length; let sched=makeSchedule(n); const rows=[];
+    // SOLO : makeSchedule(2) = 1 aller-retour (2 journées). Si l'organisateur a choisi 2 A/R,
+    // on rejoue le même calendrier une seconde fois → 4 journées (domicile/extérieur alternés).
+    if(soloNow && getSoloAR()===2) sched=sched.concat(sched);
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
     const mode=getMode(); const enjeu=getEnjeu(); const both=(enjeu==="both");
@@ -1832,7 +1862,8 @@ function voteSectionHTML(r){
 // empilait 2 votes + les enchères d'un coup. Désormais : 1 vote (2 en combiné) puis les enchères.
 // `prepStep` survit aux re-render du polling (toutes les 4 s) ; il est remis à 0 en changeant de ligue.
 let prepStep=0, prepStepLeague=null;
-function prepSteps(){ return isBoth() ? ["gage","reward","bonus"] : ["vote","bonus"]; }
+// SOLO : ni gage ni récompense → une seule étape, les enchères.
+function prepSteps(){ return isSolo() ? ["bonus"] : (isBoth() ? ["gage","reward","bonus"] : ["vote","bonus"]); }
 function prepStepGo(d){ const n=prepSteps().length; prepStep=Math.max(0,Math.min(prepStep+d,n-1)); render(); }
 // Le vote de l'étape courante est-il fait ? (bloque « Suivant » → la règle « vote obligatoire »
 // est ainsi imposée par construction, au lieu d'être découverte au bout de la page.)
@@ -1922,7 +1953,8 @@ async function prepVoteCustom(r){ if(busy)return; const rew = r ? true : isRewar
     await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
   }catch(e){ showErr("Gage perso : "+e.message); } busy=false; }
 // Combien de votes manquent à ce joueur ? (mode "both" → il en faut 2). Sert au bouton ET au garde-fou.
-function votesManquants(){ const st=prepState(); const m=[];
+function votesManquants(){ if(isSolo()) return []; // solo : aucun vote requis (pas d'enjeu)
+  const st=prepState(); const m=[];
   if(st.votes[S.myId]==null) m.push(isBoth()?"gage":(isReward()?"reward":"gage"));
   if(isBoth() && st.votesR[S.myId]==null) m.push("reward");
   return m; }
@@ -2836,6 +2868,7 @@ function viewStandings(){
 }
 // Enjeu(x) à l'écran final. En mode "both" il y en a DEUX → on affiche les deux encadrés.
 function enjeuFinalHTML(){
+  if(isSolo()) return ''; // solo : aucun enjeu (ni dernier ni champion à départager entre humains)
   const bloc=kind=>{ const eo=enjeuOutcome(kind); if(!eo.ok||!eo.title) return ''; const rew=eo.rew;
     return `<div class="box" style="border-color:${rew?'#3d5a2b':'#5a2b2b'}"><div class="row"><b class="${rew?'gold':'red'}">${rew?t("🏆 Récompense"):t("🎭 Gage")}</b><span class="chip ${rew?'gold':'red'}">${eo.target.emoji} ${esc(eo.target.name)}</span></div>
      <div class="mini muted" style="margin-top:6px">${rew?t("{name} remporte : <b>{item}</b>.",{name:esc(eo.target.name),item:esc(eo.perso?eo.title:t(eo.title))}):t("{name} doit réaliser : <b>{gage}</b>.",{name:esc(eo.target.name),gage:esc(eo.perso?eo.title:t(eo.title))})}${eo.chooser?' <span class="mini muted">'+t("(choisi par {a} 🏆)",{a:esc(eo.chooser.name)})+'</span>':''}</div></div>`; };
@@ -2843,6 +2876,7 @@ function enjeuFinalHTML(){
 }
 // Enjeu(x) projeté(s) au classement. En mode "both" il y en a DEUX → on affiche les deux lignes.
 function enjeuProjeteHTML(){
+  if(isSolo()) return ''; // solo : aucun enjeu à projeter
   const ligne=kind=>{ const eo=enjeuOutcome(kind); if(!eo.ok||!eo.title) return '';
     return `<div class="box mini"><span class="muted">${eo.rew?t("🏆 Récompense (au premier) :"):t("🎭 Gage projeté (au dernier) :")}</span> <b>${esc(eo.perso?eo.title:t(eo.title))}</b> → ${eo.target.emoji} ${esc(eo.target.name)}${eo.chooser?' <span class="mini muted">'+t("(choix de {a})",{a:esc(eo.chooser.name)})+'</span>':''}</div>`; };
   return isBoth() ? (ligne("gage")+ligne("reward")) : ligne();
