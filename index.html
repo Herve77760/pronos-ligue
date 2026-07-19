@@ -166,7 +166,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.68";
+const APP_VERSION = "v4.73";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -297,6 +297,9 @@ const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
 // simulé) et pour les règles affichées : sans ça, le simulé tirait uniformément entre les sports
 // (≈33 % de foot) alors que le réel visait 75 % — deux jeux différents sous le même nom.
 const POOL_N=12, POOL_FOOT=9;   // 12 matchs proposés, dont 9 de foot (75 %)
+// Effectif maximum d'une ligue. Écrit à 4 endroits auparavant (création, relance, salon, règles) :
+// une seule source, sinon les places annoncées au salon pourraient contredire les règles.
+const MAX_PLAYERS=12;
 const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
 const STAKE_CAP_INVEST=0.7; // … 70 % avec la carte Investisseur
 const FORGOT_PENALTY=0.25;  // ANCIEN barème : pari non validé à temps → −25 % du capital
@@ -677,7 +680,7 @@ const EN={
   "• À la fin : le <b>champion</b> reçoit la <b>récompense</b> votée par le <b>dernier</b> 🏆.":"• At the end: the <b>champion</b> gets the <b>reward</b> voted by the <b>last-placed player</b> 🏆.",
   "• À la fin : le <b>dernier</b> fait le <b>gage</b> voté par le vainqueur 😅, et le <b>champion</b> reçoit la <b>récompense</b> votée par le dernier 🏆.":"• At the end: the <b>last-placed player</b> does the <b>forfeit</b> voted by the winner 😅, and the <b>champion</b> gets the <b>reward</b> voted by the last-placed player 🏆.",
   "CODE D'INVITATION":"INVITE CODE", "📋 Copier le code":"📋 Copy the code",
-  "Joueurs inscrits · {a}":"Players signed up · {a}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
+  "Joueurs inscrits · {a}/{b}":"Players signed up · {a}/{b}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
   "Joueur IA":"AI player", "ajouté au lancement (nombre impair)":"added at launch (odd number)", "équilibre":"balance",
   "⏱️ Formule de rythme":"⏱️ Pace format", "✓ choisie":"✓ chosen", "choisir":"choose",
   "Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.":"<b>Maximum</b> delay: if everyone confirms sooner, we move on; otherwise the game advances <b>on its own</b> at the deadline.",
@@ -724,14 +727,14 @@ const EN={
   "Récompense personnalisée — réglée entre vous, hors application.":"Custom reward — settled between you, outside the app.",
   "La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :":"The <b>reward</b> handed to the champion is the one voted by the <b>last-placed player</b> 🥄 — whoever chooses is never the one who receives. Depending on who finishes last:",
   "Récompense qu'il offre au champion":"Reward they hand to the champion",
-  "Si… finit dernier":"If… finishes last", "si {a} finit dernier":"if {a} finishes last",
+  "Si… finit dernier":"If… finishes last",
   "🏆 <b>Motivation express :</b> le champion repart avec la récompense votée par le dernier — une excellente raison de viser la <b>première</b> place !":"🏆 <b>Quick motivation:</b> the champion walks away with the reward voted by the last-placed player — a great reason to aim for <b>first</b> place!",
   "🏆 Récompense (au premier) :":"🏆 Reward (for the first):",
   "🏆 Récompense":"🏆 Reward", "{name} remporte : <b>{item}</b>.":"{name} wins: <b>{item}</b>.",
   "🎭 Gage projeté (au dernier) :":"🎭 Projected forfeit (for the last):", "(choix de {a})":"({a}'s choice)", "(choisi par {a} 🏆)":"(chosen by {a} 🏆)",
   "🎭 L'enjeu du tournoi":"🎭 The tournament stakes",
   "Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :":"The <b>forfeit</b> for the last-placed player is the one voted by the <b>winner</b> 🏆 — whoever chooses is never the one who takes it. Depending on who wins:",
-  "si {a} gagne":"if {a} wins", "(pas de vote)":"(no vote)",
+  "(pas de vote)":"(no vote)",
   "😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !":"😅 Aim for the win… or get ready to do the winner's forfeit if you finish last!",
   "🔒 Les votes des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).":"🔒 Other players' votes stay hidden until everyone has confirmed (results in the backstage).",
   "✓ ton vote":"✓ your vote", "Voter":"Vote", "🃏 Enchères bonus":"🃏 Bonus auction",
@@ -907,7 +910,8 @@ const EN={
   "⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>{b} pt</b> au classement et <b>−{a} %</b> du capital.":"⏰ <b>Bet not confirmed in time.</b> No bet counted → <b>{b} pt</b> in the standings and <b>−{a} %</b> of your balance.",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.":"You didn't confirm your picks before the deadline: <b>no bet</b> counts that day → <b>{b} pt</b> in the standings and <b>−{a} %</b> of your balance. You can still follow everyone else's bets below.",
   "🤖 Format du solo":"🤖 Solo format", "solo":"solo",
-  "En attente d'autres joueurs":"Waiting for more players", "libre":"open", "si solo":"if solo",
+  "doit choisir les matchs":"must pick the matches", "attend les matchs":"waiting for the matches",
+  "En attente d'autres joueurs":"Waiting for more players", "si solo":"if solo",
   "Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.":"Registrations are open: share the code <b>{a}</b>. Nothing is locked in until you close them.",
   "ton adversaire <b>si tu clôtures maintenant</b>, à toi seul":"your opponent <b>if you close now</b>, on your own",
   "1 aller-retour — 2 journées":"1 home-and-away — 2 days", "2 allers-retours — 4 journées":"2 home-and-away rounds — 4 days",
@@ -1136,9 +1140,10 @@ const EN={
   "Mode de jeu":"Game mode", "Formule de rythme":"Pace format", "Données":"Data",
   "• <b>🎮 Simulé</b> — matchs et cotes fictifs, résolution immédiate. Idéal pour tester.":"• <b>🎮 Simulated</b> — fictional matches and odds, instant resolution. Ideal for testing.",
   "• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.":"• <b>📡 Real data</b> — real matches, real odds, real results. A matchday only resolves once <b>all</b> matches have actually been played.",
-  "Une ligue accueille jusqu'à <b>12 joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.":"A league holds up to <b>12 players</b>. The organiser can close registrations, the preparation or the picks at any time.",
+  "Une ligue accueille jusqu'à <b>{p} joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.":"A league holds up to <b>{p} players</b>. The organiser can close registrations, the preparation or the picks at any time.",
+  "1 place":"1 spot", "{a} places":"{a} spots",
   "🗓️ Format":"🗓️ Format",
-  "Aller-retour entre tous (Round Robin). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.":"Home-and-away against everyone (round robin). If the number of humans is odd, a 🤖 AI player fills in (it isn't subject to the forfeit). Each day = one head-to-head duel.",
+  "De <b>2 à {a} joueurs</b> — et la durée en découle : chacun affronte chacun aller-retour, soit <b>2 × (nombre de joueurs − 1) journées</b> (8 joueurs → 14 journées). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.":"From <b>2 to {a} players</b> — and the length follows from it: everyone plays everyone home and away, i.e. <b>2 × (number of players − 1) matchdays</b> (8 players → 14 matchdays). If the number of humans is odd, a 🤖 AI player fills in (it isn't subject to the forfeit). Each day = one head-to-head duel.",
   "⚽ Une journée":"⚽ A matchday",
   "Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).":"The <b>home</b> player picks the <b>5 fixtures</b> (imposed on both).",
   "Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>{a} %</b> du capital ({b} % avec la carte Investisseur).":"Each makes their <b>predictions + stakes</b>. Total stakes ≤ <b>{a}%</b> of capital ({b}% with the Investor card).",
@@ -1661,7 +1666,7 @@ async function createLeague(){
   busy=true; showErr("");
   try{
     const code=genCode();
-    const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+AUTH.name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
+    const lg=await q(db.from("leagues").insert({code,name:"Ligue de "+AUTH.name,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,gage:null}).select().single());
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[0],is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     openLeague(lg.id, pl.id, true);
   }catch(e){ showErr("Création : "+e.message); } busy=false;
@@ -1775,12 +1780,13 @@ function enjeuTableHTML(r){
     const o=opts[v]; return {txt:o?((o.t)||o):null, perso:false}; };
   // NB : le texte perso d'un joueur ne passe PAS par t() — c'est du texte libre, pas une clé de traduction.
   const lbl=g=>`${g.txt?'<b>'+esc(g.perso?g.txt:t(g.txt))+'</b>':'<span class="muted">'+t("(pas de vote)")+'</span>'}${g.perso?' <span class="tag">'+t("perso")+'</span>':''}`;
-  const corps = (hs.length>5)
-    // Grande ligue : format tableau compact (sinon ça fait une avalanche de blocs).
-    ? `<div style="overflow-x:auto;margin-top:8px"><table>
+  // Tableau compact QUEL QUE SOIT l'effectif (choix d'Hervé après l'avoir vu à 8 joueurs). Il y
+  // avait auparavant deux présentations — blocs empilés jusqu'à 5 joueurs, tableau au-delà — mais
+  // le tableau se lit mieux dans tous les cas, et une seule mise en page vaut mieux que deux à
+  // maintenir : la variante « blocs » n'était de fait jamais relue ni testée.
+  const corps = `<div style="overflow-x:auto;margin-top:8px"><table>
         <tr><th>${rew?t("Si… finit dernier"):t("Si… gagne")}</th><th>${rew?t("Récompense qu'il offre au champion"):t("Gage infligé au dernier")}</th></tr>
-        ${hs.map(p=>`<tr><td class="mini">${p.emoji} ${esc(p.name)}</td><td class="mini">${lbl(gOf(p))}</td></tr>`).join("")}</table></div>`
-    : hs.map(p=>`<div class="box row" style="margin-top:8px"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><div><div class="mini muted">${rew?t("si {a} finit dernier",{a:esc(p.name)}):t("si {a} gagne",{a:esc(p.name)})}</div>${lbl(gOf(p))}</div></div></div>`).join("");
+        ${hs.map(p=>`<tr><td class="mini">${p.emoji} ${esc(p.name)}</td><td class="mini">${lbl(gOf(p))}</td></tr>`).join("")}</table></div>`;
   return `<div class="box"><div class="mini muted">${rew?t("La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :"):t("Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :")}</div>
      ${corps}
      <div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${rew?t("🏆 <b>Motivation express :</b> le champion repart avec la récompense votée par le dernier — une excellente raison de viser la <b>première</b> place !"):t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`;
@@ -1831,11 +1837,11 @@ function viewLobby(){
   return `<div class="box" style="text-align:center"><div class="mini muted">${t("CODE D'INVITATION")}</div><div class="code">${esc(L.code)}</div>
       <div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">${t("📋 Copier le code")}</button></div></div>
     ${howItWorksHTML()}
-    <h2>${t("Joueurs inscrits · {a}",{a:n})}</h2>
+    <h2>${t("Joueurs inscrits · {a}/{b}",{a:n,b:MAX_PLAYERS})}</h2>
     ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
         ${p.is_organizer?'<span class="tag">'+t("organisateur")+'</span>':''}${p.id===S.myId?'<span class="chip b">'+t("toi")+'</span>':''}</div>
         ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip g">${t("Prêt")}</span>`}</div>`).join("")}
-    ${n<12?`<div class="box row" style="border-style:dashed;opacity:.9"><div class="row" style="gap:9px"><span class="sport">⏳</span><div><b>${t("En attente d'autres joueurs")}</b><div class="mini muted">${t("Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.",{a:esc(L.code)})}</div></div></div><span class="chip">${t("libre")}</span></div>`:""}
+    ${n<MAX_PLAYERS?`<div class="box row" style="border-style:dashed;opacity:.9"><div class="row" style="gap:9px"><span class="sport">⏳</span><div><b>${t("En attente d'autres joueurs")}</b><div class="mini muted">${t("Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.",{a:esc(L.code)})}</div></div></div><span class="chip num">${(MAX_PLAYERS-n)===1?t("1 place"):t("{a} places",{a:MAX_PLAYERS-n})}</span></div>`:""}
     ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${solo?t("ton adversaire <b>si tu clôtures maintenant</b>, à toi seul"):t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${solo?t("si solo"):t("équilibre")}</span></div>`:""}
     <h2>${t("⏱️ Formule de rythme")}</h2>
     ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):(org?t("choisir"):'')}</span></div>`;}).join("")}
@@ -1972,7 +1978,7 @@ async function relaunchLeague(){
   try{
     const humans=players.filter(p=>!p.is_ai && p.user_id); // on réutilise les joueurs humains
     const code=genCode();
-    const lg=await q(db.from("leagues").insert({code,name:L.name,status:"lobby",num_participants:12,num_days:0,gage:null}).select().single());
+    const lg=await q(db.from("leagues").insert({code,name:L.name,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,gage:null}).select().single());
     const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:p.emoji||EMOJIS[i]||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
     const inserted=await q(db.from("players").insert(rows).select());
     const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
@@ -2115,7 +2121,7 @@ function viewPrep(){
    <h2>${t("🃏 Enchères bonus")}</h2>
    <div class="box"><div class="mini muted">${t("Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.",{a:SHOP_CAP,b:maxCards})}</div>
      <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
-     <div class="gauge ${over?'over':''}" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
+     <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
    <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Vote d'abord pour une récompense"):t("🎭 Vote d'abord pour un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>
@@ -2127,7 +2133,11 @@ function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else d
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1); const over=tot>SHOP_CAP,tooMany=cnt>maxCards;
   const bt=$("bt"); if(bt){bt.textContent=Math.round(tot); bt.className=over?'red':'';}
   const bc=$("bc"); if(bc){bc.textContent=cnt; bc.className=tooMany?'red':'';}
-  const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,tot/SHOP_CAP*100)+"%"; g.classList.toggle("over",over);}
+  // Cibler par ID, jamais par classe : l'écran de préparation contient DEUX .gauge — la progression
+  // des étapes (en-tête) AVANT celle de l'argent. `querySelector(".gauge")` renvoyait donc la barre
+  // d'étapes : la jauge d'argent ne bougeait jamais quand on saisissait une enchère (signalé par
+  // Hervé), et la barre d'étapes sautait à sa place.
+  const g=document.getElementById("bidGauge"); if(g){g.querySelector("i").style.width=Math.min(100,tot/SHOP_CAP*100)+"%"; g.classList.toggle("over",over);}
   const miss=votesManquants(); const noVote=miss.length>0; // vote(s) obligatoire(s) — 2 en mode "both"
   const btn=$("prepValidate"); if(btn){ btn.disabled=over||tooMany||noVote;
     btn.textContent=noVote?(miss[0]==="reward"?t("🏆 Vote d'abord pour une récompense"):t("🎭 Vote d'abord pour un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →"))); } }
@@ -2297,7 +2307,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
     <div class="row mini" style="margin-top:6px"><span class="muted">${t("Misé")} <b id="tot">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">${t("👑 Capitaine ×2")}</span></div>
-    <div class="gauge ${over?'over':''}"><i style="width:${pct}%"></i></div></div>
+    <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div></div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${oddOf(f,v)}</b></div>`;
       const canTgt = targetCard && (myCard.id!=="chance" || f.draw);
@@ -2322,7 +2332,9 @@ function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCar
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
   const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*stakeCapOf(myCard)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const totEl=$("tot"); if(totEl){totEl.textContent=eur(tot); // ⚠️ ne pas nommer cette variable `t` : ça masquerait la fonction de traduction t() utilisée plus bas
-    const g=document.querySelector(".gauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
+    // Par ID également : aujourd'hui l'écran des pronos n'a qu'une jauge, mais en ajouter une
+    // au-dessus casserait celle-ci en silence — exactement ce qui est arrivé à la préparation.
+    const g=document.getElementById("betGauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",tot>max+0.001);} }
   const targetCard=myCard&&CARDS[myCard.id].t; const twoCard=myCard&&CARDS[myCard.id].two; const oppCard=myCard&&CARDS[myCard.id].oppT;
   const needTarget=targetCard&&(myCard.target==null||(twoCard&&myCard.target2==null));
   const needSel2=myCard&&myCard.id==="chance"&&myCard.target!=null&&!myCard.sel2;
@@ -2408,9 +2420,18 @@ function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; 
 function viewWait(dayLbl){
   const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
   const betPassed = deadlinePassed(); const editable=!betPassed;
+  // « en cours » était trop vague : un joueur (même une IA) ne PEUT PAS parier tant que les 5
+  // rencontres de son duel ne sont pas choisies — et c'est le joueur à domicile qui les choisit.
+  // Sans cette distinction, on croit que l'IA ne joue pas, alors qu'elle attend (signalé par Hervé).
+  const duelDe=pid=>duels.find(d=>d.home_id===pid||d.away_id===pid);
   const list=players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
+    const dd=duelDe(p.id); const sansMatchs=!!(dd&&!dd.fixtures);
+    const etat = done ? t("✓ validé")
+      : betPassed ? t("⏰ pronos non faits")
+      : sansMatchs ? (dd.home_id===p.id ? t("doit choisir les matchs") : t("attend les matchs"))
+      : t("en cours");
     return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">IA</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div>
-      <span class="chip ${done?'g':(betPassed?'red':'')}">${done?t("✓ validé"):(betPassed?t("⏰ pronos non faits"):t("en cours"))}</span></div>`;}).join("");
+      <span class="chip ${done?'g':(betPassed?'red':(sansMatchs?'b':''))}">${etat}</span></div>`;}).join("");
   const mine=myBet(); const md=myDuel();
   const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">${editable?t("✅ Tes pronos (modifiables jusqu'à la clôture)"):t("🔒 Tes pronos (verrouillés)")}</div>
      ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${oddD}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
@@ -3810,7 +3831,7 @@ function viewRules(){
    <div class="box"><h2 style="margin-top:0">${t("📖 Règles du jeu")}</h2>
      <p class="mini">${t("<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.")}</p></div>
    <div class="box"><b>${t("🗓️ Format")}</b>
-     <div class="mini muted" style="margin-top:6px">${t("Aller-retour entre tous (Round Robin). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.")} <i>${t("(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)")}</i></div></div>
+     <div class="mini muted" style="margin-top:6px">${t("De <b>2 à {a} joueurs</b> — et la durée en découle : chacun affronte chacun aller-retour, soit <b>2 × (nombre de joueurs − 1) journées</b> (8 joueurs → 14 journées). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.",{a:MAX_PLAYERS})} <i>${t("(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)")}</i></div></div>
    <div class="box"><b>${t("⚽ Une journée")}</b>
      <ul class="mini muted" style="margin:6px 0 0;padding-left:18px">
        <li>${t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).")}</li>
@@ -3933,7 +3954,7 @@ function viewRulesFull(){
      <div style="height:6px"></div><b>${t("Données")}</b><br>
      ${t("• <b>🎮 Simulé</b> — matchs et cotes fictifs, résolution immédiate. Idéal pour tester.")}<br>
      ${t("• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.")}<br>
-     <div style="height:6px"></div>${t("Une ligue accueille jusqu'à <b>12 joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.")}`)}
+     <div style="height:6px"></div>${t("Une ligue accueille jusqu'à <b>{p} joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.",{p:MAX_PLAYERS})}`)}
 
    <button class="btn ghost" onclick="closeRulesFull()">${t("← Retour")}</button>`;
 }
