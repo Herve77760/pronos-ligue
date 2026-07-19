@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.50";
+const APP_VERSION = "v4.52";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -221,8 +221,8 @@ const DBL_FACTOR=1; // Coup Double : 1 = mise prise en compte = moyenne des 2 mi
 const RECAP_THRESHOLD=10, RECAP_AMOUNT=20; // recapitalisation solidaire : sous 10€ un joueur ne peut plus miser → +20€ à lui ET à tout le monde
 // Formules de rythme : délais MAX (heures) pour choisir les matchs puis miser.
 const FORMULAS={
-  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"~12h pour choisir les matchs, puis ~12h pour miser (idée : de midi à minuit, puis de minuit à midi)."},
-  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"~24h pour choisir, puis ~24h pour miser — 48h en tout (idée : de midi au lendemain midi, deux fois)."}
+  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis jusqu'à 12h pour miser — 24h au maximum."},
+  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis jusqu'à 24h pour miser — 48h au maximum."}
 };
 function leagueFormula(){ return FORMULAS[(L&&L.formula)||'classique'] || FORMULAS.classique; }
 // Mode de contenu & gage perso : stockés dans le JSON `gage` (lobby puis prépa). Défaut "complet".
@@ -613,8 +613,9 @@ const EN={
   "Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible.":"Permanently close this league? It will be archived under \"Finished leagues\". This cannot be undone.",
   "Code copié : {a}":"Code copied: {a}", "Retirer {a} du tournoi ?":"Remove {a} from the tournament?",
   "⚡ Fast":"⚡ Fast", "🗓️ Classique":"🗓️ Classic",
-  "~12h pour choisir les matchs, puis ~12h pour miser (idée : de midi à minuit, puis de minuit à midi).":"~12h to pick the matches, then ~12h to bet (idea: noon to midnight, then midnight to noon).",
-  "~24h pour choisir, puis ~24h pour miser — 48h en tout (idée : de midi au lendemain midi, deux fois).":"~24h to pick, then ~24h to bet — 48h total (idea: noon to next noon, twice).",
+  "Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis jusqu'à 12h pour miser — 24h au maximum.":"Preparation: 24h to vote and pick your bonuses, same as Classic. Then each matchday: up to 12h to pick the matches, then up to 12h to bet — 24h at most.",
+  "Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis jusqu'à 24h pour miser — 48h au maximum.":"Preparation: 24h to vote and pick your bonuses. Then each matchday: up to 24h to pick the matches, then up to 24h to bet — 48h at most.",
+  "Ce ne sont pas des horaires fixes : chaque phase démarre <b>quand la précédente est bouclée</b>. Les mises s'ouvrent dès que tous les matchs sont choisis, et la journée suivante démarre dès que les résultats sont tombés. En 📡 données réelles, la plupart des matchs se jouant en soirée, le rythme se cale sur eux et se décale donc de jour en jour.":"These aren't fixed times of day: each phase starts <b>once the previous one is wrapped up</b>. Betting opens as soon as every match has been picked, and the next matchday starts as soon as the results are in. In 📡 real-data mode, most matches being played in the evening, the rhythm follows them and therefore drifts from day to day.",
   "🚀 Tout le monde est prêt — lancement du championnat…":"🚀 Everyone's ready — starting the championship…",
   "⏳ On attend les autres joueurs — <b>{a}/{b}</b> prêts.":"⏳ Waiting for the other players — <b>{a}/{b}</b> ready.",
   "Le championnat démarre <b>tout seul</b> dès que tout le monde a validé (ou dans {a}).":"The championship starts <b>automatically</b> once everyone has confirmed (or in {a}).",
@@ -1831,6 +1832,9 @@ async function closeRegistration(){
       votes[p.id]=ap.vote; voteTs[p.id]=Date.now(); bids[p.id]=ap.bids; bidTs[p.id]=Date.now();
       if(both){ votesR[p.id]=ap.voteR; voteTsR[p.id]=Date.now(); }
       await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
+    // La PRÉPARATION dure 24 h dans TOUTES les formules (Fast comprise) : voter et enchérir sur les
+    // bonus demande de la réflexion, on ne la comprime pas à 12 h. Le rythme 12 h de Fast ne concerne
+    // que les journées elles-mêmes. Ne pas lier cette durée à leagueFormula().
     const deadline=new Date(Date.now()+24*3600*1000).toISOString();
     const st={options,votes,voteTs,bids,bidTs,deadline,mode,enjeu};
     if(both){ st.optionsR=optionsR; st.votesR=votesR; st.voteTsR=voteTsR; }
@@ -3625,6 +3629,7 @@ function viewRulesFull(){
      ${Object.keys(MODES).map(k=>`• <b>${esc(t(MODES[k].n))}</b> — ${esc(t(MODES[k].d))}`).join("<br>")}<br>
      <div style="height:6px"></div><b>${t("Formule de rythme")}</b><br>
      ${Object.keys(FORMULAS).map(k=>`• <b>${esc(t(FORMULAS[k].n))}</b> — ${esc(t(FORMULAS[k].d))}`).join("<br>")}<br>
+     <div class="mini muted">${t("Ce ne sont pas des horaires fixes : chaque phase démarre <b>quand la précédente est bouclée</b>. Les mises s'ouvrent dès que tous les matchs sont choisis, et la journée suivante démarre dès que les résultats sont tombés. En 📡 données réelles, la plupart des matchs se jouant en soirée, le rythme se cale sur eux et se décale donc de jour en jour.")}</div>
      <div style="height:6px"></div><b>${t("Données")}</b><br>
      ${t("• <b>🎮 Simulé</b> — matchs et cotes fictifs, résolution immédiate. Idéal pour tester.")}<br>
      ${t("• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.")}<br>
