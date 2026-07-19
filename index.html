@@ -21,9 +21,14 @@
     --shadow:0 1px 2px rgba(20,29,43,.05),0 8px 22px rgba(20,29,43,.07);
   }
   *{box-sizing:border-box}
+  /* overflow-x sur html AUSSI : sur iOS, la regle posee seulement sur body ne bloque pas
+     le defilement lateral — on pouvait faire glisser la page de quelques pixels. */
+  html,body{overflow-x:hidden;}
   body{margin:0;background:var(--bg);color:var(--ink);
     font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-    -webkit-font-smoothing:antialiased;overflow-x:hidden;}
+    -webkit-font-smoothing:antialiased;
+    /* un pseudo ou un gage personnalise sans espace ne doit pas elargir la page */
+    overflow-wrap:break-word;}
   .num,td.num,.big,.code{font-variant-numeric:tabular-nums;}
   .app{max-width:540px;margin:0 auto;padding:20px 16px 64px;}
   h1{font-size:21px;margin:0;letter-spacing:-.4px;font-weight:800;}
@@ -34,6 +39,9 @@
   .topbtns .btn{flex:1 1 0;min-width:0;padding-left:0;padding-right:0;text-align:center;}
   .box{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin:12px 0;box-shadow:var(--shadow);}
   .row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+  /* Sans ceci, un enfant de flex garde min-width:auto : il refuse de retrecir sous la largeur
+     de son contenu et POUSSE la ligne hors de l'ecran (mesure : +190px avec un nom long). */
+  .row>*{min-width:0;}
   .muted{color:var(--muted);} .green{color:var(--green);} .red{color:var(--red);}
   .gold{color:var(--gold);} .blue{color:var(--blue);} .mini{font-size:12px;}
   .btn{background:var(--accent);color:var(--accent-ink);font-weight:700;border:none;border-radius:12px;
@@ -74,6 +82,10 @@
   .cardchip.on{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue);}
   .cardchip .em{font-size:19px;display:block;margin-bottom:2px;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
+  /* `anywhere` et non `break-word` : seul `anywhere` reduit la largeur MINIMALE calculee de la
+     cellule. Sans lui, un pseudo long elargit tout le tableau au-dela de l'ecran (classement,
+     resultats, ecran de fin) et la page se met a defiler lateralement. */
+  td,th{overflow-wrap:anywhere;}
   th,td{padding:9px 6px;border-bottom:1px solid var(--border);text-align:left;}
   tr:last-child td{border-bottom:none;}
   th{color:var(--muted);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;}
@@ -136,7 +148,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.52";
+const APP_VERSION = "v4.54";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -810,7 +822,10 @@ const EN={
   "Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b>, depuis n'importe quel appareil.":"No email needed: pick a username + a password. Your account lets you <b>find all your leagues</b>, from any device.",
   "📖 Découvrir le jeu (règles)":"📖 Discover the game (rules)", "Tu peux lire les règles avant de créer un compte.":"You can read the rules before creating an account.",
   // --- Mode solo contre l'IA ---
-  "🤖 Format du solo":"🤖 Solo format", "solo":"solo", "ton adversaire pour cette partie en solo":"your opponent for this solo game",
+  "🤖 Format du solo":"🤖 Solo format", "solo":"solo",
+  "En attente d'autres joueurs":"Waiting for more players", "libre":"open", "si solo":"if solo",
+  "Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.":"Registrations are open: share the code <b>{a}</b>. Nothing is locked in until you close them.",
+  "ton adversaire <b>si tu clôtures maintenant</b>, à toi seul":"your opponent <b>if you close now</b>, on your own",
   "1 aller-retour — 2 journées":"1 home-and-away — 2 days", "2 allers-retours — 4 journées":"2 home-and-away rounds — 4 days",
   "Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur.":"Lightning game: you face the AI once at home, once away.",
   "Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal.":"A bit longer: time to play your bonuses and recover if you start badly.",
@@ -1675,7 +1690,8 @@ function viewLobby(){
     ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
         ${p.is_organizer?'<span class="tag">'+t("organisateur")+'</span>':''}${p.id===S.myId?'<span class="chip b">'+t("toi")+'</span>':''}</div>
         ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip g">${t("Prêt")}</span>`}</div>`).join("")}
-    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${solo?t("ton adversaire pour cette partie en solo"):t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${solo?t("solo"):t("équilibre")}</span></div>`:""}
+    ${n<12?`<div class="box row" style="border-style:dashed;opacity:.9"><div class="row" style="gap:9px"><span class="sport">⏳</span><div><b>${t("En attente d'autres joueurs")}</b><div class="mini muted">${t("Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.",{a:esc(L.code)})}</div></div></div><span class="chip">${t("libre")}</span></div>`:""}
+    ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${solo?t("ton adversaire <b>si tu clôtures maintenant</b>, à toi seul"):t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${solo?t("si solo"):t("équilibre")}</span></div>`:""}
     <h2>${t("⏱️ Formule de rythme")}</h2>
     ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
