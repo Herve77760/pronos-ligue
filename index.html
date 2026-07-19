@@ -136,7 +136,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.43";
+const APP_VERSION = "v4.45";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -393,7 +393,8 @@ async function resolveRealIfReady(){
   const keys=[...new Set(realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.evId).map(f=>f.sportKey))];
   const results=await fetchRealResults(keys);
   let allDone=true;
-  realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId){ const r=results[f.evId]; if(!r||!r.completed) allDone=false; } }));
+  // Un match ANNULÉ compte comme terminé : sinon une journée resterait bloquée indéfiniment.
+  realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId&&!f.canceled){ const r=results[f.evId]; if(!r||!r.completed) allDone=false; } }));
   if(!allDone) return; // il reste des matchs en cours
   for(const d of realDuels){ const fx=d.fixtures.map(f=>{ if(f&&f.evId){ const r=results[f.evId]; if(r&&r.res) return Object.assign({},f,{res:r.res}); } return f; });
     try{ await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); }catch(e){} }
@@ -777,6 +778,13 @@ const EN={
   "Le confort maximal, zéro prise de tête.":"Maximum comfort, zero hassle.",
   "Boutique":"Shop", "— ou tout d'un coup —":"— or all at once —",
   "Créer une nouvelle ligue ? Tu en seras l'organisateur et tu pourras inviter tes amis avec le code.":"Create a new league? You'll be the organiser and can invite your friends with the code.",
+  // --- Match annulé ---
+  "🚫 Un match a été annulé ? (organisateur)":"🚫 A match was cancelled? (organiser)", "Un match a été annulé ?":"A match was cancelled?",
+  "Aucun match à annuler.":"No match to cancel.",
+  "Choisis le match annulé ou reporté. Les mises de tous les joueurs qui l'avaient joué seront <b>remboursées</b>, et le bonus qui le visait leur sera <b>rendu</b>.":"Pick the cancelled or postponed match. The stakes of every player who bet on it will be <b>refunded</b>, and the bonus that targeted it will be <b>given back</b>.",
+  "Annuler ce match ? Les mises seront remboursées et les bonus qui le visaient rendus. Action irréversible.":"Cancel this match? Stakes will be refunded and the bonuses targeting it given back. This cannot be undone.",
+  "Match annulé — mises remboursées.":"Match cancelled — stakes refunded.",
+  "🚫 <b>Match annulé ou reporté</b> : la <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. L'organisateur déclare l'annulation depuis l'écran d'attente des résultats.":"🚫 <b>Cancelled or postponed match</b>: the <b>stake is refunded</b> (no gain, no loss — as if the bet never happened) and the <b>bonus that targeted it is given back</b>. The organiser declares the cancellation from the results waiting screen.",
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera.":"Close registrations? Nobody else will be able to join, and the preparation (vote + bonus auction) will begin.",
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.":"Close registrations? Nobody else will be able to join. You're an odd number: a 🤖 AI player will be added to balance things out, then the preparation will begin.",
   "🔄 Nouvelle version disponible.":"🔄 A new version is available.", "Recharger":"Reload",
@@ -1227,9 +1235,10 @@ function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); } // (cote combinée 
 function dcWinOdd(f,sel,sel2){ return (f.res===sel||f.res===sel2) ? oddOf(f,f.res) : oddOf(f,sel); }
 /* ---- Barème d'un duel ---- */
 // gain (retour brut des paris gagnants, à la cote) et mise (total misé) d'un joueur.
-function gainMise(picks,fx){ let gain=0,mise=0; (picks||[]).forEach((b,i)=>{ const st=+b.stake||0; mise+=st; const f=(fx||[])[i]; if(f&&b.sel===f.res) gain+=st*oddOf(f,b.sel); }); return {gain,mise}; }
+// ⚠️ Match ANNULÉ (f.canceled) : la mise est RENDUE → le pari est ignoré (ni gain, ni mise comptée).
+function gainMise(picks,fx){ let gain=0,mise=0; (picks||[]).forEach((b,i)=>{ const f=(fx||[])[i]; if(f&&f.canceled) return; const st=+b.stake||0; mise+=st; if(f&&b.sel===f.res) gain+=st*oddOf(f,b.sel); }); return {gain,mise}; }
 // Nombre de paris gagnants d'un joueur (gère la Double Chance)
-function winCount(bt,fx){ if(!bt||!bt.picks||!fx) return 0; const c=bt.card; let w=0; bt.picks.forEach((b,i)=>{ const f=fx[i]; if(!f)return; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res); if(win)w++; }); return w; }
+function winCount(bt,fx){ if(!bt||!bt.picks||!fx) return 0; const c=bt.card; let w=0; bt.picks.forEach((b,i)=>{ const f=fx[i]; if(!f||f.canceled)return; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res); if(win)w++; }); return w; }
 // Compare deux joueurs {net,gain,mise} : vainqueur = meilleur net, puis gain, puis mise, sinon nul.
 // Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
 function duelPts(h,a){ const R=x=>Math.round((+x||0)*100)/100;
@@ -2144,6 +2153,27 @@ const REAL_WAIT_MSGS=[
   "🍿 Sors le pop-corn : le reste se joue sur le terrain.",
   "🤞 Tes pronos sont scellés. À toi de trouver un trèfle à quatre feuilles."
 ];
+// 🚫 MATCH ANNULÉ — l'organisateur déclare un match annulé/reporté (l'API ne sait pas distinguer
+// « annulé » de « pas encore fini » : sans cette main humaine, la journée resterait bloquée).
+// Effet : mise RENDUE pour tous ceux qui l'avaient joué, et carte RENDUE si elle visait ce match.
+function openCancelMatch(){
+  const seen={}, list=[];
+  (duels||[]).forEach(d=>(d.fixtures||[]).forEach(f=>{ if(f&&f.evId&&!f.canceled&&!seen[f.evId]){ seen[f.evId]=1; list.push(f); } }));
+  if(!list.length){ toast(t("Aucun match à annuler.")); return; }
+  infoModal("🚫", t("Un match a été annulé ?"),
+    `<div class="mini muted" style="text-align:left;margin-bottom:8px">${t("Choisis le match annulé ou reporté. Les mises de tous les joueurs qui l'avaient joué seront <b>remboursées</b>, et le bonus qui le visait leur sera <b>rendu</b>.")}</div>`
+    + list.map(f=>`<button class="btn ghost sm" style="width:100%;margin:4px 0" onclick="cancelMatch('${f.evId}')">${esc(f.home||'?')} – ${esc(f.away||'?')}</button>`).join(""));
+}
+async function cancelMatch(evId){
+  if(!confirm(t("Annuler ce match ? Les mises seront remboursées et les bonus qui le visaient rendus. Action irréversible."))) return;
+  closeCardInfo();
+  try{
+    for(const d of (duels||[])){ const fx=d.fixtures||[]; if(!fx.some(f=>f&&f.evId===evId)) continue;
+      const nf=fx.map(f=>(f&&f.evId===evId)?Object.assign({},f,{canceled:true,res:null}):f);
+      await q(db.from("duels").update({fixtures:nf}).eq("id",d.id)); }
+    toast(t("Match annulé — mises remboursées.")); await refresh();
+  }catch(e){ toast("Erreur : "+e.message); }
+}
 function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; for(let i=0;i<id.length;i++) h=(h+id.charCodeAt(i))|0; return t(REAL_WAIT_MSGS[Math.abs(h)%REAL_WAIT_MSGS.length]); }
 function viewWait(dayLbl){
   const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
@@ -2172,6 +2202,7 @@ function viewWait(dayLbl){
     ${betPassed?`<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`:''}
     ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
     ${(L&&L.data_mode==="real")?`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Résultats en direct")}</span>${premBadge('direct')}</div>`:''}
+    ${(org&&L&&L.data_mode==="real")?`<button class="btn ghost sm" onclick="openCancelMatch()">${t("🚫 Un match a été annulé ? (organisateur)")}</button>`:''}
     ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`:''}`;
 }
 function publicBetsHTML(){
@@ -2222,6 +2253,9 @@ function runEngine(pdIn, capStart, dz, N){
   const G={};
   for(const pid in PD){ const pd=PD[pid]; const perBet=[]; let net=0,bestOdd=0;
     pd.picks.forEach((b,i)=>{ const f=pd.fx[i]; const cc=pd.card;
+      // Match ANNULÉ : mise rendue → gain 0, pas de perte, aucun effet de carte ni de Capitaine.
+      // On empile quand même une entrée pour garder l'alignement des index (Coup Double, Miroir…).
+      if(f&&f.canceled){ perBet.push({gain:0,win:false,odd:1,canceled:true}); return; }
       const isDC=cc&&cc.id==="chance"&&cc.target===i&&cc.sel2;
       const win = isDC ? (f.res===b.sel||f.res===cc.sel2) : (b.sel===f.res);
       const odd = isDC ? dcWinOdd(f,b.sel,cc.sel2) : oddOf(f,b.sel);
@@ -2334,7 +2368,9 @@ async function resolveDay(){
     // (voir plus haut) → surtout ne pas le réappliquer ici, ce serait une double peine.
     forgot.forEach(pid=>{ if(upd[pid]){ upd[pid].points-=2; } });
     // +1 au meilleur pronostiqueur du jour (plus gros gain parmi tous les joueurs)
-    const starId=dayStar(ps.filter(p=>!forgot.has(p.id)).map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }));
+    // ⚠️ `mise>0` : un joueur dont TOUS les paris ont été annulés a un net de 0 ARTIFICIEL (mises rendues).
+    // Il n'a rien pronostiqué ce jour-là → il ne peut pas rafler l'étoile devant des joueurs en négatif.
+    const starId=dayStar(ps.filter(p=>!forgot.has(p.id)).map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }).filter(r=>r.mise>0));
     if(starId!=null) upd[starId].points+=1;
     // (v4.13 — malus « −1 pt si tous les paris faux » SUPPRIMÉ.) C'était une TROISIÈME peine pour le
     // même échec : le joueur a déjà perdu toutes ses mises ET son duel. Mesuré sur les données réelles :
@@ -2351,7 +2387,13 @@ async function resolveDay(){
       if(r.win==='h'){ upd[d.home_id].duel_wins+=1; upd[d.home_id].streak_w+=1; upd[d.home_id].streak_l=0; upd[d.away_id].streak_l+=1; upd[d.away_id].streak_w=0; }
       else if(r.win==='a'){ upd[d.away_id].duel_wins+=1; upd[d.away_id].streak_w+=1; upd[d.away_id].streak_l=0; upd[d.home_id].streak_l+=1; upd[d.home_id].streak_w=0; }
       else { upd[d.home_id].streak_w=0; upd[d.home_id].streak_l=0; upd[d.away_id].streak_w=0; upd[d.away_id].streak_l=0; } }
-    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id){ const h=upd[pid].hand; const idx=h.indexOf(pd.card.id); if(idx>=0){ h.splice(idx,1); upd[pid].cards_used.push(pd.card.id); } } }
+    // Consommation des cartes jouées — SAUF si la carte visait un match ANNULÉ : elle est alors RENDUE.
+    for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id){
+      // Carte RENDUE si l'un des matchs qu'elle visait est annulé. ⚠️ Coup Double vise DEUX matchs
+      // (target ET target2) : si l'un des deux saute, le combiné ne peut plus passer → carte rendue.
+      const fxx=pd.fx||[]; const vise=i=>(i!=null && fxx[i] && fxx[i].canceled);
+      if(vise(pd.card.target) || vise(pd.card.target2)) continue; // carte rendue (reste en main)
+      const h=upd[pid].hand; const idx=h.indexOf(pd.card.id); if(idx>=0){ h.splice(idx,1); upd[pid].cards_used.push(pd.card.id); } } }
     // Recapitalisation solidaire : si un humain n'a plus assez pour miser (< seuil), +20€ à lui ET à tout le monde
     let recapNote=null;
     const broke=ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
@@ -2594,7 +2636,9 @@ function computeStandHist(){
       else if(r.win==='a'){ if(st[du.away_id]){st[du.away_id].duel_wins++;st[du.away_id].streak_w++;st[du.away_id].streak_l=0;} if(st[du.home_id]){st[du.home_id].streak_l++;st[du.home_id].streak_w=0;} }
       else { if(st[du.home_id]){st[du.home_id].streak_w=0;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_w=0;st[du.away_id].streak_l=0;} } });
     // ⭐ meilleur pronostiqueur du jour (hors oubli) → +1 pt
-    const rows=[]; players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du||forgot.has(p.id)) return; const b=betAt[d+'|'+p.id]; const gm=gainMise(b&&b.picks, du.fixtures); rows.push({id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}); });
+    const rows=[]; players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du||forgot.has(p.id)) return; const b=betAt[d+'|'+p.id]; const gm=gainMise(b&&b.picks, du.fixtures);
+      if(gm.mise<=0) return; // tous ses paris annulés → net 0 artificiel, pas éligible à l'étoile (idem resolveDay)
+      rows.push({id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}); });
     const sid=dayStar(rows); if(sid!=null && st[sid]){ st[sid].points+=1; st[sid].star+=1; }
     // (v4.13 — le malus « −1 pt si tous les paris faux » est supprimé, cf. resolveDay. ⚠️ Cette fonction
     // REJOUE tout l'historique : ne pas le retirer ici aurait fait diverger le classement affiché des
@@ -3484,7 +3528,8 @@ function viewRulesFull(){
 
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
      ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton Capitaine. <b>Ton capital ne descend jamais sous 0.</b>")}<br>
-     ${t("<b>💸 Recapitalisation solidaire :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Dans ce cas <b>tout le monde</b> reçoit <b>+{b} €</b> — pas seulement lui — pour que personne ne soit distancé par un accident.",{a:RECAP_THRESHOLD,b:RECAP_AMOUNT})}`)}
+     ${t("<b>💸 Recapitalisation solidaire :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Dans ce cas <b>tout le monde</b> reçoit <b>+{b} €</b> — pas seulement lui — pour que personne ne soit distancé par un accident.",{a:RECAP_THRESHOLD,b:RECAP_AMOUNT})}<br>
+     ${t("🚫 <b>Match annulé ou reporté</b> : la <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. L'organisateur déclare l'annulation depuis l'écran d'attente des résultats.")}`)}
 
    ${sec(t("🏆 Points et classement"), `${t("Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). Égalité → on départage par le plus gros <b>gain</b>, puis la plus grosse <b>mise</b> ; si tout est identique, c'est <b>match nul</b>.")}<br>
      ${t("<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.")}<br>
