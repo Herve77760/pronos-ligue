@@ -156,7 +156,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.63";
+const APP_VERSION = "v4.64";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -514,7 +514,7 @@ let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0
 // après avoir fermé soi-même une ligue, `closeLeague()` force l'affichage pour qu'on la retrouve.
 let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[], trades=[], myResolvedOut=[], tradeToasted=new Set();
-let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null;
+let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null, standTrades=null;
 // Confrontations directes de la ligue COURANTE, alimentées par computeStandHist :
 // STAND_H2H["idA|idB"] = points de duel gagnés par A contre B sur toute la saison.
 // STAND_H2H_LG mémorise à quelle ligue elles appartiennent — sans ce garde-fou, l'écran
@@ -1431,10 +1431,14 @@ async function refresh(){
       if(shouldAutoResolve()){ resolveDay(); return; }
       await resolveRealIfReady(); // données réelles : résout quand les vrais matchs sont terminés
     }
-    if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; standDuels=null; }
+    if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; standDuels=null; standTrades=null; }
     if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){
       chartBets = await q(db.from("bets").select("player_id,day,net,picks,card,captain,duel_id").eq("league_id",S.leagueId).not("net","is",null));
-      standDuels = await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",S.leagueId)); }
+      standDuels = await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",S.leagueId));
+      // Rachats ACCEPTÉS : ils déplacent du capital sans être le gain de personne. Sans eux, le
+      // classement historique et la courbe divergent du capital réel (écart mesuré : ±5 €).
+      try{ standTrades = await q(db.from("trades").select("from_player,to_player,price,kind,day").eq("league_id",S.leagueId).eq("status","accepted")); }
+      catch(e){ standTrades=[]; } }
     if(L.status==="done" && endStats===null){ endStats={loading:true}; loadEndStats().then(()=>render()); }
     showErr(""); render(); maybeNotify(); notifyTrades();
   }catch(e){ showErr("Connexion : "+e.message); }
@@ -1582,7 +1586,7 @@ function viewLeagues(){
     })()}`;
 }
 function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr(t("Entre un code valide."));return;} joinLeague(c); }
-function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
+function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
@@ -2797,8 +2801,21 @@ function computeStandHist(){
   const betAt={}; chartBets.forEach(b=>{ betAt[b.day+'|'+b.player_id]=b; });
   const duelByDay={}; standDuels.forEach(d=>{ (duelByDay[d.day]=duelByDay[d.day]||[]).push(d); });
   const h2h={}; // confrontations directes, remplies au fil des duels ci-dessous
+  // Rachats de bonus : le capital change de mains SANS être le gain de personne. Sans ce report,
+  // la reconstruction diverge du capital réel. On range chaque transfert à la journée où il a été
+  // accepté ; `day` absent (rachat antérieur à MIGRATION-trades-day.sql) → journée 0, ce qui garde
+  // le TOTAL exact même si le point de départ sur la courbe est approximatif.
+  const troc={}; // troc[jour][playerId] = variation de capital
+  (standTrades||[]).forEach(tr=>{ const j=(tr.day!=null)?tr.day:0; const p=+tr.price||0; if(!p) return;
+    // `kind` décide qui reçoit : à l'achat, la carte vient du destinataire, donc l'argent va à LUI.
+    const recoit=(tr.kind==="sell")?tr.from_player:tr.to_player;
+    const paye  =(tr.kind==="sell")?tr.to_player  :tr.from_player;
+    troc[j]=troc[j]||{}; troc[j][recoit]=(troc[j][recoit]||0)+p; troc[j][paye]=(troc[j][paye]||0)-p; });
   const snaps=[];
   for(let d=0; d<N; d++){
+    // AVANT les gains du jour : l'échange a lieu entre deux journées, donc il fait partie du
+    // capital avec lequel on aborde celle-ci.
+    if(troc[d]) Object.keys(troc[d]).forEach(pid=>{ if(st[pid]) st[pid].capital=Math.max(0,Math.round((st[pid].capital+troc[d][pid])*100)/100); });
     const dz=duelByDay[d]||[];
     const inDay=pid=>dz.some(du=>du.home_id===pid||du.away_id===pid);
     // oubli : humain présent ce jour-là sans pari valide (picks vides ou absents)
@@ -3045,8 +3062,18 @@ function capChart(){
   chartBets.forEach(b=>{ if(netByDay[b.player_id]==null || b.day>=N) return;
     netByDay[b.player_id][b.day]=b.net||0;
     legacyPen[b.player_id][b.day]=!!(Array.isArray(b.picks) && b.picks.length===0 && (b.net||0)===0); });
+  // Rachats de bonus : capital déplacé sans être le gain de personne. Même report que dans
+  // computeStandHist, sinon la courbe se termine sur un capital différent de celui affiché au
+  // classement (écart constaté : ±5 €). `day` absent → journée 0 (rachat d'avant la migration).
+  const trocC={};
+  (standTrades||[]).forEach(tr=>{ const j=(tr.day!=null)?tr.day:0; const pr=+tr.price||0; if(!pr) return;
+    const recoit=(tr.kind==="sell")?tr.from_player:tr.to_player;
+    const paye  =(tr.kind==="sell")?tr.to_player  :tr.from_player;
+    trocC[j]=trocC[j]||{}; trocC[j][recoit]=(trocC[j][recoit]||0)+pr; trocC[j][paye]=(trocC[j][paye]||0)-pr; });
   const series=players.map(p=>{ let v=capAfter[p.id]; const pts=[100,v];
-    for(let d=0;d<N;d++){ v=Math.max(0,v+(netByDay[p.id][d]||0));
+    for(let d=0;d<N;d++){
+      if(trocC[d]&&trocC[d][p.id]) v=Math.max(0,Math.round((v+trocC[d][p.id])*100)/100); // avant les gains du jour
+      v=Math.max(0,v+(netByDay[p.id][d]||0));
       if(legacyPen[p.id][d]) v=Math.max(0,Math.round(v*(1-FORGOT_PENALTY)*100)/100);
       pts.push(v); } return {p,pts}; });
   const allv=series.flatMap(s=>s.pts); let mn=Math.min(...allv), mx=Math.max(...allv); if(!isFinite(mn)){mn=0;mx=100;}
@@ -3522,7 +3549,13 @@ function notifyTrades(){ const nm=p=>((p&&p.emoji)||'')+' '+((p&&p.name)||'?');
 // Lecture FRAÎCHE : l'acheteur a-t-il un pari verrouillé pour la journée passée en argument ?
 async function hasBetForDay(pid, day){
   try{ const r=await q(db.from("bets").select("id").eq("league_id",L.id).eq("day",day).eq("player_id",pid).limit(1)); return !!(r&&r.length); }catch(e){ return false; } }
-async function markTrade(id,st,reply){ try{ const u={status:st,resolved_at:new Date().toISOString()}; if(reply) u.reply=reply; await q(db.from("trades").update(u).eq("id",id)); }catch(e){} }
+// `jour` n'est renseigné qu'à l'ACCEPTATION : c'est le seul cas où du capital change de mains, et
+// c'est ce qui permet de replacer le transfert au bon point du classement historique et de la
+// courbe (cf. MIGRATION-trades-day.sql). Si la colonne n'existe pas encore en base, l'update
+// échouerait en bloc → on retente sans, pour ne pas perdre le changement de statut.
+async function markTrade(id,st,reply,jour){ const u={status:st,resolved_at:new Date().toISOString()}; if(reply) u.reply=reply;
+  try{ const uu=(jour!=null)?Object.assign({day:jour},u):u; await q(db.from("trades").update(uu).eq("id",id)); }
+  catch(e){ try{ await q(db.from("trades").update(u).eq("id",id)); }catch(e2){} } }
 function journeesRestantes(){ return Math.max(0,((L&&L.num_days)||0)-((L&&L.current_day)||0)); }
 function cardEngaged(cardId){ return trades.some(x=>x.status==="pending" && x.card_id===cardId); } // UI : carte déjà dans une offre en attente
 async function cardHasPendingTrade(cardId){ try{ const r=await q(db.from("trades").select("id").eq("league_id",L.id).eq("card_id",cardId).eq("status","pending").limit(1)); return !!(r&&r.length); }catch(e){ return false; } }
@@ -3670,7 +3703,7 @@ async function acceptTrade(id){
     const oHand=(owner.hand||[]).filter(x=>x!==o.card_id); const bHand=[...(buyer.hand||[]), o.card_id];
     await q(db.from("players").update({hand:oHand, capital:tr2((owner.capital||0)+price)}).eq("id",ownerId));
     await q(db.from("players").update({hand:bHand, capital:tr2((buyer.capital||0)-price)}).eq("id",buyerId));
-    await markTrade(id,"accepted",reply);
+    await markTrade(id,"accepted",reply,(L&&L.current_day)||0);
     toast(o.kind==="sell" ? t("Acheté ! {c} est à toi (−{b} €).",{c:t(CARDS[o.card_id]?CARDS[o.card_id].n:o.card_id),b:price}) : t("Vendu ! +{b} € reçus.",{b:price}));
     await refresh();
   }catch(e){ toast("Erreur : "+e.message); }
