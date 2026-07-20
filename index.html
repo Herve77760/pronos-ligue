@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.82";
+const APP_VERSION = "v4.83";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -305,6 +305,12 @@ const POOL_N=12, POOL_FOOT=9;   // 12 matchs proposés, dont 9 de foot (75 %)
 // Effectif maximum d'une ligue. Écrit à 4 endroits auparavant (création, relance, salon, règles) :
 // une seule source, sinon les places annoncées au salon pourraient contredire les règles.
 const MAX_PLAYERS=12;
+// PORTE DE TEST (temporaire) : dans ces ligues de démo, le tableau des gages/récompenses affiche
+// AUSSI les joueurs IA — pour prévisualiser le rendu « comme si c'étaient de vraies personnes »,
+// à la demande d'Hervé. N'affecte AUCUNE vraie ligue (codes aléatoires) et ne change PAS les règles :
+// à la résolution, le gage reste décidé entre humains. Retirer ce tableau quand la démo est finie.
+const DEMO_CODES=["TEST6"];
+function isDemoLeague(){ return !!(typeof L!=="undefined" && L && L.code && DEMO_CODES.includes(L.code)); }
 const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
 const STAKE_CAP_INVEST=0.7; // … 70 % avec la carte Investisseur
 const FORGOT_PENALTY=0.25;  // ANCIEN barème : pari non validé à temps → −25 % du capital
@@ -1835,7 +1841,9 @@ function enjeuTableHTML(r){
   const opts  = (both&&r) ? (s.optionsR||[]) : (s.options||[]);
   const votes = (both&&r) ? (s.votesR||{})   : (s.voteMap||{});
   const custs = (both&&r) ? (s.customsR||{}) : (s.customs||{});
-  const hs=(s.players||[]).filter(p=>!p.is_ai);
+  // Ligue de démo : on montre AUSSI les IA (elles ont bien voté à la clôture) pour prévisualiser le
+  // rendu à effectif complet. Ailleurs : humains seulement (le gage se décide entre humains).
+  const hs=(s.players||[]).filter(p=> isDemoLeague() || !p.is_ai);
   const gOf=p=>{ const v=votes[p.pid]; if(v==="c") return {txt:custs[p.pid]||null, perso:true};
     const o=opts[v]; return {txt:o?((o.t)||o):null, perso:false}; };
   // NB : le texte perso d'un joueur ne passe PAS par t() — c'est du texte libre, pas une clé de traduction.
@@ -1867,7 +1875,7 @@ function prepSummaryBody(){
      : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`}
    <h2>${t("💰 Capital de départ")}</h2>
    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>${t("Joueur")}</th><th style="text-align:right">${t("Dépensé")}</th><th style="text-align:right">${t("Capital")}</th><th>${t("Bonus")}</th></tr>
-     ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</td>
+     ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.is_ai&&!isDemoLeague())?' <span class="tag">'+t("IA")+'</span>':''}</td>
         <td class="num muted">${p.spent}€</td><td class="num"><b>${eur(p.capital)}€</b></td>
         <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>
    ${prepSuperlatives(s)}`;
