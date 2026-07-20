@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.90";
+const APP_VERSION = "v4.93";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -305,12 +305,6 @@ const POOL_N=12, POOL_FOOT=9;   // 12 matchs proposés, dont 9 de foot (75 %)
 // Effectif maximum d'une ligue. Écrit à 4 endroits auparavant (création, relance, salon, règles) :
 // une seule source, sinon les places annoncées au salon pourraient contredire les règles.
 const MAX_PLAYERS=12;
-// PORTE DE TEST (temporaire) : dans ces ligues de démo, le tableau des gages/récompenses affiche
-// AUSSI les joueurs IA — pour prévisualiser le rendu « comme si c'étaient de vraies personnes »,
-// à la demande d'Hervé. N'affecte AUCUNE vraie ligue (codes aléatoires) et ne change PAS les règles :
-// à la résolution, le gage reste décidé entre humains. Retirer ce tableau quand la démo est finie.
-const DEMO_CODES=["TEST6"];
-function isDemoLeague(){ return !!(typeof L!=="undefined" && L && L.code && DEMO_CODES.includes(L.code)); }
 const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
 const STAKE_CAP_INVEST=0.7; // … 70 % avec la carte Investisseur
 const FORGOT_PENALTY=0.25;  // ANCIEN barème : pari non validé à temps → −25 % du capital
@@ -796,6 +790,54 @@ const EN={
   "Créer une ligue entre amis":"Create a league with friends",
   "Le vrai jeu : invite tes amis avec un code et jouez la saison.":"The real game: invite your friends with a code and play the season.",
   "Créer →":"Create →", "← Retour à l'accueil":"← Back to home",
+  "Tes pronos":"Your predictions", "Ton net":"Your net", "Les pronos du Bot":"The Bot's predictions", "Net du Bot":"The Bot's net",
+  "💡 Pourquoi ce résultat":"💡 Why this result",
+  "Tu as eu <b>{a}/3</b> bons résultats, le Bot <b>{b}/3</b>. Le vainqueur du duel est celui au <b>meilleur net</b> : ton {c} € {d} son {e} €.":"You got <b>{a}/3</b> right, the Bot <b>{b}/3</b>. The duel winner is whoever has the <b>best net</b>: your {c} € {d} theirs {e} €.",
+  "dépasse":"beats", "égale":"equals", "est sous":"is below",
+  "👉 Ce ne sont <b>pas les € qui décident</b> du champion, mais les <b>points</b> : gagner le duel rapporte des <b>points de championnat</b>.":"👉 It's <b>not the € that decide</b> the champion, but the <b>points</b>: winning the duel earns <b>championship points</b>.",
+  "Chaque bonus revient au <b>plus offrant</b>. À <b>égalité</b> de mise, c'est le <b>premier à avoir misé</b> ce montant qui l'emporte (⚡ le plus rapide). Les mises <b>perdues sont remboursées</b>.":"Each bonus goes to the <b>highest bidder</b>. On a <b>tie</b>, the <b>first to have bid</b> that amount wins (⚡ the fastest). Losing bids are <b>refunded</b>.",
+  "Ton enveloppe":"Your budget",
+  "Tu pars avec <b>100 €</b>. Total de tes enchères ≤ <b>40 €</b>. ⚠️ Seules les mises <b>gagnées</b> sont retirées de tes 100 € — le reste te servira à <b>parier</b> toute la saison.":"You start with <b>€100</b>. Total bids ≤ <b>€40</b>. ⚠️ Only <b>winning</b> bids are deducted from your €100 — the rest is for <b>betting</b> all season.",
+  "Total misé":"Total bid",
+  "<b>Égalité</b> ({a} € chacun) → départagée à la rapidité : tu avais misé ce montant <b>en premier</b>, le bonus est pour toi.":"<b>Tie</b> (€{a} each) → broken by speed: you bid that amount <b>first</b>, so the bonus is yours.",
+  "Tu as misé plus que le Bot ({a} € contre {b} €).":"You bid more than the Bot (€{a} vs €{b}).",
+  "Le Bot a misé plus ({b} € contre {a} €) → ta mise t'est <b>remboursée</b>.":"The Bot bid more (€{b} vs €{a}) → your bid is <b>refunded</b>.",
+  "Tu n'as pas misé dessus → il revient au Bot.":"You didn't bid on it → the Bot gets it.",
+  "Tu as dépensé <b>{a} €</b> en bonus (mises gagnées) → il te reste <b>{b} €</b> pour parier.":"You spent <b>€{a}</b> on bonuses (winning bids) → you have <b>€{b}</b> left to bet.",
+  "Prêt à jouer pour de vrai.":"Ready to play for real.",
+  "Le vrai jeu : invite tes amis avec un code et jouez la saison. Dès <b>2 joueurs</b>, c'est parti.":"The real game: invite friends with a code and play the season. From <b>2 players</b>, you're off.",
+  "🔁 ":"🔁 ", "Refaire le tuto":"Redo the tutorial", "Rejouer":"Replay",
+  "Rejoue cette démo autant de fois que tu veux pour t'entraîner — c'est gratuit et sans conséquence.":"Replay this demo as often as you like to practise — it's free and has no consequences.",
+  "Jouer en solo contre l'IA":"Play solo against the AI",
+  "Une vraie saison seul face à l'ordinateur : c'est une <b>option premium</b> (offerte pendant la phase de test). Sinon, joue à plusieurs !":"A full season alone against the computer: this is a <b>premium option</b> (free during the test phase). Otherwise, play with others!",
+  "▶️ Partie d'essai":"▶️ Practice game", "▶️ Une saison éclair":"▶️ A lightning season", "aucun":"none",
+  "Faire une partie d'essai":"Play a practice game", "Refaire une partie d'essai":"Play another practice game", "Jouer →":"Play →",
+  "Une saison éclair de 2 journées contre le Bot, résultats immédiats — pour t'entraîner sur le <b>vrai enchaînement</b>. Gratuit.":"A lightning 2-day season against the Bot, instant results — to practise the <b>real flow</b>. Free.",
+  "étape {a}/{b}":"step {a}/{b}", "Dans le vrai jeu":"In the real game",
+  "On enchaîne une vraie partie dans l'ordre : préparation → paris → résultats, sur <b>2 journées</b>, face à 🤖 <b>Bot</b>. Les résultats tombent <b>tout de suite</b>.":"We play a real game in order: prep → bets → results, over <b>2 days</b>, against 🤖 <b>Bot</b>. Results come <b>right away</b>.",
+  "une saison compte bien plus de journées, tu joues à <b>plusieurs amis</b>, et les résultats tombent quand les <b>vrais matchs</b> sont joués.":"a season has far more days, you play with <b>several friends</b>, and results come when the <b>real matches</b> are played.",
+  "Commencer la prépa →":"Start the prep →",
+  "🎭 Ton vote de gage":"🎭 Your forfeit vote",
+  "Choisis le gage que <b>tu</b> infligerais si tu gagnes. Le dernier de la saison fera celui voté par le vainqueur.":"Choose the forfeit <b>you</b> would impose if you win. The last-placed player does the one voted by the winner.",
+  "chaque joueur propose SON gage ; c'est celui du <b>vainqueur</b> qui s'applique au dernier.":"each player proposes THEIR forfeit; the <b>winner's</b> is the one applied to the last-placed player.",
+  "Suivant : les bonus →":"Next: the bonuses →",
+  "Chaque bonus revient au plus offrant (à égalité, le plus rapide). Total ≤ 40 € ; seules les mises gagnées sont retirées de tes 100 €.":"Each bonus goes to the highest bidder (on a tie, the fastest). Total ≤ €40; only winning bids are deducted from your €100.",
+  "Valider ma prépa →":"Confirm my prep →", "Prépa faite ✓":"Prep done ✓",
+  "Ton gage : <b>{g}</b> · Bonus remportés : {b}":"Your forfeit: <b>{g}</b> · Bonuses won: {b}",
+  "📅 Journée 1 — tes pronos":"📅 Day 1 — your predictions", "📅 Journée 2 — tes pronos":"📅 Day 2 — your predictions",
+  "Choisis un résultat par match et, si tu veux, un 👑 Capitaine (gain/perte ×2). Mise fixe {a} € par pari.":"Pick one result per match and, if you want, a 👑 Captain (gain/loss ×2). Fixed stake €{a} per bet.",
+  "il y a <b>5 matchs</b> par journée (ici 3 pour aller vite), et tu peux jouer <b>1 bonus</b> par journée.":"there are <b>5 matches</b> per day (3 here to go fast), and you can play <b>1 bonus</b> per day.",
+  "📅 Résultats — Journée 1":"📅 Results — Day 1", "📅 Résultats — Journée 2":"📅 Results — Day 2",
+  "Le Bot":"The Bot", "Classement après J1":"Standings after day 1", "Journée 2 →":"Day 2 →",
+  "🎲 Journée 2 — choisis les matchs":"🎲 Day 2 — pick the matches",
+  "Sélectionne <b>3 matchs</b> parmi ceux proposés — ce seront les rencontres de la journée.":"Select <b>3 matches</b> from those offered — they'll be the day's fixtures.",
+  "c'est le joueur à <b>domicile</b> qui choisit les matchs ; ici tu le fais pour découvrir. Et la règle des <b>75 % de foot</b> s'applique.":"it's the <b>home</b> player who picks the matches; here you do it to discover. And the <b>75% football</b> rule applies.",
+  "Choisis {a} match(s) de plus":"Pick {a} more match(es)", "Valider les 3 matchs →":"Confirm the 3 matches →",
+  "Mêmes règles : un résultat par match, un 👑 Capitaine si tu veux.":"Same rules: one result per match, a 👑 Captain if you want.",
+  "Toi {a} pts · 🤖 Bot {b} pts":"You {a} pts · 🤖 Bot {b} pts", "🤖 Bot, Champion":"🤖 Bot, Champion",
+  "🎭 LE GAGE POUR LE BOT":"🎭 THE FORFEIT FOR THE BOT", "celui que TU as voté 🏆":"the one YOU voted 🏆",
+  "Le Bot gagne cette fois — c'est toi qui ferais le gage ! Rejoue pour prendre ta revanche. 😄":"The Bot wins this time — you'd do the forfeit! Replay to get your revenge. 😄",
+  "🎉 Voilà une saison complète ! Tu connais tout l'enchaînement. Prêt pour une vraie ligue entre amis ?":"🎉 That's a full season! You know the whole flow. Ready for a real league with friends?",
   "Mes stats — {a}":"My stats — {a}", "Uniquement cette ligue.":"This league only.", "Dans cette ligue":"In this league",
   "Face-à-face dans cette ligue":"Head-to-head in this league", "Stats de la ligue":"League stats", "Toutes mes ligues":"All my leagues",
   "Aucune journée jouée pour l'instant.":"No matchday played yet.", "{a}ᵉ / {b}":"{a} / {b}",
@@ -1803,13 +1845,18 @@ const TUTO_FX=[
  {home:"PSG",away:"OM",sport:"⚽",oh:1.90,od:3.40,oa:3.90,draw:true,res:"1"},
  {home:"Alcaraz",away:"Sinner",sport:"🎾",oh:2.10,oa:1.75,draw:false,res:"2"},
  {home:"Lakers",away:"Celtics",sport:"🏀",oh:1.80,oa:2.05,draw:false,res:"1"}];
-const TUTO_STAKE=10, TUTO_BOT_NET=-6, TUTO_CARDS=["double","assurance","tout"], TUTO_BOTBIDS={double:5,assurance:10,tout:3};
-function startTutorial(){ if(!AUTH)return; tutoStep=1; tutoPicks=TUTO_FX.map(f=>oddOf(f,"1")<=oddOf(f,"2")?"1":"2"); tutoCapOn=false; tutoBids={}; tutoBidDone=false; navRoot(); S.view="tuto"; render(); }
+// Bot : pronos SCRIPTÉS (pour montrer son détail, comme sur la vraie page). 1 bon sur 3 → il perd.
+// Enchères pré-remplies pour DÉMONTRER les 3 cas : double 8>5 (gagné), assurance 10=10 (ÉGALITÉ →
+// départage à la rapidité), tout non misé (le Bot l'emporte).
+const TUTO_STAKE=10, TUTO_BOT_PICKS=["1","1","2"], TUTO_CARDS=["double","assurance","tout"], TUTO_BOTBIDS={double:5,assurance:10,tout:3};
+function startTutorial(){ if(!AUTH)return; tutoStep=1; tutoPicks=TUTO_FX.map(f=>oddOf(f,"1")<=oddOf(f,"2")?"1":"2"); tutoCapOn=false; tutoBids={double:8,assurance:10}; tutoBidDone=false; navRoot(); S.view="tuto"; render(); }
 function exitTutorial(){ S.view="leagues"; render(); loadMyLeagues(); }
 function tutoGo(n){ tutoStep=n; render(); try{window.scrollTo(0,0);}catch(e){} }
 function tutoSetPick(i,v){ tutoPicks[i]=v; render(); }
 function tutoNet(){ let n=0; TUTO_FX.forEach((f,i)=>{ const win=tutoPicks[i]===f.res; n+= win? TUTO_STAKE*(oddOf(f,tutoPicks[i])-1) : -TUTO_STAKE; }); return Math.round(n*100)/100; }
-function tutoSetBid(id,v){ const x=Math.max(0,Math.min(40,Math.round(+v||0))); if(x>0) tutoBids[id]=x; else delete tutoBids[id]; }
+function tutoBotNet(){ let n=0; TUTO_FX.forEach((f,i)=>{ const win=TUTO_BOT_PICKS[i]===f.res; n+= win? TUTO_STAKE*(oddOf(f,TUTO_BOT_PICKS[i])-1) : -TUTO_STAKE; }); return Math.round(n*100)/100; }
+function tutoSetBid(id,v){ const x=Math.max(0,Math.min(40,Math.round(+v||0))); if(x>0) tutoBids[id]=x; else delete tutoBids[id];
+  const tot=Object.values(tutoBids).reduce((a,b)=>a+(+b||0),0); const bt=document.getElementById("tutobt"); if(bt) bt.textContent=tot; }
 function viewTutorial(){
   const head=step=>`<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span class="mini muted"><b>${t("🎓 Découverte")}</b> · ${t("étape {a}/6",{a:step})}</span><button class="btn ghost sm" onclick="exitTutorial()">${t("Passer")}</button></div>
     <div class="gauge" style="margin-bottom:12px"><i style="width:${Math.round(step/6*100)}%"></i></div>`;
@@ -1821,17 +1868,22 @@ function viewTutorial(){
       <div class="odds" style="margin-top:8px">${["1",f.draw?"N":"","2"].filter(Boolean).map(v=>`<div class="odd ${tutoPicks[i]===v?'sel':''}" onclick="tutoSetPick(${i},'${v}')">${esc(v==="1"?f.home.slice(0,8):v==="2"?f.away.slice(0,8):"Nul")}<b>${cote(oddOf(f,v))}</b></div>`).join("")}</div>
       <div class="mini muted" style="margin-top:6px">${t("Mise : {a} € (fixe pour la démo)",{a:TUTO_STAKE})}</div></div>`).join("")}
     <button class="btn" onclick="tutoGo(2)">${t("Valider mes pronos →")}</button>`; }
-  // --- Étape 2 : résultat + leçon points ≠ argent ---
-  if(tutoStep===2){ const net=tutoNet(); const won=net>TUTO_BOT_NET; const pts=won?(net>0?3:2):(net>0?1:0);
+  // --- Étape 2 : résultat + comparaison avec le Bot + leçon points ≠ argent ---
+  if(tutoStep===2){ const net=tutoNet(), botNet=tutoBotNet(); const won=net>botNet; const tie=net===botNet; const pts=tie?1:(won?(net>0?3:2):(net>0?1:0));
+    const pWins=TUTO_FX.filter((f,i)=>tutoPicks[i]===f.res).length, bWins=TUTO_FX.filter((f,i)=>TUTO_BOT_PICKS[i]===f.res).length;
+    const lignes=picks=>TUTO_FX.map((f,i)=>{ const win=picks[i]===f.res; const g=win?TUTO_STAKE*(oddOf(f,picks[i])-1):-TUTO_STAKE;
+      return `<div class="row" style="margin:4px 0"><span class="mini">${f.sport} ${esc(selLbl(f,picks[i]))} · ${TUTO_STAKE}€ @${cote(oddOf(f,picks[i]))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
     return `${head(2)}
-    <div class="recaphero ${won?'win':'loss'}"><div class="row">
-      <div><div class="mini muted">${t("DUEL vs 🤖 Bot")}</div><div class="big ${won?'green':'red'}" style="font-size:22px">${won?t("Gagné"):t("Perdu")} (${pts} pt${pts>1?'s':''})</div></div>
+    <div class="recaphero ${won?'win':(tie?'':'loss')}"><div class="row">
+      <div><div class="mini muted">${t("DUEL vs 🤖 Bot")}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:22px">${tie?t("Match nul"):(won?t("Gagné"):t("Perdu"))} (${pts} pt${pts>1?'s':''})</div></div>
       <div style="text-align:right"><div class="mini muted">${t("TON GAIN")}</div><div class="big num ${net>=0?'green':'red'}" style="font-size:22px">${fmt(net)} €</div></div></div></div>
-    <div class="box">${TUTO_FX.map((f,i)=>{ const win=tutoPicks[i]===f.res; const g=win?TUTO_STAKE*(oddOf(f,tutoPicks[i])-1):-TUTO_STAKE;
-      return `<div class="row" style="margin:4px 0"><span class="mini">${f.sport} ${esc(selLbl(f,tutoPicks[i]))} · ${TUTO_STAKE}€ @${cote(oddOf(f,tutoPicks[i]))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("")}
-      <div class="row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><span>🤖 Bot</span><b class="red">${fmt(TUTO_BOT_NET)} €</b></div></div>
-    <div class="box" style="border-color:var(--green);background:rgba(37,192,125,.10)"><b class="green">${t("💡 L'essentiel")}</b>
-      <div class="mini" style="margin-top:4px">${t("Ce ne sont <b>pas les € qui décident</b> du champion, mais les <b>points</b>. Tu as un meilleur résultat net que le Bot → tu gagnes le <b>duel</b> et tu marques des <b>points de championnat</b>.")}</div></div>
+    <div class="box"><div class="mini muted" style="margin-bottom:2px">👑 ${t("Tes pronos")}</div>${lignes(tutoPicks)}
+      <div class="row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>${t("Ton net")}</b><b class="${net>=0?'green':'red'}">${fmt(net)} €</b></div></div>
+    <div class="box"><div class="mini muted" style="margin-bottom:2px">🤖 ${t("Les pronos du Bot")}</div>${lignes(TUTO_BOT_PICKS)}
+      <div class="row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px"><b>${t("Net du Bot")}</b><b class="${botNet>=0?'green':'red'}">${fmt(botNet)} €</b></div></div>
+    <div class="box" style="border-color:var(--green);background:rgba(37,192,125,.10)"><b class="green">${t("💡 Pourquoi ce résultat")}</b>
+      <div class="mini" style="margin-top:4px">${t("Tu as eu <b>{a}/3</b> bons résultats, le Bot <b>{b}/3</b>. Le vainqueur du duel est celui au <b>meilleur net</b> : ton {c} € {d} son {e} €.",{a:pWins,b:bWins,c:fmt(net),d:won?t("dépasse"):(tie?t("égale"):t("est sous")),e:fmt(botNet)})}<br>
+      ${t("👉 Ce ne sont <b>pas les € qui décident</b> du champion, mais les <b>points</b> : gagner le duel rapporte des <b>points de championnat</b>.")}</div></div>
     <button class="btn" onclick="tutoGo(3)">${t("Continuer →")}</button>`; }
   // --- Étape 3 : le Capitaine ---
   if(tutoStep===3){ return `${head(3)}
@@ -1847,20 +1899,32 @@ function viewTutorial(){
     <div class="box"><h2 style="margin-top:0">${t("🃏 Les bonus")}</h2><div class="mini muted">${t("Des cartes qui changent une journée. En voici 3 (il y en a d'autres à découvrir). Touche une carte pour sa fiche.")}</div></div>
     ${["double","assurance","tout"].map(id=>`<div onclick="showCardInfo('${id}')" class="clik">${ex(id)}</div>`).join("")}
     <button class="btn" onclick="tutoGo(5)">${t("Et comment les obtenir ? →")}</button>`; }
-  // --- Étape 5 : les enchères ---
-  if(tutoStep===5){
+  // --- Étape 5 : les enchères (enveloppe + cas d'égalité de mise) ---
+  if(tutoStep===5){ const tot=Object.values(tutoBids).reduce((a,b)=>a+(+b||0),0);
     if(!tutoBidDone){ return `${head(5)}
-      <div class="box"><h2 style="margin-top:0">${t("🃏 Les enchères")}</h2><div class="mini muted">${t("En début de ligue, chaque bonus revient au <b>plus offrant</b> (perdu = <b>remboursé</b>). Mise ce que tu veux sur 1 ou 2 cartes, puis valide.")}</div></div>
+      <div class="box"><h2 style="margin-top:0">${t("🃏 Les enchères")}</h2><div class="mini muted">${t("Chaque bonus revient au <b>plus offrant</b>. À <b>égalité</b> de mise, c'est le <b>premier à avoir misé</b> ce montant qui l'emporte (⚡ le plus rapide). Les mises <b>perdues sont remboursées</b>.")}</div></div>
+      <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><div class="mini">💰 ${t("Ton enveloppe")}</div>
+        <div class="mini muted" style="margin-top:4px">${t("Tu pars avec <b>100 €</b>. Total de tes enchères ≤ <b>40 €</b>. ⚠️ Seules les mises <b>gagnées</b> sont retirées de tes 100 € — le reste te servira à <b>parier</b> toute la saison.")}</div>
+        <div class="row" style="margin-top:6px"><span class="muted">${t("Total misé")}</span><b><span id="tutobt">${tot}</span> € / 40 €</b></div></div>
       ${TUTO_CARDS.map(id=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${CARDS[id].e}</span><b>${esc(t(CARDS[id].n))}</b></div>
         <input type="number" inputmode="numeric" min="0" step="1" value="${tutoBids[id]||''}" placeholder="0 €" style="width:74px" oninput="tutoSetBid('${id}',this.value)"></div>`).join("")}
       <button class="btn" onclick="tutoBidDone=true;render()">${t("Valider mes enchères →")}</button>`; }
-    // révélation
+    // révélation — 3 cas : gagné (plus offrant), ÉGALITÉ (départagée à la rapidité), perdu (remboursé)
+    let gagne=0;
+    const cartes=TUTO_CARDS.map(id=>{ const mine=tutoBids[id]||0, bot=TUTO_BOTBIDS[id];
+      const egal=(mine===bot && mine>0), win=(mine>bot)||egal; if(win) gagne+=mine;
+      const chip = win? t("✓ à toi · {a} €",{a:mine}) : (mine>0?t("🤖 Bot · {a} €",{a:bot}):t("🤖 Bot"));
+      const expl = egal ? '⚡ '+t("<b>Égalité</b> ({a} € chacun) → départagée à la rapidité : tu avais misé ce montant <b>en premier</b>, le bonus est pour toi.",{a:mine})
+                 : (win ? t("Tu as misé plus que le Bot ({a} € contre {b} €).",{a:mine,b:bot})
+                 : (mine>0 ? t("Le Bot a misé plus ({b} € contre {a} €) → ta mise t'est <b>remboursée</b>.",{a:mine,b:bot})
+                 : t("Tu n'as pas misé dessus → il revient au Bot.")));
+      return `<div class="box"><div class="row"><div class="row" style="gap:9px"><span class="sport">${CARDS[id].e}</span><b>${esc(t(CARDS[id].n))}</b></div>
+        <span class="chip ${win?(egal?'gold':'g'):'red'}">${chip}</span></div>
+        <div class="mini muted" style="margin-top:5px">${expl}</div></div>`; }).join("");
     return `${head(5)}
       <div class="box"><h2 style="margin-top:0">${t("🃏 Résultat des enchères")}</h2></div>
-      ${TUTO_CARDS.map(id=>{ const mine=tutoBids[id]||0, bot=TUTO_BOTBIDS[id]; const win=mine>=bot && mine>0;
-        return `<div class="box"><div class="row"><div class="row" style="gap:9px"><span class="sport">${CARDS[id].e}</span><b>${esc(t(CARDS[id].n))}</b></div>
-          <span class="chip ${win?'g':'red'}">${win?t("✓ à toi · {a} €",{a:mine}):(mine>0?t("🤖 Bot · {a} €",{a:bot}):t("🤖 Bot"))}</span></div>
-          <div class="mini muted" style="margin-top:5px">${t("Toi {a} € · 🤖 Bot {b} €",{a:mine,b:bot})}${(!win&&mine>0)?' → <span class="green">'+t("remboursé")+'</span>':''}</div></div>`; }).join("")}
+      ${cartes}
+      <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><div class="mini">${t("Tu as dépensé <b>{a} €</b> en bonus (mises gagnées) → il te reste <b>{b} €</b> pour parier.",{a:gagne,b:100-gagne})}</div></div>
       <button class="btn" onclick="tutoGo(6)">${t("Suivant →")}</button>`; }
   // --- Étape 6 : l'enjeu (gage) ---
   if(tutoStep===6){ return `${head(6)}
@@ -1874,13 +1938,132 @@ function viewTutorial(){
     <div class="box" style="border-color:var(--green);background:rgba(37,192,125,.10)"><b class="green">${t("💡 Voilà pourquoi on joue")}</b>
       <div class="mini" style="margin-top:4px">${t("Le <b>dernier</b> fait un gage (voté par le vainqueur), le <b>champion</b> reçoit une récompense — réglés <b>entre vous</b>, hors application. C'est là toute la vanne. 😄")}</div></div>
     <button class="btn" onclick="tutoGo(7)">${t("J'ai tout vu →")}</button>`; }
-  // --- Sortie : 3 paliers ---
+  // --- Sortie : par où commencer ---
   return `<div class="row" style="justify-content:flex-end;margin-bottom:10px"><button class="btn ghost sm" onclick="exitTutorial()">${t("Fermer")}</button></div>
-    <div class="box" style="text-align:center;border-color:var(--green)"><div style="font-size:40px">🎉</div><h2 style="margin:6px 0 2px">${t("Tu as tout vu !")}</h2><div class="mini muted">${t("Prêt à jouer pour de vrai. Deux façons de démarrer :")}</div></div>
-    <div class="box clik" onclick="createLeague()"><div class="row"><div><b>🤖 ${t("M'entraîner en solo")}</b><div class="mini muted">${t("Une partie face au Bot pour te faire la main, sans pression. (Choisis « Lancer en solo » dans le salon.)")}</div></div><span class="chip b">${t("Créer →")}</span></div></div>
-    <div class="box clik" onclick="createLeague()"><div class="row"><div><b>🎉 ${t("Créer une ligue entre amis")}</b><div class="mini muted">${t("Le vrai jeu : invite tes amis avec un code et jouez la saison.")}</div></div><span class="chip g">${t("Créer →")}</span></div></div>
+    <div class="box" style="text-align:center;border-color:var(--green)"><div style="font-size:40px">🎉</div><h2 style="margin:6px 0 2px">${t("Tu as tout vu !")}</h2><div class="mini muted">${t("Prêt à jouer pour de vrai.")}</div></div>
+    <div class="box clik" onclick="startEssai()" style="border-color:var(--green)"><div class="row"><div><b>▶️ ${t("Faire une partie d'essai")}</b><div class="mini muted">${t("Une saison éclair de 2 journées contre le Bot, résultats immédiats — pour t'entraîner sur le <b>vrai enchaînement</b>. Gratuit.")}</div></div><span class="chip g">${t("Jouer →")}</span></div></div>
+    <div class="box clik" onclick="createLeague()"><div class="row"><div><b>🎉 ${t("Créer une ligue entre amis")}</b><div class="mini muted">${t("Le vrai jeu : invite tes amis avec un code et jouez la saison. Dès <b>2 joueurs</b>, c'est parti.")}</div></div><span class="chip b">${t("Créer →")}</span></div></div>
+    <div class="box clik" onclick="startTutorial()"><div class="row"><div><b>🔁 ${t("Refaire le tuto")}</b><div class="mini muted">${t("Rejoue cette démo autant de fois que tu veux pour t'entraîner — c'est gratuit et sans conséquence.")}</div></div><span class="chip b">${t("Rejouer")}</span></div></div>
+    <div class="box"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Jouer en solo contre l'IA")}</b> ${premBadge('ia')}<div class="mini muted">${t("Une vraie saison seul face à l'ordinateur : c'est une <b>option premium</b> (offerte pendant la phase de test). Sinon, joue à plusieurs !")}</div></div></div></div>
     <button class="btn ghost" onclick="exitTutorial()">${t("← Retour à l'accueil")}</button>`;
 }
+
+/* ============ PARTIE D'ESSAI — mini-saison LOCALE de 2 journées, résultats immédiats ============
+   Ordre RÉEL du jeu : prépa (gage + enchères bonus) → paris J1 → résultats → sélection matchs J2 →
+   paris J2 → résultats → classement final + gage. 100 % local (aucune base, aucune IA payante).
+   Des annotations « ℹ️ Dans le vrai jeu » signalent les simplifications (3 matchs vs 5, etc.). */
+let essaiStep=0, essaiGage=0, essaiBids={}, essaiPicks=[[],[]], essaiCap=[-1,-1], essaiSel=[];
+const ESSAI_STAKE=10, ESSAI_CARDS=["double","assurance","tout"], ESSAI_BOTBIDS={double:6,assurance:9,tout:4};
+const ESSAI_GAGES=["Chanter au bar 🎤","Payer la prochaine tournée 🍻","Imiter un animal 🐒"];
+const ESSAI_D1=[
+ {home:"PSG",away:"OM",sport:"⚽",oh:1.85,od:3.4,oa:4.0,draw:true,res:"1",botSel:"1"},
+ {home:"Real",away:"Barça",sport:"⚽",oh:2.3,od:3.3,oa:2.9,draw:true,res:"1",botSel:"2"},
+ {home:"Nadal",away:"Federer",sport:"🎾",oh:1.7,oa:2.1,draw:false,res:"1",botSel:"1"}];
+const ESSAI_POOL=[
+ {home:"Man City",away:"Chelsea",sport:"⚽",oh:1.55,od:4.2,oa:6.0,draw:true,res:"1",botSel:"1"},
+ {home:"Bayern",away:"Dortmund",sport:"⚽",oh:1.6,od:4.0,oa:5.0,draw:true,res:"1",botSel:"2"},
+ {home:"Djokovic",away:"Alcaraz",sport:"🎾",oh:1.95,oa:1.85,draw:false,res:"2",botSel:"1"},
+ {home:"Lakers",away:"Celtics",sport:"🏀",oh:2.0,oa:1.8,draw:false,res:"2",botSel:"2"},
+ {home:"Juve",away:"Milan",sport:"⚽",oh:2.2,od:3.1,oa:3.3,draw:true,res:"1",botSel:"1"}];
+function essaiFav(f){ return oddOf(f,"1")<=oddOf(f,"2")?"1":"2"; }
+function startEssai(){ if(!AUTH)return; essaiStep=0; essaiGage=0; essaiBids={double:7}; essaiSel=[];
+  essaiPicks=[ESSAI_D1.map(essaiFav),[]]; essaiCap=[-1,-1]; navRoot(); S.view="essai"; render(); }
+function essaiGo(n){ essaiStep=n; render(); try{window.scrollTo(0,0);}catch(e){} }
+function essaiSetBid(id,v){ const x=Math.max(0,Math.min(40,Math.round(+v||0))); if(x>0) essaiBids[id]=x; else delete essaiBids[id];
+  const tot=Object.values(essaiBids).reduce((a,b)=>a+(+b||0),0); const bt=document.getElementById("essaibt"); if(bt) bt.textContent=tot; }
+function essaiSetPick(d,i,v){ essaiPicks[d][i]=v; render(); }
+function essaiSetCap(d,i){ essaiCap[d]=(essaiCap[d]===i?-1:i); render(); }
+function essaiToggleSel(k){ const j=essaiSel.indexOf(k); if(j>=0) essaiSel.splice(j,1); else if(essaiSel.length<3) essaiSel.push(k); render(); }
+function essaiFxD2(){ return essaiSel.map(k=>ESSAI_POOL[k]); }
+function essaiNet(fx,picks,capIdx,bot){ let n=0; fx.forEach((f,i)=>{ const p=bot?f.botSel:picks[i]; if(p==null) return;
+  const win=p===f.res; let g=win?ESSAI_STAKE*(oddOf(f,p)-1):-ESSAI_STAKE; if(!bot&&i===capIdx) g*=2; n+=g; }); return Math.round(n*100)/100; }
+function essaiDuel(fx,picks,capIdx){ const me=essaiNet(fx,picks,capIdx,false), bot=essaiNet(fx,null,-1,true);
+  const won=me>bot, tie=me===bot; const pts=tie?1:(won?(me>0?3:2):(me>0?1:0)); const bpts=tie?1:(!won?(bot>0?3:2):(bot>0?1:0));
+  return {me,bot,won,tie,pts,bpts}; }
+function viewEssai(){
+  const N=8, head=step=>`<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span class="mini muted"><b>${t("▶️ Partie d'essai")}</b> · ${t("étape {a}/{b}",{a:step+1,b:N})}</span><button class="btn ghost sm" onclick="exitEssai()">${t("Passer")}</button></div>
+    <div class="gauge" style="margin-bottom:12px"><i style="width:${Math.round((step+1)/N*100)}%"></i></div>`;
+  const ann=txt=>`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">ℹ️ <b>${t("Dans le vrai jeu")}</b> : ${txt}</div>`;
+  const selLbl=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
+  const betCard=(d,f,i)=>`<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
+      <span class="tog cap ${essaiCap[d]===i?'on':''} clik" onclick="essaiSetCap(${d},${i})" title="${t("Capitaine")}">👑</span></div>
+    <div class="odds" style="margin-top:8px">${["1",f.draw?"N":"","2"].filter(Boolean).map(v=>`<div class="odd ${essaiPicks[d][i]===v?'sel':''}" onclick="essaiSetPick(${d},${i},'${v}')">${esc(v==="1"?f.home.slice(0,8):v==="2"?f.away.slice(0,8):"Nul")}<b>${cote(oddOf(f,v))}</b></div>`).join("")}</div></div>`;
+  const dayResults=(d,fx)=>{ const r=essaiDuel(fx,essaiPicks[d],essaiCap[d]);
+    const lignes=(picks,bot)=>fx.map((f,i)=>{ const p=bot?f.botSel:picks[i]; const win=p===f.res; let g=win?ESSAI_STAKE*(oddOf(f,p)-1):-ESSAI_STAKE; if(!bot&&i===essaiCap[d])g*=2;
+      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,p))}${(!bot&&i===essaiCap[d])?' 👑':''} @${cote(oddOf(f,p))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
+    return {r,html:`<div class="recaphero ${r.won?'win':(r.tie?'':'loss')}"><div class="row">
+        <div><div class="mini muted">${t("DUEL vs 🤖 Bot")}</div><div class="big ${r.won?'green':(r.tie?'muted':'red')}" style="font-size:20px">${r.tie?t("Match nul"):(r.won?t("Gagné"):t("Perdu"))} (+${r.pts} pt${r.pts>1?'s':''})</div></div>
+        <div style="text-align:right"><div class="mini muted">${t("TON GAIN")}</div><div class="big num ${r.me>=0?'green':'red'}" style="font-size:20px">${fmt(r.me)} €</div></div></div></div>
+      <div class="box"><div class="mini muted">👑 ${t("Tes pronos")}</div>${lignes(essaiPicks[d],false)}<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><b>${t("Ton net")}</b><b class="${r.me>=0?'green':'red'}">${fmt(r.me)} €</b></div></div>
+      <div class="box"><div class="mini muted">🤖 ${t("Le Bot")}</div>${lignes(null,true)}<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><b>${t("Net du Bot")}</b><b class="${r.bot>=0?'green':'red'}">${fmt(r.bot)} €</b></div></div>`}; };
+
+  // 0 — intro
+  if(essaiStep===0){ return `${head(0)}
+    <div class="box"><h2 style="margin-top:0">${t("▶️ Une saison éclair")}</h2><div class="mini muted">${t("On enchaîne une vraie partie dans l'ordre : préparation → paris → résultats, sur <b>2 journées</b>, face à 🤖 <b>Bot</b>. Les résultats tombent <b>tout de suite</b>.")}</div>
+    ${ann(t("une saison compte bien plus de journées, tu joues à <b>plusieurs amis</b>, et les résultats tombent quand les <b>vrais matchs</b> sont joués."))}</div>
+    <button class="btn" onclick="essaiGo(1)">${t("Commencer la prépa →")}</button>`; }
+  // 1 — gage
+  if(essaiStep===1){ return `${head(1)}
+    <div class="box"><h2 style="margin-top:0">${t("🎭 Ton vote de gage")}</h2><div class="mini muted">${t("Choisis le gage que <b>tu</b> infligerais si tu gagnes. Le dernier de la saison fera celui voté par le vainqueur.")}</div>
+    ${ann(t("chaque joueur propose SON gage ; c'est celui du <b>vainqueur</b> qui s'applique au dernier."))}</div>
+    ${ESSAI_GAGES.map((g,i)=>`<div class="box row clik" onclick="essaiGage=${i};render()" style="${essaiGage===i?'border-color:var(--green)':''}"><b>${esc(g)}</b><span class="chip ${essaiGage===i?'g':''}">${essaiGage===i?t("✓ choisi"):t("choisir")}</span></div>`).join("")}
+    <button class="btn" onclick="essaiGo(2)">${t("Suivant : les bonus →")}</button>`; }
+  // 2 — enchères bonus
+  if(essaiStep===2){ const tot=Object.values(essaiBids).reduce((a,b)=>a+(+b||0),0);
+    return `${head(2)}
+    <div class="box"><h2 style="margin-top:0">${t("🃏 Enchères bonus")}</h2><div class="mini muted">${t("Chaque bonus revient au plus offrant (à égalité, le plus rapide). Total ≤ 40 € ; seules les mises gagnées sont retirées de tes 100 €.")}</div>
+      <div class="row" style="margin-top:6px"><span class="muted">${t("Total misé")}</span><b><span id="essaibt">${tot}</span> € / 40 €</b></div></div>
+    ${ESSAI_CARDS.map(id=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${CARDS[id].e}</span><b>${esc(t(CARDS[id].n))}</b></div>
+      <input type="number" inputmode="numeric" min="0" step="1" value="${essaiBids[id]||''}" placeholder="0 €" style="width:74px" oninput="essaiSetBid('${id}',this.value)"></div>`).join("")}
+    <button class="btn" onclick="essaiGo(3)">${t("Valider ma prépa →")}</button>`; }
+  // 3 — paris J1
+  if(essaiStep===3){ const won=ESSAI_CARDS.filter(id=>(essaiBids[id]||0)>=ESSAI_BOTBIDS[id]&&(essaiBids[id]||0)>0);
+    return `${head(3)}
+    <div class="box" style="border-color:var(--green)"><div class="mini"><b>${t("Prépa faite ✓")}</b></div><div class="mini muted" style="margin-top:3px">${t("Ton gage : <b>{g}</b> · Bonus remportés : {b}",{g:esc(ESSAI_GAGES[essaiGage]),b:won.length?won.map(id=>CARDS[id].e).join(' '):t("aucun")})}</div></div>
+    <div class="box"><h2 style="margin-top:0">${t("📅 Journée 1 — tes pronos")}</h2><div class="mini muted">${t("Choisis un résultat par match et, si tu veux, un 👑 Capitaine (gain/perte ×2). Mise fixe {a} € par pari.",{a:ESSAI_STAKE})}</div>
+    ${ann(t("il y a <b>5 matchs</b> par journée (ici 3 pour aller vite), et tu peux jouer <b>1 bonus</b> par journée."))}</div>
+    ${ESSAI_D1.map((f,i)=>betCard(0,f,i)).join("")}
+    <button class="btn" onclick="essaiGo(4)">${t("Valider mes pronos →")}</button>`; }
+  // 4 — résultats J1
+  if(essaiStep===4){ const R=dayResults(0,ESSAI_D1);
+    return `${head(4)}
+    <div class="box"><h2 style="margin-top:0">${t("📅 Résultats — Journée 1")}</h2></div>
+    ${R.html}
+    <div class="box"><div class="mini muted">${t("Classement après J1")}</div>
+      <div class="row" style="margin-top:5px"><b>${R.r.pts>=R.r.bpts?'🥇':'🥈'} ${t("Toi")}</b><b>${R.r.pts} pts</b></div>
+      <div class="row" style="margin-top:3px"><b>${R.r.bpts>R.r.pts?'🥇':'🥈'} 🤖 Bot</b><b>${R.r.bpts} pts</b></div></div>
+    <button class="btn" onclick="essaiGo(5)">${t("Journée 2 →")}</button>`; }
+  // 5 — sélection matchs J2
+  if(essaiStep===5){ return `${head(5)}
+    <div class="box"><h2 style="margin-top:0">${t("🎲 Journée 2 — choisis les matchs")}</h2><div class="mini muted">${t("Sélectionne <b>3 matchs</b> parmi ceux proposés — ce seront les rencontres de la journée.")}</div>
+    ${ann(t("c'est le joueur à <b>domicile</b> qui choisit les matchs ; ici tu le fais pour découvrir. Et la règle des <b>75 % de foot</b> s'applique."))}</div>
+    ${ESSAI_POOL.map((f,k)=>{ const on=essaiSel.indexOf(k)>=0; return `<div class="box row clik" onclick="essaiToggleSel(${k})" style="${on?'border-color:var(--green)':''}"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="chip ${on?'g':''}">${on?'✓':'+'}</span></div>`; }).join("")}
+    <button class="btn" ${essaiSel.length===3?'':'disabled'} onclick="essaiPicks[1]=essaiFxD2().map(essaiFav);essaiCap[1]=-1;essaiGo(6)">${essaiSel.length===3?t("Valider les 3 matchs →"):t("Choisis {a} match(s) de plus",{a:3-essaiSel.length})}</button>`; }
+  // 6 — paris J2
+  if(essaiStep===6){ const fx=essaiFxD2(); return `${head(6)}
+    <div class="box"><h2 style="margin-top:0">${t("📅 Journée 2 — tes pronos")}</h2><div class="mini muted">${t("Mêmes règles : un résultat par match, un 👑 Capitaine si tu veux.")}</div></div>
+    ${fx.map((f,i)=>betCard(1,f,i)).join("")}
+    <button class="btn" onclick="essaiGo(7)">${t("Valider mes pronos →")}</button>`; }
+  // 7 — résultats J2 + classement final + gage
+  const fx2=essaiFxD2(); const R1=essaiDuel(ESSAI_D1,essaiPicks[0],essaiCap[0]); const R2c=dayResults(1,fx2); const R2=R2c.r;
+  const myTot=R1.pts+R2.pts, botTot=R1.bpts+R2.bpts; const champMe=myTot>=botTot;
+  return `${head(7)}
+    <div class="box"><h2 style="margin-top:0">${t("📅 Résultats — Journée 2")}</h2></div>
+    ${R2c.html}
+    <div style="text-align:center;margin:14px 0 6px"><div style="font-size:44px">🏆</div>
+      <div style="font-size:22px;font-weight:800" class="gold">${champMe?t("Toi, Champion !"):t("🤖 Bot, Champion")}</div>
+      <div class="mini muted">${t("Toi {a} pts · 🤖 Bot {b} pts",{a:myTot,b:botTot})}</div></div>
+    ${champMe?`<div class="box" style="border:2px solid var(--red);background:rgba(229,105,95,.12);text-align:center">
+      <div class="red" style="font-size:13px;font-weight:800;letter-spacing:.4px">${t("🎭 LE GAGE POUR LE BOT")}</div>
+      <div style="font-size:17px;font-weight:700;margin-top:3px">${esc(ESSAI_GAGES[essaiGage])}</div>
+      <div class="mini muted" style="margin-top:3px">${t("celui que TU as voté 🏆")}</div></div>`
+     :`<div class="box" style="text-align:center"><div class="mini muted">${t("Le Bot gagne cette fois — c'est toi qui ferais le gage ! Rejoue pour prendre ta revanche. 😄")}</div></div>`}
+    <div class="box" style="border-color:var(--green);background:rgba(37,192,125,.10)"><div class="mini">${t("🎉 Voilà une saison complète ! Tu connais tout l'enchaînement. Prêt pour une vraie ligue entre amis ?")}</div></div>
+    <button class="btn" onclick="createLeague()">🎉 ${t("Créer une ligue entre amis")}</button>
+    <div style="height:8px"></div><button class="btn ghost" onclick="startEssai()">🔁 ${t("Refaire une partie d'essai")}</button>
+    <div style="height:8px"></div><button class="btn ghost" onclick="exitEssai()">${t("← Retour à l'accueil")}</button>`;
+}
+function exitEssai(){ S.view="leagues"; render(); loadMyLeagues(); }
 function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
@@ -2021,9 +2204,7 @@ function enjeuTableHTML(r){
   const opts  = (both&&r) ? (s.optionsR||[]) : (s.options||[]);
   const votes = (both&&r) ? (s.votesR||{})   : (s.voteMap||{});
   const custs = (both&&r) ? (s.customsR||{}) : (s.customs||{});
-  // Ligue de démo : on montre AUSSI les IA (elles ont bien voté à la clôture) pour prévisualiser le
-  // rendu à effectif complet. Ailleurs : humains seulement (le gage se décide entre humains).
-  const hs=(s.players||[]).filter(p=> isDemoLeague() || !p.is_ai);
+  const hs=(s.players||[]).filter(p=>!p.is_ai);
   const gOf=p=>{ const v=votes[p.pid]; if(v==="c") return {txt:custs[p.pid]||null, perso:true};
     const o=opts[v]; return {txt:o?((o.t)||o):null, perso:false}; };
   // NB : le texte perso d'un joueur ne passe PAS par t() — c'est du texte libre, pas une clé de traduction.
@@ -2055,7 +2236,7 @@ function prepSummaryBody(){
      : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`}
    <h2>${t("💰 Capital de départ")}</h2>
    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>${t("Joueur")}</th><th style="text-align:right">${t("Dépensé")}</th><th style="text-align:right">${t("Capital")}</th><th>${t("Bonus")}</th></tr>
-     ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.is_ai&&!isDemoLeague())?' <span class="tag">'+t("IA")+'</span>':''}</td>
+     ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</td>
         <td class="num muted">${p.spent}€</td><td class="num"><b>${eur(p.capital)}€</b></td>
         <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>
    ${prepSuperlatives(s)}`;
@@ -3970,6 +4151,7 @@ function render(){
   else if(S.view==="stats") html=viewStats();
   else if(S.view==="leaguestats") html=viewLeagueStats();
   else if(S.view==="tuto") html=viewTutorial();
+  else if(S.view==="essai") html=viewEssai();
   else if(S.view==="shop") html=viewShop();
   else html=viewGame();
   $("root").innerHTML=html;
@@ -3982,7 +4164,7 @@ function render(){
   if(S.view==="game" && L && L.status==="prep") gsub+="|p"+prepStep;
   const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"")+gsub;
   if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
-  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="rulesfull"?t("📚 Règles détaillées") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : S.view==="tuto"?t("🎓 Découverte") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
+  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="rulesfull"?t("📚 Règles détaillées") : S.view==="settings"?t("Paramètres") : S.view==="leagues"?t("Mes ligues") : S.view==="tuto"?t("🎓 Découverte") : S.view==="essai"?t("▶️ Partie d'essai") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
