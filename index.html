@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v4.93";
+const APP_VERSION = "v4.94";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -758,6 +758,8 @@ const EN={
   "💸 Recapitalisation solidaire":"💸 Solidarity top-up",
   "Ligue créée !":"League created!",
   "🎓 Première fois ? Apprendre en 2 min":"🎓 First time? Learn in 2 min",
+  "Bienvenue dans The Maestro League !":"Welcome to The Maestro League!", "C'est parti →":"Let's go →", "On te montre tout en 2 minutes — en jouant.":"We'll show you everything in 2 minutes — by playing.",
+  "Un <b>championnat de pronos sportifs entre amis</b>, sans argent réel. Chaque journée, tu affrontes un adversaire en <b>duel</b> : le meilleur pronostiqueur marque des <b>points</b>. À la fin, le <b>dernier fait un gage</b>… et le <b>champion</b> soulève la coupe. 🎉":"A <b>sports-prediction championship among friends</b>, no real money. Each matchday you face an opponent in a <b>duel</b>: the best forecaster scores <b>points</b>. At the end, the <b>last-placed player does a forfeit</b>… and the <b>champion</b> lifts the cup. 🎉",
   "🎓 Découverte":"🎓 Discovery", "étape {a}/6":"step {a}/6", "Passer":"Skip", "Fermer":"Close",
   "Ton premier duel":"Your first duel",
   "Tu affrontes 🤖 <b>Bot</b>. Choisis un résultat par match (les favoris sont pré-cochés) puis valide — on révèle tout de suite.":"You're up against 🤖 <b>Bot</b>. Pick one result per match (favourites are pre-selected) then confirm — we reveal right away.",
@@ -1849,7 +1851,7 @@ const TUTO_FX=[
 // Enchères pré-remplies pour DÉMONTRER les 3 cas : double 8>5 (gagné), assurance 10=10 (ÉGALITÉ →
 // départage à la rapidité), tout non misé (le Bot l'emporte).
 const TUTO_STAKE=10, TUTO_BOT_PICKS=["1","1","2"], TUTO_CARDS=["double","assurance","tout"], TUTO_BOTBIDS={double:5,assurance:10,tout:3};
-function startTutorial(){ if(!AUTH)return; tutoStep=1; tutoPicks=TUTO_FX.map(f=>oddOf(f,"1")<=oddOf(f,"2")?"1":"2"); tutoCapOn=false; tutoBids={double:8,assurance:10}; tutoBidDone=false; navRoot(); S.view="tuto"; render(); }
+function startTutorial(){ if(!AUTH)return; tutoStep=0; tutoPicks=TUTO_FX.map(f=>oddOf(f,"1")<=oddOf(f,"2")?"1":"2"); tutoCapOn=false; tutoBids={double:8,assurance:10}; tutoBidDone=false; navRoot(); S.view="tuto"; render(); }
 function exitTutorial(){ S.view="leagues"; render(); loadMyLeagues(); }
 function tutoGo(n){ tutoStep=n; render(); try{window.scrollTo(0,0);}catch(e){} }
 function tutoSetPick(i,v){ tutoPicks[i]=v; render(); }
@@ -1861,6 +1863,13 @@ function viewTutorial(){
   const head=step=>`<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px"><span class="mini muted"><b>${t("🎓 Découverte")}</b> · ${t("étape {a}/6",{a:step})}</span><button class="btn ghost sm" onclick="exitTutorial()">${t("Passer")}</button></div>
     <div class="gauge" style="margin-bottom:12px"><i style="width:${Math.round(step/6*100)}%"></i></div>`;
   const selLbl=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
+  // --- Étape 0 : écran d'accueil (le décor + le crochet, en 3 lignes) ---
+  if(tutoStep===0){ return `<div class="row" style="justify-content:flex-end;margin-bottom:10px"><button class="btn ghost sm" onclick="exitTutorial()">${t("Passer")}</button></div>
+    <div class="box" style="text-align:center;border-color:var(--green)"><div style="font-size:44px">🏆</div>
+      <h2 style="margin:6px 0 8px">${t("Bienvenue dans The Maestro League !")}</h2>
+      <div class="mini" style="text-align:left;line-height:1.7">${t("Un <b>championnat de pronos sportifs entre amis</b>, sans argent réel. Chaque journée, tu affrontes un adversaire en <b>duel</b> : le meilleur pronostiqueur marque des <b>points</b>. À la fin, le <b>dernier fait un gage</b>… et le <b>champion</b> soulève la coupe. 🎉")}</div>
+      <div class="mini muted" style="margin-top:10px">${t("On te montre tout en 2 minutes — en jouant.")}</div></div>
+    <button class="btn" onclick="tutoGo(1)">${t("C'est parti →")}</button>`; }
   // --- Étape 1 : premier duel (pronos) ---
   if(tutoStep===1){ return `${head(1)}
     <div class="box"><h2 style="margin-top:0">${t("Ton premier duel")}</h2><div class="mini muted">${t("Tu affrontes 🤖 <b>Bot</b>. Choisis un résultat par match (les favoris sont pré-cochés) puis valide — on révèle tout de suite.")}</div></div>
