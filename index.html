@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.01";
+const APP_VERSION = "v5.02";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2020,6 +2020,8 @@ function essaiAuctionResult(id){ const a=ESSAI_AUCTION[id]||{}; const bids={me:e
 // La plus forte valeur sert de « barre » pour l'⭐ meilleur pronostiqueur : ~20 € en J1, ~40 € en J2.
 // J1 : Marco 20 bat Nina −3 · J2 : Léa 40 bat Nina 2.
 const ESSAI_SHADOW=[{marco:20,nina:-3},{lea:40,nina:2}];
+// Classement FINAL fictif « comme après une vraie saison de 6 journées » (points & cagnottes réalistes).
+const ESSAI_FINAL=[{id:"me",pts:14,cap:212.50},{id:"lea",pts:12,cap:168.00},{id:"marco",pts:9,cap:143.75},{id:"nina",pts:6,cap:96.25}];
 const ESSAI_GAGES=["Chanter au bar 🎤","Payer la prochaine tournée 🍻","Payer un shot à chacun 🥃"];
 const ESSAI_D1=[
  {home:"PSG",away:"OM",sport:"⚽",oh:1.85,od:3.4,oa:4.0,draw:true,res:"1",botSel:"1"},
@@ -2032,7 +2034,9 @@ const ESSAI_POOL=[
  {home:"Lakers",away:"Celtics",sport:"🏀",oh:2.0,oa:1.8,draw:false,res:"2",botSel:"2"},
  {home:"Juve",away:"Milan",sport:"⚽",oh:2.2,od:3.1,oa:3.3,draw:true,res:"1",botSel:"1"}];
 function essaiFav(f){ return oddOf(f,"1")<=oddOf(f,"2")?"1":"2"; }
-function startEssai(){ if(!AUTH)return; essaiStep=0; essaiGage=0; essaiBids={}; essaiSel=[];
+// Enchères PRÉ-REMPLIES pour l'exemple (éditables) : tout 9 → tu bats Marco (8) ; parachute 5 → ÉGALITÉ
+// avec Léa & Marco (tu gagnes par la rapidité) ; sangsue 3 → Nina (7) l'emporte. → les 3 cas de figure.
+function startEssai(){ if(!AUTH)return; essaiStep=0; essaiGage=0; essaiBids={tout:9,parachute:5,sangsue:3}; essaiSel=[];
   essaiPicks=[ESSAI_D1.map(essaiFav),[]]; essaiStakes=[[],[]]; essaiCap=[-1,-1]; essaiCard=[null,null]; essaiCardTgt=[-1,-1]; navRoot(); S.view="essai"; render(); }
 function essaiGo(n){ essaiStep=n; render(); try{window.scrollTo(0,0);}catch(e){} }
 function essaiSetBid(id,v){ const x=Math.max(0,Math.min(40,Math.round(+v||0))); if(x>0) essaiBids[id]=x; else delete essaiBids[id];
@@ -2111,24 +2115,32 @@ function viewEssai(){
         ${avail.map(id=>`<span class="chip ${essaiCard[d]===id?'g':''} clik" onclick="essaiSetCard(${d},'${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}
         ${usedBefore.map(id=>`<span class="chip" style="opacity:.4;text-decoration:line-through" title="${t("Déjà joué — un bonus ne sert qu'une fois")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}</div>
         ${essaiCard[d]?`<div class="mini muted" style="margin-top:6px">${esc(t(CARDS[essaiCard[d]].d))}${essaiCard[d]==="tout"?' <b class="blue">'+t("→ touche 🎯 sur le match visé")+'</b>':''}</div>`:''}
-        ${(essaiCard[d]==="tout"&&essaiCardTgt[d]>=0&&essaiCardTgt[d]===essaiCap[d])?`<div class="mini" style="margin-top:6px;color:var(--gold)">${t("⚠️ 🎯 et 👑 sur le <b>même match</b> : seul le bonus (×3) compterait là. Mets-les sur des matchs <b>différents</b> pour cumuler.")}</div>`:''}</div>`:''}
+        ${essaiCard[d]==="tout"?`<div class="mini" style="margin-top:6px;color:var(--gold)">${t("ℹ️ Tu ne peux pas poser 🎯 sur le match de ton 👑 Capitaine — ils doivent être sur des <b>matchs différents</b> (une exception existe dans le vrai jeu).")}</div>`:''}</div>`:''}
       ${fx.map((f,i)=>betCard(d,f,i)).join("")}
       <button class="btn" id="essaibetbtn" ${ok?'':'disabled'} onclick="${goNext}">${lbl}</button>`; };
-  // Détail chiffré de l'effet du bonus joué (comparé au net SANS la carte, capitaine inclus).
+  // Ligne « Capitaine » : le doublement AJOUTE une fois la mise de base (le gain simple est déjà sur la ligne).
+  const capLine=(d,fx)=>{ const c=essaiCap[d]; if(c<0) return ''; const f=fx[c], p=essaiPicks[d][c]; if(p==null) return '';
+    if(essaiCard[d]==="tout"&&essaiCardTgt[d]===c) return '';        // exclusivité 🎯/👑 → jamais le même match
+    const st=+essaiStakes[d][c]||0, win=p===f.res, add=win?st*(oddOf(f,p)-1):-st; if(!add) return '';
+    return `<div class="mini" style="margin-top:6px;color:var(--gold);background:rgba(224,182,79,.10);border-radius:8px;padding:7px 9px">👑 <b>${t("Capitaine")}</b> ${t("sur")} ${esc(selLbl(f,p))} : ${win?t("gain doublé (×2)"):t("perte doublée (×2)")} → <b>${fmt(add)} €</b></div>`; };
+  // Détail chiffré de l'effet du BONUS joué (marginal, capitaine déjà compté à part). UNE seule ligne.
   const impactLine=(d,fx)=>{ const card=essaiCard[d]; if(!card) return '';
     let raw=0; fx.forEach((f,i)=>{ const p=essaiPicks[d][i]; if(p==null) return; const st=+essaiStakes[d][i]||0; const win=p===f.res; let b=win?st*(oddOf(f,p)-1):-st; if(i===essaiCap[d]) b*=2; raw+=b; }); raw=Math.round(raw*100)/100;
     const net=essaiMeNet(d,fx); const diff=Math.round((net-raw)*100)/100; const nm=CARDS[card].e+' '+t(CARDS[card].n); let txt;
-    if(card==="tout"){ const i=essaiCardTgt[d]; if(i<0){ txt=t("aucune cible choisie — sans effet."); } else { const f=fx[i]; const win=essaiPicks[d][i]===f.res; txt=t("multiplie ton pari sur {m} ({r}) → {s} €.",{m:esc(selLbl(f,essaiPicks[d][i])),r:win?t("gagné, ×3"):t("perdu, ×2"),s:(diff>=0?'+':'')+fmt(diff)}); } }
-    else if(card==="parachute"){ txt= raw<0? t("amortit ta perte : {a} € ramenés à <b>{b} €</b> (+{c} €).",{a:fmt(raw),b:fmt(net),c:fmt(diff)}) : t("ne s'active que si ta journée est négative — ici, aucun effet."); }
-    else if(card==="sangsue"){ txt= diff>0? t("siphonne 15 % du gain de ton adversaire : <b>+{c} €</b>.",{c:fmt(diff)}) : t("ne rapporte que si ton adversaire finit positif — ici, aucun effet."); }
+    if(card==="tout"){ const i=essaiCardTgt[d]; if(i<0){ txt=t("aucune cible choisie — sans effet."); } else { const f=fx[i]; const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res;
+        txt= win? t("ton pari gagnant sur {m} passe en <b>×3</b> : il ajoute {st} × ({o} − 1) × 2 = <b>{a} €</b> (le gain simple est déjà sur la ligne du pari).",{m:esc(selLbl(f,p)),st:st,o:cote(oddOf(f,p)),a:fmt(diff)})
+              : t("ton pari perdu sur {m} passe en <b>×2</b> : il te coûte une mise de plus = <b>{a} €</b>.",{m:esc(selLbl(f,p)),a:fmt(diff)}); } }
+    else if(card==="parachute"){ txt= raw<0? t("amortit ta perte : {a} € ramenés à <b>{b} €</b> ({c} €).",{a:fmt(raw),b:fmt(net),c:fmt(diff)}) : t("ne s'active que si ta journée est négative — ici, aucun effet."); }
+    else if(card==="sangsue"){ txt= diff>0? t("siphonne 15 % du gain de ton adversaire : <b>{c} €</b>.",{c:fmt(diff)}) : t("ne rapporte que si ton adversaire finit positif — ici, aucun effet."); }
     else txt=(diff>=0?'+':'')+fmt(diff)+' €';
     return `<div class="mini" style="margin-top:6px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">🃏 <b>${esc(nm)}</b> : ${txt}</div>`; };
   const dayResults=(d,fx)=>{ const opp=essaiOpp(d); const dn=essaiDayPts(d,fx); const me=dn.nets.me, oppNet=dn.nets[opp.id];
     const won=me>oppNet, tie=me===oppNet; const duelB=won?2:(tie?1:0), netB=me>0?1:0, starB=(dn.star==="me")?1:0, myPts=duelB+netB+starB;
     const card=essaiCard[d], tgt=essaiCardTgt[d];
+    // Ligne de pari = GAIN SIMPLE (mise × (cote−1)), sans capitaine ni bonus → détaillés en dessous.
     const lignesMe=()=>fx.map((f,i)=>{ const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; const base=win?st*(oddOf(f,p)-1):-st;
-      let g=base, tag=''; if(card==="tout"&&i===tgt){ g=win?base*3:base*2; tag=' 🔥'; } else if(i===essaiCap[d]){ g=base*2; tag=' 👑'; }
-      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,p))}${tag} · ${st}€ @${cote(oddOf(f,p))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
+      let tag=''; if(i===essaiCap[d]) tag+=' 👑'; if(card==="tout"&&i===tgt) tag+=' 🔥';
+      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,p))}${tag} · ${st}€ @${cote(oddOf(f,p))}</span><b class="mini ${base>=0?'green':'red'}">${fmt(base)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
     const lignesBot=()=>fx.map((f,i)=>{ const st=+essaiStakes[d][i]||ESSAI_STAKE; const win=f.botSel===f.res; const g=win?st*(oddOf(f,f.botSel)-1):-st;
       return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,f.botSel))} · ${st}€ @${cote(oddOf(f,f.botSel))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
     const bd=[t("duel {a}",{a:duelB})].concat(netB?['+1 '+t("net positif")]:[]).concat(starB?['+1 ⭐']:[]).join(' · ');
@@ -2136,7 +2148,7 @@ function viewEssai(){
         <div><div class="mini muted">${t("DUEL vs")} ${opp.e} ${esc(opp.n)}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:20px">${tie?t("Match nul"):(won?t("Duel gagné"):t("Duel perdu"))} · +${myPts} pt${myPts>1?'s':''}</div></div>
         <div style="text-align:right"><div class="mini muted">${t("TON NET")}</div><div class="big num ${me>=0?'green':'red'}" style="font-size:20px">${fmt(me)} €</div></div></div></div>
       <div class="mini muted" style="margin:5px 0;text-align:center">${bd}</div>
-      <div class="box"><div class="mini muted">👑 ${t("Tes pronos")}${card?' · '+t("bonus")+' : '+CARDS[card].e+' '+esc(t(CARDS[card].n)):''}</div>${lignesMe()}${impactLine(d,fx)}<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><b>${t("Ton net")}</b><b class="${me>=0?'green':'red'}">${fmt(me)} €</b></div></div>
+      <div class="box"><div class="mini muted">👑 ${t("Tes pronos")}${card?' · '+t("bonus")+' : '+CARDS[card].e+' '+esc(t(CARDS[card].n)):''}</div>${lignesMe()}${capLine(d,fx)}${impactLine(d,fx)}<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><b>${t("Ton net")}</b><b class="${me>=0?'green':'red'}">${fmt(me)} €</b></div></div>
       <div class="box"><div class="mini muted">${opp.e} ${esc(opp.n)}</div>${lignesBot()}<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><b>${t("Net de {a}",{a:esc(opp.n)})}</b><b class="${oppNet>=0?'green':'red'}">${fmt(oppNet)} €</b></div></div>`}; };
 
   // 0 — intro (principe du jeu + ligue à 4)
@@ -2149,15 +2161,16 @@ function viewEssai(){
     <button class="btn" onclick="essaiGo(1)">${t("C'est parti →")}</button>`; }
   // 1 — gage
   if(essaiStep===1){ return `${head(1)}
-    <div class="box"><h2 style="margin-top:0">${t("🎭 Ton vote de gage")}</h2><div class="mini muted">${t("Choisis le gage que <b>tu</b> infligerais si tu gagnes. Le dernier de la saison fera celui voté par le vainqueur.")}</div>
+    <div class="box"><h2 style="margin-top:0">${t("🎭 Ton vote de gage")}</h2><div class="mini muted">${t("Vote pour le gage que tu aimerais voir. À la fin, le <b>dernier</b> du classement effectue le gage voté par le <b>vainqueur</b> 🏆. (Ici, pas de récompense : on joue pour l'honneur.)")}</div>
     ${ann(t("chaque joueur propose SON gage ; c'est celui du <b>vainqueur</b> qui s'applique au dernier."))}</div>
     ${ESSAI_GAGES.map((g,i)=>`<div class="box row clik" onclick="essaiGage=${i};render()" style="${essaiGage===i?'border-color:var(--green)':''}"><b>${esc(g)}</b><span class="chip ${essaiGage===i?'g':''}" style="flex:0 0 auto;white-space:nowrap">${essaiGage===i?t("✓ choisi"):t("choisir")}</span></div>`).join("")}
     <button class="btn" onclick="essaiGo(2)">${t("Suivant : les bonus →")}</button>`; }
   // 2 — enchères bonus (plafond 40 €, fiche au clic, FACULTATIF — choix stratège vs prudent)
   if(essaiStep===2){ const tot=Object.values(essaiBids).reduce((a,b)=>a+(+b||0),0), over=tot>40;
     return `${head(2)}
-    <div class="box"><h2 style="margin-top:0">${t("🃏 Enchères des bonus")}</h2><div class="mini muted">${t("Chaque bonus revient au <b>plus offrant</b> (à égalité, au plus rapide). Tu ne connais pas les mises des autres. <b>Miser est facultatif</b> — sur les bonus que tu veux, ou aucun.")}</div>
-      <div class="mini" style="margin-top:6px;color:var(--gold)">${t("⚖️ Tout l'arbitrage est là : plus <b>stratège</b> (dépenser pour t'armer de bonus) ou plus <b>prudent</b> (garder du capital pour miser gros) ? Ce que tu remportes est <b>retiré de tes 100 €</b>.")}</div>
+    <div class="box"><h2 style="margin-top:0">${t("🃏 Enchères des bonus")}</h2><div class="mini muted">${t("Chaque bonus revient au <b>plus offrant</b> (à égalité, au plus rapide). Tu ne connais pas les mises des autres. <b>Miser est facultatif</b> — ce que tu remportes est <b>retiré de tes 100 €</b>.")}</div>
+      <div class="mini" style="margin-top:6px;color:var(--gold)">${t("⚠️ Ces enchères n'ont lieu qu'<b>une seule fois, au départ</b> — ne te loupe pas ! (Tu pourras tout de même <b>racheter ou vendre</b> des bonus à tes adversaires en cours de saison.)")}</div>
+      <div class="mini muted" style="margin-top:6px">${t("On t'a pré-rempli des mises pour l'exemple — <b>ajuste-les</b> librement, ou mets 0 pour garder ton capital.")}</div>
       <div class="row" style="margin-top:6px"><span class="muted">${t("Total misé")}</span><b class="${over?'red':''}"><span id="essaibt">${tot}</span> € / 40 € max</b></div></div>
     ${ESSAI_CARDS.map(id=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport clik" onclick="showCardInfo('${id}')">${CARDS[id].e}</span><b class="clik" onclick="showCardInfo('${id}')">${esc(t(CARDS[id].n))}</b>${forceHTML(id)}</div>
       <input type="number" inputmode="numeric" min="1" step="1" value="${essaiBids[id]||''}" placeholder="€" style="width:74px" oninput="essaiSetBid('${id}',this.value)"></div>`).join("")}
@@ -2197,8 +2210,8 @@ function viewEssai(){
         <li>${t("<b>+1</b> si ton résultat <b>net est positif</b> (tu as gagné de l'argent)")}</li>
         <li>${t("<b>+1</b> au <b>⭐ meilleur pronostiqueur</b> de la journée (plus gros net de la ligue)")}</li></ul></div>
     <div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:8px 10px;line-height:1.6">💡 <b>${t("Deux compteurs à ne pas confondre")}</b> : ${t("ton <b>gain en €</b> nourrit ton <b>capital</b> (de quoi miser les journées suivantes) ; les <b>points</b> font le <b>classement</b>. On peut gagner de l'argent et perdre le duel — et l'inverse !")}</div>
-    <div class="box"><div class="mini muted">${t("Classement après J1")}</div>
-      ${(()=>{ const caps=essaiCapitals(0,[]); return essaiRank(essaiTotals(0,[])).map((p,i)=>`<div class="row" style="margin-top:${i?3:5}px"><b>${["🥇","🥈","🥉"][i]||'4.'} ${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</b><span><b>${p.pts} pts</b> <span class="mini muted">· ${caps[p.id]} €</span></span></div>`).join(""); })()}</div>
+    <div class="box"><div class="mini muted">${t("Classement — après 1 journée sur 6")}</div>
+      ${(()=>{ const caps=essaiCapitals(0,[]); return essaiRank(essaiTotals(0,[])).map((p,i)=>`<div class="row" style="margin-top:${i?3:5}px"><b>${["🥇","🥈","🥉"][i]||'4.'} ${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</b><span style="font-variant-numeric:tabular-nums"><b>${p.pts} pts</b> <span class="mini muted">· ${caps[p.id].toFixed(2)} €</span></span></div>`).join(""); })()}</div>
     <button class="btn" onclick="essaiGo(6)">${t("Journée 2 →")}</button>`; }
   // 6 — sélection matchs J2 (+ annonce du nouvel adversaire)
   if(essaiStep===6){ const rk=essaiRank(essaiTotals(0,[])); const mr=rk.findIndex(p=>p.id==="marco")+1;
@@ -2218,25 +2231,27 @@ function viewEssai(){
     return `${head(8)}
     <div class="box"><h2 style="margin-top:0">${t("📅 Résultats — Journée 2")}</h2></div>
     ${R2c.html}
-    <div class="box"><div class="mini muted">${t("Classement de la ligue après 2 journées")}</div>
-      ${(()=>{ const caps=essaiCapitals(1,fx2); return essaiRank(essaiTotals(1,fx2)).map((p,i)=>`<div class="row" style="margin-top:${i?3:5}px"><b>${["🥇","🥈","🥉"][i]||'4.'} ${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</b><span><b>${p.pts} pts</b> <span class="mini muted">· ${caps[p.id]} €</span></span></div>`).join(""); })()}</div>
+    <div class="box"><div class="mini muted">${t("Classement — après 2 journées sur 6")}</div>
+      ${(()=>{ const caps=essaiCapitals(1,fx2); return essaiRank(essaiTotals(1,fx2)).map((p,i)=>`<div class="row" style="margin-top:${i?3:5}px"><b>${["🥇","🥈","🥉"][i]||'4.'} ${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</b><span style="font-variant-numeric:tabular-nums"><b>${p.pts} pts</b> <span class="mini muted">· ${caps[p.id].toFixed(2)} €</span></span></div>`).join(""); })()}</div>
     <button class="btn" onclick="essaiGo(9)">${t("Suivant →")}</button>`; }
   // 9 — page « les journées s'enchaînent » (avant le classement final)
   if(essaiStep===9){ return `${head(9)}
     <div class="box" style="text-align:center"><div style="font-size:38px">📅➡️🏁</div><h2 style="margin:8px 0 4px">${t("Une vraie saison continue…")}</h2>
       <div class="mini muted" style="text-align:left;line-height:1.7">${t("Ici on s'arrête à <b>2 journées</b> pour la démo. Une vraie ligue enchaîne <b>bien plus de journées</b> — leur nombre dépend du <b>nombre de joueurs</b>, car <b>chacun affronte tous les autres</b> tour à tour. Le classement se construit sur toute la saison.")}</div>
+      <div class="mini" style="margin-top:8px;color:var(--green);background:rgba(37,192,125,.10);border-radius:8px;padding:7px 9px;text-align:left">🔁 ${t("Pendant la saison, tu peux aussi <b>acheter ou vendre</b> tes bonus <b>non utilisés</b> à tes adversaires — pour te refaire du capital ou t'armer avant une grosse journée.")}</div>
       <div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px;text-align:left">➡️ ${t("Pour la démo, on saute directement au <b>classement final</b> ci-dessous — juste pour te montrer à quoi ressemble la <b>fin d'une ligue</b>.")}</div></div>
     <button class="btn" onclick="essaiGo(10)">${t("Voir le classement final 🏆 →")}</button>`; }
   // 10 — classement final à 4 + gage + options du vrai jeu
-  const fx2=essaiFxD2(); const capsF=essaiCapitals(1,fx2);
-  const rows=essaiRank(essaiTotals(1,fx2)).map(p=>({n:p.n,e:p.e,pts:p.pts,cap:capsF[p.id],me:p.id==="me"}));
+  const nmOf=id=>ESSAI_PLAYERS.find(x=>x.id===id)||{n:"?",e:""};
+  const rows=ESSAI_FINAL.map(r=>{ const p=nmOf(r.id); return {n:p.n,e:p.e,pts:r.pts,cap:r.cap,me:r.id==="me"}; });
   const champ=rows[0], last=rows[rows.length-1], champMe=champ.me;
   return `${head(10)}
     <div style="text-align:center;margin:6px 0"><div style="font-size:44px">🏆</div>
       <div style="font-size:22px;font-weight:800" class="gold">${champMe?t("Toi, Champion !"):t("{a}, Champion",{a:champ.e+' '+esc(champ.n)})}</div></div>
-    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cagnotte")}</th></tr>
-      ${rows.map((p,i)=>`<tr><td>${["🥇","🥈","🥉"][i]||i+1}</td><td>${p.e} ${esc(p.n)}${p.me?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num"><b>${p.pts}</b></td><td class="num muted">${p.cap} €</td></tr>`).join("")}</table></div>
-    <div class="mini muted" style="margin-top:-2px">${t("Le classement se fait aux <b>points</b> ; la <b>cagnotte</b> (argent virtuel) montre qui a le mieux géré son capital.")}</div>
+    <div class="box"><div class="mini muted">${t("Classement final — après les 6 journées")}</div>
+      <div style="padding:2px 0;overflow-x:auto;margin-top:6px"><table style="font-variant-numeric:tabular-nums"><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cagnotte")}</th></tr>
+      ${rows.map((p,i)=>`<tr><td>${["🥇","🥈","🥉"][i]||i+1}</td><td>${p.e} ${esc(p.n)}${p.me?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num"><b>${p.pts}</b></td><td class="num muted">${p.cap.toFixed(2)} €</td></tr>`).join("")}</table></div></div>
+    <div class="mini muted" style="margin-top:-2px">${t("Exemple d'un classement en fin de saison. Le rang se fait aux <b>points</b> ; la <b>cagnotte</b> (argent virtuel) montre qui a le mieux géré son capital.")}</div>
     <div class="box" style="border:2px solid var(--red);background:rgba(229,105,95,.12);text-align:center">
       <div class="red" style="font-size:13px;font-weight:800;letter-spacing:.4px">${t("🎭 LE GAGE")}</div>
       <div class="mini muted" style="margin-top:2px">${t("pour le dernier — {a}",{a:last.e+' '+esc(last.n)})}</div>
