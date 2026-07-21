@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.06";
+const APP_VERSION = "v5.09";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -563,6 +563,19 @@ function toggleTheme(){ const t=currentTheme()==="light"?"dark":"light"; documen
 /* ---- i18n (FR par défaut, EN via dictionnaire ; clé = texte français, repli = FR si non traduit) ---- */
 let lang=(()=>{ try{ return localStorage.getItem("pl_lang")||"fr"; }catch(e){ return "fr"; } })();
 const EN={
+  // === Retours test mobile (v5.07) ===
+  "Enfin, un bonus si tu veux (facultatif) :":"Finally, a bonus if you want (optional):",
+  "aucune cible choisie — sans effet aujourd'hui.":"no target chosen — no effect today.",
+  "filet non déclenché (journée non négative) — sans effet aujourd'hui.":"safety net not triggered (day not negative) — no effect today.",
+  "l'adversaire n'était pas bénéficiaire — sans effet aujourd'hui.":"your opponent wasn't in profit — no effect today.",
+  "• <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2), et un 🃏 <b>bonus</b> si tu le souhaites (facultatif).":"• <b>Each matchday</b>: you bet on <b>5 matches</b> — total stakes ≤ <b>50% of your capital</b> — with a 👑 <b>Captain</b> (gains/losses ×2), and a 🃏 <b>bonus</b> if you like (optional).",
+  "🤖 Format du solo (si tu veux jouer seul face à un joueur IA)":"🤖 Solo format (if you want to play alone against an AI player)",
+  "ℹ️ Pour info":"ℹ️ For info",
+  "bonus encore en main de {a} (pas forcément joués aujourd'hui) :":"bonuses still in {a}'s hand (not necessarily played today):",
+  "{a} n'a plus aucun bonus en main.":"{a} has no bonuses left in hand.",
+  "🪞 Ton <b>meilleur pari gagnant</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.":"🪞 Your <b>best winning bet</b> and your opponent's were <b>swapped</b> — {a} for you, {b} for them.",
+  "🪞 Échange <b>sans effet</b> : l'un des deux n'avait aucun pari gagnant (ou les meilleurs gains étaient égaux).":"🪞 Swap <b>had no effect</b>: one of the two had no winning bet (or the best gains were equal).",
+  "Le rachat/vente n'est possible qu'entre <b>joueurs réels</b> — pas avec le 🤖 joueur IA.":"Buying/selling is only possible between <b>real players</b> — not with the 🤖 AI player.",
   // === Tuto démo (v5.x) + enjeu « aucun vote » + nom de ligue ===
   "<b>The Maestro League</b>, ce n'est <b>pas qu'un jeu de pronos sportifs</b> : c'est un <b>championnat de stratégie entre amis</b>. Tu paries, oui — mais tu gères aussi un <b>capital</b>, tu remportes des <b>bonus</b> aux enchères, et un seul coup peut <b>renverser</b> toute une saison. 100 % <b>argent virtuel</b>, zéro euro réel.":"<b>The Maestro League</b> is <b>not just a sports-betting game</b>: it's a <b>strategy championship among friends</b>. You bet, yes — but you also manage a <b>capital</b>, win <b>bonuses</b> at auction, and a single move can <b>turn a whole season around</b>. 100% <b>virtual money</b>, zero real euros.",
   "À chaque <b>journée</b>, tu affrontes <b>un adversaire</b> en <b>duel</b> : vous pariez sur les mêmes matchs, et le meilleur résultat <b>marque des points</b>. Au fil des journées, chacun rencontre tous les autres.":"Each <b>matchday</b>, you face <b>one opponent</b> in a <b>duel</b>: you bet on the same matches, and the better result <b>scores points</b>. Over the matchdays, everyone plays everyone.",
@@ -1718,16 +1731,17 @@ function winCount(bt,fx){ if(!bt||!bt.picks||!fx) return 0; const c=bt.card; let
 // 1 (net>0) ou 0 ; nul 1/1.  ⚠️ « net > 0 » strictement : un net de 0 (p. ex. tous les matchs du
 // jour annulés) ne donne PAS le point de bonus.
 function duelPts(h,a,v2){ const R=x=>Math.round((+x||0)*100)/100;
-  // Départage : net, puis gain. La MISE a été retirée du barème v2 (demande d'Hervé) : à net ET
-  // gain égaux, elle ne peut différer que si les effets de cartes compensent exactement l'écart
-  // — autrement dit jamais. Et « celui qui a le plus misé gagne » n'a aucune justification : miser
-  // davantage pour le même résultat, c'est prendre plus de risque, pas mieux jouer. À net et gain
-  // égaux, c'est donc un NUL. Conservée pour les ligues antérieures, qui gardent leur barème.
-  const c=(R(h.net)-R(a.net)) || (R(h.gain)-R(a.gain)) || (v2?0:(R(h.mise)-R(a.mise)));
-  if(v2){ const bh=R(h.net)>0?1:0, ba=R(a.net)>0?1:0;
+  if(v2){
+    // v2 : le SEUL juge du duel est le NET. À net ÉGAL → MATCH NUL. On ne départage PAS par le gain
+    // (ni la mise) : à net identique, un gain plus élevé signifie une mise plus élevée, donc plus de
+    // risque pris — pas un meilleur jeu (signalé par Hervé, ligue CDRCJ). Barème : V=2, N=1, D=0, +1 si net>0.
+    const c=R(h.net)-R(a.net); const bh=R(h.net)>0?1:0, ba=R(a.net)>0?1:0;
     if(c>0) return {h:2+bh, a:0+ba, win:'h'};
     if(c<0) return {h:0+bh, a:2+ba, win:'a'};
-    return {h:1+bh, a:1+ba, win:null}; }
+    return {h:1+bh, a:1+ba, win:null};
+  }
+  // ANCIEN barème (ligues antérieures à SCORING2) : départage net, puis gain, puis mise. Inchangé.
+  const c=(R(h.net)-R(a.net)) || (R(h.gain)-R(a.gain)) || (R(h.mise)-R(a.mise));
   if(c>0) return {h:R(h.net)>0?3:1, a:R(a.net)>0?1:0, win:'h'};
   if(c<0) return {h:R(h.net)>0?1:0, a:R(a.net)>0?3:1, win:'a'};
   return {h:1,a:1,win:null}; }
@@ -1850,8 +1864,10 @@ async function ensureAiBets(){ let made=false;
 function shouldAutoResolve(){
   const dz=duels; if(!dz.length || dz.some(d=>!d.fixtures)) return false; // sélection pas finie
   if(dz.some(d=>(d.fixtures||[]).some(f=>f&&f.evId))) return false; // matchs réels → résolution sur vrais résultats (Étape 2)
-  // Résolution UNIQUEMENT à la clôture des pronos (les joueurs peuvent modifier jusque-là ; les pronos adverses restent cachés avant)
-  // ET une fois les matchs fictifs « joués » — même déroulé qu'en réel (l'organisateur peut publier tout de suite si besoin).
+  // SOLO (vs 🤖 IA) en simulé : dès que le joueur a validé ses pronos, on résout TOUT DE SUITE — pas
+  // d'attente d'échéance ni de « coup d'envoi », l'adversaire est l'IA (demandé par Hervé).
+  if(isSolo() && myBet()) return true;
+  // Sinon : résolution à la clôture des pronos ET une fois les matchs fictifs « joués ».
   return deadlinePassed() && simMatchesDone();
 }
 function me(){ return players.find(p=>p.id===S.myId); }
@@ -1931,7 +1947,7 @@ function howItWorksHTML(){
    return `<div class="box" style="border-left:3px solid var(--blue)"><b class="mini">${t("💡 Comment ça marche ?")}</b>
    <div class="mini muted" style="margin-top:5px;line-height:1.7">${t("Championnat de pronos entre amis, <b>sans argent réel</b> — tu démarres avec <b>100 € virtuels</b>.")}<br>
    ${t("• <b>Enchères bonus</b> : tu mises en aveugle sur les cartes bonus que tu veux (jusqu'à <b>{a} €</b>) ; ce que tu remportes est retiré de tes 100 €.",{a:SHOP_CAP})}<br>
-   ${t("• <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2).")}<br>
+   ${t("• <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2), et un 🃏 <b>bonus</b> si tu le souhaites (facultatif).")}<br>
    ${t("• Le <b>vainqueur du duel</b> du jour marque des points.")}<br>
    ${fin}</div></div>`; }
 async function setAvatar(em){
@@ -2167,6 +2183,7 @@ function essaiSetStake(d,i,v){ essaiStakes[d][i]=Math.max(0,Math.round(+v||0));
   const fx=(d===0)?ESSAI_D1:essaiFxD2(); const allMin=fx.every((f,i2)=>(+essaiStakes[d][i2]||0)>=1);
   const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&!over&&capOk&&tgtOk;
   const el=document.getElementById("essaist"); if(el){ el.textContent=tot; el.parentNode.className=over?'red':''; }
+  const g=document.getElementById("essaigauge"); if(g){ g.querySelector("i").style.width=(max>0?Math.min(100,Math.round(tot/max*100)):0)+"%"; g.classList.toggle("over",over); }
   const b=document.getElementById("essaibetbtn"); if(b){ b.disabled=!ok; b.textContent= over? t("Mise trop élevée") : (!allMin? t("Mise de 1 € min. par pari") : (!capOk? t("Choisis ton Capitaine 👑") : (!tgtOk? t("Choisis la cible 🎯 du bonus") : t("Valider mes pronos →")))); } }
 function essaiToggleSel(k){ const j=essaiSel.indexOf(k); if(j>=0) essaiSel.splice(j,1); else if(essaiSel.length<3) essaiSel.push(k); render(); }
 function essaiFxD2(){ return essaiSel.map(k=>ESSAI_POOL[k]); }
@@ -2217,13 +2234,14 @@ function viewEssai(){
         <div class="mini muted" style="margin-top:3px;line-height:1.8">${t("1️⃣ choisis le <b>résultat</b> de chaque match · 2️⃣ saisis ta <b>mise</b> · 3️⃣ nomme ton <b>👑 Capitaine</b> (obligatoire : son match compte <b>×2</b>, en gain <b>comme en perte</b>) · 4️⃣ un <b>bonus</b> si tu veux, puis valide.")}</div></div>`:''}
       <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><div class="row"><span class="muted">${t("Ton capital")}</span><b>${cap} €</b></div>
         <div class="row" style="margin-top:4px"><span class="muted">${t("Misé")}</span><b class="${over?'red':''}"><span id="essaist">${tot}</span> € / ${max} € max</b></div>
+        <div class="gauge ${over?'over':''}" id="essaigauge" style="margin-top:6px"><i style="width:${max>0?Math.min(100,Math.round(tot/max*100)):0}%"></i></div>
         <div class="mini muted" style="margin-top:3px">${t("Total des mises ≤ <b>50 %</b> de ton capital.")}</div></div>
-      ${(avail.length||usedBefore.length)?`<div class="box"><div class="mini muted">${t("Jouer un bonus ce jour (facultatif) :")}</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
+      ${fx.map((f,i)=>betCard(d,f,i)).join("")}
+      ${(avail.length||usedBefore.length)?`<div class="box"><div class="mini muted">${t("Enfin, un bonus si tu veux (facultatif) :")}</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
         ${avail.map(id=>`<span class="chip ${essaiCard[d]===id?'g':''} clik" onclick="essaiSetCard(${d},'${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}
         ${usedBefore.map(id=>`<span class="chip" style="opacity:.4;text-decoration:line-through" title="${t("Déjà joué — un bonus ne sert qu'une fois")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}</div>
         ${essaiCard[d]?`<div class="mini muted" style="margin-top:6px">${esc(t(CARDS[essaiCard[d]].d))}${essaiCard[d]==="tout"?' <b class="blue">'+t("→ touche 🎯 sur le match visé")+'</b>':''}</div>`:''}
         ${essaiCard[d]==="tout"?`<div class="mini" style="margin-top:6px;color:var(--gold)">${t("ℹ️ Tu ne peux pas poser 🎯 sur le match de ton 👑 Capitaine — ils doivent être sur des <b>matchs différents</b> (une exception existe dans le vrai jeu).")}</div>`:''}</div>`:''}
-      ${fx.map((f,i)=>betCard(d,f,i)).join("")}
       <button class="btn" id="essaibetbtn" ${ok?'':'disabled'} onclick="${goNext}">${lbl}</button>`; };
   // Une LIGNE alignée (label à gauche, montant à droite) — même colonne que les lignes de pari,
   // pour que le net se lise comme la SOMME de toutes les lignes.
@@ -2240,10 +2258,11 @@ function viewEssai(){
   const impactLine=(d,fx)=>{ const card=essaiCard[d]; if(!card) return '';
     let raw=0; fx.forEach((f,i)=>{ const p=essaiPicks[d][i]; if(p==null) return; const st=+essaiStakes[d][i]||0; const win=p===f.res; let b=win?st*(oddOf(f,p)-1):-st; if(i===essaiCap[d]) b*=2; raw+=b; }); raw=Math.round(raw*100)/100;
     const net=essaiMeNet(d,fx); const diff=Math.round((net-raw)*100)/100; const nm=CARDS[card].e+' '+t(CARDS[card].n); let sub, lab='🃏 '+esc(nm);
-    if(card==="tout"){ const i=essaiCardTgt[d]; if(i<0){ return ''; } const f=fx[i]; const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; lab+=' ×'+(win?'3':'2');
-        sub= win? t("×3 sur {m} : {st} × ({o} − 1) × 2 (le gain simple est déjà au-dessus).",{m:esc(selLbl(f,p)),st:st,o:cote(oddOf(f,p))}) : t("×2 sur {m} : une mise de plus perdue.",{m:esc(selLbl(f,p))}); }
-    else if(card==="parachute"){ if(raw>=0) return ''; sub= t("perte amortie de 30 %."); }
-    else if(card==="sangsue"){ if(diff<=0) return ''; sub= t("+15 % du gain de ton adversaire."); }
+    // On affiche TOUJOURS la ligne du bonus joué — même sans effet — pour qu'on voie qu'il a été utilisé.
+    if(card==="tout"){ const i=essaiCardTgt[d]; if(i<0){ sub=t("aucune cible choisie — sans effet aujourd'hui."); } else { const f=fx[i]; const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; lab+=' ×'+(win?'3':'2');
+        sub= win? t("×3 sur {m} : {st} × ({o} − 1) × 2 (le gain simple est déjà au-dessus).",{m:esc(selLbl(f,p)),st:st,o:cote(oddOf(f,p))}) : t("×2 sur {m} : une mise de plus perdue.",{m:esc(selLbl(f,p))}); } }
+    else if(card==="parachute"){ sub= raw<0? t("perte amortie de 30 %.") : t("filet non déclenché (journée non négative) — sans effet aujourd'hui."); }
+    else if(card==="sangsue"){ sub= diff>0? t("+15 % du gain de ton adversaire.") : t("l'adversaire n'était pas bénéficiaire — sans effet aujourd'hui."); }
     else sub='';
     return ligne(lab,diff)+sousLigne(sub); };
   const dayResults=(d,fx)=>{ const opp=essaiOpp(d); const dn=essaiDayPts(d,fx); const me=dn.nets.me, oppNet=dn.nets[opp.id];
@@ -2587,7 +2606,7 @@ function viewCoulisses(){
 function soloFormatHTML(org){
   const opts=[[1,t("1 aller-retour — 2 journées"),t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur.")],
               [2,t("2 allers-retours — 4 journées"),t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal.")]];
-  return `<h2>${t("🤖 Format du solo (si tu restes seul à jouer)")}</h2>`
+  return `<h2>${t("🤖 Format du solo (si tu veux jouer seul face à un joueur IA)")}</h2>`
     + opts.map(o=>{ const k=o[0], cur=(getSoloAR()===k);
         return `<div class="box row ${org?'clik':''}" ${org?`onclick="setSoloAR(${k})"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${o[1]}</b><div class="mini muted">${o[2]}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`; }).join("")
     + `<div class="box mini muted">${t("🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça. L'étape de vote est donc sautée : tu passes directement aux enchères sur les bonus.")}</div>`;
@@ -3086,7 +3105,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
   const hand = meP.hand||[];
   // Bonus encore en main de l'adversaire (info publique) — affiché EN BAS, en petit cadre « info ».
   const oppHandInfo=(()=>{ if(!opp) return ''; const oc=((opp.hand)||[]).filter(id=>CARDS[id]&&!CARDS[id].retired);
-    return `<div class="box" style="background:rgba(90,166,224,.06);border-color:var(--blue);padding:8px 10px"><div class="mini muted">ℹ️ ${oc.length?t("Bonus encore en main de {a} (pas forcément joués aujourd'hui) :",{a:'<b>'+esc(opp.name)+'</b>'}):t("🃏 {a} n'a plus aucun bonus en main.",{a:esc(opp.name)})}</div>${oc.length?`<div class="cards" style="margin-top:5px">${oc.map(id=>`<div class="cardchip clik sm" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; })();
+    return `<div class="box" style="background:rgba(90,166,224,.06);border-color:var(--blue);padding:8px 10px"><div class="mini muted"><b>${t("ℹ️ Pour info")}</b> — ${oc.length?t("bonus encore en main de {a} (pas forcément joués aujourd'hui) :",{a:'<b>'+esc(opp.name)+'</b>'}):t("{a} n'a plus aucun bonus en main.",{a:esc(opp.name)})}</div>${oc.length?`<div class="cards" style="margin-top:5px">${oc.map(id=>`<div class="cardchip clik sm" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; })();
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
     <div class="row mini" style="margin-top:6px"><span class="muted">${t("Misé")} <b id="tot">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">${t("👑 Capitaine ×2")}</span></div>
@@ -3109,8 +3128,8 @@ function viewBet(d,dayLbl,opp,iAmHome){
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" title="${esc(t(CARDS[id].d))}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>
         ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire cette carte.")+'</b>':(needTarget?' <b class="blue">'+(twoCard?t("→ touche les 💥 de tes 2 matchs."):t("→ touche le 🎯 du pari ciblé."))+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
         :`<div class="mini muted" style="margin-top:6px">${t("Plus de cartes en main.")}</div>`}</div>
-    ${oppHandInfo}
-    <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>`;
+    <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>
+    ${oppHandInfo}`;
 }
 function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCard.target===i&&myCard.sel2===v) myCard.sel2=null; render(); }
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
@@ -3295,10 +3314,14 @@ function aiPlay(cap,fx,hand,day,numDays){
   // Rythme des bonus : proba de jouer une carte ce jour ≈ cartes en main / journées restantes.
   // Une proba fixe (0,4) vidait la main dès le début (signalé par Hervé) : un lot de cartes partait
   // sur les premières journées. Ici l'usage s'étale — 3 cartes sur 14 journées ≈ une toutes les ~5.
-  const nCards=(hand&&hand.length)||0;
+  // À la DERNIÈRE journée, 🥷 Voleur / 🧬 Clone sont inutiles (aucune journée suivante pour jouer la prise) :
+  // l'IA ne les joue pas — sinon elle « vole » une carte qu'elle ne pourra jamais utiliser (signalé par Hervé).
+  const isLast=(day||0)>=((numDays||1)-1);
+  const playable=isLast? (hand||[]).filter(id=>id!=="voleur"&&id!=="clone") : (hand||[]);
+  const nCards=playable.length;
   const remain=Math.max(1,((numDays||1)-(day||0)));   // journée en cours incluse (day est 0-indexé)
   const pPlay=nCards>0?Math.min(0.9,nCards/remain):0;  // plafond 0,9 : garde un grain d'aléa
-  let card=null; if(nCards&&Math.random()<pPlay){ const id=pick(hand); card={id,target:CARDS[id].t?Math.floor(Math.random()*fx.length):null};
+  let card=null; if(nCards&&Math.random()<pPlay){ const id=pick(playable); card={id,target:CARDS[id].t?Math.floor(Math.random()*fx.length):null};
     if(card.id==="chance"){ const drawIdx=fx.map((f,idx)=>f.draw?idx:-1).filter(x=>x>=0); if(drawIdx.length){ card.target=pick(drawIdx); const opts=["1","N","2"].filter(v=>v!==picks[card.target].sel); card.sel2=pick(opts); } else { card=null; } }
     else if(card.id==="dbl"){ const idxs=fx.map((f,idx)=>idx); for(let k=idxs.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[idxs[k],idxs[j]]=[idxs[j],idxs[k]];} if(idxs.length>=2){card.target=idxs[0];card.target2=idxs[1];} else card=null; } }
   return {picks,captain,card};
@@ -3584,6 +3607,10 @@ function recapBody(D){
     } else if(c.id==="face"){ const f=fxRecap[c.target]; const nm=f?`<b>${esc(f.home)}–${esc(f.away)}</b>`:'le match ciblé';
       const ob=(vb&&vb.picks&&c.target!=null)?vb.picks[c.target]:null; const owin=(ob&&f)?(ob.sel===f.res):false;
       detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(selLabel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
+    } else if(c.id==="miroir"){ const sv=im.self||0;
+      detail=(Math.abs(sv)>=0.5)
+        ? t("🪞 Ton <b>meilleur pari gagnant</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.",{a:'<b class="'+(sv>=0?'green':'red')+'">'+fmt(sv)+'€</b>',b:'<b class="'+((im.opp||0)>=0?'green':'red')+'">'+fmt(im.opp||0)+'€</b>'})
+        : t("🪞 Échange <b>sans effet</b> : l'un des deux n'avait aucun pari gagnant (ou les meilleurs gains étaient égaux).");
     } else if(c.id==="sangsue"){ detail=(Math.abs(im.opp||0)>=1)?`Tu as siphonné une part du bénéfice de l'adversaire.`:`L'adversaire n'était pas bénéficiaire → rien à siphonner.`;
     } else if(c.id==="parachute"){ detail=((im.self||0)>=1)?`Filet de sécurité déclenché : une partie de ta perte a été amortie.`:`Filet non déclenché (journée non négative).`;
     } else if(c.id==="chance" && c.sel2 && fxRecap[c.target] && bt.picks && bt.picks[c.target]){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const w=(f.res===b.sel||f.res===c.sel2); const od=dcWinOdd(f,b.sel,c.sel2);
@@ -4610,6 +4637,7 @@ function viewTrade(){
   let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
     <div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge('rachat')}</h2>
       <div class="mini muted">${t("Rachète une carte à un adversaire, ou vends une des tiennes pour te refaire du capital. L'autre reste libre d'accepter ou de refuser.")}</div>
+      <div class="mini" style="margin-top:6px;color:var(--blue)">ℹ️ ${t("Le rachat/vente n'est possible qu'entre <b>joueurs réels</b> — pas avec le 🤖 joueur IA.")}</div>
       <div class="mini muted" style="margin-top:6px">🗓️ ${t("Journées restantes : {a}",{a:journeesRestantes()})} · ${t("touche une carte pour voir son effet.")}</div></div>`;
   // Réponses à MES offres
   if(myResolvedOut.length){ h+=`<div class="box"><b class="mini">📨 ${t("Réponses à tes offres")}</b>`;
