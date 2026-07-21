@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.02";
+const APP_VERSION = "v5.03";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2088,7 +2088,8 @@ function essaiDayPts(d,fx){ const nets=essaiDayNets(d,fx); const pairs=d===0?[["
   let star=null,best=-1e9; ["me","lea","marco","nina"].forEach(k=>{ if(nets[k]>best){best=nets[k];star=k;} }); if(star) pts[star]+=1;
   return {nets,pts,star}; }
 function essaiTotals(upto,fx2){ const T={me:0,lea:0,marco:0,nina:0}; for(let d=0;d<=upto;d++){ const p=essaiDayPts(d,d===0?ESSAI_D1:fx2).pts; for(const k in T) T[k]+=p[k]; } return T; }
-function essaiRank(T){ return ESSAI_PLAYERS.map(p=>({...p,pts:T[p.id]})).sort((a,b)=>(b.pts-a.pts)||(a.id==="me"?-1:(b.id==="me"?1:0))); }
+// Classement : plus de POINTS d'abord, puis plus grosse CAGNOTTE (si fournie), puis « toi » devant.
+function essaiRank(T,caps){ return ESSAI_PLAYERS.map(p=>({...p,pts:T[p.id]})).sort((a,b)=>(b.pts-a.pts)||((caps?caps[b.id]:0)-(caps?caps[a.id]:0))||(a.id==="me"?-1:(b.id==="me"?1:0))); }
 function viewEssai(){
   const N=11, head=step=>`<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
       <div class="row" style="gap:6px">${AUTH?`<button class="btn ghost sm" onclick="exitEssai()">🏠 ${t("Accueil")}</button>`:''}${step>0?`<button class="btn ghost sm" onclick="essaiGo(${step-1})">${t("← Précédent")}</button>`:''}</div>
@@ -2169,6 +2170,7 @@ function viewEssai(){
   if(essaiStep===2){ const tot=Object.values(essaiBids).reduce((a,b)=>a+(+b||0),0), over=tot>40;
     return `${head(2)}
     <div class="box"><h2 style="margin-top:0">${t("🃏 Enchères des bonus")}</h2><div class="mini muted">${t("Chaque bonus revient au <b>plus offrant</b> (à égalité, au plus rapide). Tu ne connais pas les mises des autres. <b>Miser est facultatif</b> — ce que tu remportes est <b>retiré de tes 100 €</b>.")}</div>
+      <div class="mini" style="margin-top:6px;color:var(--gold)">${t("⚖️ Tout est une question de <b>stratégie</b> : miser pour t'<b>armer de bonus</b>… mais en gardant assez d'<b>argent pour parier gros</b> ensuite. Ce que tu remportes est retiré de tes 100 €.")}</div>
       <div class="mini" style="margin-top:6px;color:var(--gold)">${t("⚠️ Ces enchères n'ont lieu qu'<b>une seule fois, au départ</b> — ne te loupe pas ! (Tu pourras tout de même <b>racheter ou vendre</b> des bonus à tes adversaires en cours de saison.)")}</div>
       <div class="mini muted" style="margin-top:6px">${t("On t'a pré-rempli des mises pour l'exemple — <b>ajuste-les</b> librement, ou mets 0 pour garder ton capital.")}</div>
       <div class="row" style="margin-top:6px"><span class="muted">${t("Total misé")}</span><b class="${over?'red':''}"><span id="essaibt">${tot}</span> € / 40 € max</b></div></div>
@@ -2211,10 +2213,11 @@ function viewEssai(){
         <li>${t("<b>+1</b> au <b>⭐ meilleur pronostiqueur</b> de la journée (plus gros net de la ligue)")}</li></ul></div>
     <div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:8px 10px;line-height:1.6">💡 <b>${t("Deux compteurs à ne pas confondre")}</b> : ${t("ton <b>gain en €</b> nourrit ton <b>capital</b> (de quoi miser les journées suivantes) ; les <b>points</b> font le <b>classement</b>. On peut gagner de l'argent et perdre le duel — et l'inverse !")}</div>
     <div class="box"><div class="mini muted">${t("Classement — après 1 journée sur 6")}</div>
-      ${(()=>{ const caps=essaiCapitals(0,[]); return essaiRank(essaiTotals(0,[])).map((p,i)=>`<div class="row" style="margin-top:${i?3:5}px"><b>${["🥇","🥈","🥉"][i]||'4.'} ${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</b><span style="font-variant-numeric:tabular-nums"><b>${p.pts} pts</b> <span class="mini muted">· ${caps[p.id].toFixed(2)} €</span></span></div>`).join(""); })()}</div>
+      <div style="overflow-x:auto;margin-top:6px"><table style="width:100%;font-variant-numeric:tabular-nums">
+      ${(()=>{ const caps=essaiCapitals(0,[]); return essaiRank(essaiTotals(0,[]),caps).map((p,i)=>`<tr><td style="width:1%">${["🥇","🥈","🥉"][i]||(i+1)+'.'}</td><td>${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num" style="white-space:nowrap"><b>${p.pts} pt${p.pts>1?'s':''}</b></td><td class="num muted" style="white-space:nowrap">${caps[p.id].toFixed(2)} €</td></tr>`).join(""); })()}</table></div></div>
     <button class="btn" onclick="essaiGo(6)">${t("Journée 2 →")}</button>`; }
   // 6 — sélection matchs J2 (+ annonce du nouvel adversaire)
-  if(essaiStep===6){ const rk=essaiRank(essaiTotals(0,[])); const mr=rk.findIndex(p=>p.id==="marco")+1;
+  if(essaiStep===6){ const rk=essaiRank(essaiTotals(0,[]),essaiCapitals(0,[])); const mr=rk.findIndex(p=>p.id==="marco")+1;
     return `${head(6)}
     <div class="box" style="border:2px solid var(--blue);background:rgba(90,166,224,.10)"><div class="mini"><b>${t("🆕 Nouvelle journée, nouvel adversaire")}</b></div>
       <div class="mini muted" style="margin-top:3px">${t("En J1 tu affrontais 🦊 Léa. Cette journée, tu défies 🐼 <b>Marco</b> — actuellement <b>{a}{b} au classement</b>. Chaque journée oppose de nouveaux duels.",{a:mr,b:mr===1?"er":"e"})}</div></div>
@@ -2232,7 +2235,8 @@ function viewEssai(){
     <div class="box"><h2 style="margin-top:0">${t("📅 Résultats — Journée 2")}</h2></div>
     ${R2c.html}
     <div class="box"><div class="mini muted">${t("Classement — après 2 journées sur 6")}</div>
-      ${(()=>{ const caps=essaiCapitals(1,fx2); return essaiRank(essaiTotals(1,fx2)).map((p,i)=>`<div class="row" style="margin-top:${i?3:5}px"><b>${["🥇","🥈","🥉"][i]||'4.'} ${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</b><span style="font-variant-numeric:tabular-nums"><b>${p.pts} pts</b> <span class="mini muted">· ${caps[p.id].toFixed(2)} €</span></span></div>`).join(""); })()}</div>
+      <div style="overflow-x:auto;margin-top:6px"><table style="width:100%;font-variant-numeric:tabular-nums">
+      ${(()=>{ const caps=essaiCapitals(1,fx2); return essaiRank(essaiTotals(1,fx2),caps).map((p,i)=>`<tr><td style="width:1%">${["🥇","🥈","🥉"][i]||(i+1)+'.'}</td><td>${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num" style="white-space:nowrap"><b>${p.pts} pt${p.pts>1?'s':''}</b></td><td class="num muted" style="white-space:nowrap">${caps[p.id].toFixed(2)} €</td></tr>`).join(""); })()}</table></div></div>
     <button class="btn" onclick="essaiGo(9)">${t("Suivant →")}</button>`; }
   // 9 — page « les journées s'enchaînent » (avant le classement final)
   if(essaiStep===9){ return `${head(9)}
@@ -2257,7 +2261,7 @@ function viewEssai(){
       <div class="mini muted" style="margin-top:2px">${t("pour le dernier — {a}",{a:last.e+' '+esc(last.n)})}</div>
       <div style="font-size:17px;font-weight:700;margin-top:3px">${esc(ESSAI_GAGES[essaiGage])}</div>
       <div class="mini muted" style="margin-top:3px">${champMe?t("choisi par toi 🏆"):t("choisi par le vainqueur 🏆")}</div></div>
-    <div class="box" style="border-color:var(--blue);background:rgba(90,166,224,.08)"><b class="mini">${t("🤝 Et ce n'est pas tout")}</b>
+    <div class="box" style="border-color:var(--blue);background:rgba(90,166,224,.08)"><b class="mini">${t("📌 Points importants à retenir")}</b>
       <ul class="mini muted" style="margin:6px 0 0;padding-left:18px;line-height:1.7">
         <li>${t("Un <b>bonus</b> bien placé peut <b>tout renverser</b> à n'importe quelle journée — garde-en sous le coude.")}</li>
         <li>${t("Le <b>⭐ meilleur pronostiqueur</b> d'une journée marque un <b>point bonus</b> au classement.")}</li>
