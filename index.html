@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.20";
+const APP_VERSION = "v5.21";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1427,6 +1427,8 @@ const EN={
   "Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). À <b>net égal</b>, c'est un <b>match nul</b> — ni le gain ni la mise ne départagent.":"Each day, in your <b>duel</b>, the <b>winner</b> is whoever has the <b>best net result</b> (gains − stakes). At <b>equal net</b>, it's a <b>draw</b> — neither gain nor stake breaks the tie.",
   "Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.":"Points: <b>winner</b> = <b>3 pts</b> if their net is positive, <b>1 pt</b> if negative; <b>loser</b> = <b>1 pt</b> if their net is positive, <b>0 pt</b> if negative; <b>draw</b> = <b>1 pt</b> each.",
   "Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.":"Bonus: the <b>best forecaster</b> ⭐ (biggest net among <b>all</b> players) earns <b>+1 point</b>.",
+  "(À partir de <b>3 joueurs</b> : à deux, le plus gros net revient forcément au vainqueur du duel — le point serait redondant.)":"(From <b>3 players</b> up: with two, the biggest net always goes to the duel winner — the point would be redundant.)",
+  "Cela n'arrive <b>pas sur la dernière journée</b> : il n'y a plus rien à miser ensuite.":"This doesn't happen <b>on the last matchday</b>: there's nothing left to bet afterwards.",
   "Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.":"Standings tiebreakers: capital, then duel wins, biggest gain, biggest odds.",
   "🔥 Dynamique":"🔥 Momentum",
   "Une 🔥 flamme signale une <b>bonne dynamique</b> (victoires de duel qui s'enchaînent), un ❄️ flocon une <b>mauvaise passe</b>. C'est <b>purement indicatif</b> (visible au classement) : aucun bonus ni malus n'y est associé.":"A 🔥 flame marks a <b>good run</b> (consecutive duel wins), a ❄️ snowflake a <b>rough patch</b>. It's <b>purely indicative</b> (shown in the standings): no bonus or penalty attached.",
@@ -1770,6 +1772,12 @@ function dayStar(rows,v2){ const R=x=>Math.round((+x||0)*100)/100; let best=null
     const c=(R(r.net)-R(best.net))||(R(r.gain)-R(best.gain))||(v2?0:(R(r.mise)-R(best.mise)))||((best.order||0)-(r.order||0));
     if(c>0) best=r; }
   return best?best.id:null; }
+// L'⭐ meilleur pronostiqueur (+1 pt) n'a de sens qu'à partir de 3 joueurs : à DEUX, le plus gros
+// net revient forcément au vainqueur du duel (barème v2 basé sur le net), qui mène déjà — le point
+// bonus ferait double emploi (signalé par Hervé). Doit être testé À L'IDENTIQUE partout où l'étoile
+// est attribuée (resolveDay / recapBody / computeStandHist / graphe), sinon les points recalculés
+// divergent de ceux écrits en base.
+function starMech(n){ return (+n||0) > 2; }
 function simResult(f){ const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1",f.oh],["2",f.oa]];
   const inv=outs.map(o=>1/o[1]); const sum=inv.reduce((a,b)=>a+b,0);
   let r=Math.random(); for(let i=0;i<outs.length;i++){ r-=inv[i]/sum; if(r<=0) return outs[i][0]; } return outs[outs.length-1][0]; }
@@ -1834,7 +1842,10 @@ async function refresh(){
 // Récapitalisation : une fenêtre fermable à l'ouverture du récap concerné (un bandeau seul passait
 // inaperçu — signalé par Hervé). Une seule fois par ligue+journée, mémorisé en localStorage.
 function maybeRecapModal(dispDay){
-  if(!L || !S.recap || !L.recap_note || L.recap_note.day!==dispDay) return;
+  // `recap_note.day` = la journée RENFLOUÉE (voir resolveDay). La fenêtre s'ouvre donc quand le joueur
+  // arrive sur CETTE journée-là (au lancement des paris), après avoir vu les résultats de la précédente —
+  // et non plus sur l'écran de résultats. On ne conditionne donc plus à `S.recap`.
+  if(!L || !L.recap_note || L.recap_note.day!==dispDay) return;
   const key="pl_recapseen_"+L.id+"_"+dispDay;
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
   const names=(L.recap_note.names||[]); const multi=names.length>1;
@@ -3497,7 +3508,7 @@ async function resolveDay(){
     // ⚠️ `mise>0` : un joueur dont TOUS les paris ont été annulés a un net de 0 ARTIFICIEL (mises rendues).
     // Il n'a rien pronostiqué ce jour-là → il ne peut pas rafler l'étoile devant des joueurs en négatif.
     const starId=dayStar(ps.filter(p=>!forgot.has(p.id)).map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }).filter(r=>r.mise>0), isScoring2());
-    if(starId!=null) upd[starId].points+=1;
+    if(starId!=null && starMech(N)) upd[starId].points+=1;   // pas d'étoile à 2 joueurs (cf. starMech)
     // (v4.13 — malus « −1 pt si tous les paris faux » SUPPRIMÉ.) C'était une TROISIÈME peine pour le
     // même échec : le joueur a déjà perdu toutes ses mises ET son duel. Mesuré sur les données réelles :
     // 5,2 % des paris joués (1 sur 20) — ce n'était pas un cas rare. Retiré aussi de recapBody() et
@@ -3524,14 +3535,20 @@ async function resolveDay(){
     // la boucle de consommation ci-dessus : sinon celle-ci pourrait retirer la carte tout juste volée.
     // La victime, elle, a bien joué la sienne — elle est consommée normalement (barrée chez elle).
     for(const pid in stolen){ if(upd[pid]) upd[pid].hand.push(stolen[pid]); }
-    // Recapitalisation solidaire : si un humain n'a plus assez pour miser (< seuil), +20€ à lui ET à tout le monde
+    // Recapitalisation solidaire : si un humain n'a plus assez pour miser (< seuil), +20€ à lui ET à tout le monde.
+    // ⚠️ UNIQUEMENT s'il reste une journée à jouer : le renflouement sert à pouvoir MISER la journée
+    // suivante. Si le tournoi se termine ICI (dernière journée), il ne sert à rien et retirerait un
+    // point pour rien (signalé par Hervé, ligue 9dwsf). Le message, lui, s'affiche AU LANCEMENT de la
+    // journée suivante (pas sur l'écran de résultats) → `recap_note.day` = la journée RENFLOUÉE (D+1),
+    // pas celle qu'on vient de résoudre. Sur l'écran de résultats de D on voit d'abord ses gains, propre.
     let recapNote=null;
-    const broke=ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
+    const willBeDone=(D+1)>=fresh.num_days;
+    const broke = willBeDone ? [] : ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
     // +20 € à TOUT LE MONDE (solidaire), mais −1 pt de championnat pour le SEUL joueur renfloué :
     // le coup de pouce ne doit pas être neutre pour celui qui l'a déclenché. Appliqué à l'identique
     // dans computeStandHist(), sinon le classement recalculé divergerait de la base (piège v4.77).
     if(broke.length){ ps.forEach(p=>{ upd[p.id].capital += RECAP_AMOUNT; }); broke.forEach(p=>{ upd[p.id].points -= 1; });
-      recapNote={day:D, amount:RECAP_AMOUNT, penalty:1, names:broke.map(p=>(p.emoji?p.emoji+' ':'')+p.name)}; }
+      recapNote={day:D+1, amount:RECAP_AMOUNT, penalty:1, names:broke.map(p=>(p.emoji?p.emoji+' ':'')+p.name)}; }
     for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
     try{ await q(db.from("leagues").update({recap_note:recapNote}).eq("id",L.id)); }catch(e){} // message recapitalisation (défensif si colonne absente)
     const next=D+1; const done=next>=fresh.num_days;
@@ -3553,7 +3570,8 @@ function recapBody(D){
     const A=Object.assign({net:netMap[d.away_id]||0}, gainMise(ab&&ab.picks, d.fixtures));
     const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id),isScoring2()); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a; });
     // (v4.13 — le malus « −1 pt si tous les paris faux » qui s'appliquait ici est supprimé, cf. resolveDay.)
-  const starId=dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }), isScoring2());
+  const starOn=starMech(players.length);   // ⭐ désactivée à 2 joueurs (points + affichage)
+  const starId=starOn?dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }), isScoring2()):null;
   if(starId!=null) dpts[starId]+=1;
   players.forEach(p=>{ if(forgot(p.id)) dpts[p.id]+=forgotPtsOf(); }); // pénalité d'oubli (alignée sur resolveDay/classement)
   // Classement de la journée : d'abord les POINTS du jour (duel + ⭐ − malus), puis le gain en cas d'égalité.
@@ -3688,8 +3706,8 @@ function recapBody(D){
       </div>
       ${(()=>{ const dbN=Math.max(hNet,aNet), dbP=(hNet>=aNet?hP:aP); const sP=starId?(pById(starId)||{}):{}; const sN=starId?(netMap[starId]||0):0;
         return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;line-height:1.85">
-        🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="${dbN>=0?'green':'red'}">${fmt(dbN)}€</b> — ${esc((dbP.emoji||'')+' '+(dbP.name||'?'))}<br>
-        <span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${esc((sP.emoji||'')+' '+(sP.name||'?'))} <span class="muted">${t("→ +1 pt bonus")}</span></div>`; })()}
+        🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="${dbN>=0?'green':'red'}">${fmt(dbN)}€</b> — ${esc((dbP.emoji||'')+' '+(dbP.name||'?'))}${starId?`<br>
+        <span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${esc((sP.emoji||'')+' '+(sP.name||'?'))} <span class="muted">${t("→ +1 pt bonus")}</span>`:''}</div>`; })()}
     </div>`;
   }
   return `${quickBar('results')}${recapNav(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
@@ -3702,11 +3720,11 @@ function recapBody(D){
     ${detail?`<h2>${t("⚔️ Le duel en détail")}</h2>${detail}`:''}
     <h2>${t("Résultats de la journée")}</h2>
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.")}</div>
-    <div class="box" style="padding:4px 12px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th>${t("Carte")}</th></tr>
+    <div class="box" style="padding:4px 12px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th>${t("Carte")}</th></tr>
       ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}${forgot(p.id)?' <span class="tag red" title="'+t("Pari non validé à temps : {b} pt au classement et −{a} % du capital",{b:forgotPtsShown(),a:pct(forgotPenShown())})+'">⏰ '+forgotPtsShown()+'</span>':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
         <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
-        <td class="num">${isStar?'+1':'–'}</td>
+        ${starOn?`<td class="num">${isStar?'+1':'–'}</td>`:''}
         <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?`<span class="clik" style="font-size:1.25em" onclick="event.stopPropagation();showCardInfo('${cardMap[p.id].id}')">${CARDS[cardMap[p.id].id].e}</span>`:'–'}</td></tr>`;}).join("")}</table></div>`;
 }
 // Fenêtre « détail du calcul » du gain net d'un joueur pour la journée affichée
@@ -3842,7 +3860,7 @@ function computeStandHist(){
     const rows=[]; players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du||forgot.has(p.id)) return; const b=betAt[d+'|'+p.id]; const gm=gainMise(b&&b.picks, du.fixtures);
       if(gm.mise<=0) return; // tous ses paris annulés → net 0 artificiel, pas éligible à l'étoile (idem resolveDay)
       rows.push({id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}); });
-    const sid=dayStar(rows,isScoring2()); if(sid!=null && st[sid]){ st[sid].points+=1; st[sid].star+=1; }
+    const sid=dayStar(rows,isScoring2()); if(sid!=null && st[sid] && starMech(players.length)){ st[sid].points+=1; st[sid].star+=1; }
     // (v4.13 — le malus « −1 pt si tous les paris faux » est supprimé, cf. resolveDay. ⚠️ Cette fonction
     // REJOUE tout l'historique : ne pas le retirer ici aurait fait diverger le classement affiché des
     // points réellement écrits en base par resolveDay.)
@@ -3856,9 +3874,11 @@ function computeStandHist(){
       const bb=betAt[d+'|'+pid]; const penInNet=!!(bb && (bb.net||0)<0);
       if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*(1-forgotPenOf())*100)/100); });
     // recapitalisation solidaire : si un humain < seuil → +montant à tout le monde
-    const broke=players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
     // Miroir de resolveDay : +20 € à tous, −1 pt au(x) joueur(s) renfloué(s). Les deux doivent rester
-    // synchrones, sinon les points recalculés ici divergeraient de ceux écrits en base.
+    // synchrones, sinon les points recalculés ici divergeraient de ceux écrits en base. Et comme
+    // resolveDay, PAS de renflouement sur la dernière journée du tournoi (rien à miser ensuite).
+    const isLastDay=(d===((L.num_days||0)-1));
+    const broke=isLastDay?[]:players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
     if(broke.length){ players.forEach(p=>{ if(st[p.id]) st[p.id].capital+=RECAP_AMOUNT; }); broke.forEach(p=>{ if(st[p.id]) st[p.id].points-=1; }); }
     snaps.push(players.map(p=>({ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
       points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star })));
@@ -4053,6 +4073,7 @@ function viewStandings(){
     ? players.map(p=>({id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,points:p.points,capital:p.capital,duel_wins:p.duel_wins,best_day:p.best_day,best_odd:p.best_odd,streak_w:p.streak_w,streak_l:p.streak_l,star:sc[p.id]||0}))
     : snaps[sd];
   const ord=classe(rows);
+  const starOn=starMech(players.length);   // ⭐ masquée à 2 joueurs
   const shownIdx = useLive? Math.max(0,R-1) : sd;
   const nav = (R>=1) ? `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm" ${shownIdx>0?'':'disabled'} onclick="setStandDay(${shownIdx-1})">${t("◀ Préc.")}</button>
       <b class="mini" style="text-align:center;flex:1">${useLive?t("Classement actuel · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days}):t("Classement après J{a}/{b}",{a:sd+1,b:L.num_days})}</b>
@@ -4061,10 +4082,10 @@ function viewStandings(){
   return `<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" onclick="S.view='game';render()">${t("← Retour au jeu")}</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">${t("📅 Résultats par journée")}</button><button class="btn ghost sm" onclick="openLeagueStats()">📊 ${t("Stats de la ligue")}</button>`:''}</div>
     ${quickBar('standings')}
     ${nav}
-    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th><th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
+    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
       ${ord.map((p,i)=>{const s=p.streak_w>0?'🔥'+p.streak_w:(p.streak_l>0?'❄️'+p.streak_l:''); const bp=p.star||0; const dp=p.points-bp;
         return `<tr><td>${p.is_ai?'🤖':i+1}</td><td><span class="clik" onclick="showPlayerCards('${p.id}')">${p.emoji} ${esc(p.name)}</span>${s?' <span class="mini muted">'+s+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td>
-        <td class="num">${dp}</td><td class="num">${bp||'–'}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
+        <td class="num">${dp}</td>${starOn?`<td class="num">${bp||'–'}</td>`:''}<td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     <div class="mini muted" style="margin:-2px 2px 8px">${t("👉 Touche un joueur pour voir ses bonus (restants et utilisés).")}</div>
     ${ptsChart()}
     ${capChart()}
@@ -4176,7 +4197,7 @@ async function loadEndStats(){
         const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // forfait (pronos non validés)
         const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); if(cumPts[du.home_id]!=null)cumPts[du.home_id]+=r.h; if(cumPts[du.away_id]!=null)cumPts[du.away_id]+=r.a; });
       const rows=players.map(p=>{ const b=betAt[d+'|'+p.id]; const du=(duelByDay[d]||[]).find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, du&&du.fixtures); return {id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; });
-      const sid=dayStar(rows,isScoring2()); if(sid!=null&&cumPts[sid]!=null)cumPts[sid]+=1;
+      const sid=dayStar(rows,isScoring2()); if(sid!=null&&cumPts[sid]!=null&&starMech(players.length))cumPts[sid]+=1;
       const ord=[...players].sort((a,b)=>(cumPts[b.id]-cumPts[a.id])||(b.capital-a.capital)); ord.forEach((p,idx)=>rankHist[p.id][d]=idx+1); leaderByDay.push(ord[0]?ord[0].id:null);
     }
     let leadChanges=0; const daysLed={};
@@ -4835,7 +4856,7 @@ function viewRules(){
      <br>${scoringShown()
        ? t("Points : <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif. Soit <b>3 pts</b> au mieux, <b>0</b> au pire.")
        : t("Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.")}
-     <br>${t("Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.")}
+     <br>${t("Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.")} ${t("(À partir de <b>3 joueurs</b> : à deux, le plus gros net revient forcément au vainqueur du duel — le point serait redondant.)")}
      <br>${t("Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.")}</div></div>
    <div class="box"><b>${t("🔥 Dynamique")}</b>
      <div class="mini muted" style="margin-top:6px">${t("Une 🔥 flamme signale une <b>bonne dynamique</b> (victoires de duel qui s'enchaînent), un ❄️ flocon une <b>mauvaise passe</b>. C'est <b>purement indicatif</b> (visible au classement) : aucun bonus ni malus n'y est associé.")}</div></div>
@@ -4887,7 +4908,7 @@ function viewRulesFull(){
 
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
      ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton Capitaine. <b>Ton capital ne descend jamais sous 0.</b>")}<br>
-     ${t("<b>💸 Recapitalisation solidaire :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Dans ce cas <b>tout le monde</b> reçoit <b>+{b} €</b> — pas seulement lui — pour que personne ne soit distancé par un accident. Le joueur renfloué perd <b>1 point</b> de championnat.",{a:RECAP_THRESHOLD,b:RECAP_AMOUNT})}<br>
+     ${t("<b>💸 Recapitalisation solidaire :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Dans ce cas <b>tout le monde</b> reçoit <b>+{b} €</b> — pas seulement lui — pour que personne ne soit distancé par un accident. Le joueur renfloué perd <b>1 point</b> de championnat.",{a:RECAP_THRESHOLD,b:RECAP_AMOUNT})} ${t("Cela n'arrive <b>pas sur la dernière journée</b> : il n'y a plus rien à miser ensuite.")}<br>
      ${t("🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.",{a:STALE_MATCH_H})}<br>
      ${t("⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.")}`)}
 
