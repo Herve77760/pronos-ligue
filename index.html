@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.17";
+const APP_VERSION = "v5.18";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2190,10 +2190,12 @@ function essaiSetStake(d,i,v){ essaiStakes[d][i]=Math.max(0,Math.round(+v||0));
   const b=document.getElementById("essaibetbtn"); if(b){ b.disabled=!ok; b.textContent= over? t("Mise trop élevée") : (!allMin? t("Mise de 1 € min. par pari") : (!capOk? t("Choisis ton Capitaine 👑") : (!tgtOk? t("Choisis la cible 🎯 du bonus") : t("Valider mes pronos →")))); } }
 function essaiToggleSel(k){ const j=essaiSel.indexOf(k); if(j>=0) essaiSel.splice(j,1); else if(essaiSel.length<3) essaiSel.push(k); render(); }
 function essaiFxD2(){ return essaiSel.map(k=>ESSAI_POOL[k]); }
-// L'adversaire mise comme le joueur (même mise par match) → évite les nuls. Il a AUSSI un Capitaine
-// (match essaiBotCap) doublé, pour illustrer que son net se lit comme le nôtre.
+// L'adversaire a ses PROPRES mises (fixes, indépendantes des tiennes — avant il copiait les tiennes, ce
+// qui faisait faux, signalé par Hervé). Il a aussi un Capitaine (match essaiBotCap) doublé.
+const ESSAI_BOTSTAKE=[12,8,10];   // mise de l'IA par match (indépendante du joueur)
+function essaiBotStk(i){ return ESSAI_BOTSTAKE[i]!=null?ESSAI_BOTSTAKE[i]:ESSAI_STAKE; }
 function essaiBotCap(d){ return d===0?2:0; }   // match du capitaine adverse (J1 : Nadal gagnant · J2 : 1er match)
-function essaiBotNet(fx,stakes,capIdx){ if(capIdx==null) capIdx=-1; let n=0; fx.forEach((f,i)=>{ const st=(stakes&&(+stakes[i]))?+stakes[i]:ESSAI_STAKE; const win=f.botSel===f.res; let g=win?st*(oddOf(f,f.botSel)-1):-st; if(i===capIdx) g*=2; n+=g; }); return Math.round(n*100)/100; }
+function essaiBotNet(fx,stakes,capIdx){ if(capIdx==null) capIdx=-1; let n=0; fx.forEach((f,i)=>{ const st=essaiBotStk(i); const win=f.botSel===f.res; let g=win?st*(oddOf(f,f.botSel)-1):-st; if(i===capIdx) g*=2; n+=g; }); return Math.round(n*100)/100; }
 function essaiMeNet(d,fx){ const picks=essaiPicks[d]||[], stakes=essaiStakes[d]||[], cap=essaiCap[d], card=essaiCard[d], tgt=essaiCardTgt[d];
   let n=0; fx.forEach((f,i)=>{ if(picks[i]==null) return; const st=+stakes[i]||0; const win=picks[i]===f.res; const base= win? st*(oddOf(f,picks[i])-1) : -st;
     let g=base; if(card==="tout"&&i===tgt){ g= win? base*3 : base*2; } else if(i===cap){ g=base*2; } n+=g; });
@@ -2254,7 +2256,7 @@ function viewEssai(){
   const capLine=(d,fx,forBot)=>{ const c=forBot?essaiBotCap(d):essaiCap[d]; if(c<0||c==null) return '';
     const f=fx[c]; if(!f) return ''; const sel=forBot?f.botSel:essaiPicks[d][c]; if(sel==null) return '';
     if(!forBot&&essaiCard[d]==="tout"&&essaiCardTgt[d]===c) return '';   // exclusivité 🎯/👑
-    const st=forBot?((+essaiStakes[d][c])||ESSAI_STAKE):(+essaiStakes[d][c]||0), win=sel===f.res, add=win?st*(oddOf(f,sel)-1):-st; if(!add) return '';
+    const st=forBot?essaiBotStk(c):(+essaiStakes[d][c]||0), win=sel===f.res, add=win?st*(oddOf(f,sel)-1):-st; if(!add) return '';
     return ligne(`👑 ${t("Capitaine")} ×2 · ${esc(selLbl(f,sel))}`,add)+sousLigne(win?t("gain doublé"):t("perte doublée"));
   };
   // Ligne « Bonus » : effet MARGINAL (capitaine déjà compté à part), montant aligné + explication dessous.
@@ -2275,7 +2277,7 @@ function viewEssai(){
     const lignesMe=()=>fx.map((f,i)=>{ const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; const base=win?st*(oddOf(f,p)-1):-st;
       let tag=''; if(i===essaiCap[d]) tag+=' 👑'; if(card==="tout"&&i===tgt) tag+=' 🔥';
       return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,p))}${tag} · ${st}€ @${cote(oddOf(f,p))}</span><b class="mini ${base>=0?'green':'red'}">${fmt(base)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
-    const lignesBot=()=>fx.map((f,i)=>{ const st=+essaiStakes[d][i]||ESSAI_STAKE; const win=f.botSel===f.res; const g=win?st*(oddOf(f,f.botSel)-1):-st;
+    const lignesBot=()=>fx.map((f,i)=>{ const st=essaiBotStk(i); const win=f.botSel===f.res; const g=win?st*(oddOf(f,f.botSel)-1):-st;
       return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,f.botSel))}${i===bcap?' 👑':''} · ${st}€ @${cote(oddOf(f,f.botSel))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
     const bd=[t("duel {a}",{a:duelB})].concat(netB?['+1 '+t("net positif")]:[]).concat(starB?['+1 ⭐']:[]).join(' · ');
     return {won,tie,myPts,html:`<div class="recaphero ${won?'win':(tie?'':'loss')}"><div class="row">
