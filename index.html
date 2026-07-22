@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.16";
+const APP_VERSION = "v5.17";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -689,6 +689,7 @@ const EN={
   "Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b> et d'en jouer <b>plusieurs à la fois</b>, depuis n'importe quel appareil.":"No email needed: pick a username + password. Your account lets you <b>find all your leagues</b> and play <b>several at once</b>, from any device.",
   "Identifiant et mot de passe requis.":"Username and password required.",
   "Identifiant ou mot de passe incorrect.":"Wrong username or password.",
+  "Ton accès a été suspendu par l'organisateur.":"Your access has been suspended by the organizer.",
   "Choisis un identifiant (2 caractères minimum).":"Pick a username (2 characters minimum).",
   "Mot de passe : 8 caractères minimum.":"Password: 8 characters minimum.",
   "Mot de passe trop court (8 caractères minimum).":"Password too short (8 characters minimum).",
@@ -1905,7 +1906,7 @@ async function doLogin(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
   if(!u||!p){showErr(t("Identifiant et mot de passe requis."));return;} busy=true; showErr("");
   const { data, error } = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
-  if(error){ showErr(t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
+  if(error){ showErr(/ban/i.test(error.message)?t("Ton accès a été suspendu par l'organisateur."):t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
   AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u, avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"" };
   S.view="leagues"; busy=false; await loadMyLeagues();
 }
@@ -4276,6 +4277,14 @@ async function adminResetPwd(uid){ const u=(adminUsers||[]).find(x=>x.id===uid)|
   if((np||"").length<6){ alert("6 caractères minimum."); return; }
   try{ await q(db.rpc("admin_set_password",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_new_password:np})); infoWin("Mot de passe réinitialisé pour "+esc(u.username||"")); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Reset : "+e.message)); } }
+// Couper / réactiver l'accès d'un joueur (bannissement natif Supabase). L'admin ne peut pas se bloquer.
+async function adminSetBlocked(uid, block){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
+  if(uid===AUTH.id){ alert("Tu ne peux pas te bloquer toi-même."); return; }
+  if(!confirm((block?"Couper l'accès de « ":"Réactiver l'accès de « ")+(u.username||"?")+" » ?")) return;
+  try{ await q(db.rpc("admin_set_blocked",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_blocked:block}));
+    adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render();
+    infoWin(block?("🔒 Accès coupé pour "+esc(u.username||"")):("🔓 Accès réactivé pour "+esc(u.username||""))); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Blocage : "+e.message)); } }
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
@@ -4489,8 +4498,11 @@ function viewAdmin(){
       <div style="height:8px"></div>
       <button class="btn ghost" onclick="adminLoadUsers()">${adminUsers?'🔄 Rafraîchir la liste':'🔓 Charger les comptes'}</button>
       ${adminUsers?`<div style="margin-top:12px">${adminUsers.length?adminUsers.map(u=>`
-        <div class="box row" style="text-align:left"><div style="min-width:0"><b>${esc(u.username||'?')}</b><div class="mini muted" style="word-break:break-all">${esc(u.email||'')}${u.last_sign_in_at?' · vu '+new Date(u.last_sign_in_at).toLocaleDateString(lang==='en'?'en-GB':'fr-FR'):''}</div></div>
-          <button class="btn ghost sm" style="flex:0 0 auto;border-color:var(--gold);color:var(--gold)" onclick="adminResetPwd('${u.id}')">🔑 Réinitialiser</button></div>`).join(''):'<div class="mini muted">Aucun compte.</div>'}</div>`:'<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin, puis charge la liste pour réinitialiser le mot de passe d\'un joueur.</div>'}</div>`;
+        <div class="box" style="text-align:left"><div class="row" style="gap:8px;align-items:flex-start"><div style="min-width:0"><b>${esc(u.username||'?')}${u.id===AUTH.id?' <span class="tag">toi</span>':''}</b><div class="mini muted" style="word-break:break-all">${esc(u.email||'')}${u.last_sign_in_at?' · vu '+new Date(u.last_sign_in_at).toLocaleDateString(lang==='en'?'en-GB':'fr-FR'):''}</div></div>${u.banned?'<span class="chip" style="flex:0 0 auto;background:rgba(229,105,95,.15);color:#e5695f;border:1px solid rgba(229,105,95,.4)">🔒 bloqué</span>':''}</div>
+          <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+            <button class="btn ghost sm" style="flex:0 0 auto;border-color:var(--gold);color:var(--gold)" onclick="adminResetPwd('${u.id}')">🔑 Mot de passe</button>
+            ${u.id===AUTH.id?'':`<button class="btn ghost sm" style="flex:0 0 auto;border-color:${u.banned?'var(--green)':'var(--red)'};color:${u.banned?'var(--green)':'var(--red)'}" onclick="adminSetBlocked('${u.id}',${u.banned?'false':'true'})">${u.banned?'🔓 Réactiver l\'accès':'🔒 Couper l\'accès'}</button>`}
+          </div></div>`).join(''):'<div class="mini muted">Aucun compte.</div>'}</div>`:'<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin, puis charge la liste pour gérer les accès (couper / réactiver) et les mots de passe.</div>'}</div>`;
 }
 
 /* ============ render / poll ============ */
