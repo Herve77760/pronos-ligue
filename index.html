@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.21";
+const APP_VERSION = "v5.23";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1099,7 +1099,8 @@ const EN={
   "Acheté ! {c} est à toi (−{b} €).":"Bought! {c} is yours (−€{b}).",
   "{a} a accepté : {c} vendue (+{b} €).":"{a} accepted: {c} sold (+€{b}).",
   // --- Premium (badge + fiche stats + récap) ---
-  "✨ Premium":"✨ Premium", "Fonction premium":"Premium feature",
+  "✨ Premium":"✨ Premium", "🔒 Premium":"🔒 Premium", "Fonction premium":"Premium feature",
+  "🔒 Cette option n'est <b>pas activée sur ton compte</b>. En jeu réel, il faudrait la débloquer pour en profiter.":"🔒 This option is <b>not enabled on your account</b>. In the real game, you'd need to unlock it to use it.",
   "Fonction premium — offerte pendant la phase de test":"Premium feature — free during the test phase",
   "Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁":"This feature will be part of the <b>premium options</b> eventually. <b>During the test phase, it's free and available to everyone</b> — enjoy it! 🎁",
   // --- Fiches de vente premium par option (pitchs) ---
@@ -1568,16 +1569,30 @@ const PITCHES={
     "Le confort maximal, zéro prise de tête."]}
 };
 const PREM_FOOTER="Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁";
+const PREM_LOCKED="🔒 Cette option n'est <b>pas activée sur ton compte</b>. En jeu réel, il faudrait la débloquer pour en profiter.";
+// ─── Options premium ACTIVÉES sur le compte connecté ───────────────────────────────────────────
+// `AUTH.options` = tableau de clés (parmi SHOP_ORDER), réglé par l'ADMIN (cf. admin_set_options + écran
+// Admin), lu depuis user_metadata à la connexion. RÈGLE : s'il est ABSENT (compte jamais configuré), on
+// considère que TOUT est offert (phase de test) → aucun testeur bloqué tant que l'admin n'a rien réglé.
+// Dès qu'une liste explicite existe (même VIDE = tout verrouillé), on applique le verrou. Ça permet de
+// TESTER le futur modèle payant compte par compte sans casser l'accès des comptes non configurés.
+function optsSet(){ return (AUTH && Array.isArray(AUTH.options)) ? AUTH.options : null; }
+// DÉFAUT : aucun compte n'a d'option, SAUF le compte admin (qui a tout, pour pouvoir tout tester).
+// L'admin active ensuite les droits compte par compte depuis l'écran Admin. Un compte non configuré
+// (options absentes) = AUCUNE option ; une liste explicite = exactement ces options-là.
+function hasOpt(k){ if(AUTH && AUTH.id===ADMIN_ID) return true; const o=optsSet(); return o ? (o.indexOf(k)>=0) : false; }
+// Renvoie true si l'option est utilisable ; sinon ouvre l'argumentaire premium (verrou) et renvoie false.
+function requireOpt(k){ if(hasOpt(k)) return true; showPremiumInfo(k); return false; }
 // stopPropagation : le badge est souvent dans une ligne cliquable, on ne veut pas déclencher la ligne.
-function premBadge(key){ return `<span class="prem" onclick="event.stopPropagation();showPremiumInfo('${key||''}')" title="${t("Fonction premium — offerte pendant la phase de test")}">${t("✨ Premium")}</span>`; }
+function premBadge(key){ const lock=key&&!hasOpt(key); return `<span class="prem${lock?' lock':''}" onclick="event.stopPropagation();showPremiumInfo('${key||''}')" title="${t("Fonction premium — offerte pendant la phase de test")}">${lock?t("🔒 Premium"):t("✨ Premium")}</span>`; }
 function showPremiumInfo(key){
-  const p=PITCHES[key];
-  const footer=`<div class="mini" style="text-align:left;margin-top:12px;border-top:1px solid var(--border);padding-top:8px">${t(PREM_FOOTER)}</div>`;
-  if(!p){ infoModal("✨", t("Fonction premium"), `<div class="mini muted" style="text-align:left">${t(PREM_FOOTER)}</div>`); return; }
+  const p=PITCHES[key]; const lock=key&&!hasOpt(key); const foot=lock?PREM_LOCKED:PREM_FOOTER;
+  const footer=`<div class="mini" style="text-align:left;margin-top:12px;border-top:1px solid var(--border);padding-top:8px">${t(foot)}</div>`;
+  if(!p){ infoModal("✨", t("Fonction premium"), `<div class="mini muted" style="text-align:left">${t(foot)}</div>`); return; }
   const body=`<div style="font-weight:700;text-align:left;margin:2px 0 10px">${t(p.hook,{n:CARD_IDS.length})}</div>`
     +`<ul class="mini muted" style="text-align:left;margin:0;padding-left:18px">${p.pts.map(x=>`<li style="margin:5px 0">${t(x)}</li>`).join("")}</ul>`
     +footer;
-  infoModal(p.e, t(p.t), body);
+  infoModal(lock?"🔒":p.e, t(p.t), body);
 }
 // 🛒 BOUTIQUE — toutes les options premium en un endroit + le Pack complet (souscrire à tout d'un coup).
 const SHOP_ORDER=["rachat","bonuscomplets","ia","stats","recap","direct"];
@@ -1920,7 +1935,7 @@ async function doLogin(){
   if(!u||!p){showErr(t("Identifiant et mot de passe requis."));return;} busy=true; showErr("");
   const { data, error } = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
   if(error){ showErr(/ban/i.test(error.message)?t("Ton accès a été suspendu par l'organisateur."):t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
-  AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u, avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"" };
+  AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u, avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null };
   S.view="leagues"; busy=false; await loadMyLeagues();
 }
 async function doSignup(){
@@ -1933,7 +1948,7 @@ async function doSignup(){
     const r = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
     if(r.error){ showErr("Config Supabase : désactive la confirmation e-mail (voir runbook Partie A)."); busy=false; return; }
   }
-  AUTH={ id:data.user.id, name:u, avatar:"" };
+  AUTH={ id:data.user.id, name:u, avatar:"", options:null };
   S.view="leagues"; busy=false; await loadMyLeagues();
 }
 async function logout(){ if(!confirm(t("Se déconnecter ?")))return; if(poll)clearInterval(poll);
@@ -2441,7 +2456,10 @@ async function createLeague(){
   busy=true; showErr("");
   try{
     const code=genCode();
-    const lg=await q(db.from("leagues").insert({code,name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,gage:null}).select().single());
+    // Sans l'option « jeu complet des cartes », la ligue démarre en mode SIMPLE (sinon le défaut
+    // « complet » contournerait le verrou, le mode n'étant pas choisi via setMode à la création).
+    const gage0 = hasOpt('bonuscomplets') ? null : JSON.stringify({mode:'simple'});
+    const lg=await q(db.from("leagues").insert({code,name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,gage:gage0}).select().single());
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[0],is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     openLeague(lg.id, pl.id, true); leagueCreatedModal(code);
   }catch(e){ showErr("Création : "+e.message); } busy=false;
@@ -2756,10 +2774,14 @@ function openReport(kind){
 async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Formule : "+e.message+" (ajoute la colonne 'formula' — voir schema.sql)"); } busy=false; }
-async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
+async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
+  if(m==="complet" && !requireOpt('bonuscomplets')) return;   // jeu complet des cartes = option premium
+  busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode : "+e.message); } busy=false; }
-async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
+async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
+  if(m==="real" && !requireOpt('direct')) return;   // résultats en direct (données réelles) = option premium
+  busy=true;
   try{ await q(db.from("leagues").update({data_mode:m}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode données : "+e.message+" (ajoute la colonne 'data_mode')"); } busy=false; }
 async function setSoloAR(k){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
@@ -2793,6 +2815,7 @@ function leagueCreatedModal(code){ infoModal("🎉", t("Ligue créée !"),
 async function closeRegistration(){
   if(busy)return;
   const nH=players.filter(p=>!p.is_ai).length; const soloNow=(nH===1);
+  if(soloNow && !requireOpt('ia')) return;   // jouer SEUL contre le 🤖 joueur IA = option premium
   if(!confirm(soloNow
     ? t("Lancer la partie en SOLO contre le 🤖 joueur IA ? Personne d'autre ne pourra rejoindre. Pas de gage ni de récompense, et {a} journées à jouer.",{a:getSoloAR()*2})
     : (nH%2===1
@@ -3989,7 +4012,7 @@ async function loadMyStats(){
       staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest}, leagues, h2h };
   }catch(e){ myStatsData={error:e.message}; }
 }
-async function openStats(){ myStatsData=null; navOpen("stats"); await loadMyStats(); render(); }
+async function openStats(){ if(!requireOpt('stats')) return; myStatsData=null; navOpen("stats"); await loadMyStats(); render(); }
 function viewStats(){
   const d=myStatsData; const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
@@ -4046,7 +4069,7 @@ function seasonRecapText(){
     if(s.favCard&&CARDS[s.favCard]) l.push(t("Carte fétiche : {a}",{a:CARDS[s.favCard].e+' '+t(CARDS[s.favCard].n)})); }
   l.push("— The Maestro League"); return l.join("\n"); }
 // Aperçu D'ABORD (on voit ce qu'on partage), puis Partager (natif mobile) / Copier.
-function shareSeason(){ const txt=seasonRecapText();
+function shareSeason(){ if(!requireOpt('recap')) return; const txt=seasonRecapText();
   infoModal("📤", t("Partager ma saison"),
     `<div class="mini muted" style="margin-bottom:8px">${t("Voici ce que tu vas partager :")}</div>
      <textarea id="recapTxt" readonly onclick="this.select()" style="width:100%;box-sizing:border-box;height:150px;font:16px monospace;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:inherit">${esc(txt)}</textarea>
@@ -4310,6 +4333,22 @@ async function adminSetBlocked(uid, block){ const u=(adminUsers||[]).find(x=>x.i
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render();
     infoWin(block?("🔒 Accès coupé pour "+esc(u.username||"")):("🔓 Accès réactivé pour "+esc(u.username||""))); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Blocage : "+e.message)); } }
+// Activer / verrouiller une option premium sur un compte (pour TESTER le futur modèle payant en te
+// connectant avec ce compte). `u.options` null = tout offert (défaut test) : on matérialise alors la
+// liste complète avant de retirer la case cliquée. ⚠️ Effet à la PROCHAINE connexion du compte visé
+// (les droits sont lus dans le jeton à la connexion) — reconnecte-toi avec ce compte pour voir l'effet.
+async function adminSetOptions(uid, key){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
+  let cur = Array.isArray(u.options) ? u.options.slice() : [];   // non configuré = aucune option (nouveau défaut)
+  const i=cur.indexOf(key); if(i>=0) cur.splice(i,1); else if(SHOP_ORDER.indexOf(key)>=0) cur.push(key);
+  try{ await q(db.rpc("admin_set_options",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_options:cur}));
+    adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute OPTIONS-ADMIN.sql dans Supabase)")); } }
+async function adminSetAllOptions(uid, all){
+  try{ await q(db.rpc("admin_set_options",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_options:all?SHOP_ORDER.slice():[]}));
+    adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute OPTIONS-ADMIN.sql dans Supabase)")); } }
+// Libellés courts des options pour l'écran Admin (français ; l'écran Admin n'est pas traduit).
+const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Cartes complètes", ia:"🤖 Joueur IA", stats:"📊 Stats perso", recap:"📤 Partage", direct:"📡 Direct"};
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
@@ -4527,7 +4566,14 @@ function viewAdmin(){
           <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
             <button class="btn ghost sm" style="flex:0 0 auto;border-color:var(--gold);color:var(--gold)" onclick="adminResetPwd('${u.id}')">🔑 Mot de passe</button>
             ${u.id===AUTH.id?'':`<button class="btn ghost sm" style="flex:0 0 auto;border-color:${u.banned?'var(--green)':'var(--red)'};color:${u.banned?'var(--green)':'var(--red)'}" onclick="adminSetBlocked('${u.id}',${u.banned?'false':'true'})">${u.banned?'🔓 Réactiver l\'accès':'🔒 Couper l\'accès'}</button>`}
-          </div></div>`).join(''):'<div class="mini muted">Aucun compte.</div>'}</div>`:'<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin, puis charge la liste pour gérer les accès (couper / réactiver) et les mots de passe.</div>'}</div>`;
+          </div>
+          ${(()=>{ if(u.id===AUTH.id) return `<div class="mini muted" style="margin-top:9px">🎟️ Options premium — <b>toutes</b> (compte admin, automatique).</div>`;
+            const oo=Array.isArray(u.options)?u.options:null;
+            return `<div class="mini muted" style="margin-top:9px">🎟️ Options premium — ${oo?(oo.length+'/'+SHOP_ORDER.length+' activée'+(oo.length>1?'s':'')):'défaut (aucune activée)'} · touche pour activer / verrouiller :</div>
+            <div class="row" style="gap:5px;flex-wrap:wrap;margin-top:5px">${SHOP_ORDER.map(k=>{ const on=oo?(oo.indexOf(k)>=0):false; return `<span class="chip clik" onclick="adminSetOptions('${u.id}','${k}')" style="flex:0 0 auto;border:1px solid ${on?'var(--green)':'var(--border)'};color:${on?'var(--green)':'var(--muted)'};background:${on?'rgba(37,192,125,.12)':'transparent'}">${on?'✓':'🔒'} ${OPT_LABELS[k]}</span>`; }).join('')}</div>
+            <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetAllOptions('${u.id}',true)">Tout activer</button><button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetAllOptions('${u.id}',false)">Tout verrouiller</button></div>
+            <div class="mini muted" style="margin-top:4px;opacity:.8">Effet à la prochaine connexion de ce compte.</div>`; })()}
+          </div>`).join(''):'<div class="mini muted">Aucun compte.</div>'}</div>`:'<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin, puis charge la liste pour gérer les accès (couper / réactiver), les options premium et les mots de passe.</div>'}</div>`;
 }
 
 /* ============ render / poll ============ */
@@ -4655,7 +4701,7 @@ function tradeBloque(raison){
 }
 // Même garde que openShop : le rachat déplace du capital et des cartes. Le bouton est déjà masqué
 // hors ligue (canTrade), mais on ne s'appuie pas sur l'affichage pour protéger une transaction.
-function openTrade(){ if(!AUTH || !S.leagueId) return; tradeAckAll(); navOpen("trade"); }  // ouvrir l'écran = « j'ai vu les réponses » → éteint le badge
+function openTrade(){ if(!AUTH || !S.leagueId) return; if(!requireOpt('rachat')) return; tradeAckAll(); navOpen("trade"); }  // ouvrir l'écran = « j'ai vu les réponses » → éteint le badge
 // Réponses à mes offres que je n'ai pas encore vues (pastille côté acheteur + toasts).
 function tradeAckKey(){ return "pl_tradeack_"+S.leagueId; }
 function tradeAck(){ try{ return new Set(JSON.parse(localStorage.getItem(tradeAckKey())||"[]")); }catch(e){ return new Set(); } }
@@ -4994,7 +5040,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkFor
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
   checkForUpdate();
   try{ const { data:{ session } } = await db.auth.getSession();
-    if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"" }; }
+    if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null }; }
   }catch(e){}
   if(!AUTH){ S.view="auth"; render(); return; }
   const last=loadLast();
