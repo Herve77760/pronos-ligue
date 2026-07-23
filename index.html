@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.27";
+const APP_VERSION = "v5.28";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -997,6 +997,9 @@ const EN={
   "de ton ":"of your ", "du ":"of their ",
   "💸 Recapitalisation solidaire — J{a}":"💸 Solidarity top-up — day {a}",
   "Ferme cette fenêtre pour continuer.":"Close this window to continue.",
+  "C'est parti — préparation !":"Here we go — preparation!",
+  "La ligue démarre ! Place tes <b>enchères sur les bonus</b> pour préparer ta saison.":"The league is starting! Place your <b>bonus bids</b> to set up your season.",
+  "La ligue démarre ! À toi de faire tes <b>votes de préparation</b> (gage et/ou récompense selon la ligue) et tes <b>enchères sur les bonus</b>.":"The league is starting! Time to cast your <b>preparation votes</b> (forfeit and/or reward depending on the league) and place your <b>bonus bids</b>.",
   "⚔️ Le duel en détail":"⚔️ The duel in detail", "Résultats de la journée":"Results of the day",
   "👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.":"👉 Tap a player for their duel · tap a <b>gain</b> for the detailed calculation.",
   "Joueur":"Player", "Gain":"Gain", "Duel":"Duel", "Carte":"Card",
@@ -1886,7 +1889,7 @@ async function refresh(){
       catch(e){ standTrades=[]; } }
     if(stale()) return;
     if(L.status==="done" && endStats===null){ endStats={loading:true}; loadEndStats().then(()=>{ if(!stale()) render(); }); }
-    showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay);
+    showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay); maybePrepModal();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
 // Récapitalisation : une fenêtre fermable à l'ouverture du récap concerné (un bandeau seul passait
@@ -1901,6 +1904,21 @@ function maybeRecapModal(dispDay){
   const names=(L.recap_note.names||[]); const multi=names.length>1;
   infoModal("💸", t("💸 Recapitalisation solidaire — J{a}",{a:dispDay+1}),
     `<div class="mini" style="text-align:left">${t("<b>{a}</b> n'avai{e}t plus assez pour miser → <b>+{b} €</b> pour tout le monde, histoire de rester équitable, et <b>−1 pt</b> pour {c}. 🤝",{a:esc(names.join(', ')),e:multi?'en':'',b:L.recap_note.amount,c:multi?t("chacun d'eux"):t("ce joueur")})}</div>
+     <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`);
+}
+// Démarrage de la ligue (passage en PRÉPARATION) : une fenêtre à FERMER manuellement, en plus de la
+// notification système (cf. maybeNotify / clé "prep:"). Montrée UNE fois par ligue (localStorage), et
+// seulement à un humain qui a encore sa prépa à faire (shop_done=false).
+function maybePrepModal(){
+  if(!L || L.status!=="prep") return;
+  const meP=me(); if(!meP || meP.is_ai || meP.shop_done) return;
+  const key="pl_prepseen_"+L.id;
+  try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
+  const body = isSolo()
+    ? t("La ligue démarre ! Place tes <b>enchères sur les bonus</b> pour préparer ta saison.")
+    : t("La ligue démarre ! À toi de faire tes <b>votes de préparation</b> (gage et/ou récompense selon la ligue) et tes <b>enchères sur les bonus</b>.");
+  infoModal("🎬", t("C'est parti — préparation !"),
+    `<div class="mini" style="text-align:left">${body}</div>
      <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`);
 }
 async function ensureFixtures(){
