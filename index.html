@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.26";
+const APP_VERSION = "v5.27";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3158,7 +3158,7 @@ async function saveSelection(){ if(busy)return; busy=true;
   catch(e){ showErr("Sauvegarde matchs : "+e.message); } busy=false; }
 
 /* --- betting --- */
-let bet={picks:null,captain:-1}, myCard=null;
+let bet={picks:null,captain:-1}, myCard=null, betFor=null;
 // Règle A : la perte maximale possible du jour ne peut pas dépasser le capital (→ jamais de capital négatif).
 // Multiplicateur de PERTE par match : Capitaine ×2 · Joker/Tout ou rien ×2 · Assurance ×0 (remboursée) · sinon ×1.
 // (Capitaine et bonus ciblé sont toujours sur des matchs différents, donc pas de cumul ×4.)
@@ -3167,7 +3167,14 @@ function lossMult(i,captainIdx,card){ if(i===captainIdx) return 2;
 function worstLoss(picks,captainIdx,card){ return (picks||[]).reduce((s,b,i)=>s+(+b.stake||0)*lossMult(i,captainIdx,card),0); }
 function viewBet(d,dayLbl,opp,iAmHome){
   const fx=d.fixtures;
-  if(!bet.picks || bet.picks.length!==fx.length){ bet={picks:fx.map(()=>({sel:"1",stake:0})),captain:-1}; myCard=null; }
+  // `bet` est un global qui persistait d'une JOURNÉE (ou d'une LIGUE) à l'autre : à 5 matchs partout, la
+  // condition « longueur différente » ne le réinitialisait pas → les mises de la journée précédente
+  // s'affichaient d'entrée (signalé par Hervé). On repère la journée courante (`betFor`) et on repart
+  // d'un pari VIDE dès qu'elle change — sauf en édition (S.editingBet), où `bet` vient d'être chargé
+  // depuis le pari déjà validé.
+  const key=L.id+":"+L.current_day;
+  if(!S.editingBet && (betFor!==key || !bet.picks || bet.picks.length!==fx.length)){ bet={picks:fx.map(()=>({sel:"1",stake:0})),captain:-1}; myCard=null; }
+  betFor=key;
   const meP=me(); const invest=myCard&&myCard.id==="invest"; const cap=meP.capital, max=Math.floor(cap*stakeCapOf(myCard)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const pct=Math.min(100,max>0?tot/max*100:0); const over=tot>max+0.001;
   const targetCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].t;
