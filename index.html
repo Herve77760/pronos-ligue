@@ -169,7 +169,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v5.23";
+const APP_VERSION = "v5.24";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1100,9 +1100,11 @@ const EN={
   "{a} a accepté : {c} vendue (+{b} €).":"{a} accepted: {c} sold (+€{b}).",
   // --- Premium (badge + fiche stats + récap) ---
   "✨ Premium":"✨ Premium", "🔒 Premium":"🔒 Premium", "Fonction premium":"Premium feature",
-  "🔒 Cette option n'est <b>pas activée sur ton compte</b>. En jeu réel, il faudrait la débloquer pour en profiter.":"🔒 This option is <b>not enabled on your account</b>. In the real game, you'd need to unlock it to use it.",
-  "Fonction premium — offerte pendant la phase de test":"Premium feature — free during the test phase",
-  "Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁":"This feature will be part of the <b>premium options</b> eventually. <b>During the test phase, it's free and available to everyone</b> — enjoy it! 🎁",
+  "✅ Cette option est <b>active sur ton compte</b>. Profites-en !":"✅ This option is <b>active on your account</b>. Enjoy!",
+  "🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.":"🔒 This option isn't <b>active on your account yet</b>. Subscribe to use it — <b>during the test phase there's no payment</b>: activation is instant.",
+  "Souscrire à cette option":"Subscribe to this option",
+  "Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.":"Subscribe to “{a}”?\n\nTest phase: no payment — the option activates instantly on your account.",
+  "✅ Option activée sur ton compte. Bon jeu !":"✅ Option activated on your account. Enjoy!",
   // --- Fiches de vente premium par option (pitchs) ---
   "Bonus complets":"Full bonus set", "Résultats en direct":"Live results",
   "Un bonus te fait de l'œil ? Rachète-le.":"Got your eye on a bonus? Buy it.",
@@ -1191,10 +1193,10 @@ const EN={
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera.":"Close registrations? Nobody else will be able to join, and the preparation (vote + bonus auction) will begin.",
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.":"Close registrations? Nobody else will be able to join. You're an odd number: a 🤖 AI player will be added to balance things out, then the preparation will begin.",
   "🔄 Nouvelle version disponible.":"🔄 A new version is available.", "Recharger":"Reload",
-  "(option payante à terme — gratuite pendant les tests)":"(a premium option eventually — free during testing)",
-  "(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)":"(the 🤖 AI player will be a premium option eventually — free during testing)",
-  "<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) sera une option payante à terme — gratuit pendant les tests.</i>":"<i>The <b>full</b> card set (Full mode, with the interaction cards) will be a premium option eventually — free during testing.</i>",
-  "Toutes les options premium du jeu. <b>Offertes et accessibles pendant la phase de test</b> — profites-en ! 🎁":"All the game's premium options. <b>Free and available during the test phase</b> — enjoy it! 🎁",
+  "(option premium — à souscrire ; paiement désactivé pendant les tests)":"(premium option — subscription required; payment disabled during testing)",
+  "(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)":"(the 🤖 AI player is a premium option — subscription required; payment disabled during testing)",
+  "<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) est une option premium — à souscrire ; paiement désactivé pendant les tests.</i>":"<i>The <b>full</b> card set (Full mode, with the interaction cards) is a premium option — subscription required; payment disabled during testing.</i>",
+  "Toutes les options premium du jeu. <b>Souscris à celles qui t'intéressent</b> — paiement désactivé pendant la phase de test.":"All the game's premium options. <b>Subscribe to the ones you want</b> — payment disabled during the test phase.",
   // --- Stats perso cross-ligue ---
   "Ton dossier complet, toutes tes ligues.":"Your complete file, across all your leagues.",
   "Chargement…":"Loading…", "Pas encore de partie jouée.":"No game played yet.",
@@ -1568,14 +1570,14 @@ const PITCHES={
     "Un seul déblocage — et moins cher que pris séparément.",
     "Le confort maximal, zéro prise de tête."]}
 };
-const PREM_FOOTER="Cette fonction fera partie des <b>options premium</b> à terme. <b>Pendant la phase de test, elle est offerte et accessible à tout le monde</b> — profites-en ! 🎁";
-const PREM_LOCKED="🔒 Cette option n'est <b>pas activée sur ton compte</b>. En jeu réel, il faudrait la débloquer pour en profiter.";
+const PREM_OWNED="✅ Cette option est <b>active sur ton compte</b>. Profites-en !";
+const PREM_LOCKED="🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.";
 // ─── Options premium ACTIVÉES sur le compte connecté ───────────────────────────────────────────
-// `AUTH.options` = tableau de clés (parmi SHOP_ORDER), réglé par l'ADMIN (cf. admin_set_options + écran
-// Admin), lu depuis user_metadata à la connexion. RÈGLE : s'il est ABSENT (compte jamais configuré), on
-// considère que TOUT est offert (phase de test) → aucun testeur bloqué tant que l'admin n'a rien réglé.
-// Dès qu'une liste explicite existe (même VIDE = tout verrouillé), on applique le verrou. Ça permet de
-// TESTER le futur modèle payant compte par compte sans casser l'accès des comptes non configurés.
+// `AUTH.options` = tableau de clés (parmi SHOP_ORDER), réglé par l'ADMIN (admin_set_options) OU par le
+// joueur lui-même via « Souscrire » (subscribeOpt → user_metadata). Lu depuis user_metadata à la connexion.
+// RÈGLE (défaut) : absent OU liste ne contenant pas la clé = option NON active. Le compte admin a tout
+// (bypass ci-dessous). Simule le futur modèle payant : le joueur souscrit, l'option s'active — la seule
+// étape absente est le paiement (désactivé en phase de test).
 function optsSet(){ return (AUTH && Array.isArray(AUTH.options)) ? AUTH.options : null; }
 // DÉFAUT : aucun compte n'a d'option, SAUF le compte admin (qui a tout, pour pouvoir tout tester).
 // L'admin active ensuite les droits compte par compte depuis l'écran Admin. Un compte non configuré
@@ -1584,15 +1586,32 @@ function hasOpt(k){ if(AUTH && AUTH.id===ADMIN_ID) return true; const o=optsSet(
 // Renvoie true si l'option est utilisable ; sinon ouvre l'argumentaire premium (verrou) et renvoie false.
 function requireOpt(k){ if(hasOpt(k)) return true; showPremiumInfo(k); return false; }
 // stopPropagation : le badge est souvent dans une ligne cliquable, on ne veut pas déclencher la ligne.
-function premBadge(key){ const lock=key&&!hasOpt(key); return `<span class="prem${lock?' lock':''}" onclick="event.stopPropagation();showPremiumInfo('${key||''}')" title="${t("Fonction premium — offerte pendant la phase de test")}">${lock?t("🔒 Premium"):t("✨ Premium")}</span>`; }
+function premBadge(key){ const lock=key&&!hasOpt(key); return `<span class="prem${lock?' lock':''}" onclick="event.stopPropagation();showPremiumInfo('${key||''}')" title="${t("Fonction premium")}">${lock?t("🔒 Premium"):t("✨ Premium")}</span>`; }
+// « pack » = souscrire à TOUT : il est « possédé » si les 6 options le sont.
+function ownsOpt(key){ return key==='pack' ? SHOP_ORDER.every(k=>hasOpt(k)) : hasOpt(key); }
 function showPremiumInfo(key){
-  const p=PITCHES[key]; const lock=key&&!hasOpt(key); const foot=lock?PREM_LOCKED:PREM_FOOTER;
+  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:PREM_LOCKED;
   const footer=`<div class="mini" style="text-align:left;margin-top:12px;border-top:1px solid var(--border);padding-top:8px">${t(foot)}</div>`;
+  const subBtn=(key&&!owned)?`<button class="btn" style="margin-top:12px" onclick="subscribeOpt('${key}')">🔓 ${t("Souscrire à cette option")}</button>`:'';
   if(!p){ infoModal("✨", t("Fonction premium"), `<div class="mini muted" style="text-align:left">${t(foot)}</div>`); return; }
   const body=`<div style="font-weight:700;text-align:left;margin:2px 0 10px">${t(p.hook,{n:CARD_IDS.length})}</div>`
     +`<ul class="mini muted" style="text-align:left;margin:0;padding-left:18px">${p.pts.map(x=>`<li style="margin:5px 0">${t(x)}</li>`).join("")}</ul>`
-    +footer;
-  infoModal(lock?"🔒":p.e, t(p.t), body);
+    +footer+subBtn;
+  infoModal(owned?p.e:"🔒", t(p.t), body);
+}
+// Souscription simulée : le joueur demande l'option → elle s'active immédiatement (le PAIEMENT est la
+// seule étape absente en phase de test). Écrit dans SON PROPRE user_metadata (updateUser, autorisé pour
+// soi-même) ; l'admin peut de toute façon régler/retirer ensuite. « pack » = souscrire aux 6 options.
+async function subscribeOpt(key){
+  const p=PITCHES[key]; if(!p) return;
+  if(ownsOpt(key)) return;                              // déjà active
+  if(!confirm(t("Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.",{a:t(p.t)}))) return;
+  let cur=(AUTH && Array.isArray(AUTH.options))?AUTH.options.slice():[];
+  if(key==='pack') cur=SHOP_ORDER.slice(); else if(cur.indexOf(key)<0) cur.push(key);
+  // On repasse pseudo/avatar avec `options` : updateUser fusionne les métadonnées, mais on reste défensif.
+  try{ const r=await db.auth.updateUser({ data:{ username:AUTH.name, avatar:AUTH.avatar||"", options:cur } }); if(r && r.error) throw r.error;
+    AUTH.options=cur; closeCardInfo(); infoWin(t("✅ Option activée sur ton compte. Bon jeu !"),"🎉"); render(); }
+  catch(e){ showErr("Souscription : "+e.message); }
 }
 // 🛒 BOUTIQUE — toutes les options premium en un endroit + le Pack complet (souscrire à tout d'un coup).
 const SHOP_ORDER=["rachat","bonuscomplets","ia","stats","recap","direct"];
@@ -1607,7 +1626,7 @@ function viewShop(){
     <div class="mini muted" style="margin-top:4px">${t(p.hook,{n:CARD_IDS.length})}</div></div>`; };
   return `<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
     <div class="box"><h2 style="margin-top:0">🛒 ${t("Boutique")}</h2>
-      <div class="mini muted">${t("Toutes les options premium du jeu. <b>Offertes et accessibles pendant la phase de test</b> — profites-en ! 🎁")}</div>
+      <div class="mini muted">${t("Toutes les options premium du jeu. <b>Souscris à celles qui t'intéressent</b> — paiement désactivé pendant la phase de test.")}</div>
       <div class="mini muted" style="margin-top:6px">👉 ${t("Touche une option pour voir tous ses détails.")}</div></div>
     ${SHOP_ORDER.map(k=>card(k,false)).join("")}
     <div class="mini muted" style="text-align:center;margin:10px 0 4px">${t("— ou tout d'un coup —")}</div>
@@ -4886,7 +4905,7 @@ function viewRules(){
    <div class="box"><h2 style="margin-top:0">${t("📖 Règles du jeu")}</h2>
      <p class="mini">${t("<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes, <b>sans argent réel</b>. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.")}</p></div>
    <div class="box"><b>${t("🗓️ Format")}</b>
-     <div class="mini muted" style="margin-top:6px">${t("De <b>2 à {a} joueurs</b> — et la durée en découle : chacun affronte chacun aller-retour, soit <b>2 × (nombre de joueurs − 1) journées</b> (8 joueurs → 14 journées). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.",{a:MAX_PLAYERS})} <i>${t("(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)")}</i></div></div>
+     <div class="mini muted" style="margin-top:6px">${t("De <b>2 à {a} joueurs</b> — et la durée en découle : chacun affronte chacun aller-retour, soit <b>2 × (nombre de joueurs − 1) journées</b> (8 joueurs → 14 journées). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.",{a:MAX_PLAYERS})} <i>${t("(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)")}</i></div></div>
    <div class="box"><b>${t("⚽ Une journée")}</b>
      <ul class="mini muted" style="margin:6px 0 0;padding-left:18px">
        <li>${t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).")}</li>
@@ -4910,7 +4929,7 @@ function viewRules(){
      <div class="mini muted" style="margin:6px 0">${t("Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.",{a:SHOP_CAP})}</div>
      ${cardsAZ().map(card).join("")}</div>
    <div class="box"><b>${t("🤝 Racheter un bonus")}</b> <span class="prem" onclick="showPremiumInfo('rachat')">${t("✨ Premium")}</span>
-     <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})} <i>${t("(option payante à terme — gratuite pendant les tests)")}</i></div></div>
+     <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})} <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i></div></div>
    <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b> (pas de reprise des pronos adverses), <b>{b} pt</b> au classement et <b>−{a} % du capital</b>.",{a:pct(forgotPenShown()),b:forgotPtsShown()})}</div></div>
    <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
 }
@@ -4940,7 +4959,7 @@ function viewRulesFull(){
 
    ${sec(t("🎯 Le principe"), t("Un championnat de pronostics entre amis. Chacun démarre avec <b>100 € virtuels</b> — <b>aucun argent réel</b> n'est en jeu et l'application n'encaisse rien. Chaque journée t'oppose à un adversaire en <b>duel</b> ; le vainqueur du duel marque des <b>points de championnat</b>. À la fin, c'est le total de <b>points</b> qui désigne le champion — pas le capital."))}
 
-   ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.")+' <i>'+t("(le 🤖 joueur IA sera une option payante à terme — gratuit pendant les tests)")+'</i>')}
+   ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.")+' <i>'+t("(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)")+'</i>')}
 
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
      ${li(t("La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. ⚽ étant le seul sport à <b>3 issues</b>, c'est lui qui rend la carte 🎲 Double Chance jouable.",{a:POOL_N,b:Math.round(POOL_FOOT/POOL_N*100)}))}
@@ -4979,7 +4998,7 @@ function viewRulesFull(){
      ${t("<b>Une carte = un seul propriétaire</b> dans la ligue, et <b>une seule carte jouée par journée</b>. Une carte jouée est consommée.")}<br>
      ${t("Les cartes <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'une carte.")}<br>
      ${t("⚠️ Le <b>👑 Capitaine</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 💥 Coup Double, 🎁 Chérie c'est cadeau et 😏 Dans ta face.")}
-     ${t("<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) sera une option payante à terme — gratuit pendant les tests.</i>")}
+     ${t("<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) est une option premium — à souscrire ; paiement désactivé pendant les tests.</i>")}
      <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><b class="mini">${t("Les {a} cartes",{a:CARD_IDS.length})}</b></div>
      ${cardsAZ().map(card).join("")}`)}
 
@@ -4989,7 +5008,7 @@ function viewRulesFull(){
      ${t("⏳ <b>Quand ?</b> Un échange n'est possible <b>qu'entre deux journées</b> : tant que <b>ni le vendeur ni l'acheteur</b> n'a validé son pari du jour. Dès qu'un pari est verrouillé, les échanges le concernant sont gelés jusqu'à la résolution (ça protège la règle du capital jamais négatif et évite qu'une carte soit vendue et jouée en même temps).")}<br>
      ${t("On n'échange que des cartes <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.",{a:TRADE_MIN_CAP})}<br>
      ${t("Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.")}<br>
-     <i>${t("(option payante à terme — gratuite pendant les tests)")}</i>`)}
+     <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i>`)}
 
    ${sec(t("🎭 L'enjeu final"), `${t("À l'ouverture, l'organisateur choisit l'enjeu de la ligue : <b>gage</b> au dernier, <b>récompense</b> au champion, ou <b>les deux</b>.")}<br>
      ${t("<b>La règle est unique : celui qui choisit n'est jamais le destinataire.</b>")}<br>
