@@ -181,7 +181,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.11";
+const APP_VERSION = "v6.13";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1203,6 +1203,16 @@ const EN={
   "Voir les pronos de l'adversaire":"See the opponent's picks",
   "Les paris sont clôturés. Avec l'option <b>Voir l'adversaire</b>, tu verrais dès maintenant les pronos, mises et bonus de chacun. Sans elle, tout sera dévoilé <b>avec les résultats</b>.":"Betting is closed. With the <b>See the opponent</b> option, you'd see everyone's picks, stakes and bonus right now. Without it, everything is revealed <b>with the results</b>.",
   "→ touche le {e} du pari ciblé.":"→ tap the {e} on the targeted bet.", "→ touche les {e} de tes 2 matchs.":"→ tap the {e} on your 2 matches.",
+  // Légende du classement (v6.12)
+  "Comprendre le classement":"Understanding the standings", "monte":"up", "stable":"steady", "descend":"down", "comprendre le classement":"understand the standings",
+  "les points gagnés en duel chaque journée (face à ton adversaire du jour), cumulés.":"the points won in duels each matchday (against your daily opponent), cumulated.",
+  "+1 pt bonus au joueur qui réalise le <b>meilleur gain net de la ligue</b> sur une journée.":"+1 bonus pt to the player with the <b>best net gain in the league</b> on a matchday.",
+  "ton total de points de championnat (Duel{a}).":"your total championship points (Duel{a}).",
+  "ton capital en euros (virtuels) : la cagnotte avec laquelle tu mises.":"your capital in (virtual) euros: the pot you bet with.",
+  // Info mise max + ROI (v6.13)
+  "La mise max":"The max stake",
+  "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec la carte 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor card) — that's what fills the gauge. Each bet must be <b>at least €1</b>.",
+  "Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé. <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.":"<b>ROI</b> (return on investment) relates your net result to the total you staked. <b>+20%</b> = you won €20 for every €100 staked; a <b>negative</b> ROI = you lost money on your bets.",
   "Gage & récompense sur mesure":"Custom forfeit & reward",
   "Impose TON défi (ou ta récompense) au lieu de piocher dans la liste.":"Set YOUR own challenge (or reward) instead of picking from the list.",
   "Écris ton propre gage pour le dernier — ou ta propre récompense pour le champion.":"Write your own forfeit for the last-placed player — or your own reward for the champion.",
@@ -1613,6 +1623,8 @@ function infoModal(emoji,title,bodyHTML){ closeCardInfo();
   document.body.appendChild(o); }
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return; infoModal(c.e, t(c.n), `<div style="margin:4px 0 6px">${t("💪 Force {a}/5",{a:c.f||3})}</div><div class="mini muted">${esc(t(c.d))}</div>`); }
 function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.")}</div>`); }
+function showStakeInfo(){ infoModal("💰",t("La mise max"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec la carte 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</div>`); }
+function showRoiInfo(){ infoModal("📈",t("Rentabilité (ROI)"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé. <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.")}</div>`); }
 function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class="mini muted">${scoringShown()
     ? t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.")
     : t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.")}</div>`); }
@@ -3485,7 +3497,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
     return `<div class="box" style="background:rgba(90,166,224,.06);border-color:var(--blue);padding:8px 10px"><div class="mini muted"><b>${t("ℹ️ Pour info")}</b> — ${oc.length?t("bonus encore en main de {a} (pas forcément joués aujourd'hui) :",{a:'<b>'+esc(opp.name)+'</b>'}):t("{a} n'a plus aucun bonus en main.",{a:esc(opp.name)})}</div>${oc.length?`<div class="cards" style="margin-top:5px">${oc.map(id=>`<div class="cardchip clik sm" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; })();
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
-    <div class="row mini" style="margin-top:6px"><span class="muted">${t("Misé")} <b id="tot">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''}</span><span class="muted">${t("👑 Capitaine ×2")}</span></div>
+    <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Capitaine ×2")} ⓘ</span></div>
     <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div></div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${cote(oddOf(f,v))}</b></div>`;
@@ -4303,7 +4315,7 @@ function viewLeagueStats(){
     ${meP?line(t("Points / capital"), meP.points+" pts · "+eur(meP.capital)+" €"):''}
     ${line(t("Journées jouées"), s.days)}
     ${line(t("Pronos gagnés"), s.won+"/"+s.picks+" ("+s.hit+" %)")}
-    ${line(t("Rentabilité (ROI)"), `<span class="${s.roi>=0?'green':'red'}">${s.roi} %</span>`)}
+    ${line(t("Rentabilité (ROI)")+' <span class="clik" onclick="showRoiInfo()">ⓘ</span>', `<span class="${s.roi>=0?'green':'red'}">${s.roi} %</span>`)}
     ${line(t("Résultat net"), `<span class="${s.net>=0?'green':'red'}">${fmt(s.net)} €</span>`)}
     ${line(t("Meilleure journée"), s.best.day>=0?`<span class="green">${fmt(s.best.net)} €</span> (J${s.best.day+1})`:'–')}
     ${line(t("Pire journée"), s.worst.day>=0?`<span class="red">${fmt(s.worst.net)} €</span> (J${s.worst.day+1})`:'–')}
@@ -4433,6 +4445,18 @@ function shareSeason(){ if(!requireOpt('recap')) return; const txt=seasonRecapTe
 async function doShareSeason(){ const txt=seasonRecapText(); if(navigator.share){ try{ await navigator.share({text:txt}); }catch(e){} } }
 async function copySeason(){ const txt=seasonRecapText();
   try{ await navigator.clipboard.writeText(txt); toast(t("Récap copié — colle-le où tu veux ! 📋")); }catch(e){ const el=document.getElementById("recapTxt"); if(el){ el.focus(); el.select(); } } }
+// Explication groupée des colonnes du classement + des flèches de mouvement (le tooltip `title` des
+// flèches ne marche pas au tactile → une mini-ligne + ⓘ le rend accessible sur mobile).
+function showStandingsInfo(){
+  infoModal("📊", t("Comprendre le classement"),
+   `<div class="mini muted" style="text-align:left;line-height:1.7">
+     <b>${t("Duel")}</b> — ${t("les points gagnés en duel chaque journée (face à ton adversaire du jour), cumulés.")}<br>
+     ${starMech(players.length)?`<b>⭐</b> — ${t("+1 pt bonus au joueur qui réalise le <b>meilleur gain net de la ligue</b> sur une journée.")}<br>`:''}
+     <b>${t("Pts")}</b> — ${t("ton total de points de championnat (Duel{a}).",{a:starMech(players.length)?" + ⭐":""})}<br>
+     <b>${t("Cap.")}</b> — ${t("ton capital en euros (virtuels) : la cagnotte avec laquelle tu mises.")}<br>
+     <b>▲ = ▼</b> — ${t("À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.")}
+   </div>`);
+}
 function viewStandings(){
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
   const humansLive=classe(players).filter(p=>!p.is_ai); const lastH=humansLive[humansLive.length-1];
@@ -4471,6 +4495,7 @@ function viewStandings(){
         return `<tr><td>${i+1}</td><td><span class="clik" onclick="showPlayerCards('${p.id}')">${p.emoji} ${esc(p.name)}</span>${moveHTML(p.id,i)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td>
         <td class="num">${dp}</td>${starOn?`<td class="num">${bp||'–'}</td>`:''}<td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     <div class="mini muted" style="margin:-2px 2px 8px">${t("👉 Touche un joueur pour voir ses bonus (restants et utilisés).")}</div>
+    <div class="mini muted" style="margin:-4px 2px 10px"><span class="green">▲</span> ${t("monte")} · = ${t("stable")} · <span class="red">▼</span> ${t("descend")} — <span class="clik" onclick="showStandingsInfo()">ⓘ ${t("comprendre le classement")}</span></div>
     ${(L.status==="running" && me() && me().is_organizer)?(()=>{ const cur=FORMULAS[formulaKey()]; let pend=null; try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.fmtSchedule)) pend=o.fmtSchedule.filter(c=>c&&FORMULAS[c.formula]&&c.from>(L.current_day||0)).sort((a,b)=>a.from-b.from)[0]; }catch(e){}
       return `<div class="box"><div class="mini muted">⏱️ ${t("Format actuel :")} <b>${cur.n}</b>${pend?` · <span class="gold">${t("passe en {a} à la J{b}",{a:FORMULAS[pend.formula].n,b:pend.from+1})}</span>`:''}</div>
         <button class="btn ghost sm" style="margin-top:8px" onclick="setFormulaNext()">${t("🔄 Changer le format (dès la journée suivante)")}</button></div>`; })():''}
