@@ -181,7 +181,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.13";
+const APP_VERSION = "v6.15";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1724,8 +1724,7 @@ function viewShop(){
   const card=(k,hi)=>{ const p=PITCHES[k]; return `<div class="box clik" ${hi?'style="border-color:var(--accent)"':''} onclick="showPremiumInfo('${k}')">
     <div class="row" style="justify-content:space-between;align-items:center;gap:8px"><b>${p.e} ${t(p.t)}</b>${premBadge(k)}</div>
     <div class="mini muted" style="margin-top:4px">${t(p.hook,{n:CARD_IDS.length})}</div></div>`; };
-  return `<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
-    <div class="box"><h2 style="margin-top:0">🛒 ${t("Boutique")}</h2>
+  return `<div class="box"><h2 style="margin-top:0">🛒 ${t("Boutique")}</h2>
       <div class="mini muted">${t("Toutes les options premium du jeu. <b>Souscris à celles qui t'intéressent</b> — paiement désactivé pendant la phase de test.")}</div>
       <div class="mini muted" style="margin-top:6px">👉 ${t("Touche une option pour voir tous ses détails.")}</div></div>
     ${SHOP_ORDER.map(k=>card(k,false)).join("")}
@@ -2088,7 +2087,7 @@ async function doLogin(){
   const { data, error } = await db.auth.signInWithPassword({ email: emailFor(u), password: p });
   if(error){ showErr(/ban/i.test(error.message)?t("Ton accès a été suspendu par l'organisateur."):t("Identifiant ou mot de passe incorrect.")); busy=false; return; }
   AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u, avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null };
-  S.view="leagues"; busy=false; await loadMyLeagues();
+  S.view="home"; busy=false; await loadMyLeagues();
 }
 async function doSignup(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
@@ -2101,7 +2100,7 @@ async function doSignup(){
     if(r.error){ showErr("Config Supabase : désactive la confirmation e-mail (voir runbook Partie A)."); busy=false; return; }
   }
   AUTH={ id:data.user.id, name:u, avatar:"", options:null };
-  S.view="leagues"; busy=false; await loadMyLeagues();
+  S.view="home"; busy=false; await loadMyLeagues();
 }
 async function logout(){ if(!confirm(t("Se déconnecter ?")))return; if(poll)clearInterval(poll);
   try{ await db.auth.signOut(); }catch(e){} localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
@@ -2141,9 +2140,20 @@ async function setAvatar(em){
     if(S.leagueId){ await refresh(); } else { await loadMyLeagues(); }
   }catch(e){ showErr("Avatar : "+e.message); }
 }
+// 🏠 ACCUEIL — vraie page d'accueil (≠ page « Ligues », qui n'est que la liste). Bonjour + slogan +
+// principe de jeu, puis on navigue via les onglets du bas (Ligues, Stats, …).
+function viewHome(){
+  const active=(myLeagues||[]).filter(m=>m.lg.status!=='done').length;
+  return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b style="font-size:19px">${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b><span style="font-size:26px;line-height:1">${AUTH.avatar||'🎮'}</span></div>${sloganHTML("haut")}</div>
+    ${howItWorksHTML()}
+    <button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
+    <div style="height:8px"></div><button class="btn ghost" onclick="backToLeagues()">🏆 ${t("Mes ligues")}${active?' · '+active:''}</button>
+    ${(myLeagues&&myLeagues.length)
+      ? `<div style="height:8px"></div><button class="btn ghost sm" onclick="startEssai()">${t("🎓 Revoir le tuto")}</button>`
+      : `<div style="height:8px"></div><button class="btn ghost" onclick="startEssai()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`}`;
+}
 function viewLeagues(){
-  return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b><span style="font-size:22px;line-height:1">${AUTH.avatar||'🎮'}</span></div>${sloganHTML("haut")}</div>
-    <div class="box"><button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
+  return `<div class="box"><button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
       <div style="height:12px"></div><label>${t("Rejoindre avec un code")}</label>
       <input id="joinCode" maxlength="5" placeholder="${t("Ex : 7XK2P")}" style="text-transform:uppercase">
       <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">${t("Rejoindre →")}</button></div>
@@ -2863,8 +2873,7 @@ function viewPrepSummary(){
    <button class="btn" onclick="ackPrep()">${t("C'est parti ! →")}</button>`;
 }
 function viewCoulisses(){
-  return `<button class="btn ghost sm" onclick="S.view='game';render()">${t("← Retour au jeu")}</button>
-   <div class="box"><h2 style="margin-top:0">${t("🎪 Les Coulisses de l'ouverture")}</h2><div class="mini muted">${t("Comment tout a commencé : le vote du gage et la grande vente aux enchères des bonus.")}</div></div>
+  return `<div class="box"><h2 style="margin-top:0">${t("🎪 Les Coulisses de l'ouverture")}</h2><div class="mini muted">${t("Comment tout a commencé : le vote du gage et la grande vente aux enchères des bonus.")}</div></div>
    ${L.prep_summary?prepSummaryBody():`<div class="box mini muted">${t("La ligue n'a pas encore démarré : le tirage arrive bientôt !")}</div>`}`;
 }
 // Choix du format en SOLO : 1 ou 2 allers-retours contre l'IA (2 ou 4 journées).
@@ -4138,7 +4147,7 @@ function viewRecap(D){ const fin=(L&&L.status==="done"); return `${recapBody(D)}
     <button class="btn" onclick="ackRecap()">${fin?t("🏆 Voir le classement final →"):t("Continuer →")}</button>
     ${fin?'':`<button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`}`; }
 function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:L.current_day-1);
-  const back=`<button class="btn ghost sm" onclick="S.view='game';refresh()">${t("← Retour au jeu")}</button>`;
+  const back="";  // navigation via la barre d'onglets du bas (v6.15)
   // Journée résolue ? (d < journées résolues). Sinon → écran d'attente (pas de résultats à montrer).
   const resolvedCount = (L.status==="done" ? (L.num_days||0) : (L.current_day||0));
   if(d<0 || d>=resolvedCount) return back + waitingResultsBody(Math.max(0,d));
@@ -4303,11 +4312,10 @@ function myStats(){
 // classement montrait par erreur toutes les ligues au lieu de la seule ligue en cours).
 function openLeagueStats(){ navOpen("leaguestats"); }
 function viewLeagueStats(){
-  if(!L) return `<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button><div class="box mini muted">${t("Chargement…")}</div>`;
+  if(!L) return `<div class="box mini muted">${t("Chargement…")}</div>`;
   const meP=me(); const s=myStats(); const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   const ord=classe(players.filter(p=>!p.is_ai)); const rank=ord.findIndex(p=>p.id===S.myId)+1; const tot=ord.length;
-  let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
-    <div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats — {a}",{a:esc(L.name)})}</h2>
+  let h=`<div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats — {a}",{a:esc(L.name)})}</h2>
       <div class="mini muted">${t("Uniquement cette ligue.")}</div></div>`;
   if(!s.days) return h+`<div class="box mini muted">${t("Aucune journée jouée pour l'instant.")}</div>`;
   h+=`<div class="box"><b class="mini">🏅 ${t("Dans cette ligue")}</b>
@@ -4380,8 +4388,7 @@ async function loadMyStats(){
 async function openStats(){ if(!requireOpt('stats')) return; myStatsData=null; navOpen("stats"); await loadMyStats(); render(); }
 function viewStats(){
   const d=myStatsData; const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
-  let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
-    <div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge('stats')}</h2>
+  let h=`<div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge('stats')}</h2>
       <div class="mini muted">${t("Ton dossier complet, toutes tes ligues.")}</div></div>`;
   if(!d) return h+`<div class="box mini muted">${t("Chargement…")}</div>`;
   if(d.error) return h+`<div class="err">${esc(d.error)}</div>`;
@@ -4487,8 +4494,7 @@ function viewStandings(){
       <b class="mini" style="text-align:center;flex:1">${useLive?t("Classement actuel · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days}):t("Classement après J{a}/{b}",{a:sd+1,b:L.num_days})}</b>
       <button class="btn ghost sm" ${shownIdx<R-1?'':'disabled'} onclick="setStandDay(${shownIdx+1})">${t("Suiv. ▶")}</button></div>`
     : `<h2>${t("Classement · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days})}</h2>`;
-  return `<div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn ghost sm" onclick="S.view='game';render()">${t("← Retour au jeu")}</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">${t("📅 Résultats par journée")}</button><button class="btn ghost sm" onclick="openLeagueStats()">📊 ${t("Stats de la ligue")}</button>`:''}</div>
-    ${quickBar('standings')}
+  return `${quickBar('standings')}
     ${nav}
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
       ${ord.map((p,i)=>{const bp=p.star||0; const dp=p.points-bp;
@@ -4789,7 +4795,7 @@ async function loadPalmares(){
   }catch(e){ palmares={error:e.message}; }
 }
 function viewPalmares(){
-  const back=`<button class="btn ghost sm" onclick="S.view='leagues';render()">← Mes ligues</button>`;
+  const back="";  // navigation via la barre d'onglets du bas (v6.15)
   if(!palmares) return back+`<div class="box">${t("Chargement du palmarès…")}</div>`;
   if(palmares.error) return back+`<div class="err">${esc(palmares.error)}</div>`;
   const medal=i=>["🥇","🥈","🥉",t("4ᵉ"),t("5ᵉ")][i]||(i+1);
@@ -4985,6 +4991,7 @@ function render(){
   // leaguesBtn/settingsBtn : remplacés par 🏠 (haut) et l'onglet Profil (bas) — masqués ci-dessus.
   let html="";
   if(S.view==="auth") html=viewAuth();
+  else if(S.view==="home") html=viewHome();
   else if(S.view==="leagues") html=viewLeagues();
   else if(S.view==="rules") html=viewRules();
   else if(S.view==="rulesfull") html=viewRulesFull();
@@ -5014,7 +5021,16 @@ function render(){
   if(S.view==="game" && L && L.status==="prep") gsub+="|p"+prepStep;
   const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"")+gsub;
   if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
-  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="rulesfull"?t("📚 Règles détaillées") : S.view==="settings"?t("Paramètres") : S.view==="profil"?t("Profil") : S.view==="shop"?t("Boutique") : S.view==="palmares"?t("Palmarès") : S.view==="stats"?t("Mes stats") : S.view==="leagues"?t("Mes ligues") : S.view==="tuto"?t("🎓 Découverte") : S.view==="essai"?t("▶️ Partie d'essai") : (L? (L.status==="lobby"?t("Salon")+" · "+L.code : ((L.status==="prep"||L.status==="starting")?t("Préparation"):(L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days})))) : "…");
+  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="rulesfull"?t("📚 Règles détaillées") : S.view==="settings"?t("Paramètres") : S.view==="profil"?t("Profil") : S.view==="shop"?t("Boutique") : S.view==="palmares"?t("Palmarès") : S.view==="stats"?t("Mes stats") : S.view==="home"?t("Accueil") : S.view==="leagues"?t("Mes ligues") : S.view==="tuto"?t("🎓 Découverte") : S.view==="essai"?t("▶️ Partie d'essai") : (L? (
+     L.status==="lobby"?t("Salon")+" · "+L.code :
+     (L.status==="prep"||L.status==="starting")?t("Préparation") :
+     S.view==="standings"?t("Classement") :
+     S.view==="coulisses"?t("Coulisses") :
+     S.view==="results"?t("Résultats") :
+     S.view==="leaguestats"?t("Stats de la ligue") :
+     S.view==="trade"?t("Rachat de bonus") :
+     (L.status==="done"?t("Terminé"):t("Journée {a}/{b}",{a:L.current_day+1,b:L.num_days}))
+   ) : "…");
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
@@ -5044,14 +5060,18 @@ function navBack(){ let v=S.nav.pop();
   S.view = v || navHome(); render(); }
 function navRoot(){ S.nav=[]; }
 // === Barre d'onglets du bas (v6) — contextuelle : Accueil / Ligue en cours ===================
-const HOME_VIEWS=["leagues","stats","palmares","shop","profil"];
+const HOME_VIEWS=["home","leagues","stats","palmares","shop","profil"];
 const LEAGUE_TABVIEWS=["game","standings","coulisses","results","leaguestats","trade"];
-function goHome(){ backToLeagues(); }
+function goHome(){ goAccueil(); }   // bouton 🏠 du haut → vraie page d'accueil
+function goAccueil(){ if(poll)clearInterval(poll); localStorage.removeItem("pl_last"); navRoot(); S.leagueId=null; S.myId=null; L=null; S.view="home"; loadMyLeagues(); }
 function goGame(){ if(S.view!=="game"){ S.view="game"; render(); } }
 function openProfil(){ S.view="profil"; render(); }
-function navTab(cur,ic,lb,onclick){ const on=S.view===cur; return `<button class="navtab${on?' on':''}" ${on?'':`onclick="${onclick}"`}><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
+// v6.15 — l'onglet de la page COURANTE est retiré de la barre (le titre du haut indique où on est) →
+// jamais plus de 5 onglets visibles, et pas de doublon avec la page affichée.
+function navTab(cur,ic,lb,onclick){ if(S.view===cur) return ''; return `<button class="navtab" onclick="${onclick}"><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
 function homeTabs(){ return `<div class="inner">`
-  + navTab("leagues","🏆",t("Ligues"),"goHome()")
+  + navTab("home","🏠",t("Accueil"),"goAccueil()")
+  + navTab("leagues","🏆",t("Ligues"),"backToLeagues()")
   + navTab("stats","📊",t("Stats"),"openStats()")
   + navTab("palmares","🥇",t("Palmarès"),"openPalmares()")
   + navTab("shop","🛒",t("Boutique"),"openShop()")
@@ -5071,7 +5091,7 @@ function bottomBar(){ if(!AUTH) return '';
   if(LEAGUE_TABVIEWS.includes(S.view) && L && (L.status==="running"||L.status==="done")) return runningTabs();
   return ''; }
 function setPtab(x){ S.ptab=x; render(); }
-function navPtab(id,ic,lb){ const on=S.ptab===id; return `<button class="navtab${on?' on':''}" ${on?'':`onclick="setPtab('${id}')"`}><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
+function navPtab(id,ic,lb){ if(S.ptab===id) return ''; return `<button class="navtab" onclick="setPtab('${id}')"><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
 function prepTabs(){ const solo=isSolo();
   return `<div class="inner">`
    + navPtab("infos","ℹ️",t("Infos"))
@@ -5179,8 +5199,7 @@ function viewTrade(){
   const nm=p=>p?esc((p.emoji||'')+' '+(p.name||'?')):'?';
   const clbl=id=>CARDS[id]?`<span class="clik" onclick="showCardInfo('${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`:esc(id);
   const meP=me(); const cap=meP?(meP.capital||0):0;
-  let h=`<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>
-    <div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge('rachat')}</h2>
+  let h=`<div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge('rachat')}</h2>
       <div class="mini muted">${t("Rachète une carte à un adversaire, ou vends une des tiennes pour te refaire du capital. L'autre reste libre d'accepter ou de refuser.")}</div>
       <div class="mini" style="margin-top:6px;color:var(--blue)">ℹ️ ${t("Le rachat/vente n'est possible qu'entre <b>joueurs réels</b> — pas avec le 🤖 joueur IA.")}</div>
       <div class="mini muted" style="margin-top:6px">🗓️ ${t("Journées restantes : {a}",{a:journeesRestantes()})} · ${t("touche une carte pour voir son effet.")}</div></div>`;
@@ -5497,7 +5516,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkFor
   if(!AUTH){ S.view="auth"; render(); return; }
   const last=loadLast();
   if(last&&last.leagueId){ S.leagueId=last.leagueId; S.myId=last.myId; S.view="game"; startPoll(); refresh(); }
-  else { S.view="leagues"; loadMyLeagues(); }
+  else { S.view="home"; loadMyLeagues(); }
 })();
 </script>
 </body>
