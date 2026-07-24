@@ -182,7 +182,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.26";
+const APP_VERSION = "v6.27";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1240,6 +1240,7 @@ const EN={
   "Ni champion ni dernier cette fois — rien perdu, rien gagné. À la prochaine ! 😎":"Neither champion nor last this time — nothing lost, nothing gained. Until next time! 😎",
   "Pour <b>créer</b> une ligue ou en <b>rejoindre</b> une avec un code, va sur l'onglet <b>Ligues</b>.":"To <b>create</b> a league or <b>join</b> one with a code, go to the <b>Leagues</b> tab.",
   "✓ pronos validés":"✓ picks confirmed", "attend ses matchs":"waiting for their matches", "Paris clos · en attente des résultats":"Bets closed · awaiting results",
+  "Autres duels du jour":"Other duels of the day",
   "Pronos des joueurs · {a}/{b}":"Players' picks · {a}/{b}",
   "<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.":"<b>Premium option active</b>: as soon as betting closes (before the results), you see {a}'s picks + stakes. The 🃏 bonuses stay hidden until the results.",
   "<b>Option premium</b> : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.":"<b>Premium option</b>: as soon as betting closes (before the results), you'd see {a}'s picks + stakes. Before the close, nobody sees anything. Without it → 🔒 until the results.",
@@ -3718,6 +3719,26 @@ const REAL_WAIT_MSGS=[
 // l'organisateur un pouvoir discrétionnaire dont il pouvait s'avantager (annuler un match où il
 // perdait). Ne pas le réintroduire sans mécanisme neutre.
 function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; for(let i=0;i<id.length;i++) h=(h+id.charCodeAt(i))|0; return t(REAL_WAIT_MSGS[Math.abs(h)%REAL_WAIT_MSGS.length]); }
+// Rendu « après clôture » de TON duel en 2 colonnes (Toi / adversaire) — partagé par l'onglet Pronos
+// et l'onglet Résultats (avant résolution). Colonne adverse masquée 🔒 sans l'option « voir l'adversaire ».
+// En données réelles + option « direct », un tag ✓/⏳ indique les matchs terminés.
+function afterCloseDuelHTML(){
+  const md=myDuel(); if(!md||!md.fixtures) return '';
+  const iAmHome=md.home_id===S.myId; const opp=pById(iAmHome?md.away_id:md.home_id)||{};
+  const mine=myBet(); const oppBet=bets.find(b=>b.player_id===(iAmHome?md.away_id:md.home_id));
+  const seeOpp=hasOpt('voiradv'); const lab=(f,s)=> s==="1"?f.home:(s==="2"?f.away:t("Nul"));
+  const liveOn = L.data_mode==="real" && hasOpt('direct');
+  const noteBox=`<div class="box" style="border:1px dashed var(--gold-dim);background:rgba(231,184,75,.08)"><div class="mini" style="color:var(--gold-hi);line-height:1.5">👁️ ${seeOpp?t("<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.",{a:esc(opp.name||'?')}):t("<b>Option premium</b> : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.",{a:esc(opp.name||'?')})}</div>${seeOpp?'':`<div style="margin-top:6px">${premBadge('voiradv')}</div>`}</div>`;
+  const GH='display:grid;grid-template-columns:1fr 1fr;gap:8px';
+  const cell=(m,html)=>`<div style="background:var(--card2);border:1px solid ${m?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:6px 7px;text-align:center;font-size:12px">${html}</div>`;
+  const liveTag=f=>{ if(!liveOn||!f.evId) return ''; const r=liveRes[f.evId]; if(r&&r.completed&&r.res){const w=r.res==='1'?f.home:(r.res==='2'?f.away:t("Nul"));return ` <span class="chip g" style="flex:0 0 auto">✓ ${esc(w)}</span>`;} if(f.canceled) return ` <span class="chip" style="flex:0 0 auto">🚫</span>`; return ` <span class="mini muted" style="flex:0 0 auto">⏳</span>`; };
+  const cards=md.fixtures.map((f,i)=>{ const mb=mine&&mine.picks&&mine.picks[i]; const ob=oppBet&&oppBet.picks&&oppBet.picks[i];
+      const myTxt=mb?`${esc(lab(f,mb.sel))} · ${mb.stake}€${(mine.captain===i)?' 👑':''}`:'—';
+      const opTxt=ob?(seeOpp?`${esc(lab(f,ob.sel))} · ${ob.stake}€${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—';
+      return `<div class="box"><div class="row" style="margin-bottom:6px"><span style="font-weight:800;font-size:13px">${esc(f.home)} – ${esc(f.away)}</span>${liveTag(f)}</div>
+        <div style="${GH}"><div><div class="mini muted" style="text-align:center;margin-bottom:2px">👤 ${t("Toi")}</div>${cell(true,myTxt)}</div><div><div class="mini muted" style="text-align:center;margin-bottom:2px">${(opp.emoji?opp.emoji+' ':'')}${esc(opp.name||'?')}</div>${cell(false,opTxt)}</div></div></div>`; }).join("");
+  return noteBox+cards;
+}
 function viewWait(dayLbl){
   const org=me()&&me().is_organizer;
   const betPassed = deadlinePassed(); const editable=!betPassed;
@@ -3761,25 +3782,12 @@ function viewWait(dayLbl){
 
   // ── ÉTAT « APRÈS CLÔTURE » : duel en 2 colonnes Toi / adversaire. Colonne adverse masquée 🔒 sans
   // l'option « Voir l'adversaire » ; révélée avec (les 🃏 bonus restent cachés jusqu'aux résultats).
-  const seeOpp=hasOpt('voiradv');
   // En-tête « PARIS CLOS · EN ATTENTE DES RÉSULTATS » + duel (façon maquette écran ⑥).
   const headClose = `<div class="box"><div style="font-size:10px;letter-spacing:.4px;color:var(--accent);text-transform:uppercase;font-weight:700">${t("Paris clos · en attente des résultats")}</div>
      <div style="font-size:16px;font-weight:800;margin-top:3px">👁️ ${t("Toi")} ${t("vs")} ${(opp.emoji?opp.emoji+' ':'')}${esc(opp.name||'?')}</div>${betLineHTML()}</div>`;
   const tooLate = (!mine) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b><div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div></div>` : '';
-  const noteBox = `<div class="box" style="border:1px dashed var(--gold-dim);background:rgba(231,184,75,.08)"><div class="mini" style="color:var(--gold-hi);line-height:1.5">👁️ ${seeOpp?t("<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.",{a:esc(opp.name||'?')}):t("<b>Option premium</b> : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.",{a:esc(opp.name||'?')})}</div>${seeOpp?'':`<div style="margin-top:6px">${premBadge('voiradv')}</div>`}</div>`;
-  const GH='display:grid;grid-template-columns:1fr 1fr;gap:8px';
-  const cell=(mineCol,html)=>`<div style="background:var(--card2);border:1px solid ${mineCol?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:6px 7px;text-align:center;font-size:12px">${html}</div>`;
-  // Une CARTE par match : titre du match, puis 2 colonnes 👤 Toi / adversaire (masquée 🔒 sans l'option).
-  const matchCards = (md&&md.fixtures) ? md.fixtures.map((f,i)=>{ const mb=mine&&mine.picks&&mine.picks[i]; const ob=oppBet&&oppBet.picks&&oppBet.picks[i];
-      const myTxt = mb?`${esc(lab(f,mb.sel))} · ${mb.stake}€${(mine.captain===i)?' 👑':''}`:'—';
-      const opTxt = ob ? (seeOpp?`${esc(lab(f,ob.sel))} · ${ob.stake}€${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`) : '—';
-      return `<div class="box"><div style="font-weight:800;font-size:13px;margin-bottom:6px">${esc(f.home)} – ${esc(f.away)}</div>
-        <div style="${GH}">
-          <div><div class="mini muted" style="text-align:center;margin-bottom:2px">👤 ${t("Toi")}</div>${cell(true,myTxt)}</div>
-          <div><div class="mini muted" style="text-align:center;margin-bottom:2px">${(opp.emoji?opp.emoji+' ':'')}${esc(opp.name||'?')}</div>${cell(false,opTxt)}</div>
-        </div></div>`; }).join("") : '';
   const goRes = `<button class="btn ghost sm" onclick="${resultsTabOnclick()}">${t("📋 Suivre sur l'onglet Résultats")}</button>`;
-  return `${headClose}${missingFx}${tooLate}${noteBox}${matchCards}${goRes}`;
+  return `${headClose}${missingFx}${tooLate}${afterCloseDuelHTML()}${goRes}`;
 }
 // onclick pour aller sur l'onglet Résultats à la bonne journée (réutilisé par la barre + les renvois).
 function resultsTabOnclick(){ return "openResults("+resultsDefaultDay()+")"; }
@@ -4274,30 +4282,36 @@ function waitingResultsBody(d){
   const org=me()&&me().is_organizer;
   const isCurrent=(L.status==="running" && d===(L.current_day||0));
   const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
+  const liveShow = closed && L.data_mode==="real" && hasOpt('direct');
   let h=`<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
     <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — en attente des résultats."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${betLineHTML()}</div>`;
-  // 📡 « Voir les résultats en direct » (option premium, données réelles) : dès la clôture, on montre au
-  // détenteur de l'option les matchs qui viennent de se terminer (issue 1/N/2), avant la résolution.
-  const liveShow = closed && L.data_mode==="real" && hasOpt('direct');
-  // Partie droite d'une ligne de match : résultat en direct (option) ou rien.
+  // Résultat en direct (option premium, données réelles) à droite d'une ligne d'affiche.
   const resPart = f=>{ if(!liveShow||!f.evId) return '';
     const r=liveRes[f.evId];
     if(r && r.completed && r.res){ const w=r.res==='1'?f.home:(r.res==='2'?f.away:t("Nul")); return `<b class="green">✓ ${esc(w)}</b>`; }
     if(f.canceled) return `<span class="mini muted">🚫 ${t("annulé")}</span>`;
     return `<span class="mini muted">⏳</span>`; };
+  const affiche = dz=>{ const fx=dz.fixtures||[]; if(!fx.length) return ''; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{};
+    return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
+      <div class="mini" style="margin-bottom:3px"><b>${esc((hn.emoji||'')+' '+(hn.name||'?'))} ${t("vs")} ${esc((an.emoji||'')+' '+(an.name||'?'))}</b></div>
+      ${fx.map(f=>`<div class="row mini" style="padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span class="muted">${esc(f.home)} – ${esc(f.away)}</span><span style="flex:0 0 auto">${resPart(f)}</span></div>`).join('')}
+    </div>`; };
   const anyfx=(duels||[]).some(x=>Array.isArray(x.fixtures)&&x.fixtures.length);
-  if(anyfx){
-    const myId=(myDuel()||{}).id;   // ton duel d'abord, puis les autres affiches
+  if(!anyfx){ h+=`<div class="box mini muted">${t("Les 5 matchs ne sont pas encore choisis.")}</div>`; }
+  else if(closed){
+    const myId=(myDuel()||{}).id;
+    // TON duel en 2 colonnes (même rendu que l'onglet Pronos après clôture)
+    h += afterCloseDuelHTML();
+    if(L.data_mode==="real" && !hasOpt('direct')) h+=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Voir les matchs terminés en direct")}</span>${premBadge('direct')}</div>`;
+    // Les AUTRES duels : affiches (les pronos restent privés jusqu'à la résolution)
+    const others=(duels||[]).filter(dz=>dz.id!==myId && Array.isArray(dz.fixtures)&&dz.fixtures.length);
+    if(others.length) h+=`<div class="box"><b class="mini">${t("Autres duels du jour")}</b>${others.map(affiche).join('')}</div>`;
+  } else {
+    // Avant clôture (paris ouverts) : les affiches, ton duel d'abord.
+    const myId=(myDuel()||{}).id;
     const ordD=[...(duels||[])].sort((a,b)=>((a.id===myId)?0:1)-((b.id===myId)?0:1));
-    h+=`<div class="box"><b class="mini">${liveShow?'📡 '+t("Résultats en direct"):t("Les affiches du jour")}</b>${liveShow?`<div class="mini muted" style="margin-top:2px">${t("Option activée : tu vois les matchs terminés en direct (mise à jour périodique). Les gains en € restent dévoilés à tous à la résolution.")}</div>`:''}`
-     + ordD.map(dz=>{ const fx=dz.fixtures||[]; if(!fx.length) return ''; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{}; const mine=(dz.id===myId);
-        return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
-          <div class="mini" style="margin-bottom:3px"><b>${mine?'⚔️ ':''}${esc((hn.emoji||'')+' '+(hn.name||'?'))} ${t("vs")} ${esc((an.emoji||'')+' '+(an.name||'?'))}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
-          ${fx.map(f=>`<div class="row mini" style="padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span class="muted">${esc(f.home)} – ${esc(f.away)}</span><span style="flex:0 0 auto">${resPart(f)}</span></div>`).join('')}
-        </div>`; }).join('')
-    +`</div>`;
-    if(closed && L.data_mode==="real" && !hasOpt('direct')) h+=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Voir les matchs terminés en direct")}</span>${premBadge('direct')}</div>`;
-  } else { h+=`<div class="box mini muted">${t("Les 5 matchs ne sont pas encore choisis.")}</div>`; }
+    h+=`<div class="box"><b class="mini">${t("Les affiches du jour")}</b>${ordD.map(affiche).join('')}</div>`;
+  }
   if(closed){
     h+=`<div class="box mini muted" style="text-align:center">${(L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>`;
     if(L.data_mode==="real") h+=`<div class="box mini muted">${t("🚫 Si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:STALE_MATCH_H})}</div>`;
