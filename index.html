@@ -183,7 +183,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.32";
+const APP_VERSION = "v6.34";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1243,6 +1243,8 @@ const EN={
   "✓ pronos validés":"✓ picks confirmed", "attend ses matchs":"waiting for their matches", "Paris clos · en attente des résultats":"Bets closed · awaiting results",
   "Autres duels du jour":"Other duels of the day",
   "Modifie une enchère (ou un vote) pour la re-valider.":"Change a bid (or a vote) to re-confirm it.",
+  "pas de prono":"no pick", "Duel gagné d'office":"Duel won by default",
+  "{a} n'a pas validé ses pronos : il perd le duel <b>quel que soit le gain en €</b>.":"{a} didn't confirm their picks: they lose the duel <b>regardless of the € gain</b>.",
   "🎭 gage · 🏆 récompense — ✓ voté / · à faire":"🎭 forfeit · 🏆 reward — ✓ voted / · to do",
   "🎭 gage · 🏆 récompense · 💰 enchères — ✓ fait / · à faire":"🎭 forfeit · 🏆 reward · 💰 auction — ✓ done / · to do",
   "Pronos des joueurs · {a}/{b}":"Players' picks · {a}/{b}",
@@ -3807,7 +3809,7 @@ function viewWait(dayLbl){
   // l'option « Voir l'adversaire » ; révélée avec (les 🃏 bonus restent cachés jusqu'aux résultats).
   // En-tête « PARIS CLOS · EN ATTENTE DES RÉSULTATS » + duel (façon maquette écran ⑥).
   const headClose = `<div class="box"><div style="font-size:10px;letter-spacing:.4px;color:var(--accent);text-transform:uppercase;font-weight:700">${t("Paris clos · en attente des résultats")}</div>
-     <div style="font-size:16px;font-weight:800;margin-top:3px">👁️ ${t("Toi")} ${t("vs")} ${(opp.emoji?opp.emoji+' ':'')}${esc(opp.name||'?')}</div>${betLineHTML()}</div>`;
+     <div style="font-size:16px;font-weight:800;margin-top:3px">👁️ ${t("Toi")} ${t("vs")} ${(opp.emoji?opp.emoji+' ':'')}${esc(opp.name||'?')}</div></div>`;
   const tooLate = (!mine) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b><div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div></div>` : '';
   const goRes = `<button class="btn ghost sm" onclick="${resultsTabOnclick()}">${t("📋 Suivre sur l'onglet Résultats")}</button>`;
   return `${headClose}${missingFx}${tooLate}${afterCloseDuelHTML()}${goRes}`;
@@ -4079,6 +4081,12 @@ async function resolveDay(){
 
 /* ============ RECAP ============ */
 function recapBody(D){
+  // Bug (Hervé) : à la résolution, le polling recharge bets/duels pour la journée COURANTE. Si on affiche
+  // une journée D différente (loadedDay ≠ D), les globals ne correspondent pas → « 0 point partout ».
+  // On bascule donc temporairement sur les données de D issues de l'historique, puis on restaure.
+  const _sb=bets,_sd=duels; let _restore=false;
+  if(loadedDay!==D && Array.isArray(chartBets) && Array.isArray(standDuels)){ bets=chartBets.filter(b=>b.day===D); duels=standDuels.filter(x=>x.day===D); _restore=true; }
+  try{
   const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
   const forgot=pid=>{ const b=bets.find(x=>x.player_id===pid); return !!(b&&Array.isArray(b.picks)&&b.picks.length===0); };
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
@@ -4111,7 +4119,9 @@ function recapBody(D){
   const oppB = oppId!=null? bets.find(b=>b.player_id===oppId) : null;
   const oppName = oppId!=null? pById(oppId).name : "";
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
-  const line=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return `<span class="muted">—</span>`;
+  const line=(bt,f,i,oppCard)=>{
+    if(bt && Array.isArray(bt.picks) && bt.picks.length===0) return `<span class="mini red">🚫 ${t("pas de prono")}</span>`;   // joueur qui n'a pas validé
+    if(!bt||!bt.picks||!bt.picks[i]) return `<span class="muted">—</span>`;
     // Carte VOLÉE (🥷) : elle n'a pas été appliquée. Sans ce neutralisant, le détail recalculait son
     // effet (ex. la cote combinée d'une Double Chance) alors que le net réel l'ignore → le détail
     // divergeait du total (signalé par Hervé : Double Chance volée). On la traite comme absente.
@@ -4206,6 +4216,7 @@ function recapBody(D){
         <div style="text-align:right"><div class="mini muted">${t("extérieur ✈️")}</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((aP.emoji||'')+' '+(aP.name||'?'))}${aP.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div></div>
       </div>
       <div class="mini muted" style="margin-top:6px">${t("👉 Touche un match pour le calcul détaillé.")}</div>
+      ${(forgot(homeId)!==forgot(awayId))?`<div class="box mini" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10);margin-top:6px"><b class="gold">🏆 ${t("Duel gagné d'office")}</b> — ${t("{a} n'a pas validé ses pronos : il perd le duel <b>quel que soit le gain en €</b>.",{a:esc((forgot(homeId)?hP:aP).name||'?')})}</div>`:''}
       ${rows}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;border-top:2px solid var(--border);margin-top:4px;padding-top:10px">
         <div>
@@ -4243,6 +4254,7 @@ function recapBody(D){
         <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
         ${starOn?`<td class="num">${isStar?'+1':'–'}</td>`:''}
         <td class="mini">${cardMap[p.id]&&cardMap[p.id].id?`<span class="clik" style="font-size:1.25em" onclick="event.stopPropagation();showCardInfo('${cardMap[p.id].id}')">${CARDS[cardMap[p.id].id].e}</span>`:'–'}</td></tr>`;}).join("")}</table></div>`;
+  } finally { if(_restore){ bets=_sb; duels=_sd; } }
 }
 // Fenêtre « détail du calcul » du gain net d'un joueur pour la journée affichée
 function showGainDetail(pid){
@@ -4307,7 +4319,7 @@ function waitingResultsBody(d){
   const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
   const liveShow = closed && L.data_mode==="real" && hasOpt('direct');
   let h=`<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
-    <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — en attente des résultats."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${betLineHTML()}</div>`;
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — en attente des résultats."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}</div>`;
   // Résultat en direct (option premium, données réelles) à droite d'une ligne d'affiche.
   const resPart = f=>{ if(!liveShow||!f.evId) return '';
     const r=liveRes[f.evId];
