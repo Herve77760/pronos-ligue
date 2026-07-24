@@ -158,6 +158,7 @@
     <div><h1 style="display:flex;align-items:center;gap:8px"><svg viewBox="0 0 40 40" width="30" height="30" style="flex:0 0 auto" aria-hidden="true"><circle cx="20" cy="20" r="18" fill="#14b88a"/><circle cx="20" cy="20" r="18" fill="none" stroke="#5fe3bf" stroke-width="3.4" stroke-dasharray="4 5"/><circle cx="20" cy="20" r="12.3" fill="#0d3b30"/><line x1="15" y1="25" x2="25.6" y2="14.4" stroke="#5fe3bf" stroke-width="2.1" stroke-linecap="round"/><circle cx="14.4" cy="25.6" r="2.5" fill="#5fe3bf"/></svg><span>The <span style="color:var(--accent)">Maestro</span> League</span></h1><div class="sub" id="subtitle">Multijoueur en ligne</div></div>
     <div class="topbtns">
       <button class="btn ghost sm hide" id="homeBtn" onclick="goHome()" title="Accueil">🏠</button>
+      <button class="btn ghost sm hide" id="profilBtn" onclick="openProfil()" title="Profil">👤</button>
       <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()" title="Mes ligues">←</button>
       <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🇬🇧</button>
       <button class="btn ghost sm" id="themeBtn" onclick="toggleTheme()" title="Basculer clair / sombre">☀️</button>
@@ -181,7 +182,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.18";
+const APP_VERSION = "v6.19";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2154,23 +2155,19 @@ async function setAvatar(em){
 // 🏠 ACCUEIL — vraie page d'accueil (≠ page « Ligues », qui n'est que la liste). Bonjour + slogan +
 // principe de jeu, puis on navigue via les onglets du bas (Ligues, Stats, …).
 function viewHome(){
-  const active=(myLeagues||[]).filter(m=>m.lg.status!=='done').length;
   return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b style="font-size:19px">${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b><span style="font-size:26px;line-height:1">${AUTH.avatar||'🎮'}</span></div>${sloganHTML("haut")}</div>
     ${howItWorksHTML()}
     <button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
-    <div style="height:8px"></div><button class="btn ghost" onclick="backToLeagues()">🏆 ${t("Mes ligues")}${active?' · '+active:''}</button>
     ${(myLeagues&&myLeagues.length)
       ? `<div style="height:8px"></div><button class="btn ghost sm" onclick="startEssai()">${t("🎓 Revoir le tuto")}</button>`
-      : `<div style="height:8px"></div><button class="btn ghost" onclick="startEssai()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`}`;
+      : `<div style="height:8px"></div><button class="btn ghost" onclick="startEssai()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`}
+    ${(AUTH&&AUTH.id===ADMIN_ID)?`<div style="height:8px"></div><button class="btn ghost sm" onclick="openAdmin()">${t("🛠 Admin")}</button>`:''}`;
 }
 function viewLeagues(){
   return `<div class="box"><button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
       <div style="height:12px"></div><label>${t("Rejoindre avec un code")}</label>
       <input id="joinCode" maxlength="5" placeholder="${t("Ex : 7XK2P")}" style="text-transform:uppercase">
       <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">${t("Rejoindre →")}</button></div>
-    ${myLeagues.length?'':`<button class="btn ghost" onclick="startEssai()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`}
-    <div class="row" style="gap:8px"><button class="btn ghost" onclick="openPalmares()">${t("🏆 Palmarès général")}</button><button class="btn ghost" onclick="openStats()">✨ 📊 ${t("Mes stats")}</button>${AUTH&&AUTH.id===ADMIN_ID?`<button class="btn ghost" onclick="openAdmin()">${t("🛠 Admin")}</button>`:''}</div>
-    ${myLeagues.length?`<button class="btn ghost sm" onclick="startEssai()" style="margin-top:2px">${t("🎓 Revoir le tuto")}</button>`:''}
     ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost" onclick="askNotif()">${t("🔔 Activer les notifications")}</button><div class="mini muted" style="text-align:center;margin-top:-4px">${t("Pour être prévenu quand c'est à toi de jouer (onglet ouvert).")}</div>`:''}
     ${(()=>{
       const row=m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
@@ -2624,8 +2621,10 @@ const LEAGUE_NAME_MAX=30;
 // dédié AVANT que la ligue existe. À la création, ces réglages sont écrits et deviennent FIGÉS :
 // le lobby ne propose plus aucun réglage, seulement le partage du code + la clôture.
 let newLg=null;
+// Défauts = ce que le créateur peut réellement utiliser : s'il a l'option, on pré-sélectionne l'option
+// payante (complet / réel) ; sinon on reste sur le gratuit (simple / simulé) pour éviter tout blocage.
 function newLgDefaults(){ return { name:t("Ligue de {a}",{a:AUTH?AUTH.name:''}), type:'amis',
-  formula:'classique', mode: hasOpt('bonuscomplets')?'complet':'simple', data:'sim', enjeu:'gage', soloAR:2 }; }
+  formula:'classique', mode: hasOpt('bonuscomplets')?'complet':'simple', data: hasOpt('direct')?'real':'sim', enjeu:'gage', soloAR:2 }; }
 function openCreate(){ if(!AUTH) return; newLg=newLgDefaults(); navOpen("create"); }
 function cancelCreate(){ newLg=null; navBack(); }
 function setNew(k,v){ if(!newLg) newLg=newLgDefaults();
@@ -2647,7 +2646,7 @@ function viewCreate(){
    ${['classique','fast'].map(k=>card(g.formula===k,"setNew('formula','"+k+"')",t(FORMULAS[k].n),t(FORMULAS[k].d))).join("")}
    <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
    <h2>${t("🎛️ Mode de jeu")}</h2>
-   ${['complet','simple'].map(k=>card(g.mode===k,"setNew('mode','"+k+"')",t(MODES[k].n),t(MODES[k].d),k==='complet'?premBadge('bonuscomplets'):'')).join("")}
+   ${['simple','complet'].map(k=>card(g.mode===k,"setNew('mode','"+k+"')",t(MODES[k].n),t(MODES[k].d),k==='complet'?premBadge('bonuscomplets'):'')).join("")}
    <h2>${t("🎲 Données")}</h2>
    ${card(g.data==='sim',"setNew('data','sim')",t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu."))}
    ${card(g.data==='real',"setNew('data','real')",t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."),premBadge('direct'))}
@@ -4483,6 +4482,9 @@ function showStandingsInfo(){
    </div>`);
 }
 function viewStandings(){
+  // Ligue terminée → l'onglet Classement EST l'écran de fin (vainqueur + classement final + bilan),
+  // toujours accessible (avant, il n'était joignable que via l'onglet Pronos). Demandé par Hervé.
+  if(L && L.status==="done") return viewEnd();
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
   const humansLive=classe(players).filter(p=>!p.is_ai); const lastH=humansLive[humansLive.length-1];
   const R = (L.status==="done" ? (L.num_days||0) : (L.current_day||0)); // journées résolues
@@ -4688,9 +4690,6 @@ function viewEnd(){
    <button class="btn" onclick="shareSeason()">✨ 📤 ${t("Partager ma saison")}</button><div style="height:8px"></div>
    ${(me()&&me().is_organizer)?`<button class="btn" onclick="relaunchLeague()">${t("🔁 Relancer une compétition avec les mêmes joueurs")}</button>
      <div class="mini muted" style="text-align:center;margin:6px 0 12px">${t("Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.")}</div>`:''}
-   <button class="btn ghost" onclick="goStandings()">${t("📊 Classement détaillé (points & bonus)")}</button><div style="height:8px"></div>
-   <button class="btn ghost" onclick="openLeagueStats()">📊 ${t("Stats de la ligue")}</button><div style="height:8px"></div>
-   ${L.num_days>=1?`<button class="btn ghost" onclick="openResults(${L.num_days-1})">${t("📅 Revoir les résultats journée par journée")}</button><div style="height:8px"></div>`:''}
    <button class="btn" onclick="closeLeague()">${t("🏠 Retour à l'accueil")}</button>
    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Cette ligue est <b>terminée</b> — tu la retrouveras dans le dossier <b>« Ligues terminées »</b> de l'accueil.")}</div>`;
 }
@@ -4999,6 +4998,7 @@ function render(){
   // suffisait pas — un visiteur non connecté ouvrant les 📖 règles depuis l'écran de connexion
   // quittait la vue "auth" et voyait donc réapparaître la boutique (signalé par Hervé).
   $("homeBtn").classList.toggle("hide", !AUTH);
+  $("profilBtn").classList.toggle("hide", !AUTH || S.view==="profil");  // Profil = bouton haut-droite (retiré des onglets du bas)
   $("bugBtn").classList.toggle("hide", !AUTH);
   // Relocalisés en onglets du bas / Profil → masqués de la barre du haut (v6 navigation).
   ["shopBtn","settingsBtn","leaguesBtn","langBtn","themeBtn"].forEach(id=>{ const e=$(id); if(e) e.classList.add("hide"); });
@@ -5088,13 +5088,12 @@ function openProfil(){ S.view="profil"; render(); }
 // titre du haut indique alors où on est. À 5 onglets ou moins (ligue, prépa), on garde tout, l'onglet
 // courant simplement surligné (.on).
 function navTab(cur,ic,lb,onclick,hideActive){ const on=S.view===cur; if(on&&hideActive) return ''; return `<button class="navtab${on?' on':''}" ${on?'':`onclick="${onclick}"`}><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
-function homeTabs(){ return `<div class="inner">`   // 6 destinations > 5 → on masque l'onglet courant
-  + navTab("home","🏠",t("Accueil"),"goAccueil()",true)
-  + navTab("leagues","🏆",t("Ligues"),"backToLeagues()",true)
-  + navTab("stats","📊",t("Stats"),"openStats()",true)
-  + navTab("palmares","🥇",t("Palmarès"),"openPalmares()",true)
-  + navTab("shop","🛒",t("Boutique"),"openShop()",true)
-  + navTab("profil","👤",t("Profil"),"openProfil()",true)
+function homeTabs(){ return `<div class="inner">`   // 5 onglets (Profil est passé en bouton haut-droite) → tous affichés, l'actif surligné
+  + navTab("home","🏠",t("Accueil"),"goAccueil()")
+  + navTab("leagues","🏆",t("Ligues"),"backToLeagues()")
+  + navTab("stats","📊",t("Stats"),"openStats()")
+  + navTab("palmares","🥇",t("Palmarès"),"openPalmares()")
+  + navTab("shop","🛒",t("Boutique"),"openShop()")
   + `</div>`; }
 function runningTabs(){ const d=L?(L.current_day||0):0; const resOc = "openResults("+(d>=1?(d-1):0)+")"; // toujours accessible : dernière journée résolue, ou écran d'attente si aucune
   return `<div class="inner">`
