@@ -181,7 +181,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.03";
+const APP_VERSION = "v6.04";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3119,16 +3119,23 @@ function prepEncheresTab(){
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
    <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Vote d'abord pour une récompense"):t("🎭 Vote d'abord pour un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>`; }
+// Les réglages FIGÉS de la ligue (une seule ligne par réglage : le choix retenu, pas les alternatives).
+function prepParamsHTML(){ const solo=isSolo(); const kv=(l,v)=>`<div class="row" style="justify-content:space-between;margin:4px 0"><span class="muted mini">${l}</span><b>${v}</b></div>`;
+  return kv("⏱️ "+t("Rythme"), t(leagueFormula().n))
+   + kv("🎛️ "+t("Mode"), t(MODES[getMode()].n))
+   + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"))
+   + (solo?'':kv("🎭 "+t("Enjeu"), isBoth()?t("Gage + récompense"):(isReward()?t("Récompense"):t("Gage")))); }
 function prepInfosTab(){
-  if(L.status==="lobby") return viewLobby(); // lobby : réglages + code + clôture — vue existante réutilisée
-  const st=prepState(); const org=me()&&me().is_organizer; const solo=isSolo(); const kv=(l,v)=>`<div class="row" style="justify-content:space-between;margin:4px 0"><span class="muted mini">${l}</span><b>${v}</b></div>`;
+  const org=me()&&me().is_organizer;
+  // Organisateur EN LOBBY : réglages modifiables + code + clôture (vue existante).
+  // Tous les autres cas (non-organisateur en lobby, ou tout le monde en prépa) : réglages FIGÉS, un seul choix affiché.
+  if(L.status==="lobby" && org) return viewLobby();
+  const st=prepState(); const lobby=(L.status==="lobby");
   return `<div class="box"><h2 style="margin-top:0">ℹ️ ${t("Infos de la ligue")}</h2>
-     ${kv("⏱️ "+t("Rythme"), t(leagueFormula().n))}
-     ${kv("🎛️ "+t("Mode"), t(MODES[getMode()].n))}
-     ${kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"))}
-     ${solo?'':kv("🎭 "+t("Enjeu"), isBoth()?t("Gage + récompense"):(isReward()?t("Récompense"):t("Gage")))}
-     <div class="mini muted" style="margin-top:6px">⏳ ${t("Démarrage auto dans {a}",{a:fmtLeft(st.deadline)})}</div></div>
-   ${org?`<button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`; }
+     ${lobby?`<div class="row" style="justify-content:space-between;margin:4px 0"><span class="muted mini">🏷️ ${t("Code")}</span><b>${esc(L.code)}</b></div>`:''}
+     ${prepParamsHTML()}
+     <div class="mini muted" style="margin-top:6px">${lobby?('⏳ '+t("En attente que l'organisateur clôture les inscriptions…")):('⏳ '+t("Démarrage auto dans {a}",{a:fmtLeft(st.deadline)}))}</div></div>
+   ${(!lobby&&org)?`<button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`; }
 function viewPrepTabs(){
   const meP=me();
   if(meP && meP.shop_done){
