@@ -182,7 +182,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.19";
+const APP_VERSION = "v6.20";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1210,6 +1210,14 @@ const EN={
   "✏️ Modifier (jusqu'à la clôture)":"✏️ Edit (until close)", "Ton duel":"Your duel",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.":"You didn't confirm your picks before close: <b>no bet</b> counts that day → <b>{b} pt</b> in the standings and <b>−{a}%</b> of your capital.",
   "👁️ Option active : tu vois les pronos et mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.":"👁️ Option active: you see {a}'s picks and stakes. The 🃏 bonuses stay hidden until the results.",
+  // Préparation (Lot 2a — v6.20)
+  "✅ validé":"✅ confirmed", "📝 sauvegardé":"📝 saved", "⏳ pas commencé":"⏳ not started", "inscrit":"joined",
+  "✅ Ta préparation est validée":"✅ Your preparation is confirmed",
+  "En attente des autres — <b>{a}/{b}</b> prêts. Tu peux encore modifier tes gages / enchères.":"Waiting for the others — <b>{a}/{b}</b> ready. You can still change your forfeits / bids.",
+  "🚀 Tout le monde est prêt — lancement imminent…":"🚀 Everyone's ready — launching soon…",
+  "Force le démarrage sans attendre que tout le monde ait validé.":"Forces the start without waiting for everyone to confirm.",
+  "Passer aux enchères 💰 →":"Go to the auction 💰 →",
+  "Ton vote est enregistré au fur et à mesure. La validation finale se fait sur l'onglet Enchères.":"Your vote is saved as you go. The final confirmation happens on the Auction tab.",
   "🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.":"🔒 Without the “See the opponent” option, {a}'s column stays hidden until the results.",
   // Légende du classement (v6.12)
   "Comprendre le classement":"Understanding the standings", "monte":"up", "stable":"steady", "descend":"down", "comprendre le classement":"understand the standings",
@@ -1928,6 +1936,7 @@ function simResult(f){ const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1
   let r=Math.random(); for(let i=0;i<outs.length;i++){ r-=inv[i]/sum; if(r<=0) return outs[i][0]; } return outs[outs.length-1][0]; }
 
 /* ============ data ============ */
+let prevLeagueStatus=null;   // suivi du statut pour détecter le lancement (prépa → running) → Coulisses
 async function refresh(){
   // On CAPTURE la ligue visée au départ. `refresh()` est asynchrone (polling / boot) : pendant ses
   // `await`, l'utilisateur peut revenir à « Mes ligues » (backToLeagues met S.leagueId et L à null).
@@ -1985,6 +1994,10 @@ async function refresh(){
       catch(e){ standTrades=[]; } }
     if(stale()) return;
     if(L.status==="done" && endStats===null){ endStats={loading:true}; loadEndStats().then(()=>{ if(!stale()) render(); }); }
+    // Lancement du championnat : dès que la prépa bascule en "running", on amène le joueur sur les
+    // 🎬 Coulisses (résumé d'ouverture : gage + enchères), et non direct sur les pronos (demandé par Hervé).
+    if(L.status==="running" && (prevLeagueStatus==="prep"||prevLeagueStatus==="starting") && S.view==="game"){ S.view="coulisses"; }
+    prevLeagueStatus=L.status;
     showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay); maybePrepModal(); maybeFormulaModal();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
@@ -2608,7 +2621,7 @@ function viewEssai(){
     <div style="height:8px"></div><button class="btn ghost" onclick="exitEssai()">${AUTH?t("← Retour à l'accueil"):t("← Retour à la connexion")}</button>`;
 }
 function exitEssai(){ if(AUTH){ S.view="leagues"; render(); loadMyLeagues(); } else { S.view="auth"; render(); } }
-function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; S.ptab="infos"; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
+function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; S.ptab="infos"; prevLeagueStatus=null; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
@@ -3234,8 +3247,14 @@ function viewPrep(){
 // === v6 (Lot A2) — Préparation présentée en ONGLETS (Infos / Joueurs / Gages / Enchères) ========
 // Réutilise toute la logique existante (voteSectionHTML, savePrep, setBid, editPrep, closeRegistration…).
 // L'onglet actif est S.ptab ; la barre du bas (prepTabs) le pilote.
-function prepRosterHTML(lobby){ const org=me()&&me().is_organizer;
-  return players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${(lobby&&org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip ${p.shop_done?'g':''}">${lobby?t("Prêt"):(p.shop_done?t("✓ prêt"):t("⏳ pas encore"))}</span>`}</div>`).join(""); }
+function prepRosterHTML(lobby){ const org=me()&&me().is_organizer; const st=prepState();
+  // 3 statuts (hors lobby) : ✅ validé (gage + enchères validés) · 📝 sauvegardé (a commencé mais pas
+  // encore validé) · ⏳ pas commencé (n'a rien saisi). « Commencé » = a voté un gage OU posé une enchère.
+  const started=p=>((st.votes&&st.votes[p.id]!=null)||(st.votesR&&st.votesR[p.id]!=null)||(st.bids&&st.bids[p.id]&&Object.keys(st.bids[p.id]).length>0));
+  const statusChip=p=> p.shop_done?`<span class="chip g">${t("✅ validé")}</span>`
+     : started(p)?`<span class="chip b">${t("📝 sauvegardé")}</span>`
+     : `<span class="chip">${t("⏳ pas commencé")}</span>`;
+  return players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${(lobby&&org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:(lobby?`<span class="chip">${t("inscrit")}</span>`:statusChip(p))}</div>`).join(""); }
 function prepJoueursTab(){
   const humans=players.filter(p=>!p.is_ai); const n=humans.length; const org=me()&&me().is_organizer;
   const lobby=(L.status==="lobby"); const solo=(n===1); const canLaunch=n>=1; const addAI=n%2===1;
@@ -3247,18 +3266,24 @@ function prepJoueursTab(){
     if(org) h+=`<div style="height:8px"></div><button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?((solo?t("Lancer la partie solo"):t("Clôturer les inscriptions"))+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 1 joueur")}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">${solo?t("Tu joues seul contre l'IA. Invite des amis avec le code {a} — dès qu'un 2ᵉ joueur rejoint, la partie redevient normale.",{a:esc(L.code)}):t("Clôture quand le nombre te convient — ensuite : vote du gage + enchères, puis le championnat démarre.")}</div>`;
     else h+=`<div class="box mini muted" style="text-align:center">${t("En attente que l'organisateur clôture les inscriptions…")}</div>`;
+  } else if(org && !isSolo()){
+    // Préparation en cours : la clôture (forcer le démarrage) est ici, sur la page Joueurs (demandé par Hervé).
+    h+=`<div style="height:8px"></div><button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>
+      <div class="mini muted" style="text-align:center;margin-top:5px">${t("Force le démarrage sans attendre que tout le monde ait validé.")}</div>`;
   }
   return h; }
 function prepGagesTab(){
   if(L.status==="lobby") return `<div class="box"><h2 style="margin-top:0">🎭 ${t("Gages & récompenses")}</h2><div class="mini" style="color:var(--accent)">🔒 ${t("Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).")}</div></div>`;
-  return voteSectionHTML(false) + (isBoth()?`<div style="height:10px"></div>`+voteSectionHTML(true):''); }
+  return voteSectionHTML(false) + (isBoth()?`<div style="height:10px"></div>`+voteSectionHTML(true):'')
+    + `<div style="height:12px"></div><button class="btn" onclick="setPtab('encheres')">${t("Passer aux enchères 💰 →")}</button>
+       <div class="mini muted" style="text-align:center;margin-top:5px">${t("Ton vote est enregistré au fur et à mesure. La validation finale se fait sur l'onglet Enchères.")}</div>`; }
 function prepEncheresTab(){
   const meP=me(); const maxCards=Math.max(1,L.num_days||1);
   const ids=modeCards(getMode()).slice().sort((a,b)=>t(CARDS[a].n).localeCompare(t(CARDS[b].n),undefined,{sensitivity:"base"}));
   if(L.status==="lobby") return `<div class="box"><h2 style="margin-top:0">💰 ${t("Enchères aux bonus")}</h2><div class="mini" style="color:var(--accent)">🔒 ${t("Les enchères s'ouvriront au démarrage. En attendant, touche un bonus pour le découvrir.")}</div></div>`
       + ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div><span class="chip">🔒</span></div>`).join("");
   if(!meP) return `<div class="box">…</div>`;
-  if(!meP.shop_done && S.bidLLeague!==L.id){ bidL=Object.assign({}, (prepState().bids[S.myId]||{})); S.bidLLeague=L.id; }
+  if(S.bidLLeague!==L.id){ bidL=Object.assign({}, (prepState().bids[S.myId]||{})); S.bidLLeague=L.id; }  // charge les enchères sauvegardées (même après validation → éditable)
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards; const miss=votesManquants(); const noVote=miss.length>0;
   return `<div class="box"><h2 style="margin-top:0">🃏 ${t("Enchères bonus")}</h2><div class="mini muted">${t("Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.",{a:SHOP_CAP,b:maxCards})}</div>
@@ -3292,31 +3317,25 @@ function paramInfo(kind){
   infoModal(emoji, title, `<div class="mini muted" style="text-align:left;line-height:1.55">${body}</div>`);
 }
 function prepInfosTab(){
-  // Réglages FIGÉS à la création → l'onglet Infos les affiche en lecture seule pour TOUT LE MONDE
-  // (organisateur compris). La gestion des joueurs + la clôture sont dans l'onglet 👥 Joueurs.
+  // Réglages FIGÉS à la création → l'onglet Infos les affiche en lecture seule. La gestion des joueurs
+  // + la clôture de la préparation sont sur l'onglet 👥 Joueurs.
   const org=me()&&me().is_organizer; const lobby=(L.status==="lobby"); const st=prepState();
+  const meP=me(); const shopDone=meP&&meP.shop_done;
+  const humansN=players.filter(p=>!p.is_ai).length; const validated=players.filter(p=>!p.is_ai&&p.shop_done).length;
   const note = lobby
     ? (org ? t("Inscriptions ouvertes — partage le code, puis clôture depuis l'onglet 👥 Joueurs.")
            : t("En attente que l'organisateur clôture les inscriptions…"))
     : t("Démarrage auto dans {a}",{a:fmtLeft(st.deadline)});
+  const banner = (!lobby && shopDone) ? `<div class="box" style="border-color:var(--green)"><b class="mini">${t("✅ Ta préparation est validée")}</b><div class="mini muted" style="margin-top:4px">${validated>=humansN?t("🚀 Tout le monde est prêt — lancement imminent…"):t("En attente des autres — <b>{a}/{b}</b> prêts. Tu peux encore modifier tes gages / enchères.",{a:validated,b:humansN})}</div></div>` : '';
   return `<div class="box"><h2 style="margin-top:0">ℹ️ ${t("Infos de la ligue")}</h2>
      ${lobby?`<div class="row" style="justify-content:space-between;margin:4px 0"><span class="muted mini">🏷️ ${t("Code")}</span><b>${esc(L.code)}</b></div>`:''}
      ${prepParamsHTML()}
      <div class="mini muted" style="margin-top:6px">⏳ ${note}</div></div>
-   ${(!lobby&&org&&!isSolo())?`<button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`; }
+   ${banner}`; }
 function viewPrepTabs(){
-  const meP=me();
-  if(meP && meP.shop_done){
-    const humansN=players.filter(p=>!p.is_ai).length; const validated=players.filter(p=>!p.is_ai&&p.shop_done).length; const allReady=validated>=humansN; const st=prepState();
-    const waitMsg = allReady ? t("🚀 Tout le monde est prêt — lancement du championnat…")
-      : t("⏳ On attend les autres joueurs — <b>{a}/{b}</b> prêts.",{a:validated,b:humansN})+'<br><span class="mini">'+t("Le championnat démarre <b>tout seul</b> dès que tout le monde a validé (ou dans {a}).",{a:fmtLeft(st.deadline)})+'</span>';
-    return `<div class="box"><h2 style="margin-top:0">${t("✅ Préparation validée")}</h2>
-      <div class="mini muted">${t("Ton vote et tes enchères sont enregistrés.")}</div>
-      <div class="box mini" style="margin-top:10px;text-align:center">${waitMsg}</div></div>
-      ${prepRosterHTML(false)}
-      <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">${t("✏️ Modifier ma préparation")}</button>
-      ${(me()&&me().is_organizer&&!isSolo())?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`;
-  }
+  // Plus d'écran unique après validation : les onglets Gages/Enchères restent actifs et éditables (le
+  // joueur peut revoir/modifier sa saisie tant que le championnat n'est pas lancé). Le statut « validé /
+  // en attente des autres » s'affiche en bandeau sur l'onglet Infos. (Demandé par Hervé.)
   const tab=S.ptab||"infos";
   if(tab==="joueurs") return prepJoueursTab();
   if(tab==="gages" && !isSolo()) return prepGagesTab();
