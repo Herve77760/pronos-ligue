@@ -182,7 +182,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.22";
+const APP_VERSION = "v6.24";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -474,6 +474,7 @@ async function fetchRealPool(){
   return pool.sort(sortBig).slice(0,N);
 }
 let lastRealCheck=0, lastRealFill=0;
+let liveRes={};   // derniers résultats réels récupérés par evId (pour l'option 📡 « direct » sur la page Résultats)
 // 💰 CACHE DU POOL (mitigation quota, en attendant le stockage serveur de la Phase 2).
 // Construire le pool coûte ~24 crédits (1 par compétition interrogée) et c'était refait à chaque
 // ouverture de l'écran de sélection ET par le remplissage auto — dans CHAQUE navigateur ouvert.
@@ -511,7 +512,7 @@ async function resolveRealIfReady(){
   if(!times.length || Math.min.apply(null,times)>Date.now()) return; // aucun match commencé
   if(Date.now()-lastRealCheck < 1200000) return; lastRealCheck=Date.now(); // 20 min (était 10) — mitigation quota
   const keys=[...new Set(realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.evId).map(f=>f.sportKey))];
-  const results=await fetchRealResults(keys);
+  const results=await fetchRealResults(keys); liveRes=results||{};   // 📡 dispo pour l'affichage « direct » (Résultats)
   // ⏱️ AUTO-ANNULATION (v4.46) : un match toujours pas terminé plus de STALE_MATCH_H heures après son
   // coup d'envoi PRÉVU est réputé ANNULÉ (reporté / abandonné / jamais joué). Seuil très au-delà de la
   // durée d'un match (foot 2 h, tennis ≤ 5 h) et de tout retard de flux → aucun risque d'annuler un
@@ -1225,6 +1226,11 @@ const EN={
   "Ton vote est enregistré au fur et à mesure. La validation finale se fait sur l'onglet Enchères.":"Your vote is saved as you go. The final confirmation happens on the Auction tab.",
   "Ton vote est enregistré au fur et à mesure. Les enchères sur les bonus s'ouvriront à la clôture des inscriptions.":"Your vote is saved as you go. The bonus auction opens when registration closes.",
   "📝 gage voté":"📝 forfeit voted",
+  "Paris clôturés — en attente des résultats.":"Bets closed — waiting for the results.",
+  "📋 Suivre sur l'onglet Résultats":"📋 Follow on the Results tab",
+  "Chargement de la journée…":"Loading the matchday…",
+  "annulé":"cancelled", "Voir les matchs terminés en direct":"See finished matches live",
+  "Option activée : tu vois les matchs terminés en direct (mise à jour périodique). Les gains en € restent dévoilés à tous à la résolution.":"Option active: you see finished matches live (updated periodically). The € winnings are still revealed to everyone at resolution.",
   "🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.":"🔒 Without the “See the opponent” option, {a}'s column stays hidden until the results.",
   // Légende du classement (v6.12)
   "Comprendre le classement":"Understanding the standings", "monte":"up", "stable":"steady", "descend":"down", "comprendre le classement":"understand the standings",
@@ -1944,6 +1950,7 @@ function simResult(f){ const outs=f.draw?[["1",f.oh],["N",f.od],["2",f.oa]]:[["1
 
 /* ============ data ============ */
 let prevLeagueStatus=null;   // suivi du statut pour détecter le lancement (prépa → running) → Coulisses
+let loadedDay=null;          // journée chargée dans duels/bets (évite d'afficher une journée passée sur Pronos, D5)
 async function refresh(){
   // On CAPTURE la ligue visée au départ. `refresh()` est asynchrone (polling / boot) : pendant ses
   // `await`, l'utilisateur peut revenir à « Mes ligues » (backToLeagues met S.leagueId et L à null).
@@ -1992,6 +1999,7 @@ async function refresh(){
     S.dispDay = dispDay;
     duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay));
     bets  = await q(db.from("bets").select("*").eq("league_id",lid).eq("day",dispDay));
+    loadedDay = dispDay;   // journée effectivement chargée dans `duels`/`bets` (cf. flash Pronos, D5)
     if(stale()) return;
     // sélection auto (IA à domicile, ou échéance de sélection dépassée) + résolution auto
     if(L.status==="running" && !S.recap && !resolving){
@@ -2781,6 +2789,9 @@ function viewGame(){
   // plus affiché ici : les résultats sont dans l'onglet 📋 Résultats (l'onglet Pronos ne montre jamais
   // de résultats — choix Hervé).
   if(L.status==="done") return viewEnd();
+  // Anti-flash (D5) : après avoir consulté l'onglet Résultats (qui charge une journée passée dans
+  // duels/bets), on ne montre PAS ces données périmées sur Pronos — on attend le rechargement.
+  if(loadedDay!==L.current_day) return `<div class="box" style="text-align:center"><div style="font-size:24px">⏳</div><div class="mini muted" style="margin-top:6px">${t("Chargement de la journée…")}</div></div>`;
   // L'onglet « Pronos » va DIRECT à la journée (saisie / validés / après-clôture). Aucune info de
   // résultat ici. Le résumé d'ouverture (gage + enchères) vit dans l'onglet 🎬 Coulisses.
   return viewDay();
@@ -3739,11 +3750,13 @@ function viewWait(dayLbl){
      }).join("")}
      <div class="mini muted" style="margin-top:8px">${seeOpp?t("👁️ Option active : tu vois les pronos et mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.",{a:esc(opp.name||'?')}):t("🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.",{a:esc(opp.name||'?')})}</div>
    </div>` : '';
-  const waitBox = `<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
-    ${(L&&L.data_mode==="real")?`<div class="box mini muted">${t("🚫 Si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:STALE_MATCH_H})}</div>`:''}
-    ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`;
-  return `${head}${missingFx}${tooLate}${duelHTML}${waitBox}`;
+  // Attente des résultats + bouton « publier » (organisateur) → déplacés sur l'onglet 📋 Résultats
+  // (l'onglet Pronos ne montre que les pronos). Ici on garde juste un renvoi discret.
+  const goRes = `<button class="btn ghost sm" onclick="${resultsTabOnclick()}">${t("📋 Suivre sur l'onglet Résultats")}</button>`;
+  return `${head}${missingFx}${tooLate}${duelHTML}${goRes}`;
 }
+// onclick pour aller sur l'onglet Résultats à la bonne journée (réutilisé par la barre + les renvois).
+function resultsTabOnclick(){ return "openResults("+resultsDefaultDay()+")"; }
 function publicBetsHTML(){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
   const isMine=d=>(d.home_id===S.myId||d.away_id===S.myId);
@@ -4206,29 +4219,58 @@ function recapNav(D){ const last=L.current_day-1;
     <button class="btn ghost sm" ${D<last?'':'disabled'} onclick="navDay(${D+1})">${t("Suiv. ▶")}</button></div>`; }
 function navDay(d){ const last=L.current_day-1; if(d<0||d>last) return; openResults(d); }
 async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recapFocus=null;
-  try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); render(); }
+  try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); loadedDay=d; render(); }
   catch(e){ showErr("Résultats : "+e.message); } }
 function viewRecap(D){ const fin=(L&&L.status==="done"); return `${recapBody(D)}
     <button class="btn" onclick="ackRecap()">${fin?t("🏆 Voir le classement final →"):t("Continuer →")}</button>
     ${fin?'':`<button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`}`; }
-function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:L.current_day-1);
+// Journée affichée par défaut sur l'onglet Résultats :
+//  • ligue terminée → dernière journée ;
+//  • journée en cours dont les PARIS SONT CLÔTURÉS → cette journée (affiches / attente des résultats) ;
+//  • paris encore OUVERTS → on reste sur la dernière journée RÉSOLUE (ou J1 s'il n'y en a aucune).
+// → pendant que les joueurs parient, Résultats garde la journée finie ; dès la clôture, il bascule sur
+//   les affiches de la nouvelle journée (demandé par Hervé).
+function resultsDefaultDay(){
+  if(!L) return 0;
+  if(L.status==="done") return Math.max(0,(L.num_days||1)-1);
+  if(deadlinePassed()) return (L.current_day||0);
+  return (L.current_day||0)>=1 ? (L.current_day-1) : 0;
+}
+function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:resultsDefaultDay());
   const back="";  // navigation via la barre d'onglets du bas (v6.15)
   // Journée résolue ? (d < journées résolues). Sinon → écran d'attente (pas de résultats à montrer).
   const resolvedCount = (L.status==="done" ? (L.num_days||0) : (L.current_day||0));
   if(d<0 || d>=resolvedCount) return back + waitingResultsBody(Math.max(0,d));
-  return back + recapBody(d) +
-    `<button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`; }
+  return back + recapBody(d); }
 // Écran d'attente de l'onglet Résultats : quand la journée n'est pas encore terminée (ex. J1 avant
 // toute résolution). On montre les affiches du jour si elles sont connues ; pronos/mises masqués.
 function waitingResultsBody(d){
+  const org=me()&&me().is_organizer;
+  const isCurrent=(L.status==="running" && d===(L.current_day||0));
+  const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
   let h=`<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
-    <div class="mini" style="color:var(--accent)">⏳ ${t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${betLineHTML()}</div>`;
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — en attente des résultats."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${betLineHTML()}</div>`;
+  // 📡 « Voir les résultats en direct » (option premium, données réelles) : dès la clôture, on montre au
+  // détenteur de l'option les matchs qui viennent de se terminer (issue 1/N/2), avant la résolution.
+  const liveShow = closed && L.data_mode==="real" && hasOpt('direct');
+  const matchLine = f=>{ const base=`<span class="muted">${esc(f.home)}–${esc(f.away)}</span>`;
+    if(!liveShow || !f.evId) return base;
+    const r=liveRes[f.evId];
+    if(r && r.completed && r.res){ const w=r.res==='1'?f.home:(r.res==='2'?f.away:t("Nul")); return base+` <b class="green">✓ ${esc(w)}</b>`; }
+    if(f.canceled) return base+` <span class="mini muted">🚫 ${t("annulé")}</span>`;
+    return base+` <span class="mini muted">⏳</span>`; };
   const anyfx=(duels||[]).some(x=>Array.isArray(x.fixtures)&&x.fixtures.length);
-  if(anyfx){ h+=`<div class="box"><b class="mini">${t("Les affiches du jour")}</b>`+
+  if(anyfx){ h+=`<div class="box"><b class="mini">${liveShow?'📡 '+t("Résultats en direct"):t("Les affiches du jour")}</b>${liveShow?`<div class="mini muted" style="margin-top:2px">${t("Option activée : tu vois les matchs terminés en direct (mise à jour périodique). Les gains en € restent dévoilés à tous à la résolution.")}</div>`:''}`+
     (duels||[]).map(dz=>{ const fx=dz.fixtures||[]; if(!fx.length) return ''; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{};
-      return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px"><b>${esc((hn.emoji||'')+' '+(hn.name||'?'))}</b> ${t("vs")} <b>${esc((an.emoji||'')+' '+(an.name||'?'))}</b><br>${fx.map(f=>`<span class="muted">${esc(f.home)}–${esc(f.away)}</span>`).join(' · ')}</div>`; }).join('')
+      return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px"><b>${esc((hn.emoji||'')+' '+(hn.name||'?'))}</b> ${t("vs")} <b>${esc((an.emoji||'')+' '+(an.name||'?'))}</b><br>${fx.map(matchLine).join(' · ')}</div>`; }).join('')
     +`</div>`;
+    if(closed && L.data_mode==="real" && !hasOpt('direct')) h+=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Voir les matchs terminés en direct")}</span>${premBadge('direct')}</div>`;
   } else { h+=`<div class="box mini muted">${t("Les 5 matchs ne sont pas encore choisis.")}</div>`; }
+  if(closed){
+    h+=`<div class="box mini muted" style="text-align:center">${(L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>`;
+    if(L.data_mode==="real") h+=`<div class="box mini muted">${t("🚫 Si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:STALE_MATCH_H})}</div>`;
+    if(!(L.data_mode==="real")&&!simMatchesDone()&&org) h+=`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`;
+  }
   return h;
 }
 let recapOpen=-1, recapFocus=null;
@@ -5130,7 +5172,7 @@ const HOME_VIEWS=["home","leagues","stats","palmares","shop","profil"];
 const LEAGUE_TABVIEWS=["game","standings","coulisses","results","leaguestats","trade"];
 function goHome(){ goAccueil(); }   // bouton 🏠 du haut → vraie page d'accueil
 function goAccueil(){ if(poll)clearInterval(poll); localStorage.removeItem("pl_last"); navRoot(); S.leagueId=null; S.myId=null; L=null; S.view="home"; loadMyLeagues(); }
-function goGame(){ if(S.view!=="game"){ S.view="game"; render(); } }
+function goGame(){ if(S.view==="game") return; S.view="game"; render(); if(L&&loadedDay!==L.current_day) refresh(); }
 function openProfil(){ S.view="profil"; render(); }
 // v6.16 — on ne RETIRE l'onglet courant que si la barre dépasse 5 onglets (cas de l'accueil, 6) : le
 // titre du haut indique alors où on est. À 5 onglets ou moins (ligue, prépa), on garde tout, l'onglet
@@ -5143,7 +5185,7 @@ function homeTabs(){ return `<div class="inner">`   // 5 onglets (Profil est pas
   + navTab("palmares","🥇",t("Palmarès"),"openPalmares()")
   + navTab("shop","🛒",t("Boutique"),"openShop()")
   + `</div>`; }
-function runningTabs(){ const d=L?(L.current_day||0):0; const resOc = "openResults("+(d>=1?(d-1):0)+")"; // toujours accessible : dernière journée résolue, ou écran d'attente si aucune
+function runningTabs(){ const resOc = "openResults("+resultsDefaultDay()+")"; // journée finie pendant les paris, affiches de la journée en cours dès la clôture
   return `<div class="inner">`
   + navTab("coulisses","🎬",t("Coulisses"),"openCoulisses()")
   + navTab("game","⚽",t("Pronos"),"goGame()")
