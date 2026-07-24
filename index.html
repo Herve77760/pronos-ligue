@@ -181,7 +181,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.10";
+const APP_VERSION = "v6.11";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -728,6 +728,7 @@ const EN={
   "▲ masquer":"▲ hide", "▼ afficher":"▼ show",
   "Salon":"Lobby", "Journée {a}/{b}":"Day {a}/{b}",
   "Capitaine et bonus doivent être sur des matchs différents.":"Captain and bonus must be on different matches.",
+  "👑 Le Capitaine et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager le match du Capitaine.":"👑 The Captain and the 🃏 bonus must target different matches. Exception: bonuses that attack the opponent's bet ({a}, {b}) can share the Captain's match.",
   "⚠️ Trop risqué — baisse la mise du Capitaine":"⚠️ Too risky — lower the Captain stake",
   "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : 7XK2P":"e.g. 7XK2P",
@@ -3524,7 +3525,7 @@ function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0);
     btn.textContent = bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →"))))))); }
 }
 function setCap(i){ const C=(myCard&&CARDS[myCard.id])||{}; const on=bet.captain!==i;
-  if(on && myCard && C.t && !C.two && !C.oppT && myCard.target===i){ infoWin(t("Capitaine et bonus doivent être sur des matchs différents."),"⚠️"); return; }
+  if(on && myCard && C.t && !C.two && !C.oppT && myCard.target===i){ infoWin(t("👑 Le Capitaine et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager le match du Capitaine.",{a:CARDS.face.e+' '+t(CARDS.face.n),b:CARDS.cadeau.e+' '+t(CARDS.cadeau.n)}),"⚠️"); return; }
   bet.captain=bet.captain===i?-1:i; render(); }
 function setTarget(i){ if(!myCard) return;
   if(CARDS[myCard.id]&&CARDS[myCard.id].two){ // Coup Double : bascule parmi 2 cibles max (Capitaine autorisé)
@@ -3534,7 +3535,7 @@ function setTarget(i){ if(!myCard) return;
     else if(myCard.target2==null){ myCard.target2=i; }
     else { myCard.target2=i; }
     render(); return; }
-  if(bet.captain===i && !(CARDS[myCard.id]&&CARDS[myCard.id].oppT)){ infoWin(t("Capitaine et bonus doivent être sur des matchs différents."),"⚠️"); return; } // les cartes qui visent l'adversaire peuvent partager le match du Capitaine
+  if(bet.captain===i && !(CARDS[myCard.id]&&CARDS[myCard.id].oppT)){ infoWin(t("👑 Le Capitaine et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager le match du Capitaine.",{a:CARDS.face.e+' '+t(CARDS.face.n),b:CARDS.cadeau.e+' '+t(CARDS.cadeau.n)}),"⚠️"); return; } // les cartes qui visent l'adversaire peuvent partager le match du Capitaine
   if(myCard.id==="chance"){ const d=myDuel(); const f=d&&d.fixtures&&d.fixtures[i]; if(!f||!f.draw) return; } myCard.target=i; if(myCard.id==="chance") myCard.sel2=null; render(); }
 function setSel2(i,v){ if(!myCard||myCard.id!=="chance"||myCard.target!==i) return; if(bet.picks[i].sel===v) return; myCard.sel2=v; render(); }
 function selCard(id){ if(myCard&&myCard.id===id){ myCard=null; } else { myCard={id, target:null}; } render(); }
