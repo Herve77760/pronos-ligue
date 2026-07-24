@@ -182,7 +182,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.20";
+const APP_VERSION = "v6.21";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -314,6 +314,11 @@ function isBoth(){ return getEnjeu()==="both"; }
 function hasGage(){ const e=getEnjeu(); return e==="gage"||e==="both"; }
 function hasReward(){ const e=getEnjeu(); return e==="reward"||e==="both"; }
 function itemPool(enjeu,mode){ const base=(enjeu==="reward")?REWARDS:GAGES; return (mode==="simple")?base.filter(g=>g.s):base.slice(); }
+// Tire au hasard les options de gage/récompense proposées au vote (3 en mode simple, 5 en complet).
+// Utilisé à la CRÉATION (le vote du gage est ouvert dès le lobby) et en secours à la clôture.
+function drawItems(enjeu,mode){ const nOpt=(mode==="simple")?3:5; const pool=itemPool(enjeu,mode);
+  for(let i=pool.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [pool[i],pool[j]]=[pool[j],pool[i]]; }
+  return pool.slice(0,Math.min(nOpt,pool.length)); }
 const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
 // Règles de mise & sanction — SOURCE UNIQUE (v4.17). Avant, ces valeurs étaient des nombres magiques
 // dupliqués (le plafond était écrit 2 fois, la pénalité 3 fois) et les ~22 textes qui les annoncent
@@ -1218,6 +1223,8 @@ const EN={
   "Force le démarrage sans attendre que tout le monde ait validé.":"Forces the start without waiting for everyone to confirm.",
   "Passer aux enchères 💰 →":"Go to the auction 💰 →",
   "Ton vote est enregistré au fur et à mesure. La validation finale se fait sur l'onglet Enchères.":"Your vote is saved as you go. The final confirmation happens on the Auction tab.",
+  "Ton vote est enregistré au fur et à mesure. Les enchères sur les bonus s'ouvriront à la clôture des inscriptions.":"Your vote is saved as you go. The bonus auction opens when registration closes.",
+  "📝 gage voté":"📝 forfeit voted",
   "🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.":"🔒 Without the “See the opponent” option, {a}'s column stays hidden until the results.",
   // Légende du classement (v6.12)
   "Comprendre le classement":"Understanding the standings", "monte":"up", "stable":"steady", "descend":"down", "comprendre le classement":"understand the standings",
@@ -2717,7 +2724,15 @@ async function createLeague(){
     const data = (newLg.data==='real' && hasOpt('direct')) ? 'real' : 'sim';
     const formula = (newLg.formula==='fast') ? 'fast' : 'classique';
     const st = { mode };                         // réglages figés stockés dans le JSON `gage`
-    if(solo) st.soloAR = (newLg.soloAR===1?1:2); else st.enjeu = newLg.enjeu||'gage';
+    if(solo) st.soloAR = (newLg.soloAR===1?1:2);
+    else {
+      st.enjeu = newLg.enjeu||'gage';
+      // Vote du gage ouvert dès le LOBBY (amis) → on tire les options tout de suite + maps de votes vides.
+      const both=(st.enjeu==="both");
+      st.options = drawItems(both?"gage":st.enjeu, mode);
+      if(both) st.optionsR = drawItems("reward", mode);
+      st.votes={}; st.voteTs={}; st.bids={}; st.bidTs={}; if(both){ st.votesR={}; st.voteTsR={}; }
+    }
     const lg=await q(db.from("leagues").insert({code,name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,gage:JSON.stringify(st)}).select().single());
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[0],is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     newLg=null;
@@ -3109,27 +3124,23 @@ async function closeRegistration(){
     if(soloNow && getSoloAR()===2) sched=sched.concat(sched);
     sched.forEach((pairs,day)=>pairs.forEach(pr=>rows.push({league_id:L.id,day,home_id:ps[pr[0]].id,away_id:ps[pr[1]].id,fixtures:null})));
     await q(db.from("duels").insert(rows));
-    const mode=getMode(); const enjeu=getEnjeu(); const both=(enjeu==="both");
-    const nOpt=(mode==="simple")?3:5;
-    // Tire `nOpt` options au hasard dans le pool voulu.
-    const tirer=e=>{ const pool=itemPool(e,mode); for(let i=pool.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[pool[i],pool[j]]=[pool[j],pool[i]];} return pool.slice(0,Math.min(nOpt,pool.length)); };
-    // Bloc principal = le GAGE en mode "both" (sinon l'enjeu unique de la ligue).
-    const options=tirer(both?"gage":enjeu);
-    // Bloc R = la RÉCOMPENSE, tiré UNIQUEMENT en mode "both" (additif : une ligue simple n'en a pas).
-    const optionsR=both?tirer("reward"):null;
-    // (Plus de gage perso imposé par l'organisateur : chaque joueur propose le sien à la préparation.)
-    // l'IA fait sa prépa (vote + enchères) tout de suite — 2 votes en mode "both"
-    const votes={},voteTs={},bids={},bidTs={}; const votesR={},voteTsR={};
-    for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length, mode, options.length, optionsR?optionsR.length:0);
-      votes[p.id]=ap.vote; voteTs[p.id]=Date.now(); bids[p.id]=ap.bids; bidTs[p.id]=Date.now();
-      if(both){ votesR[p.id]=ap.voteR; voteTsR[p.id]=Date.now(); }
+    // Réglages + votes de gage déjà saisis (le vote est ouvert dès le lobby) : on PRÉSERVE l'existant,
+    // on ne repart plus de zéro (sinon la clôture effaçait les votes du lobby). Lecture fraîche en base.
+    let st; try{ const fr=await q(db.from("leagues").select("gage").eq("id",L.id).single()); st=JSON.parse(fr.gage)||{}; }catch(e){ st={}; }
+    const mode=st.mode||getMode(); const enjeu=st.enjeu||getEnjeu(); const both=(enjeu==="both");
+    st.mode=mode; st.enjeu=enjeu;
+    // Options : normalement tirées à la création (amis). Secours pour les vieilles ligues et le solo.
+    if(!Array.isArray(st.options)||!st.options.length) st.options=drawItems(both?"gage":enjeu, mode);
+    if(both && (!Array.isArray(st.optionsR)||!st.optionsR.length)) st.optionsR=drawItems("reward", mode);
+    st.votes=st.votes||{}; st.voteTs=st.voteTs||{}; st.bids=st.bids||{}; st.bidTs=st.bidTs||{};
+    if(both){ st.votesR=st.votesR||{}; st.voteTsR=st.voteTsR||{}; }
+    // L'IA fait sa prépa (vote + enchères) tout de suite — 2 votes en mode "both".
+    for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length, mode, st.options.length, st.optionsR?st.optionsR.length:0);
+      st.votes[p.id]=ap.vote; st.voteTs[p.id]=Date.now(); st.bids[p.id]=ap.bids; st.bidTs[p.id]=Date.now();
+      if(both){ st.votesR[p.id]=ap.voteR; st.voteTsR[p.id]=Date.now(); }
       await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
-    // La PRÉPARATION dure 24 h dans TOUTES les formules (Fast comprise) : voter et enchérir sur les
-    // bonus demande de la réflexion, on ne la comprime pas à 12 h. Le rythme 12 h de Fast ne concerne
-    // que les journées elles-mêmes. Ne pas lier cette durée à leagueFormula().
-    const deadline=new Date(Date.now()+24*3600*1000).toISOString();
-    const st={options,votes,voteTs,bids,bidTs,deadline,mode,enjeu};
-    if(both){ st.optionsR=optionsR; st.votesR=votesR; st.voteTsR=voteTsR; }
+    // La PRÉPARATION dure 24 h dans TOUTES les formules (Fast comprise). Ne pas lier à leagueFormula().
+    st.deadline=new Date(Date.now()+24*3600*1000).toISOString();
     await q(db.from("leagues").update({status:"prep",num_days:sched.length,current_day:0,gage:JSON.stringify(st)}).eq("id",L.id));
     setSeen(0); await refresh();
   }catch(e){ showErr("Clôture : "+e.message); } busy=false;
@@ -3254,7 +3265,7 @@ function prepRosterHTML(lobby){ const org=me()&&me().is_organizer; const st=prep
   const statusChip=p=> p.shop_done?`<span class="chip g">${t("✅ validé")}</span>`
      : started(p)?`<span class="chip b">${t("📝 sauvegardé")}</span>`
      : `<span class="chip">${t("⏳ pas commencé")}</span>`;
-  return players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${(lobby&&org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:(lobby?`<span class="chip">${t("inscrit")}</span>`:statusChip(p))}</div>`).join(""); }
+  return players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${(lobby&&org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:(lobby?(started(p)?`<span class="chip b">${t("📝 gage voté")}</span>`:`<span class="chip">${t("inscrit")}</span>`):statusChip(p))}</div>`).join(""); }
 function prepJoueursTab(){
   const humans=players.filter(p=>!p.is_ai); const n=humans.length; const org=me()&&me().is_organizer;
   const lobby=(L.status==="lobby"); const solo=(n===1); const canLaunch=n>=1; const addAI=n%2===1;
@@ -3273,10 +3284,15 @@ function prepJoueursTab(){
   }
   return h; }
 function prepGagesTab(){
-  if(L.status==="lobby") return `<div class="box"><h2 style="margin-top:0">🎭 ${t("Gages & récompenses")}</h2><div class="mini" style="color:var(--accent)">🔒 ${t("Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).")}</div></div>`;
-  return voteSectionHTML(false) + (isBoth()?`<div style="height:10px"></div>`+voteSectionHTML(true):'')
-    + `<div style="height:12px"></div><button class="btn" onclick="setPtab('encheres')">${t("Passer aux enchères 💰 →")}</button>
-       <div class="mini muted" style="text-align:center;margin-top:5px">${t("Ton vote est enregistré au fur et à mesure. La validation finale se fait sur l'onglet Enchères.")}</div>`; }
+  const st=prepState(); const hasOpts=Array.isArray(st.options)&&st.options.length; const lobby=(L.status==="lobby");
+  // Vote du gage disponible dès le LOBBY (options tirées à la création). Secours pour d'anciennes ligues
+  // sans options en base : on garde l'écran verrouillé jusqu'à la clôture.
+  if(!hasOpts) return `<div class="box"><h2 style="margin-top:0">🎭 ${t("Gages & récompenses")}</h2><div class="mini" style="color:var(--accent)">🔒 ${t("Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).")}</div></div>`;
+  const foot = lobby
+    ? `<div class="mini muted" style="text-align:center;margin-top:12px">💡 ${t("Ton vote est enregistré au fur et à mesure. Les enchères sur les bonus s'ouvriront à la clôture des inscriptions.")}</div>`
+    : `<div style="height:12px"></div><button class="btn" onclick="setPtab('encheres')">${t("Passer aux enchères 💰 →")}</button>
+       <div class="mini muted" style="text-align:center;margin-top:5px">${t("Ton vote est enregistré au fur et à mesure. La validation finale se fait sur l'onglet Enchères.")}</div>`;
+  return voteSectionHTML(false) + (isBoth()?`<div style="height:10px"></div>`+voteSectionHTML(true):'') + foot; }
 function prepEncheresTab(){
   const meP=me(); const maxCards=Math.max(1,L.num_days||1);
   const ids=modeCards(getMode()).slice().sort((a,b)=>t(CARDS[a].n).localeCompare(t(CARDS[b].n),undefined,{sensitivity:"base"}));
