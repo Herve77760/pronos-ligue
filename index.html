@@ -183,7 +183,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.34";
+const APP_VERSION = "v6.36";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1244,6 +1244,10 @@ const EN={
   "Autres duels du jour":"Other duels of the day",
   "Modifie une enchère (ou un vote) pour la re-valider.":"Change a bid (or a vote) to re-confirm it.",
   "pas de prono":"no pick", "Duel gagné d'office":"Duel won by default",
+  "Changement de format à venir":"Upcoming format change",
+  "L'organisateur a décidé : à partir de la <b>journée {b}</b>, la ligue passera en <b>{a}</b>.":"The organizer decided: from <b>matchday {b}</b>, the league switches to <b>{a}</b>.",
+  "Annuler le changement et rester en {a} à la journée {b} ?":"Cancel the change and stay in {a} on matchday {b}?",
+  "✅ Changement annulé : la journée {b} reste en {a}.":"✅ Change cancelled: matchday {b} stays in {a}.",
   "{a} n'a pas validé ses pronos : il perd le duel <b>quel que soit le gain en €</b>.":"{a} didn't confirm their picks: they lose the duel <b>regardless of the € gain</b>.",
   "🎭 gage · 🏆 récompense — ✓ voté / · à faire":"🎭 forfeit · 🏆 reward — ✓ voted / · to do",
   "🎭 gage · 🏆 récompense · 💰 enchères — ✓ fait / · à faire":"🎭 forfeit · 🏆 reward · 💰 auction — ✓ done / · to do",
@@ -2082,15 +2086,27 @@ function maybePrepModal(){
 // fermer, montrée UNE fois par (ligue, journée). Concerne tous les joueurs.
 function maybeFormulaModal(){
   if(!L || L.status!=="running") return;
-  let ch=null; try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.fmtSchedule)) ch=o.fmtSchedule.find(c=>c&&c.from===(L.current_day||0)&&FORMULAS[c.formula]); }catch(e){}
-  if(!ch) return;
-  const key="pl_fmtseen_"+L.id+"_"+ch.from;
-  try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
-  const F=FORMULAS[ch.formula];
-  infoModal("⏱️", t("Changement de format"),
-    `<div class="mini" style="text-align:left">${t("À partir de cette journée, la ligue passe en <b>{a}</b>.",{a:F.n})}</div>
-     <div class="mini muted" style="text-align:left;margin-top:6px">${esc(t(F.d))}</div>
-     <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`);
+  let sched=[]; try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.fmtSchedule)) sched=o.fmtSchedule.filter(c=>c&&FORMULAS[c.formula]); }catch(e){}
+  const cd=(L.current_day||0);
+  // 1) Changement ACTIF cette journée (from === journée courante) → « la ligue passe en X ».
+  const act=sched.find(c=>c.from===cd);
+  if(act){ const key="pl_fmtseen_"+L.id+"_"+act.from;
+    let seen=true; try{ seen=!!localStorage.getItem(key); if(!seen) localStorage.setItem(key,"1"); }catch(e){}
+    if(!seen){ const F=FORMULAS[act.formula];
+      infoModal("⏱️", t("Changement de format"),
+        `<div class="mini" style="text-align:left">${t("À partir de cette journée, la ligue passe en <b>{a}</b>.",{a:F.n})}</div>
+         <div class="mini muted" style="text-align:left;margin-top:6px">${esc(t(F.d))}</div>
+         <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`);
+      return; } }
+  // 2) Changement À VENIR (from > journée courante) → prévenir TOUS les joueurs dès qu'il est planifié.
+  const pend=sched.filter(c=>c.from>cd).sort((a,b)=>a.from-b.from)[0];
+  if(pend){ const key="pl_fmtpend_"+L.id+"_"+pend.from+"_"+pend.formula;
+    let seen=true; try{ seen=!!localStorage.getItem(key); if(!seen) localStorage.setItem(key,"1"); }catch(e){}
+    if(!seen){ const F=FORMULAS[pend.formula];
+      infoModal("⏱️", t("Changement de format à venir"),
+        `<div class="mini" style="text-align:left">${t("L'organisateur a décidé : à partir de la <b>journée {b}</b>, la ligue passera en <b>{a}</b>.",{a:F.n,b:pend.from+1})}</div>
+         <div class="mini muted" style="text-align:left;margin-top:6px">${esc(t(F.d))}</div>
+         <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`); } }
 }
 async function ensureFixtures(){
   let filled=false; const dt=dayTimes(); const selPassed=dt.ok && Date.now()>=dt.sel;
@@ -3111,14 +3127,30 @@ async function setSoloAR(k){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&
 // et maybeFormulaModal() prévient tout le monde par une fenêtre à fermer.
 async function setFormulaNext(){
   if(busy||!L||L.status!=="running")return; if(!(me()&&me().is_organizer))return;
-  const cur=formulaKey(); const next=(cur==='fast')?'classique':'fast'; const day=((L.current_day||0)+1);
+  const day=((L.current_day||0)+1);
   if(day>=(L.num_days||0)){ infoWin(t("C'est déjà la dernière journée — changer le format n'aurait aucun effet."),"⏱️"); return; }
-  if(!confirm(t("Passer la ligue en {a} à partir de la journée {b} ? Tous les joueurs en seront informés.",{a:FORMULAS[next].n,b:day+1}))) return;
+  // On bascule à partir de ce qui est DÉJÀ PRÉVU pour la journée `day` (changement en attente s'il existe,
+  // sinon le format actuel) → on peut donc revenir en arrière tant que la journée `day` n'a pas démarré.
+  const nat=formulaKey();   // format « naturel » (sans changement) = celui de la journée courante
+  let st0={}; try{st0=JSON.parse(L.gage)||{};}catch(e){}
+  const pend0=(Array.isArray(st0.fmtSchedule)?st0.fmtSchedule.find(c=>c&&c.from===day&&FORMULAS[c.formula]):null);
+  const planned = pend0? pend0.formula : nat;
+  const next=(planned==='fast')?'classique':'fast';
+  const revert=(next===nat);   // le toggle ramène au format actuel → on annule simplement le changement
+  if(!confirm(revert
+      ? t("Annuler le changement et rester en {a} à la journée {b} ?",{a:FORMULAS[nat].n,b:day+1})
+      : t("Passer la ligue en {a} à partir de la journée {b} ? Tous les joueurs en seront informés.",{a:FORMULAS[next].n,b:day+1}))) return;
   busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage)||{};}catch(e){st={};}
-    st.fmtSchedule=(Array.isArray(st.fmtSchedule)?st.fmtSchedule.filter(c=>c&&c.from!==day):[]); st.fmtSchedule.push({from:day,formula:next});
-    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh();
-    infoWin(t("✅ Format modifié : {a} dès la journée {b}. Les joueurs seront prévenus.",{a:FORMULAS[next].n,b:day+1}),"⏱️");
+    st.fmtSchedule=(Array.isArray(st.fmtSchedule)?st.fmtSchedule.filter(c=>c&&c.from!==day):[]);
+    if(!revert) st.fmtSchedule.push({from:day,formula:next});
+    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id));
+    // L'organisateur a déjà sa confirmation → on marque le « pending » comme vu pour lui (pas de double fenêtre).
+    if(!revert){ try{ localStorage.setItem("pl_fmtpend_"+L.id+"_"+day+"_"+next,"1"); }catch(e){} }
+    await refresh();
+    infoWin(revert
+      ? t("✅ Changement annulé : la journée {b} reste en {a}.",{a:FORMULAS[nat].n,b:day+1})
+      : t("✅ Format modifié : {a} dès la journée {b}. Les joueurs seront prévenus.",{a:FORMULAS[next].n,b:day+1}),"⏱️");
   }catch(e){ showErr("Format : "+e.message); } busy=false; }
 async function setEnjeu(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.enjeu=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
@@ -5176,7 +5208,8 @@ function render(){
   $("profilBtn").classList.toggle("hide", !AUTH || S.view==="profil");  // Profil = bouton haut-droite (retiré des onglets du bas)
   $("bugBtn").classList.toggle("hide", !AUTH);
   // Relocalisés en onglets du bas / Profil → masqués de la barre du haut (v6 navigation).
-  ["shopBtn","settingsBtn","leaguesBtn","langBtn","themeBtn"].forEach(id=>{ const e=$(id); if(e) e.classList.add("hide"); });
+  ["shopBtn","settingsBtn","leaguesBtn","themeBtn"].forEach(id=>{ const e=$(id); if(e) e.classList.add("hide"); });
+  $("langBtn").classList.toggle("hide", S.view!=="auth");   // 🇬🇧 langue : dispo sur la page de connexion (avant d'avoir accès au Profil)
   // 🤝 rachat de bonus : visible en cours de championnat ; pastille = nb d'offres reçues à traiter.
   const canTrade = !!(L && L.status==="running" && inLeague);
   $("tradeBtn").classList.toggle("hide", !canTrade);
