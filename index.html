@@ -181,7 +181,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.15";
+const APP_VERSION = "v6.18";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1203,6 +1203,13 @@ const EN={
   "Voir les pronos de l'adversaire":"See the opponent's picks",
   "Les paris sont clôturés. Avec l'option <b>Voir l'adversaire</b>, tu verrais dès maintenant les pronos, mises et bonus de chacun. Sans elle, tout sera dévoilé <b>avec les résultats</b>.":"Betting is closed. With the <b>See the opponent</b> option, you'd see everyone's picks, stakes and bonus right now. Without it, everything is revealed <b>with the results</b>.",
   "→ touche le {e} du pari ciblé.":"→ tap the {e} on the targeted bet.", "→ touche les {e} de tes 2 matchs.":"→ tap the {e} on your 2 matches.",
+  // Écran Pronos refondu (v6.17)
+  "Pronos enregistrés ✅":"Picks saved ✅", "Paris clôturés 🔒":"Betting closed 🔒", "En attente de tes pronos…":"Waiting for your picks…",
+  "🃏 Bonus du jour :":"🃏 Bonus of the day:", "Prêts : {a}/{b}":"Ready: {a}/{b}", "clôture dans {a}":"closes in {a}",
+  "✏️ Modifier (jusqu'à la clôture)":"✏️ Edit (until close)", "Ton duel":"Your duel",
+  "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.":"You didn't confirm your picks before close: <b>no bet</b> counts that day → <b>{b} pt</b> in the standings and <b>−{a}%</b> of your capital.",
+  "👁️ Option active : tu vois les pronos et mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.":"👁️ Option active: you see {a}'s picks and stakes. The 🃏 bonuses stay hidden until the results.",
+  "🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.":"🔒 Without the “See the opponent” option, {a}'s column stays hidden until the results.",
   // Légende du classement (v6.12)
   "Comprendre le classement":"Understanding the standings", "monte":"up", "stable":"steady", "descend":"down", "comprendre le classement":"understand the standings",
   "les points gagnés en duel chaque journée (face à ton adversaire du jour), cumulés.":"the points won in duels each matchday (against your daily opponent), cumulated.",
@@ -1946,8 +1953,12 @@ async function refresh(){
       const st=prepState(); const dlPassed=st.deadline && new Date(st.deadline).getTime()<=Date.now();
       if(allDone||dlPassed){ resolvePrep(); return; }
     }
-    S.recap = L.status!=="lobby" && (L.current_day>getSeen()) && (L.current_day>=1);
-    const dispDay = S.recap ? L.current_day-1 : Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
+    // v6.18 — L'onglet Pronos ne montre JAMAIS les résultats (choix Hervé) : ils vivent uniquement dans
+    // l'onglet Résultats. On n'entre donc plus dans l'« état récap » (qui figeait le jeu sur la journée
+    // résolue, dispDay = jour−1) : on acquitte automatiquement et on enchaîne sur la journée courante.
+    if(L.status!=="lobby" && L.current_day>getSeen() && L.current_day>=1) setSeen(L.current_day);
+    S.recap = false;
+    const dispDay = Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
     S.dispDay = dispDay;
     duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay));
     bets  = await q(db.from("bets").select("*").eq("league_id",lid).eq("day",dispDay));
@@ -2726,14 +2737,12 @@ function viewGame(){
   if(L.status==="lobby"||L.status==="prep") return viewPrepTabs();
   if(L.status==="starting") return `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
   if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">⚙️</div><b>Résolution de la journée…</b><div class="mini muted" style="margin-top:6px">Calcul des gains en cours.</div></div>`;
-  // Ligue terminée : on montre D'ABORD le récap de la DERNIÈRE journée (si pas encore vu), puis le
-  // classement final. Avant, on arrivait direct sur le classement final sans voir la dernière journée
-  // (signalé par Hervé). « Continuer → » du récap acquitte (setSeen) et bascule vers viewEnd.
-  if(L.status==="done"){ if(S.recap) return viewRecap(S.dispDay); return viewEnd(); }
-  // (v6) L'onglet « Pronos » va DIRECT à la journée. Le résumé d'ouverture (gage + enchères) — ex-
-  // viewPrepSummary affiché ici tant que non acquitté — vit désormais dans l'onglet 🎬 Coulisses,
-  // sinon Pronos et Coulisses affichaient la même chose (signalé par Hervé, ligue 8YVLG).
-  if(S.recap) return viewRecap(S.dispDay);
+  // Ligue terminée → écran de fin (champion + classement final). Le récap de la dernière journée n'est
+  // plus affiché ici : les résultats sont dans l'onglet 📋 Résultats (l'onglet Pronos ne montre jamais
+  // de résultats — choix Hervé).
+  if(L.status==="done") return viewEnd();
+  // L'onglet « Pronos » va DIRECT à la journée (saisie / validés / après-clôture). Aucune info de
+  // résultat ici. Le résumé d'ouverture (gage + enchères) vit dans l'onglet 🎬 Coulisses.
   return viewDay();
 }
 function prepSeen(){ return localStorage.getItem("pl_preps_"+S.leagueId)==="1"; }
@@ -3632,52 +3641,61 @@ const REAL_WAIT_MSGS=[
 // perdait). Ne pas le réintroduire sans mécanisme neutre.
 function realWaitPhrase(){ let h=(L&&L.current_day)||0; const id=(L&&L.id)||''; for(let i=0;i<id.length;i++) h=(h+id.charCodeAt(i))|0; return t(REAL_WAIT_MSGS[Math.abs(h)%REAL_WAIT_MSGS.length]); }
 function viewWait(dayLbl){
-  const waiting=humansToSubmit(); const org=me()&&me().is_organizer;
+  const org=me()&&me().is_organizer;
   const betPassed = deadlinePassed(); const editable=!betPassed;
-  // Les 3 actions d'organisateur s'enchaînent : ① tirer les matchs manquants → ② clôturer les
-  // pronos → ③ publier les résultats. Clôturer avant que TOUS les duels aient leurs 5 matchs
-  // condamnait la journée : les joueurs concernés ne pouvaient plus parier, mais la résolution
-  // attendait quand même des matchs qui n'existaient pas (signalé par Hervé).
-  // (③ est déjà conditionnée : elle ne s'affiche qu'une fois les pronos clôturés.)
+  // Clôturer avant que TOUS les duels aient leurs 5 matchs condamnait la journée → on ne propose la
+  // clôture (organisateur) que quand tous les duels ont leurs matchs.
   const tousMatchs = duels.length>0 && duels.every(d=>!!d.fixtures);
-  // « en cours » était trop vague : un joueur (même une IA) ne PEUT PAS parier tant que les 5
-  // rencontres de son duel ne sont pas choisies — et c'est le joueur à domicile qui les choisit.
-  // Sans cette distinction, on croit que l'IA ne joue pas, alors qu'elle attend (signalé par Hervé).
-  const duelDe=pid=>duels.find(d=>d.home_id===pid||d.away_id===pid);
-  const list=players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id);
-    const dd=duelDe(p.id); const sansMatchs=!!(dd&&!dd.fixtures);
-    const etat = done ? t("✓ validé")
-      : betPassed ? t("⏰ pronos non faits")
-      : sansMatchs ? (dd.home_id===p.id ? t("doit choisir les matchs") : t("attend les matchs"))
-      : t("en cours");
-    return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">IA</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div>
-      <span class="chip ${done?'g':(betPassed?'red':(sansMatchs?'b':''))}">${etat}</span></div>`;}).join("");
   const mine=myBet(); const md=myDuel();
-  const mySummary = (mine&&mine.picks&&md&&md.fixtures)? `<div class="box"><div class="mini muted" style="margin-bottom:4px">${editable?t("✅ Tes pronos (modifiables jusqu'à la clôture)"):t("🔒 Tes pronos (verrouillés)")}</div>
-     ${md.fixtures.map((f,i)=>{const b=mine.picks[i]; if(!b)return ''; const lab=s=>s==="1"?f.home:s==="2"?f.away:t("Nul"); const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2; const selD=dc?`${esc(lab(b.sel))} / ${esc(lab(mine.card.sel2))}`:esc(lab(b.sel)); const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel); return `<div class="mini" style="margin:3px 0"><span class="muted">${esc(f.home)}–${esc(f.away)}</span> — <b>${selD}</b> · ${b.stake}€ @${cote(oddD)}${i===mine.captain?' <span class="bem clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="bem clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''} ${koLabel(f)?'· '+koLabel(f):''}</div>`;}).join("")}
-     ${mine.card&&mine.card.id?`<div class="mini" style="margin-top:6px">${t("🃏 Bonus joué :")} <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</span> <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:`<div class="mini muted" style="margin-top:6px">${t("Aucun bonus joué ce jour.")}</div>`}</div>` : '';
-  // Joueur qui n'a pas validé ses pronos avant la clôture : plus d'accès à la saisie, on l'informe clairement.
-  // Un autre duel n'a pas encore ses matchs → la journée ne peut pas se résoudre. L'orga peut débloquer.
-  const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}
-     <div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
-  const tooLate = (!mine && betPassed) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b>
-     <div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div></div>` : '';
-  // (Ancien bloc « Pronos de l'IA » retiré : il affichait TOUS les joueurs IA, même ceux d'un autre duel,
-  //  et faisait doublon avec « Paris de la journée (publics) » qui montre déjà chaque duel après la clôture.)
-  return `${quickBar('')}<div class="box"><b>${dayLbl}</b>
-    ${(()=>{ if(!md) return ''; const iAmHome=md.home_id===S.myId; const opp=pById(iAmHome?md.away_id:md.home_id)||{};
-      return `<div class="row mini" style="margin-top:6px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+(opp.emoji?opp.emoji+' ':'')+esc(opp.name||'?')+'</b>'})}</span><span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>`; })()}
-    <div class="mini muted" style="margin-top:6px">${editable?t("Tes pronos sont validés ✓ — tu peux encore les modifier jusqu'à la clôture."):t("Pronos clôturés.")}</div>${betLineHTML()}
-    ${editable?`<div style="height:8px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier mes pronos")}</button>${org?`<div style="height:6px"></div><button class="btn ghost sm" ${tousMatchs?'':'disabled'} onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>${tousMatchs?'':`<div class="mini muted" style="text-align:center;margin-top:5px">${t("⏳ Étape précédente d'abord : tous les duels doivent avoir leurs 5 matchs.")}</div>`}`:''}`:''}</div>${missingFx}${tooLate}${mySummary}${list}
-    ${editable?`<div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}${(()=>{const dt=dayTimes();return dt.ok?`<br><b>${t("Clôture dans {a}",{a:fmtLeft(dt.bet)})}</b>`:'';})()}</div>`:''}
-    ${betPassed?(hasOpt('voiradv')
-      ? `<h2>${t("Paris de la journée (publics)")}</h2><div class="mini muted" style="margin:-4px 0 8px">${t("Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.")}</div>${publicBetsHTML()}`
-      : `<div class="box" style="border-color:var(--accent)"><div class="row" style="justify-content:space-between;align-items:center;gap:8px"><b>🕵️ ${t("Voir les pronos de l'adversaire")}</b>${premBadge('voiradv')}</div><div class="mini muted" style="margin-top:6px">${t("Les paris sont clôturés. Avec l'option <b>Voir l'adversaire</b>, tu verrais dès maintenant les pronos, mises et bonus de chacun. Sans elle, tout sera dévoilé <b>avec les résultats</b>.")}</div></div>`
-    ):''}
-    ${betPassed?`<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
-    ${(L&&L.data_mode==="real")?`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Résultats en direct")}</span>${premBadge('direct')}</div>`:''}
+  const iAmHome = md && md.home_id===S.myId;
+  const opp = md ? (pById(iAmHome?md.away_id:md.home_id)||{}) : {};
+  const oppBet = md ? bets.find(b=>b.player_id===(iAmHome?md.away_id:md.home_id)) : null;
+  const lab=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
+  const dt=dayTimes();
+  const head = `<div class="box"><div class="row"><b>${dayLbl}</b>${md?`<span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span>`:''}</div>
+     ${md?`<div class="mini muted" style="margin-top:4px">${t("Duel vs {a}",{a:'<b>'+((opp.emoji?opp.emoji+' ':'')+esc(opp.name||'?'))+'</b>'})}</div>`:''}
+     <div class="mini muted" style="margin-top:4px">${editable?t("Pronos enregistrés ✅"):t("Paris clôturés 🔒")}</div>${betLineHTML()}</div>`;
+  const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}<div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
+
+  // ── ÉTAT « VALIDÉS » (avant clôture) : la liste des 5 pronos + bouton Modifier (cf. maquette écran ⑥)
+  if(editable){
+    const picks = (mine&&mine.picks&&md&&md.fixtures) ? md.fixtures.map((f,i)=>{ const b=mine.picks[i]; if(!b) return '';
+      const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2;
+      const selD=dc?`${esc(lab(f,b.sel))} / ${esc(lab(f,mine.card.sel2))}`:esc(lab(f,b.sel));
+      const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel);
+      const mk=`${i===mine.captain?' <span class="chip gold clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''}`;
+      return `<div class="box row"><span class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b>${mk}</span><span class="chip" style="flex:0 0 auto">${selD} @${cote(oddD)} · ${b.stake}€</span></div>`;
+    }).join("") : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
+    const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
+    const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
+    const readyLine = humansN>1?`<div class="mini muted" style="text-align:center;margin-top:6px">${t("Prêts : {a}/{b}",{a:doneN,b:humansN})}${dt.ok?' · '+t("clôture dans {a}",{a:fmtLeft(dt.bet)}):''}</div>`:'';
+    return `${head}${missingFx}
+      ${picks}${bonusLine}
+      <div style="height:6px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier (jusqu'à la clôture)")}</button>
+      ${org?`<div style="height:6px"></div><button class="btn ghost sm" ${tousMatchs?'':'disabled'} onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>${tousMatchs?'':`<div class="mini muted" style="text-align:center;margin-top:5px">${t("⏳ Étape précédente d'abord : tous les duels doivent avoir leurs 5 matchs.")}</div>`}`:''}
+      ${readyLine}
+      <div class="box mini muted" style="text-align:center">🔒 ${t("Les pronos des autres joueurs restent cachés jusqu'à la clôture.")}</div>`;
+  }
+
+  // ── ÉTAT « APRÈS CLÔTURE » : duel en 2 colonnes Toi / adversaire. Colonne adverse masquée 🔒 sans
+  // l'option « Voir l'adversaire » ; révélée avec (les 🃏 bonus restent cachés jusqu'aux résultats).
+  const seeOpp=hasOpt('voiradv');
+  const tooLate = (!mine) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b><div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div></div>` : '';
+  const CB='background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:5px 6px;text-align:center;font-size:12px';
+  const GH='display:grid;grid-template-columns:1fr 1fr;gap:6px';
+  const duelHTML = (md&&md.fixtures) ? `<div class="box"><div class="row" style="margin-bottom:6px"><b class="mini">👁️ ${t("Ton duel")}</b>${seeOpp?'':premBadge('voiradv')}</div>
+     <div style="${GH}"><div class="mini muted" style="text-align:center">${t("toi")}</div><div class="mini muted" style="text-align:center">${(opp.emoji?opp.emoji+' ':'')+esc(opp.name||'?')}</div></div>
+     ${md.fixtures.map((f,i)=>{ const mb=mine&&mine.picks&&mine.picks[i]; const ob=oppBet&&oppBet.picks&&oppBet.picks[i];
+        const myCell = mb?`<div style="${CB}">${esc(lab(f,mb.sel))} · ${mb.stake}€${(mine.captain===i)?' 👑':''}</div>`:`<div style="${CB};color:var(--muted)">—</div>`;
+        const opCell = ob ? (seeOpp?`<div style="${CB}">${esc(lab(f,ob.sel))} · ${ob.stake}€${(oppBet.captain===i)?' 👑':''}</div>`:`<div style="${CB};color:var(--muted);letter-spacing:1px">🔒 •••</div>`) : `<div style="${CB};color:var(--muted)">—</div>`;
+        return `<div style="margin-top:6px"><div class="mini" style="text-align:center"><b>${esc(f.home)} – ${esc(f.away)}</b></div><div style="${GH};margin-top:3px">${myCell}${opCell}</div></div>`;
+     }).join("")}
+     <div class="mini muted" style="margin-top:8px">${seeOpp?t("👁️ Option active : tu vois les pronos et mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.",{a:esc(opp.name||'?')}):t("🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.",{a:esc(opp.name||'?')})}</div>
+   </div>` : '';
+  const waitBox = `<div class="box mini muted" style="text-align:center">${(L&&L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>
     ${(L&&L.data_mode==="real")?`<div class="box mini muted">${t("🚫 Si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:STALE_MATCH_H})}</div>`:''}
-    ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`:''}`;
+    ${(!(L&&L.data_mode==="real")&&!simMatchesDone()&&org)?`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`:''}`;
+  return `${head}${missingFx}${tooLate}${duelHTML}${waitBox}`;
 }
 function publicBetsHTML(){
   const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
@@ -5066,16 +5084,17 @@ function goHome(){ goAccueil(); }   // bouton 🏠 du haut → vraie page d'accu
 function goAccueil(){ if(poll)clearInterval(poll); localStorage.removeItem("pl_last"); navRoot(); S.leagueId=null; S.myId=null; L=null; S.view="home"; loadMyLeagues(); }
 function goGame(){ if(S.view!=="game"){ S.view="game"; render(); } }
 function openProfil(){ S.view="profil"; render(); }
-// v6.15 — l'onglet de la page COURANTE est retiré de la barre (le titre du haut indique où on est) →
-// jamais plus de 5 onglets visibles, et pas de doublon avec la page affichée.
-function navTab(cur,ic,lb,onclick){ if(S.view===cur) return ''; return `<button class="navtab" onclick="${onclick}"><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
-function homeTabs(){ return `<div class="inner">`
-  + navTab("home","🏠",t("Accueil"),"goAccueil()")
-  + navTab("leagues","🏆",t("Ligues"),"backToLeagues()")
-  + navTab("stats","📊",t("Stats"),"openStats()")
-  + navTab("palmares","🥇",t("Palmarès"),"openPalmares()")
-  + navTab("shop","🛒",t("Boutique"),"openShop()")
-  + navTab("profil","👤",t("Profil"),"openProfil()")
+// v6.16 — on ne RETIRE l'onglet courant que si la barre dépasse 5 onglets (cas de l'accueil, 6) : le
+// titre du haut indique alors où on est. À 5 onglets ou moins (ligue, prépa), on garde tout, l'onglet
+// courant simplement surligné (.on).
+function navTab(cur,ic,lb,onclick,hideActive){ const on=S.view===cur; if(on&&hideActive) return ''; return `<button class="navtab${on?' on':''}" ${on?'':`onclick="${onclick}"`}><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
+function homeTabs(){ return `<div class="inner">`   // 6 destinations > 5 → on masque l'onglet courant
+  + navTab("home","🏠",t("Accueil"),"goAccueil()",true)
+  + navTab("leagues","🏆",t("Ligues"),"backToLeagues()",true)
+  + navTab("stats","📊",t("Stats"),"openStats()",true)
+  + navTab("palmares","🥇",t("Palmarès"),"openPalmares()",true)
+  + navTab("shop","🛒",t("Boutique"),"openShop()",true)
+  + navTab("profil","👤",t("Profil"),"openProfil()",true)
   + `</div>`; }
 function runningTabs(){ const d=L?(L.current_day||0):0; const resOc = "openResults("+(d>=1?(d-1):0)+")"; // toujours accessible : dernière journée résolue, ou écran d'attente si aucune
   return `<div class="inner">`
@@ -5091,7 +5110,7 @@ function bottomBar(){ if(!AUTH) return '';
   if(LEAGUE_TABVIEWS.includes(S.view) && L && (L.status==="running"||L.status==="done")) return runningTabs();
   return ''; }
 function setPtab(x){ S.ptab=x; render(); }
-function navPtab(id,ic,lb){ if(S.ptab===id) return ''; return `<button class="navtab" onclick="setPtab('${id}')"><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
+function navPtab(id,ic,lb){ const on=S.ptab===id; return `<button class="navtab${on?' on':''}" ${on?'':`onclick="setPtab('${id}')"`}><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
 function prepTabs(){ const solo=isSolo();
   return `<div class="inner">`
    + navPtab("infos","ℹ️",t("Infos"))
