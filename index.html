@@ -183,7 +183,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.30";
+const APP_VERSION = "v6.31";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3314,9 +3314,20 @@ function prepRosterHTML(lobby){ const org=me()&&me().is_organizer; const st=prep
   const statusChip=p=>{
     if(p.shop_done) return `<span class="chip g" title="${t("Gage/récompense votés + enchères validées")}">${t("✅ prêt")}</span>`;
     if(!started(p)) return `<span class="chip">${t("⏳ pas commencé")}</span>`;
-    return `<span class="chip b" title="${t("🎭 gage · 🏆 récompense · 💰 enchères — ✓ fait / · à faire")}">📝 ${voteBits(p)} 💰${t("à valider")}</span>`;
+    return `<span class="chip b" title="${t("🎭 gage · 🏆 récompense · 💰 enchères — ✓ fait / · à faire")}">📝 ${voteBits(p)} 💰·</span>`;
   };
-  return players.map(p=>`<div class="box row" style="flex-wrap:wrap;gap:6px 10px"><div class="row" style="gap:9px;min-width:0"><span class="sport">${p.emoji}</span><b style="white-space:nowrap">${esc(p.name)}</b>${p.is_organizer?' <span class="tag" style="white-space:nowrap">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div><span style="flex:0 0 auto">${(lobby&&org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:(lobby?(started(p)?`<span class="chip ${voteComplete(p)?'g':'b'}" title="${t("🎭 gage · 🏆 récompense — ✓ voté / · à faire")}">📝 ${voteBits(p)}</span>`:`<span class="chip">${t("inscrit")}</span>`):statusChip(p))}</span></div>`).join(""); }
+  return players.map(p=>{
+    const canKick=(lobby&&org&&p.id!==S.myId&&!p.is_organizer);
+    // Statut affiché pour TOUS (y compris les autres joueurs vus par l'organisateur) — pas seulement soi.
+    const status = lobby
+      ? (started(p)?`<span class="chip ${voteComplete(p)?'g':'b'}" title="${t("🎭 gage · 🏆 récompense — ✓ voté / · à faire")}">📝 ${voteBits(p)}</span>`:`<span class="chip">${t("inscrit")}</span>`)
+      : statusChip(p);
+    const kick = canKick?`<button class="btn ghost sm" title="${t("Retirer")}" onclick="kickPlayer('${p.id}')" style="flex:0 0 auto;padding:4px 8px">✕</button>`:'';
+    // Nom + tags à gauche (s'enroulent dans leur zone, le nom ne se coupe pas) · statut + ✕ à droite.
+    return `<div class="box row" style="align-items:center;gap:8px">
+      <div class="row" style="gap:9px;flex:1 1 auto;min-width:0;flex-wrap:wrap"><span class="sport">${p.emoji}</span><b style="white-space:nowrap">${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>
+      <span class="row" style="gap:6px;flex:0 0 auto">${status}${kick}</span></div>`;
+  }).join(""); }
 function prepJoueursTab(){
   const humans=players.filter(p=>!p.is_ai); const n=humans.length; const org=me()&&me().is_organizer;
   const lobby=(L.status==="lobby"); const solo=(n===1); const canLaunch=n>=1; const addAI=n%2===1;
