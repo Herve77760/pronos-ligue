@@ -185,7 +185,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.38";
+const APP_VERSION = "v6.40";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -255,6 +255,7 @@ const CARDS={
  roi:      {e:"💎",n:"Roi de la cote",t:false, f:3, retired:true, d:"Un pari gagné à cote ≥ 2,00 → +10 % de ton capital en début de journée."},
  tout:     {e:"🔥",n:"Ça passe ou ça casse",t:true, f:4, d:"Un pari choisi : gain ×3, perte ×2."},
  sangsue:  {e:"🩸",n:"Sangsue",t:false, f:4, d:"Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches)."},
+ moitie:   {e:"✂️",n:"Demi-portion",t:false, oppT:true, f:5, d:"Le résultat TOTAL de la journée de ton adversaire est divisé par 2. ⚠️ Arme à double tranchant : si tu la joues et qu'il rate sa journée, tu divises aussi sa PERTE par 2 (tu l'aides !). À jouer quand tu le sens en réussite."},
  parachute:{e:"🪂",n:"Parachute",t:false, f:3, d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
  joker:    {e:"🃏",n:"Joker",t:true, f:2, retired:true, d:"Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien."},
  chance:   {e:"🧈",n:"Le beurre et l'argent du beurre",t:true, f:5, d:"Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à la cote initiale du résultat qui tombe (aucune cote réduite)."},
@@ -1246,6 +1247,11 @@ const EN={
   "Autres duels du jour":"Other duels of the day",
   "Modifie une enchère (ou un vote) pour la re-valider.":"Change a bid (or a vote) to re-confirm it.",
   "pas de prono":"no pick", "Duel gagné d'office":"Duel won by default",
+  // Bonus « Demi-portion » (v6.39)
+  "Demi-portion":"Half Rations",
+  "Le résultat TOTAL de la journée de ton adversaire est divisé par 2. ⚠️ Arme à double tranchant : si tu la joues et qu'il rate sa journée, tu divises aussi sa PERTE par 2 (tu l'aides !). À jouer quand tu le sens en réussite.":"Your opponent's TOTAL day result is halved. ⚠️ Double-edged: if you play it and they flop, you also halve their LOSS (you help them!). Play it when you sense they're on a roll.",
+  "Le résultat total de l'adversaire a été divisé par 2.":"The opponent's total result was halved.",
+  "L'adversaire a fini quasiment à zéro — diviser par 2 n'a rien changé.":"The opponent finished near zero — halving changed nothing.",
   "Changement de format à venir":"Upcoming format change",
   "L'organisateur a décidé : à partir de la <b>journée {b}</b>, la ligue passera en <b>{a}</b>.":"The organizer decided: from <b>matchday {b}</b>, the league switches to <b>{a}</b>.",
   "Annuler le changement et rester en {a} à la journée {b} ?":"Cancel the change and stay in {a} on matchday {b}?",
@@ -3991,6 +3997,12 @@ function runEngine(pdIn, capStart, dz, N){
   // Serge Benamou : si le joueur qui l'a jouée finit dans le vert, il partage 10 % de SON net avec tous les autres.
   // Phase 6 : Parachute (amortit 30 % de la perte nette du jour)
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="parachute"){ const cur=G[pid].net+G[pid].bonus; if(cur<0) G[pid].bonus += (-0.3*cur); } }
+  // Phase 7 : ✂️ Demi-portion — divise par 2 le résultat TOTAL de la journée de l'adversaire (double
+  // tranchant : réduit un gain… mais aussi une perte). Calculé sur les totaux AVANT réduction (comme
+  // Sangsue), appliqué ensemble → deux Demi-portion croisées se répondent proprement.
+  const halves=[];
+  for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="moitie"){ const opp=G[pd.oppId]; if(opp) halves.push({oppId:pd.oppId, cut:(opp.net+opp.bonus)*0.5}); } }
+  halves.forEach(x=>{ G[x.oppId].bonus -= x.cut; });   // total − total/2 = total/2 (positif comme négatif)
   const dayNet={},dayBest={},dayWins={}; for(const pid in G){ dayNet[pid]=Math.round((G[pid].net+G[pid].bonus)*100)/100; dayBest[pid]=G[pid].bestOdd; dayWins[pid]=G[pid].perBet.filter(x=>x.win).length; }
   return {dayNet,dayBest,dayWins,stolen,cloned};
 }
@@ -4209,6 +4221,7 @@ function recapBody(D){
         ? t("❄️ Ton <b>meilleur pari gagnant</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.",{a:'<b class="'+(sv>=0?'green':'red')+'">'+fmt(sv)+'€</b>',b:'<b class="'+((im.opp||0)>=0?'green':'red')+'">'+fmt(im.opp||0)+'€</b>'})
         : t("❄️ Échange <b>sans effet</b> : l'un des deux n'avait aucun pari gagnant (ou les meilleurs gains étaient égaux).");
     } else if(c.id==="sangsue"){ detail=(Math.abs(im.opp||0)>=1)?`Tu as siphonné une part du bénéfice de l'adversaire.`:`L'adversaire n'était pas bénéficiaire → rien à siphonner.`;
+    } else if(c.id==="moitie"){ detail=(Math.abs(im.opp||0)>=1)?t("Le résultat total de l'adversaire a été divisé par 2."):t("L'adversaire a fini quasiment à zéro — diviser par 2 n'a rien changé.");
     } else if(c.id==="parachute"){ detail=((im.self||0)>=1)?`Filet de sécurité déclenché : une partie de ta perte a été amortie.`:`Filet non déclenché (journée non négative).`;
     } else if(c.id==="chance" && c.sel2 && fxRecap[c.target] && bt.picks && bt.picks[c.target]){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const w=(f.res===b.sel||f.res===c.sel2); const od=dcWinOdd(f,b.sel,c.sel2);
       detail=`Sur <b>${esc(f.home)}–${esc(f.away)}</b> : couvre <b>${esc(selLabel(f,b.sel))}</b> ou <b>${esc(selLabel(f,c.sel2))}</b> — ${w?'<span class="green">gagné</span> à la cote du résultat sorti @'+od:'<span class="red">perdu</span>'}.`;
