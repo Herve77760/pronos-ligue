@@ -182,7 +182,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.21";
+const APP_VERSION = "v6.22";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1964,6 +1964,19 @@ async function refresh(){
     try{ trades = await q(db.from("trades").select("*").eq("league_id",lid).eq("status","pending")); }catch(e){ trades=[]; } // rachats en attente (badge 🤝 + écran)
     try{ myResolvedOut = await q(db.from("trades").select("*").eq("league_id",lid).eq("from_player",S.myId).in("status",["accepted","refused"]).order("resolved_at",{ascending:false}).limit(20)); }catch(e){ myResolvedOut=[]; } // réponses à MES offres (acheteur prévenu)
     if(stale()) return;
+    // Ligue amis en LOBBY sans options de gage (créée avant v6.21 ou via un onglet resté en cache) :
+    // l'organisateur les tire dès qu'il y a ≥2 joueurs → le vote du gage devient dispo aux inscriptions.
+    if(L.status==="lobby" && me() && me().is_organizer){
+      let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
+      const nH=players.filter(p=>!p.is_ai).length;
+      if(nH>=2 && o.enjeu && !(Array.isArray(o.options)&&o.options.length)){
+        const both=(o.enjeu==="both"); const md=o.mode||getMode();
+        o.options=drawItems(both?"gage":o.enjeu, md);
+        if(both && !(Array.isArray(o.optionsR)&&o.optionsR.length)) o.optionsR=drawItems("reward", md);
+        o.votes=o.votes||{}; o.voteTs=o.voteTs||{}; o.bids=o.bids||{}; o.bidTs=o.bidTs||{}; if(both){o.votesR=o.votesR||{};o.voteTsR=o.voteTsR||{};}
+        try{ await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",lid)); L.gage=JSON.stringify(o); }catch(e){}
+      }
+    }
     // fin de préparation AUTOMATIQUE : dès que tous ont validé (ou délai écoulé), on démarre sans clic
     if(L.status==="prep" && !resolving){
       const humans=players.filter(p=>!p.is_ai); const allDone=humans.length>=1 && humans.every(p=>p.shop_done); // >=1 : le SOLO doit pouvoir démarrer
