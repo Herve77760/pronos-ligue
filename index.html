@@ -181,7 +181,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.02";
+const APP_VERSION = "v6.03";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -559,7 +559,7 @@ function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini mute
 function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ ${t("Clôture des paris {a}",{a:'<b>'+fmtWhen(dt.bet)+'</b>'})} · ${leagueFormula().n}</div>`:''; }
 
 /* ============ STATE ============ */
-let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, nav:[] };
+let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, nav:[], ptab:"infos" };
 // showFinished=false par défaut (choix d'Hervé 2026-07-17) : la section « ligues terminées » est
 // REPLIÉE au chargement, pour ne pas noyer les ligues en cours. On la déplie d'un clic. Exception :
 // après avoir fermé soi-même une ligue, `closeLeague()` force l'affichage pour qu'on la retrouve.
@@ -892,6 +892,14 @@ const EN={
   "✓ ton vote":"✓ your vote", "Voter":"Vote", "🃏 Enchères bonus":"🃏 Bonus auction",
   "Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.":"Blind bidding: each bonus goes to the <b>highest bidder</b> (tie → whoever bid first). Non-winners are <b>refunded</b>. Total ≤ <b>€{a}</b>, up to <b>{b}</b> bonuses. What you pay (winning bids) is deducted from your starting balance. <b>💪 x/5</b> shows each bonus's <b>strength</b> (indicative) — some are worth more than others.",
   "bonus":"bonuses", "Dépasse {a} €":"Over €{a}", "Trop de bonus (max {a})":"Too many bonuses (max {a})", "Valider ma préparation →":"Confirm my preparation →",
+  // Préparation en onglets (v6 — Lot A2)
+  "Infos":"Info", "Joueurs":"Players", "Gages":"Forfeits", "Récomp.":"Reward", "Rythme":"Pace", "Mode":"Mode", "Données":"Data", "Enjeu":"Stakes",
+  "Infos de la ligue":"League info", "Démarrage auto dans {a}":"Auto-start in {a}",
+  "Gage":"Forfeit", "Récompense":"Reward", "Gage + récompense":"Forfeit + reward",
+  "Gages & récompenses":"Forfeits & rewards", "Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).":"Voting opens at kickoff (once the organizer closes registration).",
+  "Enchères":"Auction", "Enchères aux bonus":"Bonus auction", "Enchères bonus":"Bonus auction",
+  "Les enchères s'ouvriront au démarrage. En attendant, touche un bonus pour le découvrir.":"The auction opens at kickoff. Meanwhile, tap a bonus to discover it.",
+  "Invite tes amis avec le code <b>{a}</b>.":"Invite your friends with code <b>{a}</b>.",
   // Résultats & recap (phase 4a)
   "🏠 domicile":"🏠 home", "extérieur ✈️":"away ✈️", "(duel)":"(duel)",
   "👉 Touche un match pour le calcul détaillé.":"👉 Tap a match for the detailed calculation.",
@@ -2540,7 +2548,7 @@ function viewEssai(){
     <div style="height:8px"></div><button class="btn ghost" onclick="exitEssai()">${AUTH?t("← Retour à l'accueil"):t("← Retour à la connexion")}</button>`;
 }
 function exitEssai(){ if(AUTH){ S.view="leagues"; render(); loadMyLeagues(); } else { S.view="auth"; render(); } }
-function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
+function openLeague(lid,pid,fresh){ navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; S.ptab="infos"; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   localStorage.setItem("pl_last", JSON.stringify({leagueId:lid,myId:pid}));
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
@@ -2587,8 +2595,7 @@ async function joinLeague(code){
 /* ============ GAME dispatch ============ */
 function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
-  if(L.status==="lobby") return viewLobby();
-  if(L.status==="prep") return viewPrep();
+  if(L.status==="lobby"||L.status==="prep") return viewPrepTabs();
   if(L.status==="starting") return `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
   if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">⚙️</div><b>Résolution de la journée…</b><div class="mini muted" style="margin-top:6px">Calcul des gains en cours.</div></div>`;
   // Ligue terminée : on montre D'ABORD le récap de la DERNIÈRE journée (si pas encore vu), puis le
@@ -3084,6 +3091,62 @@ function viewPrep(){
    <div style="height:6px"></div>${prec}
    <h2>${t("👥 Joueurs de la ligue · {a}",{a:players.filter(p=>!p.is_ai).length})}</h2>
    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("en cours")}</span></div>`).join("")}`;
+}
+// === v6 (Lot A2) — Préparation présentée en ONGLETS (Infos / Joueurs / Gages / Enchères) ========
+// Réutilise toute la logique existante (voteSectionHTML, savePrep, setBid, editPrep, closeRegistration…).
+// L'onglet actif est S.ptab ; la barre du bas (prepTabs) le pilote.
+function prepRosterHTML(lobby){ const org=me()&&me().is_organizer;
+  return players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${(lobby&&org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip ${p.shop_done?'g':''}">${lobby?t("Prêt"):(p.shop_done?t("✓ prêt"):t("⏳ pas encore"))}</span>`}</div>`).join(""); }
+function prepJoueursTab(){ const n=players.filter(p=>!p.is_ai).length; const lobby=(L.status==="lobby");
+  return `<div class="box"><h2 style="margin-top:0">👥 ${t("Joueurs")} · ${n}${lobby?'/'+MAX_PLAYERS:''}</h2>`
+    + (lobby?`<div class="mini muted">${t("Invite tes amis avec le code <b>{a}</b>.",{a:esc(L.code)})}</div><div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">${t("📋 Copier le code")}</button></div>`:'')
+    + `</div>` + prepRosterHTML(lobby); }
+function prepGagesTab(){
+  if(L.status==="lobby") return `<div class="box"><h2 style="margin-top:0">🎭 ${t("Gages & récompenses")}</h2><div class="mini" style="color:var(--accent)">🔒 ${t("Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).")}</div></div>`;
+  return voteSectionHTML(false) + (isBoth()?`<div style="height:10px"></div>`+voteSectionHTML(true):''); }
+function prepEncheresTab(){
+  const meP=me(); const maxCards=Math.max(1,L.num_days||1);
+  const ids=modeCards(getMode()).slice().sort((a,b)=>t(CARDS[a].n).localeCompare(t(CARDS[b].n),undefined,{sensitivity:"base"}));
+  if(L.status==="lobby") return `<div class="box"><h2 style="margin-top:0">💰 ${t("Enchères aux bonus")}</h2><div class="mini" style="color:var(--accent)">🔒 ${t("Les enchères s'ouvriront au démarrage. En attendant, touche un bonus pour le découvrir.")}</div></div>`
+      + ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div><span class="chip">🔒</span></div>`).join("");
+  if(!meP) return `<div class="box">…</div>`;
+  if(!meP.shop_done && S.bidLLeague!==L.id){ bidL=Object.assign({}, (prepState().bids[S.myId]||{})); S.bidLLeague=L.id; }
+  const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
+  const over=tot>SHOP_CAP, tooMany=cnt>maxCards; const miss=votesManquants(); const noVote=miss.length>0;
+  return `<div class="box"><h2 style="margin-top:0">🃏 ${t("Enchères bonus")}</h2><div class="mini muted">${t("Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.",{a:SHOP_CAP,b:maxCards})}</div>
+     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
+     <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
+   ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
+      <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
+   <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Vote d'abord pour une récompense"):t("🎭 Vote d'abord pour un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>`; }
+function prepInfosTab(){
+  if(L.status==="lobby") return viewLobby(); // lobby : réglages + code + clôture — vue existante réutilisée
+  const st=prepState(); const org=me()&&me().is_organizer; const solo=isSolo(); const kv=(l,v)=>`<div class="row" style="justify-content:space-between;margin:4px 0"><span class="muted mini">${l}</span><b>${v}</b></div>`;
+  return `<div class="box"><h2 style="margin-top:0">ℹ️ ${t("Infos de la ligue")}</h2>
+     ${kv("⏱️ "+t("Rythme"), t(leagueFormula().n))}
+     ${kv("🎛️ "+t("Mode"), t(MODES[getMode()].n))}
+     ${kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"))}
+     ${solo?'':kv("🎭 "+t("Enjeu"), isBoth()?t("Gage + récompense"):(isReward()?t("Récompense"):t("Gage")))}
+     <div class="mini muted" style="margin-top:6px">⏳ ${t("Démarrage auto dans {a}",{a:fmtLeft(st.deadline)})}</div></div>
+   ${org?`<button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`; }
+function viewPrepTabs(){
+  const meP=me();
+  if(meP && meP.shop_done){
+    const humansN=players.filter(p=>!p.is_ai).length; const validated=players.filter(p=>!p.is_ai&&p.shop_done).length; const allReady=validated>=humansN; const st=prepState();
+    const waitMsg = allReady ? t("🚀 Tout le monde est prêt — lancement du championnat…")
+      : t("⏳ On attend les autres joueurs — <b>{a}/{b}</b> prêts.",{a:validated,b:humansN})+'<br><span class="mini">'+t("Le championnat démarre <b>tout seul</b> dès que tout le monde a validé (ou dans {a}).",{a:fmtLeft(st.deadline)})+'</span>';
+    return `<div class="box"><h2 style="margin-top:0">${t("✅ Préparation validée")}</h2>
+      <div class="mini muted">${t("Ton vote et tes enchères sont enregistrés.")}</div>
+      <div class="box mini" style="margin-top:10px;text-align:center">${waitMsg}</div></div>
+      ${prepRosterHTML(false)}
+      <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">${t("✏️ Modifier ma préparation")}</button>
+      ${(me()&&me().is_organizer)?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`;
+  }
+  const tab=S.ptab||"infos";
+  if(tab==="joueurs") return prepJoueursTab();
+  if(tab==="gages" && !isSolo()) return prepGagesTab();
+  if(tab==="encheres") return prepEncheresTab();
+  return prepInfosTab();
 }
 function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else delete bidL[id];
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=Math.max(1,L.num_days||1); const over=tot>SHOP_CAP,tooMany=cnt>maxCards;
@@ -4827,9 +4890,19 @@ function runningTabs(){ const d=L?(L.current_day||0):0; const resOc = "openResul
   + navTab("leaguestats","📈",t("Stats"),"openLeagueStats()")
   + `</div>`; }
 function bottomBar(){ if(!AUTH) return '';
+  if(S.leagueId && L && (L.status==="lobby"||L.status==="prep") && LEAGUE_TABVIEWS.includes(S.view)) return prepTabs();
   if(HOME_VIEWS.includes(S.view)) return homeTabs();
   if(LEAGUE_TABVIEWS.includes(S.view) && L && (L.status==="running"||L.status==="done")) return runningTabs();
   return ''; }
+function setPtab(x){ S.ptab=x; render(); }
+function navPtab(id,ic,lb){ const on=S.ptab===id; return `<button class="navtab${on?' on':''}" ${on?'':`onclick="setPtab('${id}')"`}><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
+function prepTabs(){ const solo=isSolo();
+  return `<div class="inner">`
+   + navPtab("infos","ℹ️",t("Infos"))
+   + navPtab("joueurs","👥",t("Joueurs"))
+   + (solo?'':navPtab("gages","🎭",isReward()?t("Récomp."):t("Gages")))
+   + navPtab("encheres","💰",t("Enchères"))
+   + `</div>`; }
 function viewProfil(){
   const admin = AUTH && AUTH.id===ADMIN_ID;
   return `<div class="box"><h2 style="margin-top:0">👤 ${t("Profil")}</h2>
