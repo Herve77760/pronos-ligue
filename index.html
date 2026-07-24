@@ -181,7 +181,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.01";
+const APP_VERSION = "v6.02";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1133,6 +1133,8 @@ const EN={
   "Ligues":"Leagues", "Profil":"Profile", "Pronos":"Picks", "Classt":"Rank", "Langue":"Language", "Thème":"Theme", "Stats":"Stats",
   "Clair / sombre":"Light / dark", "Espace admin":"Admin area", "🔑 Changer mon mot de passe":"🔑 Change my password",
   "Palmarès":"Hall of fame",
+  "📋 Résultats · J{a}":"📋 Results · MD{a}", "Les affiches du jour":"Today's fixtures", "vs":"vs", "Les 5 matchs ne sont pas encore choisis.":"The 5 matches haven't been picked yet.",
+  "Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.":"Matchday in progress — picks and stakes will be revealed once the day is over.",
   "✅ Cette option est <b>active sur ton compte</b>. Profites-en !":"✅ This option is <b>active on your account</b>. Enjoy!",
   "🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.":"🔒 This option isn't <b>active on your account yet</b>. Subscribe to use it — <b>during the test phase there's no payment</b>: activation is instant.",
   "Souscrire à cette option":"Subscribe to this option",
@@ -3911,9 +3913,25 @@ function viewRecap(D){ const fin=(L&&L.status==="done"); return `${recapBody(D)}
     <button class="btn" onclick="ackRecap()">${fin?t("🏆 Voir le classement final →"):t("Continuer →")}</button>
     ${fin?'':`<button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`}`; }
 function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:L.current_day-1);
-  return `<button class="btn ghost sm" onclick="S.view='game';refresh()">${t("← Retour au jeu")}</button>
-    ${recapBody(d)}
-    <button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`; }
+  const back=`<button class="btn ghost sm" onclick="S.view='game';refresh()">${t("← Retour au jeu")}</button>`;
+  // Journée résolue ? (d < journées résolues). Sinon → écran d'attente (pas de résultats à montrer).
+  const resolvedCount = (L.status==="done" ? (L.num_days||0) : (L.current_day||0));
+  if(d<0 || d>=resolvedCount) return back + waitingResultsBody(Math.max(0,d));
+  return back + recapBody(d) +
+    `<button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`; }
+// Écran d'attente de l'onglet Résultats : quand la journée n'est pas encore terminée (ex. J1 avant
+// toute résolution). On montre les affiches du jour si elles sont connues ; pronos/mises masqués.
+function waitingResultsBody(d){
+  let h=`<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
+    <div class="mini" style="color:var(--accent)">⏳ ${t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${betLineHTML()}</div>`;
+  const anyfx=(duels||[]).some(x=>Array.isArray(x.fixtures)&&x.fixtures.length);
+  if(anyfx){ h+=`<div class="box"><b class="mini">${t("Les affiches du jour")}</b>`+
+    (duels||[]).map(dz=>{ const fx=dz.fixtures||[]; if(!fx.length) return ''; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{};
+      return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px"><b>${esc((hn.emoji||'')+' '+(hn.name||'?'))}</b> ${t("vs")} <b>${esc((an.emoji||'')+' '+(an.name||'?'))}</b><br>${fx.map(f=>`<span class="muted">${esc(f.home)}–${esc(f.away)}</span>`).join(' · ')}</div>`; }).join('')
+    +`</div>`;
+  } else { h+=`<div class="box mini muted">${t("Les 5 matchs ne sont pas encore choisis.")}</div>`; }
+  return h;
+}
 let recapOpen=-1, recapFocus=null;
 function toggleRecapMatch(i){ recapOpen=recapOpen===i?-1:i; render(); }
 function ackRecap(){ recapOpen=-1; recapFocus=null; setSeen(L.current_day); refresh(); }
@@ -4800,7 +4818,7 @@ function homeTabs(){ return `<div class="inner">`
   + navTab("shop","🛒",t("Boutique"),"openShop()")
   + navTab("profil","👤",t("Profil"),"openProfil()")
   + `</div>`; }
-function runningTabs(){ const d=L?(L.current_day||0):0; const resOc = d>=1?("openResults("+(d-1)+")"):"noResultsYet()";
+function runningTabs(){ const d=L?(L.current_day||0):0; const resOc = "openResults("+(d>=1?(d-1):0)+")"; // toujours accessible : dernière journée résolue, ou écran d'attente si aucune
   return `<div class="inner">`
   + navTab("coulisses","🎬",t("Coulisses"),"openCoulisses()")
   + navTab("game","⚽",t("Pronos"),"goGame()")
