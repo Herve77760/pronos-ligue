@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.70";
+const APP_VERSION = "v6.71";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -425,7 +425,7 @@ const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
 // Composition du pool de matchs proposé au choix. Une seule source pour les DEUX modes (réel et
 // simulé) et pour les règles affichées : sans ça, le simulé tirait uniformément entre les sports
 // (≈33 % de foot) alors que le réel visait 75 % — deux jeux différents sous le même nom.
-const POOL_N=9, POOL_FOOT=7;   // v6.57 (Hervé) : 9 matchs proposés (réel ET simulé), dont ~7 de foot (~78 %)
+const POOL_N=9, POOL_FOOT=7;   // 9 matchs proposés (réel ET simulé), dont ~7 de foot (≈ 75 % ; affiché « environ 75 % »)
 // Effectif maximum d'une ligue. Écrit à 4 endroits auparavant (création, relance, salon, règles) :
 // une seule source, sinon les places annoncées au salon pourraient contredire les règles.
 const MAX_PLAYERS=12;
@@ -562,7 +562,11 @@ async function fetchRealPool(){
   for(const k of keys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
     if(!r.ok) continue; const arr=await r.json();
     arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; out.push(f); } });
-  }catch(e){} }
+  }catch(e){}
+    // Économie de crédits : dès qu'on a assez de matchs (≥15) AVEC de la variété (≥3 hors foot), on arrête
+    // d'interroger d'autres compétitions. Si la variété n'est pas atteinte, on continue (pas le choix). (Hervé)
+    if(out.length>=15 && out.filter(e=>e.grp!=="Soccer").length>=3) break;
+  }
   // Resserrage : on ne garde que les matchs du créneau (winH). Repli sur la fenêtre large si trop peu de matchs.
   const tight=out.filter(e=>{ const tt=new Date(e.commence).getTime(); return !isNaN(tt) && tt<=tightMax; });
   // On PRIORISE le créneau serré (résultats groupés), mais on COMPLÈTE toujours jusqu'à la cible avec
@@ -1026,6 +1030,7 @@ const EN={
   "Gages & récompenses":"Forfeits & rewards", "Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).":"Voting opens at kickoff (once the organizer closes registration).",
   "Enchères":"Auction", "Enchères aux bonus":"Bonus auction", "Enchères bonus":"Bonus auction", "Aller aux pronos →":"Go to predictions →",
   "Nombre de joueurs maximum atteint ({a}) — les inscriptions sont closes.":"Maximum number of players reached ({a}) — registration is closed.",
+  "Vrais matchs indisponibles — matchs simulés pour cette journée.":"Real matches unavailable — simulated matches for this matchday.",
   "Les enchères s'ouvriront au démarrage. En attendant, touche un bonus pour le découvrir.":"The auction opens at kickoff. Meanwhile, tap a bonus to discover it.",
   "Invite tes amis avec le code <b>{a}</b>.":"Invite your friends with code <b>{a}</b>.",
   // Écran de création (v6.05)
@@ -3762,7 +3767,12 @@ function noResultsYet(){ toast(t("Aucune journée terminée pour l'instant — l
 /* --- selection --- */
 let selPool=null, selChosen=[], selLoading=false;
 async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
-  try{ selPool=await fetchRealPoolCached(); }catch(e){ selPool=[]; showErr("Vrais matchs : "+e.message); }
+  try{ selPool=await fetchRealPoolCached(); }catch(e){ selPool=null; }
+  // 🛟 Anti-blocage (phase de test) : si l'API réelle est indisponible (plus de crédits, intersaison,
+  // erreur réseau) ou renvoie trop peu de matchs, on bascule SUR DES MATCHS SIMULÉS pour cette journée
+  // → le joueur n'est jamais coincé. La journée se résout alors comme en simulé (fixtures sans evId).
+  if(!selPool || selPool.length<5){ selPool=genPool(POOL_N,leagueFormula().bet); selChosen=[];
+    toast(t("Vrais matchs indisponibles — matchs simulés pour cette journée.")); }
   selLoading=false; render(); }
 function viewSelect(d,dayLbl,opp){
   const real=(L.data_mode==="real");
@@ -5909,7 +5919,7 @@ function viewRulesFull(){
    ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.")+' <i>'+t("(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)")+'</i>')}
 
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
-     ${li(t("La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. ⚽ étant le seul sport à <b>3 issues</b>, c'est lui qui rend la carte 🧈 {c} jouable.",{a:POOL_N,b:Math.round(POOL_FOOT/POOL_N*100),c:t(CARDS.chance.n)}))}
+     ${li(t("La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. ⚽ étant le seul sport à <b>3 issues</b>, c'est lui qui rend la carte 🧈 {c} jouable.",{a:POOL_N,b:75,c:t(CARDS.chance.n)}))}
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
      ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec la carte Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
      ${li(t("Tu désignes un <b>👑 Capitaine</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>."))}
