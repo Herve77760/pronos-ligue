@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.55";
+const APP_VERSION = "v6.56";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -537,7 +537,11 @@ async function fetchRealPool(){
   // Fenêtre serrée = rythme de la formule (12h Fast / 24h Classique) : tous les matchs se jouent dans le MÊME créneau,
   // pour que les résultats tombent groupés (toute la ligue attend le dernier match). On collecte large (24h) puis on resserre,
   // avec repli sur la fenêtre large si le créneau serré ne contient pas assez de matchs (intersaison).
-  const _f=leagueFormula(); const cutoffMin=Date.now()+((_f.sel||24)+(_f.bet||24))*3600000; const cutoffMax=cutoffMin+24*3600000;
+  const _f=leagueFormula(); const cutoffMin=Date.now()+((_f.sel||24)+(_f.bet||24))*3600000;
+  // Fenêtre de collecte élargie à 7 jours (v6.56) : en intersaison (ex. fin juillet, grosses ligues à
+  // l'arrêt), les 24h suivant la clôture ne contenaient parfois que ~5 matchs. On ramasse plus large,
+  // puis on PRIORISE les plus proches (tri par priorité/heure) → assez de choix même quand c'est creux.
+  const cutoffMax=cutoffMin+7*24*3600000;
   const winH=(_f.bet||24); const tightMax=cutoffMin+winH*3600000;
   const out=[];
   for(const k of keys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
