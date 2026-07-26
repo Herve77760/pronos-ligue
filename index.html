@@ -186,13 +186,17 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.51";
+const APP_VERSION = "v6.52";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
 const ADMIN_ID = "87c0be26-7fe8-4909-8be2-aa38c6db06e0"; // compte administrateur (Hervé) — uid Supabase Auth
 const AUTH_DOMAIN = "bbb.app"; // e-mail synthétique invisible pour l'utilisateur (Supabase Auth) : pseudo@bbb.app
-const emailFor = u => u.trim().toLowerCase() + "@" + AUTH_DOMAIN;
+// Connexion insensible aux ACCENTS et à la CASSE : le pseudo est normalisé (é→e, É→e…) avant de
+// construire l'email technique. Ainsi « Hervé », « HERVE » ou « herve » mènent au MÊME compte
+// (un email ne peut de toute façon pas contenir d'accent). Rétrocompatible : un pseudo sans accent
+// est inchangé (demandé par Hervé — pouvoir se connecter en tapant « Hervé »).
+const emailFor = u => (u||"").trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9._-]/g,"") + "@" + AUTH_DOMAIN;
 const validUser = u => /^[a-zA-Z0-9._-]{2,20}$/.test(u); // pseudo : 2–20, lettres/chiffres/._- (sans espace ni accent)
 
 /* ============ CONSTANTS ============ */
