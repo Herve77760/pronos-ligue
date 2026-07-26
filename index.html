@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.65";
+const APP_VERSION = "v6.69";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1401,8 +1401,10 @@ const EN={
   "commencé, mais pas encore validé (le joueur doit revenir valider).":"started, but not confirmed yet (the player must come back to confirm).",
   "le joueur n'a encore rien saisi.":"the player hasn't entered anything yet.",
   "✨ Faits marquants":"✨ Highlights",
-  "a joué {a} — ça s'est retourné : <b class=\"green\">+{b}€</b> pour {c}.":"played {a} — it backfired: <b class=\"green\">+{b}€</b> for {c}.",
-  "a réussi {a} : <b class=\"green\">+{b}€</b>.":"nailed {a}: <b class=\"green\">+{b}€</b>.",
+  "Meilleur résultat du jour : {a} (<b class=\"green\">{b}€</b>).":"Best result of the day: {a} (<b class=\"green\">{b}€</b>).",
+  "Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).":"Biggest hit: {a} on {b} (<b class=\"green\">{c}€</b>).",
+  "a joué {a} — ça s'est retourné : <b class=\"green\">{b}€</b> pour {c}.":"played {a} — it backfired: <b class=\"green\">{b}€</b> for {c}.",
+  "a réussi {a} : <b class=\"green\">{b}€</b>.":"nailed {a}: <b class=\"green\">{b}€</b>.",
   "a volé le bonus de {c}.":"stole {c}'s bonus.",
   // Bonus « Demi-portion » (v6.39)
   "Demi-portion":"Half Rations",
@@ -2242,7 +2244,7 @@ async function refresh(){
     // 🎬 Coulisses (résumé d'ouverture : gage + enchères), et non direct sur les pronos (demandé par Hervé).
     if(L.status==="running" && (prevLeagueStatus==="prep"||prevLeagueStatus==="starting") && S.view==="game"){ S.view="coulisses"; }
     prevLeagueStatus=L.status;
-    showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay); maybePrepModal(); maybeFormulaModal(); maybeLastDayModal();
+    showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay); maybePrepModal(); maybeFormulaModal();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
 // Récapitalisation : une fenêtre fermable à l'ouverture du récap concerné (un bandeau seul passait
@@ -2308,19 +2310,9 @@ function maybeFormulaModal(){
       `<div class="mini" style="text-align:left">${t("Le changement prévu à la <b>journée {b}</b> est annulé : elle reste en <b>{a}</b>.",{a:FORMULAS[formulaKey()].n,b:cx.from+1})}</div>
        <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`); }
 }
-// Pop-up (une seule fois par ligue) à l'arrivée sur la DERNIÈRE journée : rappelle que les points de
-// duel comptent double. Complète le bandeau permanent (lastDayBanner). Demandé par Hervé.
-function maybeLastDayModal(){
-  if(!L || L.status!=="running") return;
-  const cd=(L.current_day||0); if(!(L.num_days && cd===L.num_days-1)) return;   // pas la dernière journée
-  if(document.getElementById("cardModal")) return;   // une autre pop-up est ouverte → on réessaiera au prochain refresh (flag non consommé)
-  const key="pl_lastday_"+L.id;
-  let seen=true; try{ seen=!!localStorage.getItem(key); if(!seen) localStorage.setItem(key,"1"); }catch(e){}
-  if(seen) return;
-  infoModal("🔥", t("Dernière journée !"),
-    `<div class="mini" style="text-align:left;line-height:1.6">${t("C'est la <b>dernière journée</b> — les points de <b>duel comptent DOUBLE</b> aujourd'hui. Même mal classé, tout peut encore se renverser : rien n'est jamais joué jusqu'au bout !")} <span class="muted">${t("(le +1 du ⭐ meilleur pronostiqueur de la journée n'est pas doublé)")}</span></div>
-     <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`);
-}
+// (v6.66) Pop-up « dernière journée = points doubles » RETIRÉ : il s'affichait au moment de découvrir
+// les résultats de la journée passée (mauvais timing). L'info reste bien visible via le bandeau
+// lastDayBanner sur les écrans Pronos + Résultats. Demandé par Hervé.
 async function ensureFixtures(){
   let filled=false; const dt=dayTimes(); const selPassed=dt.ok && Date.now()>=dt.sel;
   // Duels à remplir : IA à domicile (tout de suite) ou humain à domicile ayant dépassé l'échéance de sélection.
@@ -3868,14 +3860,16 @@ async function submitBet(){
   if(deadlinePassed()){ infoWin(t("⏰ Trop tard — les pronos sont clôturés."),"⏰"); S.editingBet=false; bet={picks:null,captain:-1}; myCard=null; await refresh(); return; }
   if(bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > ((me()||{}).capital||0)+0.001){ infoWin(t("⚠️ Trop risqué — baisse la mise du Capitaine"),"⚠️"); return; } // règle A (sécurité)
   busy=true;
-  try{ const d=myDuel();
+  try{ const d=myDuel(); const playedDay=L.current_day;   // la journée qu'on vient de jouer (avant la résolution auto qui fait avancer current_day)
     await q(db.from("bets").upsert({league_id:L.id,day:L.current_day,player_id:S.myId,duel_id:d.id,
       picks:bet.picks,captain:bet.captain,card:myCard,submitted:true},{onConflict:"player_id,day"}));
     bet={picks:null,captain:-1}; myCard=null; S.editingBet=false; await refresh();
     // Après validation : on ne bascule sur Résultats QUE en solo (adversaire IA) — les résultats du jour
     // tombent tout de suite. À plusieurs humains, on RESTE sur Pronos : sinon on verrait les résultats
     // de la journée PASSÉE, ce qui prête à confusion (demandé par Hervé v6.42).
-    if(isSolo()) openResults(resultsDefaultDay());
+    // ⚠️ On vise EXPLICITEMENT la journée qu'on vient de jouer (playedDay) : la résolution auto est
+    // asynchrone, donc resultsDefaultDay() renverrait encore la journée précédente juste après (bug Hervé).
+    if(isSolo()) openResults(playedDay);
   }catch(e){ showErr("Validation : "+e.message); } busy=false;
 }
 // Rouvrir ses pronos pour les modifier (tant que la clôture n'est pas passée). Précharge le pari existant.
@@ -4318,7 +4312,7 @@ function recapBody(D){
   if(myD){ const hb=bets.find(b=>b.player_id===myD.home_id), ab=bets.find(b=>b.player_id===myD.away_id);
     const H=Object.assign({net:netMap[myD.home_id]||0}, gainMise(hb&&hb.picks, myD.fixtures));
     const A=Object.assign({net:netMap[myD.away_id]||0}, gainMise(ab&&ab.picks, myD.fixtures));
-    const r=duelPtsF(H,A,forgot(myD.home_id),forgot(myD.away_id),isScoring2()); const iAmHome=myD.home_id===fp; fpDuelPts=iAmHome?r.h:r.a;
+    const r=duelPtsF(H,A,forgot(myD.home_id),forgot(myD.away_id),isScoring2()); const iAmHome=myD.home_id===fp; fpDuelPts=(iAmHome?r.h:r.a)*lastMult;   // ×2 dernière journée (cohérent avec le tableau)
     fpOutcome = (r.win==null)?'tie':(((r.win==='h')===iAmHome)?'win':'loss'); }
   const won=fpOutcome==='win', tie=fpOutcome==='tie';
   const cardTxt=c=>c&&c.id?`${CARDS[c.id].e} ${CARDS[c.id].n}`:"—";
@@ -4430,13 +4424,13 @@ function recapBody(D){
         <div>
           <div class="mini muted">${t("Gain net")}</div>
           <div class="big ${hNet>=0?'green':'red'}" style="font-size:22px">${fmt(hNet)} €</div>
-          <div style="margin-top:3px"><span class="ptpill ${rr.h>0?'':'zero'}">${rr.h} pt${rr.h>1?'s':''} ${t("(duel)")}</span></div>
+          <div style="margin-top:3px"><span class="ptpill ${rr.h>0?'':'zero'}">${rr.h*lastMult} pt${rr.h*lastMult>1?'s':''} ${t("(duel)")}</span></div>
           ${bonusMini(hB)}
         </div>
         <div style="text-align:right">
           <div class="mini muted">${t("Gain net")}</div>
           <div class="big ${aNet>=0?'green':'red'}" style="font-size:22px">${fmt(aNet)} €</div>
-          <div style="margin-top:3px"><span class="ptpill ${rr.a>0?'':'zero'}">${rr.a} pt${rr.a>1?'s':''} ${t("(duel)")}</span></div>
+          <div style="margin-top:3px"><span class="ptpill ${rr.a>0?'':'zero'}">${rr.a*lastMult} pt${rr.a*lastMult>1?'s':''} ${t("(duel)")}</span></div>
           ${bonusMini(aB)}
         </div>
       </div>
@@ -4451,10 +4445,19 @@ function recapBody(D){
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
     const wp=pById(b.player_id)||{}; const whoNm=avatarHTML(wp.emoji)+' '+(b.player_id===S.myId?t("toi"):esc(wp.name||'?'));
     const dd=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const oid=dd?(dd.home_id===b.player_id?dd.away_id:dd.home_id):null; const op=oid!=null?(pById(oid)||{}):{}; const oppNm=avatarHTML(op.emoji)+' '+esc(op.name||'?');
-    if(C.oppT && (im.opp||0)>=1) faits.push(`😅 <b>${esc(whoNm)}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"green\">+{b}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.opp),c:esc(oppNm)})}`);
-    else if((im.self||0)>=5) faits.push(`🎯 <b>${esc(whoNm)}</b> ${t("a réussi {a} : <b class=\"green\">+{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.self)})}`);
-    else if(c.stole) faits.push(`🥷 <b>${esc(whoNm)}</b> ${t("a volé le bonus de {c}.",{c:esc(oppNm)})}`);
+    if(C.oppT && (im.opp||0)>=1) faits.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"green\">{b}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.opp),c:oppNm})}`);
+    else if((im.self||0)>=5) faits.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.self)})}`);
+    else if(c.stole) faits.push(`🥷 <b>${whoNm}</b> ${t("a volé le bonus de {c}.",{c:oppNm})}`);
   });
+  // Faits GÉNÉRAUX (pour qu'un résumé apparaisse même sans bonus marquant — demandé par Hervé) :
+  // meilleur résultat net du jour + plus gros pari gagnant.
+  const nm2=pid=>{ const p=pById(pid)||{}; return avatarHTML(p.emoji)+' '+(pid===S.myId?t("toi"):esc(p.name||'?')); };
+  const inDay=players.filter(p=>duels.some(d=>d.home_id===p.id||d.away_id===p.id));
+  if(inDay.length){ const best=inDay.slice().sort((a,b)=>(netMap[b.id]||0)-(netMap[a.id]||0))[0];
+    if(best && (netMap[best.id]||0)>0) faits.unshift(`🏅 ${t("Meilleur résultat du jour : {a} (<b class=\"green\">{b}€</b>).",{a:nm2(best.id),b:fmt(netMap[best.id]||0)})}`); }
+  let bc=null; bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[]; if(!Array.isArray(b.picks)) return;
+    b.picks.forEach((pk,i)=>{ const f=fx[i]; if(!f||f.canceled||f.res!==pk.sel) return; const g=Math.round((+pk.stake||0)*(oddOf(f,pk.sel)-1)*100)/100; if(g>0 && (!bc||g>bc.g)) bc={g,pid:b.player_id,f,sel:pk.sel}; }); });
+  if(bc) faits.push(`💥 ${t("Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).",{a:nm2(bc.pid),b:esc(bc.f.home+' – '+bc.f.away),c:fmt(bc.g)})}`);
   const faitsBox = faits.length ? `<h2>${t("✨ Faits marquants")}</h2><div class="box"><div class="mini" style="line-height:1.8">${faits.map(x=>'• '+x).join('<br>')}</div></div>` : '';
   return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
       <div class="row">
