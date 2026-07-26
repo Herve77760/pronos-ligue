@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.71";
+const APP_VERSION = "v6.74";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1599,8 +1599,8 @@ const EN={
   "Caractéristiques de la ligue":"League settings", "Code":"Code", "Format":"Format",
   "Simple":"Simple", "Complet":"Full", "📡 Réelles":"📡 Real", "🎯 Gage personnalisé":"🎯 Custom forfeit", "{a} journées":"{a} matchdays",
   "Archive la ligue dans « Ligues terminées ». Action irréversible.":"Archives the league under “Finished leagues”. This cannot be undone.",
-  "Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.":"Fictional matches and odds — instant resolution. Ideal to test the game.",
-  "Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results. ⚠️ A matchday only resolves once the matches are actually played.",
+  "Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.":"Fictional matches and odds, results drawn from their probabilities (a bit of randomness). No real match to wait for — made for playing among friends, even a whole game in a single evening.",
+  "Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results: to prove who's the best forecaster for real. ⚠️ A matchday only resolves once the matches are actually played.",
   "⏳ Chargement des vrais matchs à venir…":"⏳ Loading upcoming real matches…", "🔄 Réessayer":"🔄 Retry",
   "Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.":"Not enough upcoming real matches right now (off-season?). Try again later, or the organizer can switch the league back to simulated.",
   "Toutes les cartes bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus cards and a wide choice of forfeits — the full-featured game.",
@@ -1741,8 +1741,8 @@ const EN={
   "⚠️ Gages et récompenses se règlent <b>entre vous, hors application</b> — elle ne gère aucun argent et n'encaisse rien.":"⚠️ Forfeits and rewards are settled <b>between you, outside the app</b> — it handles no money and collects nothing.",
   "🎛️ Les options de la ligue":"🎛️ League options",
   "Mode de jeu":"Game mode", "Formule de rythme":"Pace format", "Données":"Data",
-  "• <b>🎮 Simulé</b> — matchs et cotes fictifs, résolution immédiate. Idéal pour tester.":"• <b>🎮 Simulated</b> — fictional matches and odds, instant resolution. Ideal for testing.",
-  "• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.":"• <b>📡 Real data</b> — real matches, real odds, real results. A matchday only resolves once <b>all</b> matches have actually been played.",
+  "• <b>🎮 Simulé</b> — matchs et cotes fictifs, résultats tirés selon leurs probabilités (part d'aléa). Sans attendre de vrais matchs : pour jouer entre amis, jusqu'à une partie entière en une soirée.":"• <b>🎮 Simulated</b> — fictional matches and odds, results drawn from their probabilities (some randomness). No real match to wait for: to play among friends, up to a whole game in one evening.",
+  "• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur sur du concret. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.":"• <b>📡 Real data</b> — real matches, real odds, real results: to prove who's the best for real. A matchday only resolves once <b>all</b> matches have actually been played.",
   "Une ligue accueille jusqu'à <b>{p} joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.":"A league holds up to <b>{p} players</b>. The organiser can close registrations, the preparation or the picks at any time.",
   "1 place":"1 spot", "{a} places":"{a} spots",
   "🗓️ Format":"🗓️ Format",
@@ -2350,8 +2350,21 @@ function shouldAutoResolve(){
   // SOLO (vs 🤖 IA) en simulé : dès que le joueur a validé ses pronos, on résout TOUT DE SUITE — pas
   // d'attente d'échéance ni de « coup d'envoi », l'adversaire est l'IA (demandé par Hervé).
   if(isSolo() && myBet()) return true;
-  // Sinon : résolution à la clôture des pronos ET une fois les matchs fictifs « joués ».
-  return deadlinePassed() && simMatchesDone();
+  // SIMULÉ multi-joueurs (v6.74, Hervé) : résolution INSTANTANÉE dès que tous les humains de la journée ont
+  // validé leurs pronos → on enchaîne une partie entière en une soirée. (Pas de publication manuelle : le
+  // « temps de lecture » n'apporte rien puisque les pronos adverses ne sont visibles qu'avec l'option payante,
+  // et tous les pronos sont dévoilés à la résolution.) Garde loadedDay = journée courante réellement chargée.
+  if(loadedDay===(L&&L.current_day) && allHumansSubmitted()) return true;
+  // Repli si un joueur n'a pas validé : à la clôture des pronos (échéance naturelle ou clôture organisateur).
+  return deadlinePassed();
+}
+// Tous les HUMAINS de la journée courante ont-ils validé un pari ? (l'IA joue automatiquement à la résolution)
+function allHumansSubmitted(){
+  const dz=duels||[]; if(!dz.length) return false;
+  const ids=new Set(); dz.forEach(d=>{ ids.add(d.home_id); ids.add(d.away_id); });
+  const humans=(players||[]).filter(p=>!p.is_ai && ids.has(p.id));
+  if(!humans.length) return false;
+  return humans.every(p=>{ const b=(bets||[]).find(x=>x.player_id===p.id); return !!(b && b.submitted!==false && Array.isArray(b.picks) && b.picks.length); });
 }
 function me(){ return players.find(p=>p.id===S.myId); }
 function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId); }
@@ -2873,8 +2886,8 @@ function viewCreate(){
    <h2>${t("🎛️ Mode de jeu")}</h2>
    ${['simple','complet'].map(k=>card(g.mode===k,"setNew('mode','"+k+"')",t(MODES[k].n),t(MODES[k].d),k==='complet'?premBadge('bonuscomplets'):'')).join("")}
    <h2>${t("🎲 Données")}</h2>
-   ${card(g.data==='sim',"setNew('data','sim')",t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu."))}
-   ${card(g.data==='real',"setNew('data','real')",t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."),premBadge('direct'))}
+   ${card(g.data==='sim',"setNew('data','sim')",t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."))}
+   ${card(g.data==='real',"setNew('data','real')",t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."),premBadge('direct'))}
    ${solo? `<h2>${t("🤖 Format du solo")}</h2>
      ${card(g.soloAR===1,"setNew('soloAR',1)",t("1 aller-retour — 2 journées"),t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."))}
      ${card(g.soloAR===2,"setNew('soloAR',2)",t("2 allers-retours — 4 journées"),t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."))}
@@ -3149,7 +3162,7 @@ function viewLobby(){
     <h2>${t("🎛️ Mode de jeu")}</h2>
     ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <h2>${t("🎲 Données")}</h2>
-    ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     ${solo?soloFormatHTML(org):`<h2>${t("🎭 Enjeu de la ligue")}</h2>
     ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage voté par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense votée par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun vote deux fois à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux votes</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense votée par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>`}
@@ -3600,7 +3613,7 @@ function paramInfo(kind){
   let emoji="ℹ️", title="", body="";
   if(kind==='formula'){ const f=leagueFormula(); emoji="⏱️"; title=t(f.n); body=t(f.d)+"<br><br>"+t("💡 La vitesse (classique / fast) est le <b>seul</b> réglage que l'organisateur pourra encore changer, en cours de partie."); }
   else if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=t(m.d); }
-  else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); body=real?t("Vrais matchs, vraies cotes, vrais résultats. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs — résolution immédiate. Idéal pour tester le jeu."); }
+  else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."); }
   else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun vote deux fois à la préparation."):(isReward()?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur.")); }
   else if(kind==='solo'){ emoji="🤖"; const one=(o.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
   infoModal(emoji, title, `<div class="mini muted" style="text-align:left;line-height:1.55">${body}</div>`);
@@ -4599,9 +4612,10 @@ function waitingResultsBody(d){
     if(closed && L.data_mode==="real" && !hasOpt('direct')) h+=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Voir les matchs terminés en direct")}</span>${premBadge('direct')}</div>`;
   }
   if(closed){
-    h+=`<div class="box mini muted" style="text-align:center">${(L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':(simMatchesDone()?t("✅ Pronos clôturés — résolution automatique en cours…"):t("✅ Pronos clôturés — on attend la fin des matchs.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>')}</div>`;
+    h+=`<div class="box mini muted" style="text-align:center">${(L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Pronos clôturés — résolution automatique en cours…")}</div>`;
     if(L.data_mode==="real") h+=`<div class="box mini muted">${t("🚫 Si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:STALE_MATCH_H})}</div>`;
-    if(!(L.data_mode==="real")&&!simMatchesDone()&&org) h+=`<button class="btn ghost sm" onclick="forcePublishResults()">${t("▶️ Publier les résultats maintenant (organisateur)")}</button>`;
+    // (v6.73) Bouton « Publier les résultats » retiré en simulé : la journée se résout automatiquement dès que
+    // tous ont validé (ou à la clôture des pronos par l'organisateur) — plus d'attente de « coup d'envoi » fictif.
   }
   return h;
 }
@@ -5984,8 +5998,8 @@ function viewRulesFull(){
      ${Object.keys(FORMULAS).map(k=>`• <b>${esc(t(FORMULAS[k].n))}</b> — ${esc(t(FORMULAS[k].d))}`).join("<br>")}<br>
      <div class="mini muted">${t("Ce ne sont pas des horaires fixes : chaque phase démarre <b>quand la précédente est bouclée</b>. Les mises s'ouvrent dès que tous les matchs sont choisis, et la journée suivante démarre dès que les résultats sont tombés. En 📡 données réelles, la plupart des matchs se jouant en soirée, le rythme se cale sur eux et se décale donc de jour en jour.")}</div>
      <div style="height:6px"></div><b>${t("Données")}</b><br>
-     ${t("• <b>🎮 Simulé</b> — matchs et cotes fictifs, résolution immédiate. Idéal pour tester.")}<br>
-     ${t("• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.")}<br>
+     ${t("• <b>🎮 Simulé</b> — matchs et cotes fictifs, résultats tirés selon leurs probabilités (part d'aléa). Sans attendre de vrais matchs : pour jouer entre amis, jusqu'à une partie entière en une soirée.")}<br>
+     ${t("• <b>📡 Données réelles</b> — vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur sur du concret. Une journée ne se résout qu'une fois <b>tous</b> les matchs réellement joués.")}<br>
      <div style="height:6px"></div>${t("Une ligue accueille jusqu'à <b>{p} joueurs</b>. L'organisateur peut clôturer les inscriptions, la préparation ou les pronos à tout moment.",{p:MAX_PLAYERS})}`)}
 
    <button class="btn ghost" onclick="closeRulesFull()">${t("← Retour")}</button>`;
