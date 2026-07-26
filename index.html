@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.49";
+const APP_VERSION = "v6.50";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -202,6 +202,48 @@ const validUser = u => /^[a-zA-Z0-9._-]{2,20}$/.test(u); // pseudo : 2–20, let
 // âges), quelques têtes « à lunettes » et « fun ». Le joueur peut aussi saisir SON emoji perso (setCustomAvatar).
 // ⚠️ Aucun emoji d'élément de jeu ici (pas de 🕵️ = carte, 👑 🏆 🎯 🤖 ⚽🎾🏀, ni bonus CARDS[*].e).
 const EMOJIS=["🧑🏻","🧑🏽","🧑🏾","🧑🏿","👨🏼","👨🏿","👩🏻","👩🏽","👩🏿","👱🏼‍♀️","🧑🏻‍🦲","👨🏿‍🦲","👩🏻‍🦰","🧔🏽","🧔🏿","👴🏼","👵🏻","🧕🏽","👳🏿","🤵🏼","👸🏾","💂🏻","👮🏾","🏋🏽‍♂️","🧑🏼‍🚀","🧑🏾‍🎤","🧑🏿‍🍳","🧑🏻‍💼","😎","🤓","🥸","🧐","🤠","🥳","🤡","🤪","🤩","😈","👽","👻","🧛","🦸🏿","🧙🏽","🎅"];
+
+/* ============ AVATARS (v6.50) ============
+   L'avatar d'un joueur est une CHAÎNE polymorphe stockée dans players.emoji / AUTH.avatar :
+   • "av:N"  → illustration SVG intégrée (générée ci-dessous), N = graine.
+   • "http…" → image uploadée (Supabase Storage), affichée en <img> rond.
+   • sinon   → ancien emoji (repli pour les comptes existants) ou 🙂 par défaut.
+   Tout l'affichage passe par avatarHTML() → on ne casse aucun des ~70 points de rendu. */
+const AV_COUNT=30;
+function _avp(a,n){ return a[((n%a.length)+a.length)%a.length]; }
+function avatarSvg(seed,px){ px=px||30; var n=(seed|0);
+  var skin=["#F7D3B0","#E8B88E","#C68A5E","#9C6B3F","#6B4423"];
+  var hair=["#2B2A28","#4A2C12","#8A5A2B","#D8B25A","#B8B8B8","#EDEDED","#7A3EA6","#C0392B"];
+  var bg  =["#BFE3FF","#FFD5C2","#CDEFC8","#FFE6A0","#E4D6FF","#FFCCE0","#BFEFE8","#FFE0B3"];
+  var shirt=["#3F72AF","#E27D60","#41924B","#C98A2B","#7A5EA6","#4AA6A0","#C0506B","#555B6E"];
+  var s=_avp(skin,n), h=_avp(hair,(n>>2)+3), b=_avp(bg,n>>1), sh=_avp(shirt,(n>>3)+1);
+  var style=n%4, glasses=(n%3===0), beard=(n%5===0)&&n%2===0;
+  var hairSvg = style===0 ? '<path d="M27 44 q23 -28 46 0 q-3 -18 -23 -18 q-20 0 -23 18 z" fill="'+h+'"/>'
+    : style===1 ? '<path d="M27 44 q23 -28 46 0 q-3 -18 -23 -18 q-20 0 -23 18 z" fill="'+h+'"/><rect x="25" y="40" width="8" height="30" rx="4" fill="'+h+'"/><rect x="67" y="40" width="8" height="30" rx="4" fill="'+h+'"/>'
+    : style===2 ? '<path d="M30 42 q20 -16 40 0" fill="none" stroke="'+h+'" stroke-width="4" stroke-linecap="round"/>'
+    : '<g fill="'+h+'"><circle cx="34" cy="30" r="9"/><circle cx="50" cy="25" r="10"/><circle cx="66" cy="30" r="9"/><circle cx="42" cy="26" r="8"/><circle cx="58" cy="26" r="8"/></g>';
+  var beardSvg = beard ? '<path d="M31 50 q19 24 38 0 q-1 18 -19 18 q-18 0 -19 -18 z" fill="'+h+'"/>' : '';
+  var glassesSvg = glasses ? '<g fill="none" stroke="#2b2b2b" stroke-width="2.4"><circle cx="41" cy="46" r="7"/><circle cx="59" cy="46" r="7"/><path d="M48 46 h4"/></g>' : '';
+  var eyes = glasses ? '' : '<circle cx="41" cy="46" r="2.6" fill="#2b2b2b"/><circle cx="59" cy="46" r="2.6" fill="#2b2b2b"/>';
+  return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'" style="border-radius:50%;display:inline-block;vertical-align:middle;flex:0 0 auto" aria-hidden="true">'
+    +'<rect width="100" height="100" rx="14" fill="'+b+'"/>'
+    +'<path d="M22 100 q0 -24 28 -24 q28 0 28 24 z" fill="'+sh+'"/>'
+    +'<circle cx="50" cy="46" r="22" fill="'+s+'"/>'
+    +beardSvg+hairSvg+eyes+glassesSvg
+    +'<path d="M44 56 q6 6 12 0" fill="none" stroke="#7a4a34" stroke-width="2.4" stroke-linecap="round"/>'
+    +'</svg>';
+}
+// Rendu universel d'un avatar (image / SVG intégré / emoji hérité). px = taille en pixels.
+function avatarHTML(val,px){ px=px||26; val=(val==null?"":(""+val)).trim();
+  if(/^https?:\/\//.test(val)) return '<img src="'+esc(val)+'" alt="" style="width:'+px+'px;height:'+px+'px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle;flex:0 0 auto">';
+  if(val.indexOf("av:")===0) return avatarSvg(parseInt(val.slice(3),10)||0, px);
+  var e=val||"🙂"; var fs=Math.round(px*0.62);
+  return '<span class="sport" style="width:'+px+'px;height:'+px+'px;font-size:'+fs+'px">'+e+'</span>';
+}
+// "avatar + nom" en ligne (remplace les esc((p.emoji||'')+' '+p.name)). Renvoie du HTML sûr.
+function avaName(p,px){ p=p||{}; return avatarHTML(p.emoji!=null?p.emoji:p.avatar, px||20)+' '+esc(p.name||'?'); }
+// Avatar par défaut d'un nouveau joueur : une illustration intégrée (graine tournante), plus d'emoji imposé.
+function defaultAvatar(i){ return "av:"+(((i|0)%AV_COUNT)+AV_COUNT)%AV_COUNT; }
 // Les effectifs doivent permettre un tirage SANS répétition : POOL_FOOT matchs de foot consomment
 // 2×POOL_FOOT équipes distinctes (18 pour 9 matchs). Avec les 10 clubs d'origine, faire passer le
 // foot de ~4 à 9 matchs (v4.66) rendait les doublons MATHÉMATIQUEMENT inévitables — d'où « 3 fois
@@ -765,7 +807,11 @@ const EN={
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : 7XK2P":"e.g. 7XK2P",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
   "Pseudo affiché":"Display name", "Modifier":"Edit", "Pseudo mis à jour ✓":"Display name updated ✓",
-  "✨ Ou colle ton propre emoji":"✨ Or paste your own emoji", "Utiliser":"Use", "Colle un emoji d'abord.":"Paste an emoji first.",
+  "✨ Ou colle ton propre emoji":"✨ Or paste your own emoji", "✨ Ou colle un emoji":"✨ Or paste an emoji", "Utiliser":"Use", "Colle un emoji d'abord.":"Paste an emoji first.",
+  "📷 Ou charge ta propre image":"📷 Or upload your own picture", "Choisir une image":"Choose an image",
+  "Choisis un fichier image.":"Pick an image file.", "Image trop lourde (8 Mo max).":"Image too large (8 MB max).",
+  "Traitement…":"Processing…", "Envoi…":"Uploading…", "Échec de l'envoi":"Upload failed",
+  "Stockage non configuré (bucket « avatars »).":"Storage not set up (\"avatars\" bucket).",
   "Nouveau pseudo (2 caractères min.) — c'est le nom affiché partout :":"New display name (2 characters min.) — this is the name shown everywhere:",
   "C'est le nom vu dans toutes tes ligues. Ton identifiant de connexion, lui, ne change pas.":"This is the name shown in all your leagues. Your login identifier doesn't change.",
   "Paramètres":"Settings", "⚙️ Paramètres du compte":"⚙️ Account settings",
@@ -1859,7 +1905,7 @@ function showPlayerCards(pid){ const p=pById(pid); if(!p) return;
   if(!hand.length && !used.length) body=`<div class="mini muted">${t("Aucun bonus.")}</div>`;
   else body=`<div class="mini muted" style="margin-bottom:6px">${t("Restants en couleur · barré = déjà utilisé. Touche un bonus pour sa description.")}</div>
     <div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div>`;
-  infoModal(p.emoji||"🃏", p.name||"?", body); }
+  infoModal(avatarHTML(p.emoji,42), p.name||"?", body); }
 function showDuelPtsInfo(pid){
   const p=pById(pid)||{}; const d=duels.find(x=>x.home_id===pid||x.away_id===pid);
   const bareme=`<div class="mini muted" style="text-align:left">${isScoring2()
@@ -1873,7 +1919,7 @@ function showDuelPtsInfo(pid){
     const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); const iAmHome=d.home_id===pid; const mult=lastDayMult(loadedDay); const pts=(iAmHome?r.h:r.a)*mult; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
     const issue = fg(iAmHome?hb:ab) ? t("déclaré forfait (pronos non faits)") : (r.win==null?t("fait match nul") : (((r.win==='h')===iAmHome)?t("gagné son duel"):t("perdu son duel")));
     const x2 = mult===2 ? ' <b class="gold">'+t("(dernière journée → ×2)")+'</b>' : '';
-    ctx=`<div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:esc((p.emoji||'')+' '+(p.name||'?')),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+fmt(netMe)+'€</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}${x2}</div>`;
+    ctx=`<div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:avaName(p),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+fmt(netMe)+'€</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}${x2}</div>`;
   }
   const lastNote=`<div class="mini gold" style="text-align:left;margin-top:8px">${t("🔥 <b>Dernière journée</b> : les points de duel comptent <b>double</b> — rien n'est jamais joué jusqu'au bout.")} <span class="muted">${t("(le +1 du ⭐ meilleur pronostiqueur de la journée n'est pas doublé)")}</span></div>`;
   infoModal("🥇",t("Points du duel"), bareme+lastNote+ctx);
@@ -1890,7 +1936,7 @@ function showBonusImpact(pid){
   // 🥷 / 🧬 : sans cette ligne, l'impact chiffré est incompréhensible — on ne sait ni ce qui a été
   // pris, ni ce qui a été copié, ni pourquoi la carte n'a rien donné.
   const nomC=id=>(CARDS[id]?CARDS[id].e+" "+t(CARDS[id].n):id);
-  const nomJ=p=>{ const x=pById(p); return x?esc((x.emoji?x.emoji+" ":"")+x.name):"?"; };
+  const nomJ=p=>{ const x=pById(p); return x?avatarHTML(x.emoji)+' '+esc(x.name||'?'):"?"; };
   let mot="";
   if(c.stole) mot=t("🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et la carte est passée dans ta main.",{a:nomJ(oppId),b:nomC(c.stole)});
   else if(c.id==="voleur") mot=t("🥷 Rien à prendre : ton adversaire n'a joué aucun bonus ce jour-là.");
@@ -2327,6 +2373,33 @@ function setCustomAvatar(){ const el=$("customAv"); let v=(el&&el.value||"").tri
   try{ if(typeof Intl!=="undefined" && Intl.Segmenter){ const seg=new Intl.Segmenter().segment(v); const first=seg[Symbol.iterator]().next(); if(first&&first.value) v=first.value.segment; } }catch(e){}
   v=v.slice(0,16); // garde-fou longueur (un emoji composite peut faire plusieurs unités UTF-16)
   setAvatar(v); }
+// Upload d'une image perso → Supabase Storage (bucket public "avatars"). On redimensionne l'image en
+// 256×256 côté client (canvas) pour rester léger, on remplace le fichier de CE compte (upsert), puis on
+// stocke l'URL publique comme avatar. Nécessite un bucket "avatars" public + policy d'upload (voir doc).
+async function uploadAvatar(input){ const file=input&&input.files&&input.files[0]; if(!file) return;
+  const msg=$("avUpMsg"); const say=m=>{ if(msg) msg.textContent=m; };
+  if(!/^image\//.test(file.type)){ say(t("Choisis un fichier image.")); return; }
+  if(file.size>8*1024*1024){ say(t("Image trop lourde (8 Mo max).")); return; }
+  try{
+    say(t("Traitement…"));
+    const dataUrl=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    const img=await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=dataUrl; });
+    const S=256, cv=document.createElement("canvas"); cv.width=S; cv.height=S; const ctx=cv.getContext("2d");
+    const m=Math.min(img.width,img.height), sx=(img.width-m)/2, sy=(img.height-m)/2;   // recadrage centré carré
+    ctx.drawImage(img,sx,sy,m,m,0,0,S,S);
+    const blob=await new Promise(res=>cv.toBlob(res,"image/jpeg",0.85));
+    say(t("Envoi…"));
+    const path=AUTH.id+".jpg";
+    const up=await db.storage.from("avatars").upload(path, blob, {upsert:true, contentType:"image/jpeg"});
+    if(up&&up.error) throw up.error;
+    const { data:pub }=db.storage.from("avatars").getPublicUrl(path);
+    let url=pub&&pub.publicUrl; if(!url) throw new Error("URL introuvable");
+    url += (url.indexOf("?")>=0?"&":"?")+"v="+Date.now();   // casse le cache après remplacement
+    say("");
+    await setAvatar(url);
+  }catch(e){ say((/bucket|not found|404/i.test(e.message||"")) ? t("Stockage non configuré (bucket « avatars »).") : (t("Échec de l'envoi")+" : "+(e.message||e))); }
+  finally{ if(input) input.value=""; }
+}
 // Changer son PSEUDO affiché (≠ identifiant de connexion, qui reste l'email dérivé du pseudo d'origine).
 // Met à jour la métadonnée du compte ET le nom recopié dans toutes ses ligues (players.name par user_id),
 // comme setAvatar le fait pour l'emoji. L'admin reste l'admin : le statut dépend de l'UID, pas du pseudo.
@@ -2346,7 +2419,7 @@ async function changeMyUsername(){ if(!AUTH) return;
 // 🏠 ACCUEIL — vraie page d'accueil (≠ page « Ligues », qui n'est que la liste). Bonjour + slogan +
 // principe de jeu, puis on navigue via les onglets du bas (Ligues, Stats, …).
 function viewHome(){
-  return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b style="font-size:19px">${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b><span style="font-size:26px;line-height:1">${AUTH.avatar||'🎮'}</span></div>${sloganHTML("haut",true)}</div>
+  return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b style="font-size:19px">${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b>${avatarHTML(AUTH.avatar,34)}</div>${sloganHTML("haut",true)}</div>
     ${howItWorksHTML()}
     <div class="box mini muted">🏆 ${t("Pour <b>créer</b> une ligue ou en <b>rejoindre</b> une avec un code, va sur l'onglet <b>Ligues</b>.")}</div>
     <button class="btn" onclick="backToLeagues()">🏆 ${t("Aller sur mes ligues")}</button>
@@ -2784,7 +2857,7 @@ async function createLeague(){
       st.votes={}; st.voteTs={}; st.bids={}; st.bidTs={}; if(both){ st.votesR={}; st.voteTsR={}; }
     }
     const lg=await q(db.from("leagues").insert({code,name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,gage:JSON.stringify(st)}).select().single());
-    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[0],is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||defaultAvatar(0),is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     newLg=null;
     if(solo){ await startLeagueCore(lg); openLeague(lg.id, pl.id, true); }  // SOLO : démarre direct (pas de lobby)
     else { openLeague(lg.id, pl.id, true); leagueCreatedModal(code); }
@@ -2830,7 +2903,7 @@ function ackPrep(){ localStorage.setItem("pl_preps_"+S.leagueId,"1"); render(); 
 function prepSuperlatives(s){
   const auction=s.auction||[]; const ps=(s.players||[]);
   if(ps.length<2 || !auction.length) return '';
-  const nm=pid=>{const p=ps.find(x=>x.pid===pid)||{}; return (p.emoji?p.emoji+' ':'')+esc(p.name||'?');};
+  const nm=pid=>{const p=ps.find(x=>x.pid===pid)||{}; return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
   const st={}; ps.forEach(p=>st[p.pid]={bids:0,total:0,won:0,maxBid:0,maxCard:null});
   auction.forEach(a=>{ (a.bids||[]).forEach(bd=>{ const x=st[bd.pid]; if(x&&bd.amt>0){ x.bids++; x.total+=bd.amt; if(bd.amt>x.maxBid){x.maxBid=bd.amt;x.maxCard=a.card;} } }); if(st[a.winner]) st[a.winner].won++; });
   const bidders=ps.filter(p=>st[p.pid].bids>0);
@@ -2930,14 +3003,14 @@ function enjeuTableHTML(r){
   // maintenir : la variante « blocs » n'était de fait jamais relue ni testée.
   const corps = `<div style="overflow-x:auto;margin-top:8px"><table>
         <tr><th>${rew?t("Si… finit dernier"):t("Si… gagne")}</th><th>${rew?t("Récompense qu'il offre au champion"):t("Gage infligé au dernier")}</th></tr>
-        ${hs.map(p=>`<tr><td class="mini">${p.emoji} ${esc(p.name)}</td><td class="mini">${lbl(gOf(p))}</td></tr>`).join("")}</table></div>`;
+        ${hs.map(p=>`<tr><td class="mini">${avaName(p)}</td><td class="mini">${lbl(gOf(p))}</td></tr>`).join("")}</table></div>`;
   return `<div class="box"><div class="mini muted">${rew?t("La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :"):t("Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :")}</div>
      ${corps}
      <div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${rew?t("🏆 <b>Motivation express :</b> le champion repart avec la récompense votée par le dernier — une excellente raison de viser la <b>première</b> place !"):t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`;
 }
 function prepSummaryBody(){
   const s=L.prep_summary||{}; const both=(s.enjeu==="both");
-  const pName=pid=>{const p=(s.players||[]).find(x=>x.pid===pid)||{};return (p.emoji?p.emoji+' ':'')+esc(p.name||'?');};
+  const pName=pid=>{const p=(s.players||[]).find(x=>x.pid===pid)||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
   // Règle du pôle opposé : même présentation « si X … → … » dans tous les modes. En mode "both" on
   // affiche les DEUX tableaux (gage puis récompense). (L'ancien histogramme des votes du mode
   // récompense reste retiré : la majorité ne décide plus, l'afficher laisserait croire le contraire.)
@@ -2951,7 +3024,7 @@ function prepSummaryBody(){
      : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`}
    <h2>${t("💰 Capital de départ")}</h2>
    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>${t("Joueur")}</th><th style="text-align:right">${t("Dépensé")}</th><th style="text-align:right">${t("Capital")}</th><th>${t("Bonus")}</th></tr>
-     ${(s.players||[]).map(p=>`<tr><td>${esc(p.emoji||'')} ${esc(p.name)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</td>
+     ${(s.players||[]).map(p=>`<tr><td>${avaName(p)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</td>
         <td class="num muted">${p.spent}€</td><td class="num"><b>${eur(p.capital)}€</b></td>
         <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>
    ${prepSuperlatives(s)}`;
@@ -2981,7 +3054,7 @@ function viewLobby(){
       <div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">${t("📋 Copier le code")}</button></div></div>
     ${howItWorksHTML()}
     <h2>${t("Joueurs inscrits · {a}/{b}",{a:n,b:MAX_PLAYERS})}</h2>
-    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>
+    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>
         ${p.is_organizer?'<span class="tag">'+t("organisateur")+'</span>':''}${p.id===S.myId?'<span class="chip b">'+t("toi")+'</span>':''}</div>
         ${(org&&p.id!==S.myId&&!p.is_organizer)?`<button class="btn ghost sm" onclick="kickPlayer('${p.id}')">${t("Retirer")}</button>`:`<span class="chip g">${t("Prêt")}</span>`}</div>`).join("")}
     ${n<MAX_PLAYERS?`<div class="box row" style="border-style:dashed;opacity:.9"><div class="row" style="gap:9px"><span class="sport">⏳</span><div><b>${t("En attente d'autres joueurs")}</b><div class="mini muted">${t("Les inscriptions sont ouvertes : partage le code <b>{a}</b>. Rien n'est figé tant que tu n'as pas clôturé.",{a:esc(L.code)})}</div></div></div><span class="chip num">${(MAX_PLAYERS-n)===1?t("1 place max"):t("{a} places max",{a:MAX_PLAYERS-n})}</span></div>`:""}
@@ -3281,7 +3354,7 @@ function viewPrep(){
       <div class="mini muted">${t("Ton vote et tes enchères sont enregistrés.")}</div>
       <div class="box mini" style="margin-top:10px;text-align:center">${waitMsg}</div></div>
       <h2>${t("Joueurs")}</h2>
-      ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("⏳ pas encore")}</span></div>`).join("")}
+      ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("⏳ pas encore")}</span></div>`).join("")}
       <div style="height:8px"></div><button class="btn ghost" onclick="editPrep()">${t("✏️ Modifier ma préparation")}</button>
       ${(me()&&me().is_organizer&&!isSolo())?`<div style="height:6px"></div><button class="btn ghost sm" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}`; }
   // --- Étapes ---
@@ -3323,7 +3396,7 @@ function viewPrep(){
    <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Vote d'abord pour une récompense"):t("🎭 Vote d'abord pour un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>
    <div style="height:6px"></div>${prec}
    <h2>${t("👥 Joueurs de la ligue · {a}",{a:players.filter(p=>!p.is_ai).length})}</h2>
-   ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("en cours")}</span></div>`).join("")}`;
+   ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("en cours")}</span></div>`).join("")}`;
 }
 // === v6 (Lot A2) — Préparation présentée en ONGLETS (Infos / Joueurs / Gages / Enchères) ========
 // Réutilise toute la logique existante (voteSectionHTML, savePrep, setBid, editPrep, closeRegistration…).
@@ -3359,7 +3432,7 @@ function prepRosterHTML(lobby){ const org=me()&&me().is_organizer; const st=prep
     const kick = canKick?`<button class="btn ghost sm" title="${t("Retirer")}" onclick="kickPlayer('${p.id}')" style="flex:0 0 auto;padding:4px 8px">✕</button>`:'';
     // Nom + tags à gauche (s'enroulent dans leur zone, le nom ne se coupe pas) · statut + ✕ à droite.
     return `<div class="box row" style="align-items:center;gap:8px">
-      <div class="row" style="gap:9px;flex:1 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-start"><span class="sport">${p.emoji}</span><b style="white-space:nowrap">${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>
+      <div class="row" style="gap:9px;flex:1 1 auto;min-width:0;flex-wrap:wrap;justify-content:flex-start">${avatarHTML(p.emoji)}<b style="white-space:nowrap">${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>
       <span class="row" style="gap:6px;flex:0 0 auto">${status}${kick}</span></div>`;
   }).join(""); }
 function prepJoueursTab(){
@@ -3797,7 +3870,7 @@ function afterCloseDuelHTML(){
       const myTxt=mb?`${esc(lab(f,mb.sel))} · ${mb.stake}€${(mine.captain===i)?' 👑':''}`:'—';
       const opTxt=ob?(seeOpp?`${esc(lab(f,ob.sel))} · ${ob.stake}€${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—';
       return `<div class="box"><div class="row" style="margin-bottom:6px"><span style="font-weight:800;font-size:13px">${esc(f.home)} – ${esc(f.away)}</span>${liveTag(f)}</div>
-        <div style="${GH}"><div><div class="mini muted" style="text-align:center;margin-bottom:2px">👤 ${t("Toi")}</div>${cell(true,myTxt)}</div><div><div class="mini muted" style="text-align:center;margin-bottom:2px">${(opp.emoji?opp.emoji+' ':'')}${esc(opp.name||'?')}</div>${cell(false,opTxt)}</div></div></div>`; }).join("");
+        <div style="${GH}"><div><div class="mini muted" style="text-align:center;margin-bottom:2px">👤 ${t("Toi")}</div>${cell(true,myTxt)}</div><div><div class="mini muted" style="text-align:center;margin-bottom:2px">${avaName(opp)}</div>${cell(false,opTxt)}</div></div></div>`; }).join("");
   return noteBox+cards;
 }
 function viewWait(dayLbl){
@@ -3813,7 +3886,7 @@ function viewWait(dayLbl){
   const lab=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
   const dt=dayTimes();
   const head = `<div class="box"><div class="row"><b>${dayLbl}</b>${md?`<span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span>`:''}</div>
-     ${md?`<div class="mini muted" style="margin-top:4px">${t("Duel vs {a}",{a:'<b>'+((opp.emoji?opp.emoji+' ':'')+esc(opp.name||'?'))+'</b>'})}</div>`:''}
+     ${md?`<div class="mini muted" style="margin-top:4px">${t("Duel vs {a}",{a:'<b>'+avaName(opp)+'</b>'})}</div>`:''}
      <div class="mini muted" style="margin-top:4px">${editable?t("Pronos enregistrés ✅"):t("Paris clôturés 🔒")}</div>${betLineHTML()}</div>`;
   const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}<div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
 
@@ -3832,7 +3905,7 @@ function viewWait(dayLbl){
     const pronosRoster = humansN>1 ? `<h2 class="mini" style="margin:10px 2px 4px">${t("Pronos des joueurs · {a}/{b}",{a:doneN,b:humansN})}${dt.ok?' · '+t("clôture dans {a}",{a:fmtLeft(dt.bet)}):''}</h2>`
       + players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id); const dd=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const noFx=!!(dd&&!dd.fixtures);
         const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`:(noFx?`<span class="chip">${t("attend ses matchs")}</span>`:`<span class="chip">${t("⏳ pas encore")}</span>`);
-        return `<div class="box row"><div class="row" style="gap:9px"><span class="sport">${p.emoji}</span><b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${chip}</div>`; }).join('') : '';
+        return `<div class="box row"><div class="row" style="gap:9px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${chip}</div>`; }).join('') : '';
     return `${head}${missingFx}
       ${picks}${bonusLine}
       <div style="height:6px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier (jusqu'à la clôture)")}</button>
@@ -3845,7 +3918,7 @@ function viewWait(dayLbl){
   // l'option « Voir l'adversaire » ; révélée avec (les 🃏 bonus restent cachés jusqu'aux résultats).
   // En-tête « PARIS CLOS · EN ATTENTE DES RÉSULTATS » + duel (façon maquette écran ⑥).
   const headClose = `<div class="box"><div style="font-size:10px;letter-spacing:.4px;color:var(--accent);text-transform:uppercase;font-weight:700">${t("Paris clos · en attente des résultats")}</div>
-     <div style="font-size:16px;font-weight:800;margin-top:3px">👁️ ${t("Toi")} ${t("vs")} ${(opp.emoji?opp.emoji+' ':'')}${esc(opp.name||'?')}</div></div>`;
+     <div style="font-size:16px;font-weight:800;margin-top:3px">👁️ ${t("Toi")} ${t("vs")} ${avaName(opp)}</div></div>`;
   const tooLate = (!mine) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b><div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div></div>` : '';
   const goRes = `<button class="btn ghost sm" onclick="${resultsTabOnclick()}">${t("📋 Suivre sur l'onglet Résultats")}</button>`;
   return `${headClose}${missingFx}${tooLate}${afterCloseDuelHTML()}${goRes}`;
@@ -4111,7 +4184,7 @@ async function resolveDay(){
     const willBeDone=(D+1)>=fresh.num_days;
     const broke = willBeDone ? [] : ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
     if(broke.length){ broke.forEach(p=>{ upd[p.id].capital += RECAP_AMOUNT; upd[p.id].points -= 1; });
-      recapNote={day:D+1, amount:RECAP_AMOUNT, penalty:1, names:broke.map(p=>(p.emoji?p.emoji+' ':'')+p.name)}; }
+      recapNote={day:D+1, amount:RECAP_AMOUNT, penalty:1, names:broke.map(p=>p.name)}; }
     for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
     try{ await q(db.from("leagues").update({recap_note:recapNote}).eq("id",L.id)); }catch(e){} // message recapitalisation (défensif si colonne absente)
     const next=D+1; const done=next>=fresh.num_days;
@@ -4195,7 +4268,7 @@ function recapBody(D){
   const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Pari du Capitaine : gain et perte doublés">👑 Capitaine (${esc(who)})</span> `; if(cardOnMatch(bt.card,i)) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.id}')">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
   const fxRecap = (myD && myD.fixtures) || [];
   const impactTxt=(who,bt,vb)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card; const C=CARDS[c.id]; const im=c.impact||{}; let detail='';
-    if(c.stolenBy){ const th=pById(c.stolenBy); detail=t("🥷 Ce bonus a été <b>pris</b> par {a} : il ne s'est pas appliqué.",{a:th?esc((th.emoji?th.emoji+' ':'')+th.name):'?'}); }
+    if(c.stolenBy){ const th=pById(c.stolenBy); detail=t("🥷 Ce bonus a été <b>pris</b> par {a} : il ne s'est pas appliqué.",{a:th?avaName(th):'?'}); }
     else if(c.stole){ detail=t("🥷 Bonus pris à l'adversaire : sa carte n'a pas joué et t'est revenue en main."); }
     else if(c.id==="cadeau"){
       if(c.flip && fxRecap[c.flip.match]){ const f=fxRecap[c.flip.match]; const won=(c.flip.to===f.res);
@@ -4239,7 +4312,7 @@ function recapBody(D){
     const hB=bets.find(b=>b.player_id===homeId), aB=bets.find(b=>b.player_id===awayId);
     const hNet=netMap[homeId]||0, aNet=netMap[awayId]||0;
     const rr=duelPts(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)), isScoring2());
-    const nameCell=(p,side)=>`<span class="mini muted">${side}</span> <b>${esc((p.emoji||'')+' '+(p.name||'?'))}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}`;
+    const nameCell=(p,side)=>`<span class="mini muted">${side}</span> <b>${avaName(p)}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}`;
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
       return `<div class="mini blue clik" onclick="showBonusImpact('${bt.player_id}')" style="margin-top:4px" title="${t("Toucher pour le détail : gain avec la carte vs sans la carte")}">🃏 ${C.e} ${esc(t(C.n))}${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</div>`; };
@@ -4248,18 +4321,18 @@ function recapBody(D){
       return `<div class="clik" style="border-top:2px solid color-mix(in srgb,var(--ink) 22%,transparent);${imp?'border-left:3px solid var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent);border-radius:0 10px 10px 0;padding:10px 8px 10px 9px;':'padding:10px 2px;'}" onclick="toggleRecapMatch(${i})">
         <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(selLabel(f,f.res))} ${open?'▲':'▼'}</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
-          <div class="mini" style="background:var(--card2);border:1px solid ${hP.id===S.myId?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:5px 7px"><div class="mini muted" style="margin-bottom:2px">${esc((hP.emoji||'')+' '+(hP.name||'?'))}${hP.id===S.myId?' '+t("(toi)"):''}</div>${line(hB,f,i,aB&&aB.card)}</div>
-          <div class="mini" style="background:var(--card2);border:1px solid ${aP.id===S.myId?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:5px 7px"><div class="mini muted" style="margin-bottom:2px">${esc((aP.emoji||'')+' '+(aP.name||'?'))}${aP.id===S.myId?' '+t("(toi)"):''}</div>${line(aB,f,i,hB&&hB.card)}</div>
+          <div class="mini" style="background:var(--card2);border:1px solid ${hP.id===S.myId?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:5px 7px"><div class="mini muted" style="margin-bottom:2px">${avaName(hP)}${hP.id===S.myId?' '+t("(toi)"):''}</div>${line(hB,f,i,aB&&aB.card)}</div>
+          <div class="mini" style="background:var(--card2);border:1px solid ${aP.id===S.myId?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:5px 7px"><div class="mini muted" style="margin-bottom:2px">${avaName(aP)}${aP.id===S.myId?' '+t("(toi)"):''}</div>${line(aB,f,i,hB&&hB.card)}</div>
         </div>
         ${open?`<div style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">
           <div class="mini muted">Cotes : ${esc(f.home)} ${cote(f.oh)}${f.draw?` · Nul ${cote(f.od)}`:''} · ${esc(f.away)} ${cote(f.oa)}</div>
-          <div class="mini" style="margin-top:5px"><b>${esc((hP.emoji||'')+' '+(hP.name||'?'))}</b> ${explain(hB,f,i,aB&&aB.card)}</div>
-          <div class="mini" style="margin-top:3px"><b>${esc((aP.emoji||'')+' '+(aP.name||'?'))}</b> ${explain(aB,f,i,hB&&hB.card)}</div></div>`:''}
+          <div class="mini" style="margin-top:5px"><b>${avaName(hP)}</b> ${explain(hB,f,i,aB&&aB.card)}</div>
+          <div class="mini" style="margin-top:3px"><b>${avaName(aP)}</b> ${explain(aB,f,i,hB&&hB.card)}</div></div>`:''}
       </div>`; }).join("");
     detail=`<div class="box" style="padding:12px 14px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-        <div><div class="mini muted">${t("🏠 domicile")}</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((hP.emoji||'')+' '+(hP.name||'?'))}${hP.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div></div>
-        <div style="text-align:right"><div class="mini muted">${t("extérieur ✈️")}</div><div style="font-size:17px;font-weight:800;line-height:1.2">${esc((aP.emoji||'')+' '+(aP.name||'?'))}${aP.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div></div>
+        <div><div class="mini muted">${t("🏠 domicile")}</div><div style="font-size:17px;font-weight:800;line-height:1.2">${avaName(hP)}${hP.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div></div>
+        <div style="text-align:right"><div class="mini muted">${t("extérieur ✈️")}</div><div style="font-size:17px;font-weight:800;line-height:1.2">${avaName(aP)}${aP.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}</div></div>
       </div>
       <div class="mini muted" style="margin-top:6px">${t("👉 Touche un match pour le calcul détaillé.")}</div>
       ${(forgot(homeId)!==forgot(awayId))?`<div class="box mini" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10);margin-top:6px"><b class="gold">🏆 ${t("Duel gagné d'office")}</b> — ${t("{a} n'a pas validé ses pronos : il perd le duel <b>quel que soit le gain en €</b>.",{a:esc((forgot(homeId)?hP:aP).name||'?')})}</div>`:''}
@@ -4280,15 +4353,15 @@ function recapBody(D){
       </div>
       ${(()=>{ const dbN=Math.max(hNet,aNet), dbP=(hNet>=aNet?hP:aP); const sP=starId?(pById(starId)||{}):{}; const sN=starId?(netMap[starId]||0):0;
         return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;line-height:1.85">
-        🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="${dbN>=0?'green':'red'}">${fmt(dbN)}€</b> — ${esc((dbP.emoji||'')+' '+(dbP.name||'?'))}${starId?`<br>
-        <span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${esc((sP.emoji||'')+' '+(sP.name||'?'))} <span class="muted">${t("→ +1 pt bonus")}</span>`:''}</div>`; })()}
+        🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="${dbN>=0?'green':'red'}">${fmt(dbN)}€</b> — ${avaName(dbP)}${starId?`<br>
+        <span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="${sN>=0?'green':'red'}">${fmt(sN)}€</b> — ${avaName(sP)} <span class="muted">${t("→ +1 pt bonus")}</span>`:''}</div>`; })()}
     </div>`;
   }
   // ✨ Faits marquants de la journée (dont bonus qui se sont retournés contre leur joueur) — demandé par Hervé.
   const faits=[];
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
-    const wp=pById(b.player_id)||{}; const whoNm=(wp.emoji?wp.emoji+' ':'')+(b.player_id===S.myId?t("toi"):(wp.name||'?'));
-    const dd=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const oid=dd?(dd.home_id===b.player_id?dd.away_id:dd.home_id):null; const op=oid!=null?(pById(oid)||{}):{}; const oppNm=(op.emoji?op.emoji+' ':'')+(op.name||'?');
+    const wp=pById(b.player_id)||{}; const whoNm=avatarHTML(wp.emoji)+' '+(b.player_id===S.myId?t("toi"):esc(wp.name||'?'));
+    const dd=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const oid=dd?(dd.home_id===b.player_id?dd.away_id:dd.home_id):null; const op=oid!=null?(pById(oid)||{}):{}; const oppNm=avatarHTML(op.emoji)+' '+esc(op.name||'?');
     if(C.oppT && (im.opp||0)>=1) faits.push(`😅 <b>${esc(whoNm)}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"green\">+{b}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.opp),c:esc(oppNm)})}`);
     else if((im.self||0)>=5) faits.push(`🎯 <b>${esc(whoNm)}</b> ${t("a réussi {a} : <b class=\"green\">+{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.self)})}`);
     else if(c.stole) faits.push(`🥷 <b>${esc(whoNm)}</b> ${t("a volé le bonus de {c}.",{c:esc(oppNm)})}`);
@@ -4296,8 +4369,8 @@ function recapBody(D){
   const faitsBox = faits.length ? `<h2>${t("✨ Faits marquants")}</h2><div class="box"><div class="mini" style="line-height:1.8">${faits.map(x=>'• '+x).join('<br>')}</div></div>` : '';
   return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
       <div class="row">
-      <div>${oppId!=null?`<div class="mini muted">${t("DUEL vs {a}",{a:pById(oppId).emoji+' '+esc(oppName)})}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:22px">${won?t("Gagné"):(tie?t("Match nul"):t("Perdu"))} (${fpDuelPts} pt${fpDuelPts>1?'s':''})</div>`:''}</div>
-      <div style="text-align:right"><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:esc((fpP.emoji||'')+' '+fpName)})}</div><div class="big num ${myNet>=0?'green':'red'}" style="font-size:22px">${fmt(myNet)} €</div></div></div></div>
+      <div>${oppId!=null?`<div class="mini muted">${t("DUEL vs {a}",{a:avatarHTML(pById(oppId).emoji)+' '+esc(oppName)})}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:22px">${won?t("Gagné"):(tie?t("Match nul"):t("Perdu"))} (${fpDuelPts} pt${fpDuelPts>1?'s':''})</div>`:''}</div>
+      <div style="text-align:right"><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:avatarHTML(fpP.emoji)+' '+esc(fpName)})}</div><div class="big num ${myNet>=0?'green':'red'}" style="font-size:22px">${fmt(myNet)} €</div></div></div></div>
     ${forgot(fp)?`<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Pari non validé à temps")}</b><div class="mini" style="margin-top:4px">${t("Aucun pari pris en compte ce jour-là → <b>{a} pt{s}</b> au classement et <b>−{b} %</b> {c}capital.",{a:forgotPtsOf(),s:Math.abs(forgotPtsOf())>1?'s':'',b:Math.round(forgotPenOf()*100),c:isMe?t("de ton "):t("du ")})}</div></div>`:''}
     ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">${t("← Revenir à mes résultats")}</button>`:''}
     ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">${t("💸 Recapitalisation solidaire")}</b><div class="mini" style="margin-top:4px">${t("<b>{a}</b> n'avai{e}t plus assez pour miser → <b>+{b} €</b> pour rester dans la course, en échange de <b>−1 pt</b> de championnat. 🤝",{a:esc((L.recap_note.names||[]).join(', ')),e:(L.recap_note.names||[]).length>1?'en':'',b:L.recap_note.amount})}</div></div>`:''}
@@ -4305,7 +4378,7 @@ function recapBody(D){
     <h2>${t("Résultats de la journée")}</h2>
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.")}</div>
     <div class="box" style="padding:4px 12px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th>${t("Carte")}</th></tr>
-      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}${forgot(p.id)?' <span class="tag red" title="'+t("Pari non validé à temps : {b} pt au classement et −{a} % du capital",{b:forgotPtsShown(),a:pct(forgotPenShown())})+'">⏰ '+forgotPtsShown()+'</span>':''}</td>
+      ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${avaName(p)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}${forgot(p.id)?' <span class="tag red" title="'+t("Pari non validé à temps : {b} pt au classement et −{a} % du capital",{b:forgotPtsShown(),a:pct(forgotPenShown())})+'">⏰ '+forgotPtsShown()+'</span>':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
         <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
         ${starOn?`<td class="num">${isStar?'+1':'–'}</td>`:''}
@@ -4340,7 +4413,7 @@ function showGainDetail(pid){
     const adj=net-sumG;
     if(Math.abs(adj)>=1) rows+=`<div class="mini" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("🃏 Bonus & ajustements")}${c&&CARDS[c.id]?' ('+CARDS[c.id].e+' '+esc(t(CARDS[c.id].n))+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
   } else rows=`<div class="mini muted">${t("Pas de détail disponible pour ce joueur.")}</div>`;
-  infoModal("🧮", t("Détail — {a}",{a:(p.emoji||'')+' '+(p.name||'?')}), `<div style="text-align:left">${rows}<div class="mini" style="margin-top:8px;border-top:2px solid var(--border);padding-top:6px"><b>${t("Total net :")} <span class="${net>=0?'green':'red'}">${fmt(net)}€</span></b></div></div>`);
+  infoModal("🧮", t("Détail — {a}",{a:(p.name||'?')}), `<div style="text-align:left">${rows}<div class="mini" style="margin-top:8px;border-top:2px solid var(--border);padding-top:6px"><b>${t("Total net :")} <span class="${net>=0?'green':'red'}">${fmt(net)}€</span></b></div></div>`);
   } finally { if(_r){ bets=_sb; duels=_sd; } }
 }
 function setRecapFocus(pid){ recapFocus=pid||null; recapOpen=-1; render(); }
@@ -4391,7 +4464,7 @@ function waitingResultsBody(d){
   const myDuelId=(myDuel()||{}).id;
   const affiche = dz=>{ const fx=dz.fixtures||[]; if(!fx.length) return ''; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{}; const mine=(dz.id===myDuelId);
     return `<div style="margin-top:8px;border-top:1px solid var(--border);padding-top:6px">
-      <div class="mini" style="margin-bottom:3px"><b>${mine?'⚔️ ':''}${esc((hn.emoji||'')+' '+(hn.name||'?'))} ${t("vs")} ${esc((an.emoji||'')+' '+(an.name||'?'))}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
+      <div class="mini" style="margin-bottom:3px"><b>${mine?'⚔️ ':''}${avaName(hn)} ${t("vs")} ${avaName(an)}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
       ${fx.map(f=>{ const rp=resPart(f); /* résultat live si dispo, sinon l'heure du coup d'envoi (Hervé v6.42) */
         return `<div class="row mini" style="padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span class="muted">${esc(f.home)} – ${esc(f.away)}</span><span style="flex:0 0 auto">${rp||koLabel(f)||'<span class="mini muted">⏳</span>'}</span></div>`; }).join('')}
     </div>`; };
@@ -4581,7 +4654,7 @@ function viewLeagueStats(){
   const opps=Object.keys(s.h2h);
   if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face dans cette ligue")}</b>`;
     opps.forEach(oid=>{ const p=pById(oid); const r=s.h2h[oid];
-      h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${esc(((p&&p.emoji)||'')+' '+((p&&p.name)||'?'))}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
+      h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${avaName(p)}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
     h+=`</div>`; }
   if(L&&L.status==="done") h+=`<button class="btn" onclick="shareSeason()">✨ 📤 ${t("Partager ma saison")}</button>`;   // partage : seulement une fois la ligue terminée
   return h; }
@@ -4654,7 +4727,7 @@ function viewStats(){
   const opps=Object.keys(d.h2h);
   if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face")}</b>`;
     opps.map(k=>d.h2h[k]).sort((x,y)=>(y.w+y.l+y.d)-(x.w+x.l+x.d)).forEach(r=>{
-      h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${esc((r.emoji||'')+' '+(r.name||'?'))}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
+      h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${avaName(r)}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
     h+=`</div>`; }
   h+=`<div class="box"><b class="mini">📋 ${t("Par ligue")}</b>
     <div class="mini muted" style="margin:4px 0 6px">${t("Touche une ligue pour son détail.")}</div>
@@ -4750,7 +4823,7 @@ function viewStandings(){
     ${nav}
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
       ${ord.map((p,i)=>{const bp=p.star||0; const dp=p.points-bp;
-        return `<tr><td>${i+1}</td><td><span class="clik" onclick="showPlayerCards('${p.id}')">${p.emoji} ${esc(p.name)}</span>${moveHTML(p.id,i)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td>
+        return `<tr><td>${i+1}</td><td><span class="clik" onclick="showPlayerCards('${p.id}')">${avaName(p)}</span>${moveHTML(p.id,i)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td>
         <td class="num">${dp}</td>${starOn?`<td class="num">${bp||'–'}</td>`:''}<td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>
     <div class="mini muted" style="margin:-2px 2px 8px">${t("👉 Touche un joueur pour voir ses bonus (restants et utilisés).")}</div>
     <div class="mini muted" style="margin:-4px 2px 10px"><span class="green">▲</span> ${t("monte")} · = ${t("stable")} · <span class="red">▼</span> ${t("descend")} — <span class="clik" onclick="showStandingsInfo()">ⓘ ${t("comprendre le classement")}</span></div>
@@ -4771,7 +4844,7 @@ function enjeuFinalHTML(){
     const item=esc(eo.perso?eo.title:t(eo.title));
     return `<div class="box" style="border:2px solid ${rew?'var(--green)':'var(--red)'};background:${rew?'rgba(61,90,43,.12)':'rgba(90,43,43,.12)'};text-align:center;margin-top:10px">
       <div style="font-size:15px;font-weight:800;letter-spacing:.5px" class="${rew?'gold':'red'}">${rew?t("🏆 LA RÉCOMPENSE"):t("🎭 LE GAGE")}</div>
-      <div style="font-size:22px;font-weight:800;margin-top:4px">${eo.target.emoji} ${esc(eo.target.name)}</div>
+      <div style="font-size:22px;font-weight:800;margin-top:4px">${avaName(eo.target)}</div>
       <div class="mini muted" style="margin-top:2px">${rew?t("remporte :"):t("doit réaliser :")}</div>
       <div style="font-size:17px;font-weight:700;margin-top:3px">${item}</div>
       ${eo.chooser?`<div class="mini muted" style="margin-top:5px">${rew?t("récompense choisie par {a} 🥄",{a:esc(eo.chooser.name)}):t("gage choisi par {a} 🏆",{a:esc(eo.chooser.name)})}</div>`:''}
@@ -4782,7 +4855,7 @@ function enjeuFinalHTML(){
 function enjeuProjeteHTML(){
   if(isSolo()) return ''; // solo : aucun enjeu à projeter
   const ligne=kind=>{ const eo=enjeuOutcome(kind); if(!eo.ok||!eo.title) return '';
-    return `<div class="box mini"><span class="muted">${eo.rew?t("🏆 Récompense (au premier) :"):t("🎭 Gage projeté (au dernier) :")}</span> <b>${esc(eo.perso?eo.title:t(eo.title))}</b> → ${eo.target.emoji} ${esc(eo.target.name)}${eo.chooser?' <span class="mini muted">'+t("(choix de {a})",{a:esc(eo.chooser.name)})+'</span>':''}</div>`; };
+    return `<div class="box mini"><span class="muted">${eo.rew?t("🏆 Récompense (au premier) :"):t("🎭 Gage projeté (au dernier) :")}</span> <b>${esc(eo.perso?eo.title:t(eo.title))}</b> → ${avaName(eo.target)}${eo.chooser?' <span class="mini muted">'+t("(choix de {a})",{a:esc(eo.chooser.name)})+'</span>':''}</div>`; };
   return isBoth() ? (ligne("gage")+ligne("reward")) : ligne();
 }
 
@@ -4843,7 +4916,7 @@ function lineChart(series, labels, title, lo, hi){
   const lines=series.map((s,si)=>{ const c=cols[si%cols.length]; const dpath=s.pts.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
     const dots=s.pts.map((v,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2" fill="${c}"/>`).join('');
     return `<path d="${dpath}" fill="none" stroke="${c}" stroke-width="2"/>${dots}`; }).join('');
-  const legend=series.map((s,si)=>`<span class="mini" style="margin-right:10px;white-space:nowrap"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${cols[si%cols.length]};vertical-align:middle"></span> ${esc(s.p.emoji)} ${esc(s.p.name)}</span>`).join('');
+  const legend=series.map((s,si)=>`<span class="mini" style="margin-right:10px;white-space:nowrap"><span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${cols[si%cols.length]};vertical-align:middle"></span> ${avatarHTML(s.p.emoji,14)} ${esc(s.p.name)}</span>`).join('');
   return `<div class="box"><div class="mini muted" style="margin-bottom:6px">${title}</div>
      <div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:320px;height:auto">${grid}${lines}${xlab}</svg></div>
      <div style="margin-top:6px;line-height:1.9">${legend}</div></div>`;
@@ -4853,7 +4926,7 @@ async function loadEndStats(){
     const bz=await q(db.from("bets").select("day,player_id,net,card,picks").eq("league_id",L.id));
     const dz=await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",L.id));
     const N=L.num_days||0; const pmap={}; players.forEach(p=>pmap[p.id]=p);
-    const nm=pid=>{const p=pmap[pid]||{};return (p.emoji?p.emoji+' ':'')+esc(p.name||'?');};
+    const nm=pid=>{const p=pmap[pid]||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
     const betAt={}; bz.forEach(b=>{ betAt[b.day+'|'+b.player_id]=b; });
     const duelByDay={}; dz.forEach(d=>{ (duelByDay[d.day]=duelByDay[d.day]||[]).push(d); });
     let bigDay=null, worstDay=null;
@@ -4909,22 +4982,22 @@ function viewEnd(){
     : `<div class="box mini muted" style="text-align:center">${t("Ni champion ni dernier cette fois — rien perdu, rien gagné. À la prochaine ! 😎")}</div>`
     ) : '';
   return `<div style="text-align:center;margin:10px 0"><div style="font-size:46px">🏆</div>
-     <div style="font-size:24px;font-weight:800" class="gold">${champ.emoji} ${esc(champ.name)}${t(", Champion !")}</div>
+     <div style="font-size:24px;font-weight:800" class="gold">${avaName(champ,28)}${t(", Champion !")}</div>
      <div class="mini muted">${champ.points} pts · ${eur(champ.capital)} €</div>
      ${showLast?`<div style="margin-top:14px;font-size:32px">🥄</div>
-       <div style="font-size:19px;font-weight:800" class="red">${last.emoji} ${esc(last.name)}${t(", Dernier")}</div>
+       <div style="font-size:19px;font-weight:800" class="red">${avaName(last,22)}${t(", Dernier")}</div>
        <div class="mini muted">${last.points} pts · ${eur(last.capital)} €</div>`:''}</div>
    ${myMsg}
    ${enjeuFinalHTML()}
    <h2>${t("Classement final")}</h2>
    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
-     ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${p.emoji} ${esc(p.name)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`).join("")}</table></div>
+     ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${avaName(p)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`).join("")}</table></div>
    ${endRecapHTML()}
    ${ptsChart()}
    ${capChart()}
    <div class="box"><div class="mini muted">${t("🃏 Bonus de chaque joueur")} <span class="mini">${t("(barré = utilisé · survole pour la description)")}</span></div>
      ${ord.map(p=>{ const owned=[...(p.cards_used||[]),...(p.hand||[])];
-       return `<div style="margin-top:8px"><div class="mini"><b>${p.emoji} ${esc(p.name)}</b>${owned.length?'':' <span class="muted">'+t("— aucun bonus")+'</span>'}</div>
+       return `<div style="margin-top:8px"><div class="mini"><b>${avaName(p)}</b>${owned.length?'':' <span class="muted">'+t("— aucun bonus")+'</span>'}</div>
          ${owned.length?`<div class="cards" style="margin-top:4px">
            ${(p.cards_used||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}
            ${(p.hand||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
@@ -5075,7 +5148,7 @@ function viewPalmares(){
      <div class="mini muted" style="margin:2px 0 0">${t("Si tu avais misé <b>1 € sur chacun</b> de tes pronos (cotes comprises) : ce que tu aurais gagné ou perdu <b>en moyenne par pari</b>. <b class=\"green\">Positif</b> = tu bats les cotes ; <b class=\"red\">négatif</b> = tu as souvent raison mais sur des favoris qui rapportent trop peu pour couvrir les erreurs.")}</div>`;
   const sec=(title,arr,val,detail,tag,empty)=>`<h2>${title}</h2>${arr.length?arr.map((r,i)=>{const k=tag+i;const op=palmOpen===k;const v=val(r);
      return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="togglePalm('${k}')">
-       <div class="row"><div class="row" style="gap:8px"><b style="min-width:22px">${medal(i)}</b><span>${r.emoji||''} ${esc(r.name)}</span></div><b class="${v.cls}">${v.txt} ${op?'▲':'▼'}</b></div>
+       <div class="row"><div class="row" style="gap:8px"><b style="min-width:22px">${medal(i)}</b><span>${avaName(r)}</span></div><b class="${v.cls}">${v.txt} ${op?'▲':'▼'}</b></div>
        ${op?`<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">${detail(r)}</div>`:''}</div>`;}).join(""):`<div class="box mini muted">${empty||t("Pas encore de données.")}</div>`}`;
   // Palmarès GÉNÉRAL : classement public, sans mise en avant du joueur courant (ses stats perso sont
   // dans « Mes stats », option premium — demandé par Hervé). Ni bordure « toi », ni « Ta position ».
@@ -5083,7 +5156,7 @@ function viewPalmares(){
     if(!arr.length) return `<h2>${title}</h2><div class="box mini muted">${empty||t("Pas encore de données.")}</div>`;
     const rows=arr.map((r,i)=>{ const k=tag+i; const op=palmOpen===k; const v=val(r);
       return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="togglePalm('${k}')">
-        <div class="row"><div class="row" style="gap:8px"><b style="min-width:22px">${medal(i)}</b><span>${r.emoji||''} ${esc(r.name)}</span></div><b class="${v.cls}">${v.txt} ${op?'▲':'▼'}</b></div>
+        <div class="row"><div class="row" style="gap:8px"><b style="min-width:22px">${medal(i)}</b><span>${avaName(r)}</span></div><b class="${v.cls}">${v.txt} ${op?'▲':'▼'}</b></div>
         ${op?`<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">${detail(r)}</div>`:''}</div>`;}).join("");
     return `<h2>${title}</h2>${rows}`; };
   return `${back}
@@ -5404,12 +5477,14 @@ function initSwipeNav(){ const root=$("root"); if(!root||root._swipe) return; ro
 function viewProfil(){
   const admin = AUTH && AUTH.id===ADMIN_ID;
   return `<div class="box"><h2 style="margin-top:0">👤 ${t("Profil")}</h2>
-      <div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${esc(AUTH.name)}</b><span style="font-size:34px;line-height:1">${AUTH.avatar||'🎮'}</span></div>
+      <div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${esc(AUTH.name)}</b>${avatarHTML(AUTH.avatar,44)}</div>
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><b class="mini">✏️ ${t("Pseudo affiché")}</b><button class="btn ghost sm" onclick="changeMyUsername()">${t("Modifier")}</button></div>
       <div class="mini muted" style="margin-top:3px">${t("C'est le nom vu dans toutes tes ligues. Ton identifiant de connexion, lui, ne change pas.")}</div>
       <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${EMOJIS.map(em=>`<button class="btn ghost sm" onclick="setAvatar('${em}')" style="font-size:20px;padding:6px 9px;line-height:1${em===AUTH.avatar?';border-color:var(--accent)':''}">${em}</button>`).join("")}</div>
-      <div class="mini muted" style="margin-top:14px">${t("✨ Ou colle ton propre emoji")}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${Array.from({length:AV_COUNT},(_,i)=>{const v="av:"+i, on=AUTH.avatar===v; return `<button class="btn ghost sm" onclick="setAvatar('${v}')" style="padding:4px;line-height:0;border-radius:50%${on?';border-color:var(--accent)':''}">${avatarSvg(i,36)}</button>`;}).join("")}</div>
+      <div class="mini muted" style="margin-top:14px">${t("📷 Ou charge ta propre image")}</div>
+      <div class="row" style="gap:8px;margin-top:6px;align-items:center"><label class="btn ghost sm" style="cursor:pointer">${t("Choisir une image")}<input type="file" accept="image/*" onchange="uploadAvatar(this)" style="display:none"></label><span id="avUpMsg" class="mini muted"></span></div>
+      <div class="mini muted" style="margin-top:14px">${t("✨ Ou colle un emoji")}</div>
       <div class="row" style="gap:8px;margin-top:6px"><input id="customAv" maxlength="16" placeholder="🙂" style="width:70px;text-align:center;font-size:20px"><button class="btn ghost sm" onclick="setCustomAvatar()">${t("Utiliser")}</button></div></div>
     <div class="box"><div class="row" style="justify-content:space-between;align-items:center"><b class="mini">🌐 ${t("Langue")}</b><button class="btn ghost sm" onclick="toggleLang()">${lang==='en'?'🇬🇧 English':'🇫🇷 Français'}</button></div>
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><b class="mini">🌗 ${t("Thème")}</b><button class="btn ghost sm" onclick="toggleTheme()">${t("Clair / sombre")}</button></div></div>
@@ -5423,7 +5498,7 @@ function closeSettings(){ navBack(); }
 function viewSettings(){
   return `<button class="btn ghost sm" onclick="closeSettings()">${t("← Retour")}</button>
     <div class="box"><h2 style="margin-top:0">${t("⚙️ Paramètres du compte")}</h2>
-      <div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${esc(AUTH.name)}</b><span style="font-size:34px;line-height:1">${AUTH.avatar||'🎮'}</span></div>
+      <div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${esc(AUTH.name)}</b>${avatarHTML(AUTH.avatar,42)}</div>
       <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${EMOJIS.map(em=>`<button class="btn ghost sm" onclick="setAvatar('${em}')" style="font-size:20px;padding:6px 9px;line-height:1${em===AUTH.avatar?';border-color:var(--accent)':''}">${em}</button>`).join("")}</div>
     </div>
@@ -5478,7 +5553,7 @@ function tradeAckKey(){ return "pl_tradeack_"+S.leagueId; }
 function tradeAck(){ try{ return new Set(JSON.parse(localStorage.getItem(tradeAckKey())||"[]")); }catch(e){ return new Set(); } }
 function tradeAckAll(){ const s=tradeAck(); myResolvedOut.forEach(o=>s.add(o.id)); try{ localStorage.setItem(tradeAckKey(),JSON.stringify([...s])); }catch(e){} }
 function myResolvedUnseen(){ const s=tradeAck(); return myResolvedOut.filter(o=>!s.has(o.id)); }
-function notifyTrades(){ const nm=p=>((p&&p.emoji)||'')+' '+((p&&p.name)||'?');
+function notifyTrades(){ const nm=p=>((p&&p.name)||'?');
   myResolvedUnseen().forEach(o=>{ if(tradeToasted.has(o.id)) return; tradeToasted.add(o.id);
     const cn=CARDS[o.card_id]?t(CARDS[o.card_id].n):o.card_id; const other=pById(o.to_player); let body;
     if(o.status==="accepted") body = o.kind==="sell" ? t("{a} a accepté : {c} vendue (+{b} €).",{a:nm(other),b:Math.round(o.price),c:cn})
@@ -5502,7 +5577,7 @@ async function cardHasPendingTrade(cardId){ try{ const r=await q(db.from("trades
 
 function viewTrade(){
   const inOff=myPendingIn(), outOff=myPendingOut();
-  const nm=p=>p?esc((p.emoji||'')+' '+(p.name||'?')):'?';
+  const nm=p=>p?avaName(p):'?';
   const clbl=id=>CARDS[id]?`<span class="clik" onclick="showCardInfo('${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`:esc(id);
   const meP=me(); const cap=meP?(meP.capital||0):0;
   let h=`<div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge('rachat')}</h2>
@@ -5585,7 +5660,7 @@ function proposeBuy(sellerId, cardId){
   const maxP=Math.round((meP.capital||0)-TRADE_MIN_CAP);
   if(maxP<1){ toast(t("Ton capital est trop faible pour proposer un rachat.")); return; }
   tradeModal(C?C.e:'🤝', t("Racheter {c}",{c:esc(t(C?C.n:cardId))}),
-    `<div class="mini muted">${t("à {a}",{a:esc(((seller&&seller.emoji)||'')+' '+((seller&&seller.name)||'?'))})}</div>${C?`<div class="mini muted" style="margin:8px 0;text-align:left">${esc(t(C.d))}</div>`:''}`,
+    `<div class="mini muted">${t("à {a}",{a:avatarHTML(seller&&seller.emoji,18)+' '+esc((seller&&seller.name)||'?')})}</div>${C?`<div class="mini muted" style="margin:8px 0;text-align:left">${esc(t(C.d))}</div>`:''}`,
     `<div class="mini" style="margin-top:8px;text-align:left">${t("Prix proposé (€) — entre 1 et {a} :",{a:maxP})}</div>${priceInput(maxP)}`,
     `submitBuy('${sellerId}','${cardId}',${maxP})`);
 }
@@ -5613,7 +5688,7 @@ function proposeSell(cardId){
   if(!opps.length){ toast(t("Aucun adversaire pour l'instant.")); return; }
   tradeModal(C?C.e:'💰', t("Vendre {c}",{c:esc(t(C?C.n:cardId))}),
     `${C?`<div class="mini muted" style="margin:8px 0;text-align:left">${esc(t(C.d))}</div>`:''}<div class="mini" style="text-align:left">${t("À qui ?")}</div>
-     <select id="sellTarget" style="width:100%;box-sizing:border-box;padding:10px;margin-top:6px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:inherit;font-size:16px">${opps.map(p=>`<option value="${p.id}">${esc((p.emoji||'')+' '+(p.name||'?'))} · 💰 ${eur(p.capital||0)} €</option>`).join("")}</select>`,
+     <select id="sellTarget" style="width:100%;box-sizing:border-box;padding:10px;margin-top:6px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:inherit;font-size:16px">${opps.map(p=>`<option value="${p.id}">${avaName(p)} · 💰 ${eur(p.capital||0)} €</option>`).join("")}</select>`,
     `<div class="mini" style="margin-top:10px;text-align:left">${t("Prix (€) :")}</div>${priceInput(0)}`,
     `submitSell('${cardId}')`);
 }
