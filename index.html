@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.54";
+const APP_VERSION = "v6.55";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -546,13 +546,18 @@ async function fetchRealPool(){
   }catch(e){} }
   // Resserrage : on ne garde que les matchs du créneau (winH). Repli sur la fenêtre large si trop peu de matchs.
   const tight=out.filter(e=>{ const tt=new Date(e.commence).getTime(); return !isNaN(tt) && tt<=tightMax; });
-  const src=(tight.length>=5)?tight:out;
+  // On PRIORISE le créneau serré (résultats groupés), mais on COMPLÈTE toujours jusqu'à la cible avec
+  // la fenêtre large (24h) : en fast, le créneau immédiat contient parfois peu de matchs et on tombait
+  // à ~5 propositions au lieu de ~9 (signalé par Hervé). On ne se limite plus au créneau serré.
+  const primary=(tight.length>=5)?tight:out;
   const sortBig=(a,b)=> (b.prio-a.prio) || String(a.commence).localeCompare(String(b.commence));
-  const soc=src.filter(e=>e.grp==="Soccer").sort(sortBig);
-  const oth=src.filter(e=>e.grp!=="Soccer").sort(sortBig);
+  const soc=primary.filter(e=>e.grp==="Soccer").sort(sortBig);
+  const oth=primary.filter(e=>e.grp!=="Soccer").sort(sortBig);
   const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/rugby/tennis)
   const pool=[...soc.slice(0,socTarget), ...oth.slice(0,N-socTarget)];
-  if(pool.length<N){ [...soc.slice(socTarget), ...oth.slice(N-socTarget)].sort(sortBig).forEach(e=>{ if(pool.length<N) pool.push(e); }); }
+  const fill=arr=>arr.sort(sortBig).forEach(e=>{ if(pool.length<N && pool.indexOf(e)<0) pool.push(e); });
+  fill([...soc.slice(socTarget), ...oth.slice(N-socTarget)]);   // reste du créneau serré
+  if(pool.length<N) fill(out.slice());                          // puis fenêtre large (24h) pour atteindre la cible
   return pool.sort(sortBig).slice(0,N);
 }
 let lastRealCheck=0, lastRealFill=0;
