@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.42";
+const APP_VERSION = "v6.43";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1081,6 +1081,23 @@ const EN={
   "Points du duel":"Duel points",
   "Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>• <b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> si négatif.<br>• <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> si négatif.<br>• <b>Match nul</b> : <b>1 pt</b> chacun.":"The duel winner is the one with the <b>best net result</b> (gains − stakes).<br>• <b>Winner</b>: <b>3 pts</b> if their net is positive, <b>1 pt</b> if negative.<br>• <b>Loser</b>: <b>1 pt</b> if their net is positive, <b>0 pt</b> if negative.<br>• <b>Draw</b>: <b>1 pt</b> each.",
   "fait match nul":"drew", "gagné son duel":"won their duel", "perdu son duel":"lost their duel",
+  "« Ça passe ou ça casse » en action":"“Make or Break” in action",
+  "Tu poses ce bonus sur <b>un seul pari</b>. Voici l'effet sur un pari <b>gagné</b> de 10 € à la cote 1.90 :":"You place this bonus on <b>a single bet</b>. Here's the effect on a <b>winning</b> €10 bet at odds of 1.90:",
+  "Sans bonus":"Without bonus",
+  "gain ×3":"gain ×3",
+  "si ce pari avait perdu":"if this bet had lost",
+  "au lieu de":"instead of",
+  "mise ×2":"stake ×2",
+  "💥 Ces <b>+18 €</b> de plus peuvent suffire à <b>renverser un duel serré</b> : tu passes de <b>perdant à vainqueur</b> du jour — et tu rafles les <b>points de championnat</b> qui vont avec. C'est toute la force d'un bonus.":"💥 That extra <b>+€18</b> can be enough to <b>swing a tight duel</b>: you go from <b>loser to winner</b> of the day — and grab the <b>championship points</b> that come with it. That's the power of a bonus.",
+  "(dernière journée → ×2)":"(last matchday → ×2)",
+  "Dernière journée":"Last matchday",
+  "Dernière journée — les points de duel comptent DOUBLE":"Last matchday — duel points count DOUBLE",
+  "Suspense jusqu'au bout":"Suspense to the very end",
+  "🔥 <b>Dernière journée</b> : les points de duel comptent <b>double</b> — rien n'est jamais joué jusqu'au bout.":"🔥 <b>Last matchday</b>: duel points count <b>double</b> — it's never over till it's over.",
+  "les points de <b>duel comptent double</b> ce jour-là. Un retard peut se combler d'un coup : <b>rien n'est jamais joué jusqu'au bout</b>.":"<b>duel points count double</b> that day. A gap can close in one go: <b>it's never over till it's over</b>.",
+  "Dernière journée : les points de <b>duel comptent double</b>. Un écart peut se combler d'un coup — rien n'est jamais joué jusqu'au tout dernier match.":"Last matchday: <b>duel points count double</b>. A gap can close in one go — it's never over until the very last match.",
+  "Dernière journée : les points de <b>duel comptent double</b> — un retard peut se combler sur le fil, rien n'est jamais joué jusqu'au bout.":"Last matchday: <b>duel points count double</b> — a gap can close at the wire, it's never over till it's over.",
+  "Sur la <b>dernière journée</b>, les points de <b>duel comptent double</b> : même en retard, on peut renverser la table sur le fil. <b>Rien n'est jamais joué</b> tant que le dernier match n'est pas tombé.":"On the <b>last matchday</b>, <b>duel points count double</b>: even when behind, you can flip everything at the wire. <b>It's never over</b> until the last match is in.",
   "positif":"positive", "négatif ou nul":"negative or zero",
   "<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.":"<b>Here:</b> {a} <b>{b}</b> with a net {c} ({d}) → <b>{e}</b>.",
   "L'<b>effet</b> = le gain <b>avec</b> la carte moins le gain qu'il y aurait eu <b>sans</b> la carte.":"The <b>effect</b> = the gain <b>with</b> the card minus the gain there would have been <b>without</b> it.",
@@ -1829,11 +1846,13 @@ function showDuelPtsInfo(pid){
     const H=Object.assign({net:(hb&&hb.net)||0},gainMise(hb&&hb.picks,d.fixtures));
     const A=Object.assign({net:(ab&&ab.net)||0},gainMise(ab&&ab.picks,d.fixtures));
     const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // pronos non validés à temps → forfait
-    const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); const iAmHome=d.home_id===pid; const pts=iAmHome?r.h:r.a; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
+    const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); const iAmHome=d.home_id===pid; const mult=lastDayMult(loadedDay); const pts=(iAmHome?r.h:r.a)*mult; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
     const issue = fg(iAmHome?hb:ab) ? t("déclaré forfait (pronos non faits)") : (r.win==null?t("fait match nul") : (((r.win==='h')===iAmHome)?t("gagné son duel"):t("perdu son duel")));
-    ctx=`<div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:esc((p.emoji||'')+' '+(p.name||'?')),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+fmt(netMe)+'€</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}</div>`;
+    const x2 = mult===2 ? ' <b class="gold">'+t("(dernière journée → ×2)")+'</b>' : '';
+    ctx=`<div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:esc((p.emoji||'')+' '+(p.name||'?')),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+fmt(netMe)+'€</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}${x2}</div>`;
   }
-  infoModal("🥇",t("Points du duel"), bareme+ctx);
+  const lastNote=`<div class="mini gold" style="text-align:left;margin-top:8px">${t("🔥 <b>Dernière journée</b> : les points de duel comptent <b>double</b> — rien n'est jamais joué jusqu'au bout.")}</div>`;
+  infoModal("🥇",t("Points du duel"), bareme+lastNote+ctx);
 }
 // Détail de l'« effet » d'une carte bonus : gain avec la carte vs sans la carte (impact enregistré à la résolution)
 function showBonusImpact(pid){
@@ -1954,6 +1973,13 @@ function winCount(bt,fx){ if(!bt||!bt.picks||!fx) return 0; const c=bt.card; let
 // v2 : RÉSULTAT (V=2, N=1, D=0) + 1 pt si net > 0.  ANCIEN : vainqueur 3 (net>0) ou 1 ; perdant
 // 1 (net>0) ou 0 ; nul 1/1.  ⚠️ « net > 0 » strictement : un net de 0 (p. ex. tous les matchs du
 // jour annulés) ne donne PAS le point de bonus.
+// v6.42 (Hervé) : sur la DERNIÈRE journée, les points de DUEL comptent DOUBLE — « rien n'est jamais joué,
+// tout peut basculer jusqu'au bout ». (Le ⭐ +1 meilleur pronostiqueur reste +1, ce qui garde la colonne
+// Duel/⭐ du classement exacte.) ⚠️ Ce multiplicateur DOIT être appliqué à l'identique dans resolveDay
+// (points écrits en base) ET computeStandHist (rejeu affiché), sinon le classement diverge des points réels.
+function lastDayMult(d){ return (L && L.num_days && d===(L.num_days-1)) ? 2 : 1; }
+// Bandeau « dernière journée » : rappelle que les points de duel comptent double AU MOMENT où ça compte.
+function lastDayBanner(d){ return lastDayMult(d)===2 ? `<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.12);text-align:center;padding:8px 10px"><b class="gold">🔥 ${t("Dernière journée — les points de duel comptent DOUBLE")}</b></div>` : ''; }
 function duelPts(h,a,v2){ const R=x=>Math.round((+x||0)*100)/100;
   if(v2){
     // v2 : le SEUL juge du duel est le NET. À net ÉGAL → MATCH NUL. On ne départage PAS par le gain
@@ -2372,6 +2398,12 @@ function viewTutorial(){
     return `${head(4)}
     <div class="box"><h2 style="margin-top:0">${t("🃏 Les bonus")}</h2><div class="mini muted">${t("Des cartes qui changent une journée. Ici on n'en montre que <b>3 pour faire simple</b> — une vraie ligue en propose bien plus, et l'organisateur peut même en créer des <b>personnalisées</b>. Touche une carte pour sa fiche.")}</div></div>
     ${TUTO_CARDS.map(id=>`<div onclick="showCardInfo('${id}')" class="clik">${ex(id)}</div>`).join("")}
+    <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><b class="gold">🔥 ${t("« Ça passe ou ça casse » en action")}</b>
+      <div class="mini muted" style="margin-top:4px">${t("Tu poses ce bonus sur <b>un seul pari</b>. Voici l'effet sur un pari <b>gagné</b> de 10 € à la cote 1.90 :")}</div>
+      <div class="row" style="margin-top:8px"><span class="mini">${t("Sans bonus")}</span><b class="green">+9 €</b></div>
+      <div class="row" style="margin-top:4px"><span class="mini">🔥 ${t("gain ×3")}</span><b class="green" style="font-size:18px">+27 € <span class="mini">(+18 € !)</span></b></div>
+      <div class="row" style="margin-top:4px"><span class="mini">⚠️ ${t("si ce pari avait perdu")}</span><b class="red">−20 € <span class="mini muted">(${t("au lieu de")} −10 €, ${t("mise ×2")})</span></b></div>
+      <div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${t("💥 Ces <b>+18 €</b> de plus peuvent suffire à <b>renverser un duel serré</b> : tu passes de <b>perdant à vainqueur</b> du jour — et tu rafles les <b>points de championnat</b> qui vont avec. C'est toute la force d'un bonus.")}</div></div>
     <button class="btn" onclick="tutoGo(5)">${t("Et comment les obtenir ? →")}</button>`; }
   // --- Étape 5 : les enchères (enveloppe + cas d'égalité de mise) ---
   if(tutoStep===5){ const tot=Object.values(tutoBids).reduce((a,b)=>a+(+b||0),0);
@@ -2408,6 +2440,8 @@ function viewTutorial(){
     <div style="text-align:center;margin:6px 0"><div style="font-size:42px">🏆</div><div style="font-size:20px;font-weight:800" class="gold">${t("Toi, Champion !")}</div></div>
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th></tr>
       ${stand.map((p,i)=>`<tr><td>${["🥇","🥈","🥉"][i]}</td><td>${p.e} ${esc(p.n)}${p.me?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num"><b>${p.pts}</b></td></tr>`).join("")}</table></div>
+    <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><b class="gold">🔥 ${t("Suspense jusqu'au bout")}</b>
+      <div class="mini" style="margin-top:4px">${t("Sur la <b>dernière journée</b>, les points de <b>duel comptent double</b> : même en retard, on peut renverser la table sur le fil. <b>Rien n'est jamais joué</b> tant que le dernier match n'est pas tombé.")}</div></div>
     <div class="box" style="border:2px solid var(--red);background:rgba(229,105,95,.12);text-align:center">
       <div class="red" style="font-size:13px;font-weight:800;letter-spacing:.4px">${t("🎭 LE GAGE")}</div>
       <div class="mini muted" style="margin-top:2px">${t("pour le dernier — 🐼 Marco")}</div>
@@ -3693,7 +3727,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
   // Bonus encore en main de l'adversaire (info publique) — affiché EN BAS, en petit cadre « info ».
   const oppHandInfo=(()=>{ if(!opp) return ''; const oc=((opp.hand)||[]).filter(id=>CARDS[id]&&!CARDS[id].retired);
     return `<div class="box" style="background:rgba(90,166,224,.06);border-color:var(--blue);padding:8px 10px"><div class="mini muted"><b>${t("ℹ️ Pour info")}</b> — ${oc.length?t("bonus encore en main de {a} (pas forcément joués aujourd'hui) :",{a:'<b>'+esc(opp.name)+'</b>'}):t("{a} n'a plus aucun bonus en main.",{a:esc(opp.name)})}</div>${oc.length?`<div class="cards" style="margin-top:5px">${oc.map(id=>`<div class="cardchip clik sm" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; })();
-  return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
+  return `${quickBar('')}${lastDayBanner(L.current_day)}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
     <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Capitaine ×2")} ⓘ</span></div>
     <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div></div>
@@ -4127,7 +4161,9 @@ async function resolveDay(){
     for(const d of dz){ const hp=PD[d.home_id], ap=PD[d.away_id]; if(!hp||!ap) continue;
       const H=Object.assign({net:dayNet[d.home_id]||0}, gainMise(hp.picks,hp.fx));
       const A=Object.assign({net:dayNet[d.away_id]||0}, gainMise(ap.picks,ap.fx));
-      const r=duelPtsF(H,A,forgot.has(d.home_id),forgot.has(d.away_id),isScoring2()); upd[d.home_id].points+=r.h; upd[d.away_id].points+=r.a;
+      const r=duelPtsF(H,A,forgot.has(d.home_id),forgot.has(d.away_id),isScoring2());
+      const lastMult=(D===((fresh.num_days||0)-1))?2:1;   // dernière journée : points de duel ×2 (cf. lastDayMult)
+      upd[d.home_id].points+=r.h*lastMult; upd[d.away_id].points+=r.a*lastMult;
       if(r.win==='h'){ upd[d.home_id].duel_wins+=1; upd[d.home_id].streak_w+=1; upd[d.home_id].streak_l=0; upd[d.away_id].streak_l+=1; upd[d.away_id].streak_w=0; }
       else if(r.win==='a'){ upd[d.away_id].duel_wins+=1; upd[d.away_id].streak_w+=1; upd[d.away_id].streak_l=0; upd[d.home_id].streak_l+=1; upd[d.home_id].streak_w=0; }
       else { upd[d.home_id].streak_w=0; upd[d.home_id].streak_l=0; upd[d.away_id].streak_w=0; upd[d.away_id].streak_l=0; } }
@@ -4176,10 +4212,11 @@ function recapBody(D){
   const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
   const forgot=pid=>{ const b=bets.find(x=>x.player_id===pid); return !!(b&&Array.isArray(b.picks)&&b.picks.length===0); };
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
+  const lastMult=lastDayMult(D);   // dernière journée : points de duel ×2 (cohérent avec resolveDay/computeStandHist)
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
     const H=Object.assign({net:netMap[d.home_id]||0}, gainMise(hb&&hb.picks, d.fixtures));
     const A=Object.assign({net:netMap[d.away_id]||0}, gainMise(ab&&ab.picks, d.fixtures));
-    const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id),isScoring2()); dpts[d.home_id]+=r.h; dpts[d.away_id]+=r.a; });
+    const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id),isScoring2()); dpts[d.home_id]+=r.h*lastMult; dpts[d.away_id]+=r.a*lastMult; });
     // (v4.13 — le malus « −1 pt si tous les paris faux » qui s'appliquait ici est supprimé, cf. resolveDay.)
   const starOn=starMech(players.length);   // ⭐ désactivée à 2 joueurs (points + affichage)
   const starId=starOn?dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }), isScoring2()):null;
@@ -4335,7 +4372,7 @@ function recapBody(D){
     else if(c.stole) faits.push(`🥷 <b>${esc(whoNm)}</b> ${t("a volé le bonus de {c}.",{c:esc(oppNm)})}`);
   });
   const faitsBox = faits.length ? `<h2>${t("✨ Faits marquants")}</h2><div class="box"><div class="mini" style="line-height:1.8">${faits.map(x=>'• '+x).join('<br>')}</div></div>` : '';
-  return `${quickBar('results')}${recapNav(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
+  return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
       <div class="row">
       <div>${oppId!=null?`<div class="mini muted">${t("DUEL vs {a}",{a:pById(oppId).emoji+' '+esc(oppName)})}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:22px">${won?t("Gagné"):(tie?t("Match nul"):t("Perdu"))} (${fpDuelPts} pt${fpDuelPts>1?'s':''})</div>`:''}</div>
       <div style="text-align:right"><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:esc((fpP.emoji||'')+' '+fpName)})}</div><div class="big num ${myNet>=0?'green':'red'}" style="font-size:22px">${fmt(myNet)} €</div></div></div></div>
@@ -4422,7 +4459,7 @@ function waitingResultsBody(d){
   const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
   const liveShow = closed && L.data_mode==="real" && hasOpt('direct');
   let h=`<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
-    <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — en attente des résultats."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}</div>`;
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — en attente des résultats."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}</div>${lastDayBanner(d)}`;
   // Résultat en direct (option premium, données réelles) à droite d'une ligne d'affiche.
   const resPart = f=>{ if(!liveShow||!f.evId) return '';
     const r=liveRes[f.evId];
@@ -4530,14 +4567,16 @@ function computeStandHist(){
       if(p.is_ai) return;                       // repli : une IA jouée automatiquement n'oublie pas
       if(!b||!Array.isArray(b.picks)||b.picks.length===0) forgot.add(p.id); });
     // points de duel + séries 🔥/❄️ + victoires
+    const lastMult=(d===((L.num_days||0)-1))?2:1;   // dernière journée : points de duel ×2 (miroir EXACT de resolveDay)
     dz.forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
       const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
       const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
       const r=duelPtsF(H,A,forgot.has(du.home_id),forgot.has(du.away_id),isScoring2());
-      // confrontations directes : points marqués par chacun DANS CE FACE-À-FACE
-      h2h[du.home_id+'|'+du.away_id]=(h2h[du.home_id+'|'+du.away_id]||0)+r.h;
-      h2h[du.away_id+'|'+du.home_id]=(h2h[du.away_id+'|'+du.home_id]||0)+r.a;
-      if(st[du.home_id]) st[du.home_id].points+=r.h; if(st[du.away_id]) st[du.away_id].points+=r.a;
+      const rh=r.h*lastMult, ra=r.a*lastMult;
+      // confrontations directes : points marqués par chacun DANS CE FACE-À-FACE (déjà doublés le dernier jour)
+      h2h[du.home_id+'|'+du.away_id]=(h2h[du.home_id+'|'+du.away_id]||0)+rh;
+      h2h[du.away_id+'|'+du.home_id]=(h2h[du.away_id+'|'+du.home_id]||0)+ra;
+      if(st[du.home_id]) st[du.home_id].points+=rh; if(st[du.away_id]) st[du.away_id].points+=ra;
       if(r.win==='h'){ if(st[du.home_id]){st[du.home_id].duel_wins++;st[du.home_id].streak_w++;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_l++;st[du.away_id].streak_w=0;} }
       else if(r.win==='a'){ if(st[du.away_id]){st[du.away_id].duel_wins++;st[du.away_id].streak_w++;st[du.away_id].streak_l=0;} if(st[du.home_id]){st[du.home_id].streak_l++;st[du.home_id].streak_w=0;} }
       else { if(st[du.home_id]){st[du.home_id].streak_w=0;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_w=0;st[du.away_id].streak_l=0;} } });
@@ -4748,6 +4787,7 @@ function showStandingsInfo(){
      ${starMech(players.length)?`<b>⭐</b> — ${t("+1 pt bonus au joueur qui réalise le <b>meilleur gain net de la ligue</b> sur une journée.")}<br>`:''}
      <b>${t("Pts")}</b> — ${t("ton total de points de championnat (Duel{a}).",{a:starMech(players.length)?" + ⭐":""})}<br>
      <b>${t("Cap.")}</b> — ${t("ton capital en euros (virtuels) : la cagnotte avec laquelle tu mises.")}<br>
+     <b class="gold">🔥 ${t("Dernière journée")}</b> — ${t("les points de <b>duel comptent double</b> ce jour-là. Un retard peut se combler d'un coup : <b>rien n'est jamais joué jusqu'au bout</b>.")}<br>
      <b>▲ = ▼</b> — ${t("À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.")}
    </div>`);
 }
@@ -5715,6 +5755,7 @@ function viewRules(){
        ? t("Points : <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif. Soit <b>3 pts</b> au mieux, <b>0</b> au pire.")
        : t("Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.")}
      <br>${t("Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.")} ${t("(À partir de <b>3 joueurs</b> : à deux, le plus gros net revient forcément au vainqueur du duel — le point serait redondant.)")}
+     <br><b class="gold">🔥 ${t("Dernière journée : les points de <b>duel comptent double</b>. Un écart peut se combler d'un coup — rien n'est jamais joué jusqu'au tout dernier match.")}</b>
      <br>${t("Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.")}</div></div>
    <div class="box"><b>${t("▲ Mouvement au classement")}</b>
      <div class="mini muted" style="margin-top:6px">${t("À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.")}</div></div>
@@ -5776,6 +5817,7 @@ function viewRulesFull(){
        ? t("Points = <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif.<br>Soit : victoire <b>3</b> ou <b>2</b> · nul <b>2</b> ou <b>1</b> · défaite <b>1</b> ou <b>0</b>. ⚠️ Un net de <b>0 €</b> (par exemple si tous les matchs du jour sont annulés) ne donne <b>pas</b> le point de bonus.")
        : t("<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.")}<br>
      ${t("<b>⭐ Meilleur pronostiqueur :</b> chaque journée, le joueur au plus gros net de <b>toute la ligue</b> gagne <b>+1 point</b> en plus.")}<br>
+     <b class="gold">🔥 ${t("Dernière journée : les points de <b>duel comptent double</b> — un retard peut se combler sur le fil, rien n'est jamais joué jusqu'au bout.")}</b><br>
      ${scoringShown()
        ? t("<b>Départage au classement final</b> (à points égaux) : <b>cagnotte</b>, puis le <b>résultat des confrontations directes</b> entre les joueurs concernés, puis plus gros gain, puis plus grosse cote.")
        : t("<b>Départage au classement final</b> (à points égaux) : capital, puis victoires en duel, puis plus gros gain, puis plus grosse cote.")}<br>
