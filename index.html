@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.69";
+const APP_VERSION = "v6.70";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1025,6 +1025,7 @@ const EN={
   "Gage":"Forfeit", "Récompense":"Reward", "Gage + récompense":"Forfeit + reward",
   "Gages & récompenses":"Forfeits & rewards", "Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).":"Voting opens at kickoff (once the organizer closes registration).",
   "Enchères":"Auction", "Enchères aux bonus":"Bonus auction", "Enchères bonus":"Bonus auction", "Aller aux pronos →":"Go to predictions →",
+  "Nombre de joueurs maximum atteint ({a}) — les inscriptions sont closes.":"Maximum number of players reached ({a}) — registration is closed.",
   "Les enchères s'ouvriront au démarrage. En attendant, touche un bonus pour le découvrir.":"The auction opens at kickoff. Meanwhile, tap a bonus to discover it.",
   "Invite tes amis avec le code <b>{a}</b>.":"Invite your friends with code <b>{a}</b>.",
   // Écran de création (v6.05)
@@ -2244,6 +2245,7 @@ async function refresh(){
     // 🎬 Coulisses (résumé d'ouverture : gage + enchères), et non direct sur les pronos (demandé par Hervé).
     if(L.status==="running" && (prevLeagueStatus==="prep"||prevLeagueStatus==="starting") && S.view==="game"){ S.view="coulisses"; }
     prevLeagueStatus=L.status;
+    if(L.status==="lobby") maybeAutoStartFull();   // ligue pleine → clôture auto + démarrage
     showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay); maybePrepModal(); maybeFormulaModal();
   }catch(e){ showErr("Connexion : "+e.message); }
 }
@@ -2949,7 +2951,7 @@ async function joinLeague(code){
     if(mine){ openLeague(lg.id, mine.id); busy=false; return; } // déjà membre → on rouvre (reconnexion)
     if(lg.status!=="lobby"){ showErr("Cette ligue a déjà démarré, tu ne peux plus la rejoindre."); busy=false; return; }
     const humans=ps.filter(p=>!p.is_ai);
-    if(humans.length>=lg.num_participants){ showErr("La ligue est complète."); busy=false; return; }
+    if(humans.length>=lg.num_participants){ showErr(t("Nombre de joueurs maximum atteint ({a}) — les inscriptions sont closes.",{a:lg.num_participants})); busy=false; return; }
     const ord=humans.length;
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[ord]||"🎮",join_order:ord,user_id:AUTH.id}).select().single());
     openLeague(lg.id, pl.id, true);
@@ -3332,7 +3334,12 @@ async function closeRegistration(){
     : (nH%2===1
       ? t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.")
       : t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (vote + enchères sur les bonus) commencera.")))) return;
-  busy=true;
+  await doCloseRegistration();
+}
+// Corps de la clôture (calendrier + prépa) SANS confirm — réutilisé par l'auto-démarrage à la ligue pleine.
+async function doCloseRegistration(){
+  if(busy)return; busy=true;
+  const soloNow=(players.filter(p=>!p.is_ai).length===1);
   try{
     let ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
     if(ps.length%2===1){ await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"🤖",is_ai:true,join_order:ps.length}));
@@ -3363,6 +3370,17 @@ async function closeRegistration(){
     await q(db.from("leagues").update({status:"prep",num_days:sched.length,current_day:0,gage:JSON.stringify(st)}).eq("id",L.id));
     setSeen(0); await refresh();
   }catch(e){ showErr("Clôture : "+e.message); } busy=false;
+}
+// Ligue PLEINE (nombre max de joueurs atteint) → clôture auto + démarrage, sans attendre l'organisateur.
+// Appelé à chaque refresh en lobby. `claim` atomique (lobby→starting) : un seul client lance, pas de doublon.
+async function maybeAutoStartFull(){
+  if(!L || L.status!=="lobby" || busy) return;
+  const nH=(players||[]).filter(p=>!p.is_ai).length;
+  if(nH < MAX_PLAYERS) return;   // pas encore plein
+  let claim=null; try{ claim=await q(db.from("leagues").update({status:"starting"}).eq("id",L.id).eq("status","lobby").select("*")); }catch(e){ return; }
+  if(!claim||!claim.length) return;   // un autre client a déjà lancé
+  L.status="starting";
+  await doCloseRegistration();   // crée le calendrier, passe en prépa
 }
 function aiPrep(nDays, mode, optCount, optCountR){ const ids=modeCards(mode||"complet").slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
   // Enchères des IA : elles VISENT plusieurs bonus et engagent une bonne part de leur budget, sinon
