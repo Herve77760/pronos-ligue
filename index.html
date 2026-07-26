@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.50";
+const APP_VERSION = "v6.51";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -211,26 +211,39 @@ const EMOJIS=["🧑🏻","🧑🏽","🧑🏾","🧑🏿","👨🏼","👨🏿",
    Tout l'affichage passe par avatarHTML() → on ne casse aucun des ~70 points de rendu. */
 const AV_COUNT=30;
 function _avp(a,n){ return a[((n%a.length)+a.length)%a.length]; }
-function avatarSvg(seed,px){ px=px||30; var n=(seed|0);
-  var skin=["#F7D3B0","#E8B88E","#C68A5E","#9C6B3F","#6B4423"];
-  var hair=["#2B2A28","#4A2C12","#8A5A2B","#D8B25A","#B8B8B8","#EDEDED","#7A3EA6","#C0392B"];
-  var bg  =["#BFE3FF","#FFD5C2","#CDEFC8","#FFE6A0","#E4D6FF","#FFCCE0","#BFEFE8","#FFE0B3"];
-  var shirt=["#3F72AF","#E27D60","#41924B","#C98A2B","#7A5EA6","#4AA6A0","#C0506B","#555B6E"];
-  var s=_avp(skin,n), h=_avp(hair,(n>>2)+3), b=_avp(bg,n>>1), sh=_avp(shirt,(n>>3)+1);
-  var style=n%4, glasses=(n%3===0), beard=(n%5===0)&&n%2===0;
-  var hairSvg = style===0 ? '<path d="M27 44 q23 -28 46 0 q-3 -18 -23 -18 q-20 0 -23 18 z" fill="'+h+'"/>'
-    : style===1 ? '<path d="M27 44 q23 -28 46 0 q-3 -18 -23 -18 q-20 0 -23 18 z" fill="'+h+'"/><rect x="25" y="40" width="8" height="30" rx="4" fill="'+h+'"/><rect x="67" y="40" width="8" height="30" rx="4" fill="'+h+'"/>'
-    : style===2 ? '<path d="M30 42 q20 -16 40 0" fill="none" stroke="'+h+'" stroke-width="4" stroke-linecap="round"/>'
-    : '<g fill="'+h+'"><circle cx="34" cy="30" r="9"/><circle cx="50" cy="25" r="10"/><circle cx="66" cy="30" r="9"/><circle cx="42" cy="26" r="8"/><circle cx="58" cy="26" r="8"/></g>';
-  var beardSvg = beard ? '<path d="M31 50 q19 24 38 0 q-1 18 -19 18 q-18 0 -19 -18 z" fill="'+h+'"/>' : '';
-  var glassesSvg = glasses ? '<g fill="none" stroke="#2b2b2b" stroke-width="2.4"><circle cx="41" cy="46" r="7"/><circle cx="59" cy="46" r="7"/><path d="M48 46 h4"/></g>' : '';
-  var eyes = glasses ? '' : '<circle cx="41" cy="46" r="2.6" fill="#2b2b2b"/><circle cx="59" cy="46" r="2.6" fill="#2b2b2b"/>';
+function avatarSvg(seed,px){ px=px||30; var n=Math.abs(seed|0); var AV=function(a,i){return a[((i%a.length)+a.length)%a.length];};
+  var skin=["#FBD9B8","#F3C49A","#E0AE7E","#D49A6A","#B97A4B","#94623A","#6E4326"];
+  var hairC=["#201B18","#3C2415","#6B3E1E","#A9662E","#D7A94B","#ECD79A","#9BA1A6","#ECECEC","#B23B3B","#6C3FA0"];
+  var bg  =["#DCEBFF","#FFE1D5","#DEF3D7","#FFF1C2","#ECDDFF","#FFDAE9","#D0F1EC","#FFE7C9","#E5E9F0","#D7EFF7"];
+  var shirt=["#3E6FB0","#E07A5F","#3F8F57","#CB8A2E","#7A5EA6","#3FA6A0","#C05070","#4B5563","#B5495B","#2E8BC0"];
+  var s=AV(skin,n%7), h=AV(hairC,((n/7)|0)%10), b=AV(bg,((n/3)|0)%10), sh=AV(shirt,((n/5)|0)%10);
+  var hs=((n/2)|0)%6, glasses=(n%3===0), beard=(((n/5)|0)%3===0)&&(n%2===0), mouth=((n/11)|0)%3;
+  var ears='<circle cx="29" cy="49" r="4.6" fill="'+s+'"/><circle cx="71" cy="49" r="4.6" fill="'+s+'"/>';
+  var neck='<path d="M43 62 h14 v8 h-14 z" fill="'+s+'"/>';
+  var shirtSvg='<path d="M22 100 q0 -23 28 -23 q28 0 28 23 z" fill="'+sh+'"/><path d="M42 77 q8 9 16 0 l0 6 q-8 7 -16 0 z" fill="#ffffff" opacity="0.18"/>';
+  var face='<ellipse cx="50" cy="48" rx="22" ry="24" fill="'+s+'"/>';
+  var hairMap=[
+    '<path d="M27 47 q-1 -27 23 -27 q24 0 23 27 q-5 -13 -23 -13 q-18 0 -23 13 z" fill="'+h+'"/>',
+    '<path d="M27 47 q-1 -27 23 -27 q24 0 23 27 q-4 -15 -21 -13 q-3 -7 -13 -3 q-9 4 -12 16 z" fill="'+h+'"/>',
+    '<path d="M28 46 q-1 -24 22 -24 q23 0 22 24 q-5 -10 -22 -10 q-17 0 -22 10 z" fill="'+h+'" opacity="0.92"/>',
+    '<g fill="'+h+'"><circle cx="33" cy="33" r="11"/><circle cx="50" cy="26" r="13"/><circle cx="67" cy="33" r="11"/><circle cx="41" cy="27" r="10"/><circle cx="59" cy="27" r="10"/></g>',
+    '<path d="M27 47 q-1 -27 23 -27 q24 0 23 27 q-5 -13 -23 -13 q-18 0 -23 13 z" fill="'+h+'"/><path d="M26 45 q-3 26 3 40 q6 -4 6 -20 z" fill="'+h+'"/><path d="M74 45 q3 26 -3 40 q-6 -4 -6 -20 z" fill="'+h+'"/>',
+    '<path d="M28 46 q-1 -24 22 -24 q23 0 22 24 q-5 -11 -22 -11 q-17 0 -22 11 z" fill="'+h+'"/><circle cx="50" cy="18" r="7.5" fill="'+h+'"/>'
+  ];
+  var hairSvg=hairMap[hs];
+  var brows='<g stroke="'+h+'" stroke-width="2.2" stroke-linecap="round" fill="none"><path d="M38 41 q4 -2.4 8 -0.4"/><path d="M54 40.6 q4 -2 8 0.4"/></g>';
+  var beardSvg = beard ? '<path d="M30 50 q0 20 20 22 q20 -2 20 -22 q-6 12 -20 12 q-14 0 -20 -12 z" fill="'+h+'"/>' : '';
+  var eyes = glasses
+    ? '<circle cx="41.5" cy="48" r="2.3" fill="#2b2b2b"/><circle cx="58.5" cy="48" r="2.3" fill="#2b2b2b"/>'
+    : '<circle cx="41.5" cy="48" r="2.7" fill="#2b2b2b"/><circle cx="58.5" cy="48" r="2.7" fill="#2b2b2b"/><circle cx="42.4" cy="47.1" r="0.8" fill="#fff"/><circle cx="59.4" cy="47.1" r="0.8" fill="#fff"/>';
+  var glassesSvg = glasses ? '<g fill="none" stroke="#33373b" stroke-width="2.2"><rect x="34.5" y="43.5" width="13" height="10" rx="4.5"/><rect x="52.5" y="43.5" width="13" height="10" rx="4.5"/><path d="M47.5 48 h5"/><path d="M34.5 46.5 l-5 -1.2"/><path d="M65.5 46.5 l5 -1.2"/></g>' : '';
+  var nose='<path d="M50 49 q2.4 4 -1 6.4" fill="none" stroke="rgba(80,45,25,.28)" stroke-width="1.6" stroke-linecap="round"/>';
+  var mouthSvg = mouth===0 ? '<path d="M43 58 q7 6.5 14 0" fill="none" stroke="#93412f" stroke-width="2.4" stroke-linecap="round"/>'
+    : mouth===1 ? '<path d="M44 59 q6 3.4 12 0" fill="none" stroke="#93412f" stroke-width="2.4" stroke-linecap="round"/>'
+    : '<path d="M44 58 q6 6.5 12 0 q-6 2.4 -12 0 z" fill="#b0533f"/>';
   return '<svg viewBox="0 0 100 100" width="'+px+'" height="'+px+'" style="border-radius:50%;display:inline-block;vertical-align:middle;flex:0 0 auto" aria-hidden="true">'
-    +'<rect width="100" height="100" rx="14" fill="'+b+'"/>'
-    +'<path d="M22 100 q0 -24 28 -24 q28 0 28 24 z" fill="'+sh+'"/>'
-    +'<circle cx="50" cy="46" r="22" fill="'+s+'"/>'
-    +beardSvg+hairSvg+eyes+glassesSvg
-    +'<path d="M44 56 q6 6 12 0" fill="none" stroke="#7a4a34" stroke-width="2.4" stroke-linecap="round"/>'
+    +'<rect width="100" height="100" rx="16" fill="'+b+'"/>'
+    +shirtSvg+neck+ears+face+hairSvg+beardSvg+brows+eyes+glassesSvg+nose+mouthSvg
     +'</svg>';
 }
 // Rendu universel d'un avatar (image / SVG intégré / emoji hérité). px = taille en pixels.
