@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.82";
+const APP_VERSION = "v6.83";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1548,6 +1548,19 @@ const EN={
   "Plus grosse cote gagnée":"Biggest odds won", "Carte fétiche":"Favourite card", "Face-à-face":"Head-to-head",
   "{w} V · {n} N · {l} D":"{w}W · {n}D · {l}L", "Partager ma saison":"Share my season",
   "Voici ce que tu vas partager :":"Here's what you'll share:", "Partager":"Share", "Copier":"Copy",
+  // Carte de saison partageable (v6.83). Les libellés en capitales de la carte restent courts :
+  // ils sont dessinés dans des cases à largeur fixe (police réduite automatiquement si besoin).
+  "MA SAISON":"MY SEASON", "CHAMPION":"CHAMPION", "{a}ᵉ sur {b}":"{a} of {b}",
+  "POINTS":"POINTS", "PRONOS RÉUSSIS":"PICKS WON", "RENDEMENT":"RETURN",
+  "{a} REMPORTE":"{a} WINS", "{a} DOIT":"{a} MUST",
+  "journée {a}":"matchday {a}", "Duels gagnés":"Duels won",
+  "{a} sur {b} journées":"{a} of {b} matchdays",
+  "Plus grosse cote décrochée":"Biggest odds landed",
+  "Saison complète":"Full season", "{a} journées jouées jusqu'au bout":"{a} matchdays played to the end",
+  "Préparation de ta carte…":"Building your card…",
+  "Image indisponible sur cet appareil — le texte ci-dessous reste partageable.":"Image unavailable on this device — the text below can still be shared.",
+  "Version texte":"Text version", "Copier le texte":"Copy the text",
+  "Enregistrer":"Save", "Image enregistrée 📥":"Image saved 📥",
   "Ma saison — {a}":"My season — {a}", "Classement : {a}ᵉ / {b}":"Rank: {a} / {b}",
   "Points : {a} · Capital : {b} €":"Points: {a} · Balance: €{b}",
   "Pronos gagnés : {a}/{b} ({c} %)":"Winning picks: {a}/{b} ({c}%)",
@@ -4939,7 +4952,191 @@ function showLeagueStat(lid){
     +line(t("Carte fétiche"), l.favCard&&CARDS[l.favCard]?CARDS[l.favCard].e+' '+esc(t(CARDS[l.favCard].n)):'–');
   infoModal("📋", l.name, body);
 }
-// Récap texte partageable (premium, offert en test) — WhatsApp/SMS via l'API de partage, sinon presse-papier, sinon zone de texte.
+/* ===== CARTE DE SAISON — image partageable (v6.83) ==========================================
+ * Le partage ne produisait qu'un bloc de TEXTE : illisible dans un fil WhatsApp et sans aucune
+ * identité. On dessine désormais une carte au format story (1080×1920) reprenant la charte de
+ * l'affiche (bleu nuit, or, ticket crème).
+ * POURQUOI CANVAS et pas HTML→image : l'app tient en UN fichier ; une bibliothèque de conversion
+ * (html2canvas & co) pèserait plus lourd que tout le reste et devrait être embarquée. Le canvas
+ * ne coûte rien et `toBlob` donne directement un fichier partageable par navigator.share.
+ * Maquette de référence et banc d'essai : `Partage-Saison.html` à la racine du projet.
+ * ⚠️ Le texte (`seasonRecapText`) est CONSERVÉ : il sert de repli si la génération d'image échoue.
+ */
+const CARD_W=1080, CARD_H=1920;
+const CD_GOLD="#E7B84B", CD_GOLD_HI="#FCE9A6", CD_GOLD_DIM="#b98f2f";
+const CD_CREAM="#F4EFE3", CD_MUTED="#8B93A8", CD_GREEN="#3fe0a0", CD_RED="#E5695F";
+const CD_DISP='900 {s}px "Arial Black","Helvetica Neue",Arial,sans-serif';
+const CD_SANS='{w} {s}px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif';
+const CD_SERIF='italic {w} {s}px Georgia,"Times New Roman",serif';
+const cdF=(tpl,s,w)=>tpl.replace("{s}",s).replace("{w}",w||700);
+function cdRR(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r);
+  c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+// Le dégradé doit couvrir la hauteur RÉELLE du texte, sinon l'or paraît plat.
+function cdGold(c,y,size){ const g=c.createLinearGradient(0,y-size*0.78,0,y+size*0.18);
+  g.addColorStop(0,CD_GOLD_HI); g.addColorStop(.46,CD_GOLD); g.addColorStop(1,CD_GOLD_DIM); return g; }
+// Un chiffre NÉGATIF ne doit jamais être doré : doré = trophée, et un rendement de −27 %
+// se lirait comme une performance.
+function cdVal(c,y,size,neg){ if(!neg) return cdGold(c,y,size);
+  const g=c.createLinearGradient(0,y-size*0.78,0,y+size*0.18);
+  g.addColorStop(0,"#f4a29b"); g.addColorStop(.5,CD_RED); g.addColorStop(1,"#b8453c"); return g; }
+// Réduit la police jusqu'à tenir : un pseudo ou un nom de ligue long ne doit jamais déborder.
+function cdFit(c,txt,tpl,maxS,minS,maxW,w){ for(let s=maxS;s>=minS;s-=2){ c.font=cdF(tpl,s,w);
+    if(c.measureText(txt).width<=maxW) return s; } c.font=cdF(tpl,minS,w); return minS; }
+function cdEll(c,txt,maxW){ if(c.measureText(txt).width<=maxW) return txt; let s=txt;
+  while(s.length>1 && c.measureText(s+"…").width>maxW) s=s.slice(0,-1); return s+"…"; }
+// Avatar dessiné : data URI, donc même origine → le canvas reste exploitable.
+// PHOTO importée : sans `crossOrigin` le navigateur l'affiche mais VERROUILLE le canvas, et
+// `toBlob` échoue plus tard, au moment du partage. Supabase renvoie bien `Access-Control-Allow-Origin`
+// (vérifié) → avec crossOrigin la carte reste générable. Au moindre souci on renvoie null et
+// l'appelant retombe sur l'avatar dessiné : le partage n'est jamais bloqué par une photo.
+function cdImg(src,cross){ return new Promise(res=>{ if(!src) return res(null);
+  const img=new Image(); if(cross) img.crossOrigin="anonymous";
+  img.onload=()=>res(img); img.onerror=()=>res(null);
+  setTimeout(()=>res(null),8000); img.src=src; }); }
+
+// Rassemble les VRAIES données de la ligue terminée.
+async function seasonCardData(){
+  const meP=me(); const s=myStats();
+  const ord=classe(players.filter(p=>!p.is_ai));
+  const rank=ord.findIndex(p=>p.id===S.myId)+1, total=ord.length;
+  const d={ league:(L&&L.name)||"The Maestro League", name:(meP&&meP.name)||"?",
+            rank, total, points:(meP?meP.points:0), capital:eur(meP?meP.capital:0),
+            hit:s.hit, roi:s.roi, days:s.days, duelWins:(meP&&meP.duel_wins)||0, bestOdd:s.bestOdd,
+            enjeux:[], highlight:null, avatar:null };
+  // Enjeu final : 0 (solo), 1, ou 2 entrées en mode « gage ET récompense ».
+  if(!isSolo()){
+    const kinds=isBoth()?["gage","reward"]:[null];
+    kinds.forEach(k=>{ const eo=enjeuOutcome(k);
+      if(eo&&eo.ok&&eo.title&&eo.target) d.enjeux.push({rew:eo.rew, who:eo.target.name||"?",
+        title:eo.perso?eo.title:t(eo.title)}); });
+  }
+  // Fait marquant, du plus flatteur au plus neutre. Le dernier maillon ne dépend que du nombre de
+  // journées : il est TOUJOURS disponible, même pour une saison ratée → jamais de trou dans la carte.
+  if(s.best && s.best.net>0) d.highlight={label:t("Meilleure journée"), value:fmt(s.best.net)+" € · "+t("journée {a}",{a:s.best.day+1})};
+  else if(s.favCard && CARDS[s.favCard]) d.highlight={label:t("Carte fétiche"), value:CARDS[s.favCard].e+" "+t(CARDS[s.favCard].n)};
+  else if(d.duelWins>0) d.highlight={label:t("Duels gagnés"), value:t("{a} sur {b} journées",{a:d.duelWins,b:d.days})};
+  else if(d.bestOdd>0)  d.highlight={label:t("Plus grosse cote décrochée"), value:cote(d.bestOdd)};
+  else if(d.days>0)     d.highlight={label:t("Saison complète"), value:t("{a} journées jouées jusqu'au bout",{a:d.days})};
+  // Avatar : image importée (crossOrigin), avatar dessiné, ou emoji hérité.
+  const av=(meP&&meP.emoji)||(AUTH&&AUTH.avatar)||"";
+  if(/^https?:/.test(av))      d.avatar=await cdImg(av,true);
+  else if(/^av:/.test(av))     d.avatar=await cdImg("data:image/svg+xml;charset=utf-8,"+encodeURIComponent(avatarSvg(+av.slice(3)||0,320)),false);
+  else if(av)                  d.emoji=av;
+  return d;
+}
+
+function drawSeasonCard(cv,d){
+  const c=cv.getContext("2d"), W=CARD_W, H=CARD_H;
+  c.clearRect(0,0,W,H);
+  const bg=c.createRadialGradient(W/2,-260,80,W/2,-260,1750);
+  bg.addColorStop(0,"#17233f"); bg.addColorStop(.55,"#0b1220"); bg.addColorStop(1,"#070c16");
+  c.fillStyle=bg; c.fillRect(0,0,W,H);
+  const spot=c.createRadialGradient(W/2,40,0,W/2,40,760);
+  spot.addColorStop(0,"rgba(231,184,75,.26)"); spot.addColorStop(.35,"rgba(231,184,75,.08)"); spot.addColorStop(1,"transparent");
+  c.fillStyle=spot; c.fillRect(0,0,W,900);
+  c.strokeStyle="rgba(139,147,168,.05)"; c.lineWidth=1;
+  for(let yy=150;yy<H-330;yy+=68){ c.beginPath(); c.moveTo(70,yy); c.lineTo(W-70,yy); c.stroke(); }
+  c.textAlign="center"; c.textBaseline="alphabetic";
+
+  let y=140;
+  c.font=cdF(CD_SANS,30,800); c.fillStyle=CD_GOLD; c.letterSpacing="7px";
+  c.fillText(t("MA SAISON"),W/2,y); c.letterSpacing="0px";
+  y+=76; cdFit(c,d.league,CD_SERIF,54,32,W-190,600);
+  c.fillStyle=CD_CREAM; c.fillText(cdEll(c,d.league,W-190),W/2,y);
+  y+=44; const rl=c.createLinearGradient(W/2-130,0,W/2+130,0);
+  rl.addColorStop(0,"transparent"); rl.addColorStop(.5,CD_GOLD); rl.addColorStop(1,"transparent");
+  c.fillStyle=rl; c.fillRect(W/2-130,y,260,5);
+
+  y+=192; const R=116;
+  const ring=c.createLinearGradient(W/2-R,y-R,W/2+R,y+R);
+  ring.addColorStop(0,CD_GOLD_HI); ring.addColorStop(.5,CD_GOLD); ring.addColorStop(1,CD_GOLD_DIM);
+  c.beginPath(); c.arc(W/2,y,R+11,0,7); c.fillStyle=ring; c.fill();
+  c.beginPath(); c.arc(W/2,y,R,0,7); c.fillStyle="#1b2740"; c.fill();
+  if(d.avatar){ c.save(); c.beginPath(); c.arc(W/2,y,R,0,7); c.clip();
+    c.drawImage(d.avatar,W/2-R,y-R,R*2,R*2); c.restore(); }
+  else { c.textBaseline="middle"; c.font=cdF(CD_DISP,d.emoji?130:104);
+    c.fillStyle=d.emoji?"#fff":CD_GOLD_HI;
+    c.fillText(d.emoji||(d.name||"?").slice(0,1).toUpperCase(),W/2,y+4); c.textBaseline="alphabetic"; }
+
+  y+=R+86; cdFit(c,d.name,CD_SANS,64,34,W-180,800);
+  c.fillStyle="#f2f4f9"; c.fillText(cdEll(c,d.name,W-180),W/2,y);
+
+  y+=40;
+  const champ=(d.rank===1), podium=(d.rank<=3&&d.total>3);
+  const label=champ?t("CHAMPION"):t("{a}ᵉ sur {b}",{a:d.rank,b:d.total});
+  const medal=champ?"🥇":(d.rank===2?"🥈":(d.rank===3?"🥉":""));
+  const bh=champ?120:100, bw=champ?520:430, bx=W/2-bw/2;
+  cdRR(c,bx,y,bw,bh,bh/2);
+  if(champ){ const g=c.createLinearGradient(bx,y,bx,y+bh);
+    g.addColorStop(0,CD_GOLD_HI); g.addColorStop(1,CD_GOLD); c.fillStyle=g;
+    c.shadowColor="rgba(231,184,75,.45)"; c.shadowBlur=60; c.fill(); c.shadowBlur=0;
+    c.font=cdF(CD_DISP,62); c.fillStyle="#12100a"; c.fillText(medal+" "+label,W/2,y+bh/2+22); }
+  else { c.fillStyle="rgba(255,255,255,.05)"; c.fill();
+    c.strokeStyle="rgba(231,184,75,.34)"; c.lineWidth=2; c.stroke();
+    c.font=cdF(CD_SANS,48,800); c.fillStyle=podium?CD_GOLD_HI:"#dfe4ef";
+    c.fillText((medal?medal+" ":"")+label,W/2,y+bh/2+17); }
+
+  y+=bh+58;
+  const cells=[[t("POINTS"),String(d.points),d.points<0],
+               [t("CAGNOTTE"),d.capital+" €",false],
+               [t("PRONOS RÉUSSIS"),d.hit+" %",false],
+               [t("RENDEMENT"),(d.roi>0?"+":"")+d.roi+" %",d.roi<0]];
+  const gp=20, cw=(W-160-gp)/2, ch=168;
+  cells.forEach((cell,i)=>{ const x=80+(i%2)*(cw+gp), yy=y+Math.floor(i/2)*(ch+gp);
+    cdRR(c,x,yy,cw,ch,26); c.fillStyle="rgba(255,255,255,.045)"; c.fill();
+    c.strokeStyle="rgba(231,184,75,.20)"; c.lineWidth=2; c.stroke();
+    c.font=cdF(CD_SANS,24,800); c.fillStyle=CD_MUTED; c.letterSpacing="2.5px";
+    c.fillText(cdEll(c,cell[0],cw-30),x+cw/2,yy+52); c.letterSpacing="0px";
+    const vs=cdFit(c,cell[1],CD_DISP,72,40,cw-46);
+    c.fillStyle=cdVal(c,yy+128,vs,cell[2]); c.fillText(cell[1],x+cw/2,yy+128); });
+
+  // ZONE BASSE — l'enjeu final d'abord : c'est la CHUTE de la saison, celle qui fait réagir le
+  // groupe. Le fait marquant est un plus, il cède la place en mode « gage ET récompense ».
+  const rows=[];
+  (d.enjeux||[]).forEach(e=>rows.push({ label:(e.rew?"🏆 "+t("{a} REMPORTE",{a:e.who.toUpperCase()})
+                                                 :"🎭 "+t("{a} DOIT",{a:e.who.toUpperCase()})),
+    value:e.title, tone:e.rew?"gold":"red" }));
+  if(rows.length<2 && d.highlight) rows.push({label:d.highlight.label, value:d.highlight.value, tone:"green"});
+  const shown=rows.slice(0,2);
+  const tH=250, tY=H-tH-72, tX=80, tW=W-160;
+  const zTop=y+ch*2+gp+34, zBot=tY-34, rh=104, rgap=16;
+  let ry=zTop+Math.max(0,(zBot-zTop-(shown.length*rh+(shown.length-1)*rgap))/2);
+  const TONE={ gold:["rgba(231,184,75,.14)","rgba(231,184,75,.38)",CD_GOLD,"#f6ecd4"],
+               red:["rgba(229,105,95,.13)","rgba(229,105,95,.36)","#f0a49d","#f8e6e4"],
+               green:["rgba(34,169,113,.13)","rgba(63,224,160,.30)",CD_GREEN,"#eaf6f1"] };
+  shown.forEach(r=>{ const T=TONE[r.tone];
+    cdRR(c,80,ry,W-160,rh,24); c.fillStyle=T[0]; c.fill();
+    c.strokeStyle=T[1]; c.lineWidth=2; c.stroke();
+    c.font=cdF(CD_SANS,23,800); c.fillStyle=T[2]; c.letterSpacing="2px";
+    c.fillText(cdEll(c,r.label.toUpperCase(),W-230),W/2,ry+42); c.letterSpacing="0px";
+    cdFit(c,r.value,CD_SANS,36,23,W-230,700);
+    c.fillStyle=T[3]; c.fillText(cdEll(c,r.value,W-230),W/2,ry+83); ry+=rh+rgap; });
+
+  cdRR(c,tX,tY,tW,tH,34); c.fillStyle=CD_CREAM; c.fill();
+  c.fillStyle="#080d18";
+  c.beginPath(); c.arc(tX,tY+tH/2,26,0,7); c.fill();
+  c.beginPath(); c.arc(tX+tW,tY+tH/2,26,0,7); c.fill();
+  c.font=cdF(CD_SERIF,44,600); c.fillStyle="#6b6152"; c.fillText("The",W/2,tY+76);
+  c.font=cdF(CD_DISP,74); c.letterSpacing="-1px";
+  const wm=c.createLinearGradient(0,tY+92,0,tY+152);
+  wm.addColorStop(0,"#2a2216"); wm.addColorStop(1,"#12100a"); c.fillStyle=wm;
+  c.fillText("MAESTRO LEAGUE",W/2,tY+150); c.letterSpacing="0px";
+  // ⚠️ URL de TEST. À remplacer par le lien de l'app (ou un QR code) le jour du vrai lancement.
+  c.font=cdF(CD_SANS,30,600); c.fillStyle="#5c564a"; c.fillText(SHARE_URL,W/2,tY+206);
+}
+const SHARE_URL="herve77760.github.io/pronos-ligue";
+
+// Produit le PNG. Renvoie null si quoi que ce soit échoue → l'appelant bascule sur le texte.
+async function seasonCardBlob(){
+  try{
+    const d=await seasonCardData();
+    const cv=document.createElement("canvas"); cv.width=CARD_W; cv.height=CARD_H;
+    drawSeasonCard(cv,d);
+    return await new Promise((res,rej)=>{ try{ cv.toBlob(b=>b?res(b):rej(new Error("blob")),"image/png"); }catch(e){ rej(e); } });
+  }catch(e){ return null; }
+}
+
+// Récap texte partageable — CONSERVÉ comme repli de l'image (et pour le copier-coller).
 function seasonRecapText(){
   const s=myStats(); const meP=me(); const ord=classe(players.filter(p=>!p.is_ai));
   const rank=ord.findIndex(p=>p.id===S.myId)+1; const tot=ord.length; const l=[];
@@ -4950,16 +5147,50 @@ function seasonRecapText(){
     l.push(t("ROI : {a} % · Meilleure journée : {b} €",{a:s.roi,b:fmt(s.best.net)}));
     if(s.favCard&&CARDS[s.favCard]) l.push(t("Carte fétiche : {a}",{a:CARDS[s.favCard].e+' '+t(CARDS[s.favCard].n)})); }
   l.push("— The Maestro League"); return l.join("\n"); }
-// Aperçu D'ABORD (on voit ce qu'on partage), puis Partager (natif mobile) / Copier.
-function shareSeason(){ const txt=seasonRecapText();   // gratuit (v6.65) — plus d'option premium requise
+// Aperçu D'ABORD (on voit ce qu'on partage), puis Partager (natif mobile) / Enregistrer / Copier.
+// L'image est générée en tâche de fond : on ouvre tout de suite avec un texte d'attente, sinon
+// l'écran resterait figé une seconde sans explication.
+let seasonBlob=null, seasonBlobUrl=null;
+function shareSeason(){   // gratuit (v6.65) — plus d'option premium requise
+  const txt=seasonRecapText();
   infoModal("📤", t("Partager ma saison"),
-    `<div class="mini muted" style="margin-bottom:8px">${t("Voici ce que tu vas partager :")}</div>
-     <textarea id="recapTxt" readonly onclick="this.select()" style="width:100%;box-sizing:border-box;height:150px;font:16px monospace;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:inherit">${esc(txt)}</textarea>
-     <div class="row" style="gap:8px;margin-top:10px">
-       ${navigator.share?`<button class="btn" style="flex:1" onclick="doShareSeason()">${t("Partager")}</button>`:''}
-       <button class="btn ${navigator.share?'ghost':''}" style="flex:1" onclick="copySeason()">📋 ${t("Copier")}</button>
-     </div>`); }
-async function doShareSeason(){ const txt=seasonRecapText(); if(navigator.share){ try{ await navigator.share({text:txt}); }catch(e){} } }
+    `<div id="cardWrap" class="mini muted" style="margin-bottom:10px">${t("Préparation de ta carte…")}</div>
+     <div id="cardBtns"></div>
+     <details style="margin-top:12px;text-align:left">
+       <summary class="mini muted" style="cursor:pointer">${t("Version texte")}</summary>
+       <textarea id="recapTxt" readonly onclick="this.select()" style="width:100%;box-sizing:border-box;height:130px;margin-top:6px;font:14px monospace;padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:inherit">${esc(txt)}</textarea>
+       <button class="btn ghost sm" style="margin-top:6px" onclick="copySeason()">📋 ${t("Copier le texte")}</button>
+     </details>`);
+  buildSeasonCard();
+}
+async function buildSeasonCard(){
+  if(seasonBlobUrl){ URL.revokeObjectURL(seasonBlobUrl); seasonBlobUrl=null; }
+  seasonBlob=await seasonCardBlob();
+  const wrap=document.getElementById("cardWrap"), btns=document.getElementById("cardBtns");
+  if(!wrap||!btns) return;                      // fenêtre déjà refermée
+  if(!seasonBlob){                              // repli honnête : le texte reste partageable
+    wrap.innerHTML=`<div class="mini muted">${t("Image indisponible sur cet appareil — le texte ci-dessous reste partageable.")}</div>`;
+    btns.innerHTML=`<button class="btn" onclick="copySeason()">📋 ${t("Copier le texte")}</button>`; return; }
+  seasonBlobUrl=URL.createObjectURL(seasonBlob);
+  wrap.innerHTML=`<img src="${seasonBlobUrl}" alt="" style="width:100%;border-radius:12px;display:block">`;
+  const f=new File([seasonBlob],"ma-saison.png",{type:"image/png"});
+  const canFile=!!(navigator.canShare&&navigator.canShare({files:[f]}));
+  btns.innerHTML=`<div class="row" style="gap:8px">
+     ${canFile?`<button class="btn" style="flex:1" onclick="doShareSeason()">${t("Partager")}</button>`:''}
+     <button class="btn ${canFile?'ghost':''}" style="flex:1" onclick="saveSeasonCard()">⬇️ ${t("Enregistrer")}</button></div>`;
+}
+// Partage natif : l'IMAGE d'abord (c'est elle qui a de l'allure dans un fil de discussion).
+// Si l'appareil refuse les fichiers, on part sur le texte plutôt que de ne rien faire.
+async function doShareSeason(){
+  const txt=seasonRecapText();
+  if(seasonBlob){ const f=new File([seasonBlob],"ma-saison.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[f]})){
+      try{ await navigator.share({files:[f],text:txt}); return; }catch(e){ if(e&&e.name==="AbortError") return; } } }
+  if(navigator.share){ try{ await navigator.share({text:txt}); }catch(e){} }
+}
+function saveSeasonCard(){ if(!seasonBlobUrl) return;
+  const a=document.createElement("a"); a.href=seasonBlobUrl; a.download="ma-saison.png"; a.click();
+  toast(t("Image enregistrée 📥")); }
 async function copySeason(){ const txt=seasonRecapText();
   try{ await navigator.clipboard.writeText(txt); toast(t("Récap copié — colle-le où tu veux ! 📋")); }catch(e){ const el=document.getElementById("recapTxt"); if(el){ el.focus(); el.select(); } } }
 // Explication groupée des colonnes du classement + des flèches de mouvement (le tooltip `title` des
