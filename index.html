@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.81";
+const APP_VERSION = "v6.82";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -375,7 +375,15 @@ function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2
   for(let i=0;i<size-nc;i++) hand.push(pool[i%pool.length]); return hand; }
 const SHOP_CAP=40; // dépense max en bonus sur les 100€ (les bonus n'ont pas de prix fixe : chacun enchérit ce qu'il veut)
 const DBL_FACTOR=1; // Coup Double : 1 = mise prise en compte = moyenne des 2 mises · 0.5 = la moitié (si jugé trop fort)
-const RECAP_THRESHOLD=10, RECAP_AMOUNT=40; // recapitalisation : sous 10€ un joueur ne peut plus miser → +40€ pour LUI SEUL, en échange de −1 pt (modèle v5.30 : l'argent va au seul renfloué, donc le point est le prix du coup de pouce, pas une double peine)
+// Recapitalisation (v6.82, décision Hervé) : sous 30 € le capital est REMONTÉ À 40 € — pas « +40 € ».
+// Pourquoi ce changement : (1) à 11 € de capital, le plafond de 50 % ne laissait que 5,50 € à répartir
+// sur 5 matchs, soit la mise MINIMUM de 1 € partout → plus de dosage, un 👑 Capitaine qui double 1 €,
+// des bonus sans effet : le joueur restait dans la course aux points mais ne jouait plus vraiment.
+// (2) L'ancien « +40 € sous 10 € » créait une FALAISE (être à 11 € était pire qu'être à 9 €) et
+// récompensait la défaite volontaire : perdre exprès ses 5,50 € rapportait +40 € pour −1 pt.
+// Remonter À un niveau fixe supprime ce calcul : qu'on finisse à 29 € ou à 2 €, on repart à 40 €.
+// L'argent va au SEUL renfloué → le −1 pt est le prix du coup de pouce, pas une double peine (v5.30).
+const RECAP_THRESHOLD=30, RECAP_TARGET=40;
 // Formules de rythme : délais MAX (heures) pour choisir les matchs puis miser.
 const FORMULAS={
   fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis jusqu'à 12h pour miser — 24h au maximum."},
@@ -1720,7 +1728,9 @@ const EN={
   "💰 Gains et pertes":"💰 Winnings and losses",
   "<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.":"<b>Bet won</b>: you pocket <b>stake × (odds − 1)</b>. <b>Bet lost</b>: you lose your <b>stake</b>.",
   "<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton Capitaine. <b>Ton capital ne descend jamais sous 0.</b>":"<b>🛟 The safety net:</b> the matchday's <b>maximum possible loss</b> can never exceed your balance. The app refuses a bet that could leave you negative — if the button is blocked, lower your Captain's stake. <b>Your balance never drops below 0.</b>",
-  "<b>💸 Recapitalisation :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Il reçoit alors <b>+{b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).":"<b>💸 Top-up:</b> if a player falls below <b>€{a}</b> they can no longer bet. They then receive <b>+€{b}</b> to stay in the race, in exchange for <b>−1 championship point</b> (only they are affected).",
+  "<b>💸 Recapitalisation :</b> si un joueur finit une journée sous <b>{a} €</b>, il n'a plus de quoi miser vraiment : son capital est <b>remonté à {b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).":"<b>💸 Top-up:</b> if a player ends a matchday below <b>€{a}</b>, they no longer have enough to bet meaningfully: their balance is <b>raised to €{b}</b> to stay in the race, in exchange for <b>−1 championship point</b> (only they are affected).",
+  "On <b>remonte à</b> {b} €, on n'ajoute pas {b} € : que tu finisses à {c} € ou à 2 €, tu repars avec {b} €. Perdre davantage ne rapporte donc rien.":"It's a <b>raise to</b> €{b}, not a €{b} bonus: whether you end on €{c} or on €2, you restart with €{b}. So losing more gains you nothing.",
+  "<b>{a}</b> étai{e}t sous <b>{c} €</b> — capital remonté à <b>{b} €</b> pour rester dans la course, en échange de <b>−1 pt</b> de championnat. 🤝":"<b>{a}</b> — below <b>€{c}</b>, balance raised to <b>€{b}</b> to stay in the race, in exchange for <b>−1 championship point</b>. 🤝",
   "🏆 Points et classement":"🏆 Points and standings",
   "Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). À <b>net égal</b>, c'est un <b>match nul</b> — ni le gain ni la mise ne départagent.":"The <b>duel winner</b> is the one with the <b>best net result</b> (winnings − stakes). At <b>equal net</b>, it's a <b>draw</b> — neither gain nor stake breaks the tie.",
   "<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.":"<b>Winner</b>: <b>3 pts</b> if their net is positive, <b>1 pt</b> if negative. <b>Loser</b>: <b>1 pt</b> if their net is positive, <b>0 pt</b> if negative. <b>Draw</b>: <b>1 pt</b> each.",
@@ -2286,6 +2296,15 @@ async function refresh(){
 }
 // Récapitalisation : une fenêtre fermable à l'ouverture du récap concerné (un bandeau seul passait
 // inaperçu — signalé par Hervé). Une seule fois par ligue+journée, mémorisé en localStorage.
+// Phrase du renflouement, partagée par la fenêtre et par l'encart de l'écran Résultats (une seule
+// formulation à maintenir). Replis `amount`/10 : les notes des ligues d'AVANT v6.82 ne portent ni
+// `target` ni `seuil` (ancien modèle « +40 € sous 10 € ») — l'historique reste lisible.
+function recapNoteText(n){
+  const names=(n.names||[]); const multi=names.length>1;
+  const cible=(n.target!=null)?n.target:n.amount, seuil=(n.seuil!=null)?n.seuil:10;
+  return t("<b>{a}</b> étai{e}t sous <b>{c} €</b> — capital remonté à <b>{b} €</b> pour rester dans la course, en échange de <b>−1 pt</b> de championnat. 🤝",
+    {a:esc(names.join(', ')), e:multi?'en':'', b:cible, c:seuil});
+}
 function maybeRecapModal(dispDay){
   // `recap_note.day` = la journée RENFLOUÉE (voir resolveDay). La fenêtre s'ouvre donc quand le joueur
   // arrive sur CETTE journée-là (au lancement des paris), après avoir vu les résultats de la précédente —
@@ -2293,9 +2312,8 @@ function maybeRecapModal(dispDay){
   if(!L || !L.recap_note || L.recap_note.day!==dispDay) return;
   const key="pl_recapseen_"+L.id+"_"+dispDay;
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
-  const names=(L.recap_note.names||[]); const multi=names.length>1;
   infoModal("💸", t("💸 Recapitalisation solidaire — J{a}",{a:dispDay+1}),
-    `<div class="mini" style="text-align:left">${t("<b>{a}</b> n'avai{e}t plus assez pour miser → <b>+{b} €</b> pour rester dans la course, en échange de <b>−1 pt</b> de championnat. 🤝",{a:esc(names.join(', ')),e:multi?'en':'',b:L.recap_note.amount})}</div>
+    `<div class="mini" style="text-align:left">${recapNoteText(L.recap_note)}</div>
      <div class="mini muted" style="text-align:left;margin-top:8px">${t("Ferme cette fenêtre pour continuer.")}</div>`);
 }
 // Démarrage de la ligue (passage en PRÉPARATION) : une fenêtre à FERMER manuellement, en plus de la
@@ -4332,7 +4350,8 @@ async function resolveDay(){
     // la boucle de consommation ci-dessus : sinon celle-ci pourrait retirer la carte tout juste volée.
     // La victime, elle, a bien joué la sienne — elle est consommée normalement (barrée chez elle).
     for(const pid in stolen){ if(upd[pid]) upd[pid].hand.push(stolen[pid]); }
-    // Recapitalisation : si un humain n'a plus assez pour miser (< seuil), +montant pour LUI SEUL, en
+    // Recapitalisation : si un humain n'a plus assez pour miser (< seuil), son capital est REMONTÉ À
+    // RECAP_TARGET pour LUI SEUL (pas un ajout : on fixe le niveau, cf. commentaire de la constante), en
     // échange de −1 pt de championnat. ⚠️ UNIQUEMENT s'il reste une journée à jouer (sinon rien à miser,
     // et le point serait retiré pour rien — signalé par Hervé, ligue 9dwsf). Le message s'affiche AU
     // LANCEMENT de la journée suivante → `recap_note.day` = la journée RENFLOUÉE (D+1). Modèle v5.30 :
@@ -4342,8 +4361,8 @@ async function resolveDay(){
     let recapNote=null;
     const willBeDone=(D+1)>=fresh.num_days;
     const broke = willBeDone ? [] : ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
-    if(broke.length){ broke.forEach(p=>{ upd[p.id].capital += RECAP_AMOUNT; upd[p.id].points -= 1; });
-      recapNote={day:D+1, amount:RECAP_AMOUNT, penalty:1, names:broke.map(p=>p.name)}; }
+    if(broke.length){ broke.forEach(p=>{ upd[p.id].capital = RECAP_TARGET; upd[p.id].points -= 1; });
+      recapNote={day:D+1, target:RECAP_TARGET, seuil:RECAP_THRESHOLD, penalty:1, names:broke.map(p=>p.name)}; }
     for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
     try{ await q(db.from("leagues").update({recap_note:recapNote}).eq("id",L.id)); }catch(e){} // message recapitalisation (défensif si colonne absente)
     const next=D+1; const done=next>=fresh.num_days;
@@ -4541,7 +4560,7 @@ function recapBody(D){
       <div style="text-align:right"><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:avatarHTML(fpP.emoji)+' '+esc(fpName)})}</div><div class="big num ${myNet>=0?'green':'red'}" style="font-size:22px">${fmt(myNet)} €</div></div></div></div>
     ${forgot(fp)?`<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Pari non validé à temps")}</b><div class="mini" style="margin-top:4px">${t("Aucun pari pris en compte ce jour-là → <b>{a} pt{s}</b> au classement et <b>−{b} %</b> {c}capital.",{a:forgotPtsOf(),s:Math.abs(forgotPtsOf())>1?'s':'',b:Math.round(forgotPenOf()*100),c:isMe?t("de ton "):t("du ")})}</div></div>`:''}
     ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">${t("← Revenir à mes résultats")}</button>`:''}
-    ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">${t("💸 Recapitalisation solidaire")}</b><div class="mini" style="margin-top:4px">${t("<b>{a}</b> n'avai{e}t plus assez pour miser → <b>+{b} €</b> pour rester dans la course, en échange de <b>−1 pt</b> de championnat. 🤝",{a:esc((L.recap_note.names||[]).join(', ')),e:(L.recap_note.names||[]).length>1?'en':'',b:L.recap_note.amount})}</div></div>`:''}
+    ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">${t("💸 Recapitalisation solidaire")}</b><div class="mini" style="margin-top:4px">${recapNoteText(L.recap_note)}</div></div>`:''}
     ${detail?`<h2>${t("⚔️ Le duel en détail")}</h2>${detail}`:''}
     <h2>${t("Résultats de la journée")}</h2>
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.")}</div>
@@ -4762,12 +4781,12 @@ function computeStandHist(){
     forgot.forEach(pid=>{ if(!st[pid]) return; st[pid].points+=forgotPtsOf();
       const bb=betAt[d+'|'+pid]; const penInNet=!!(bb && (bb.net||0)<0);
       if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*(1-forgotPenOf())*100)/100); });
-    // recapitalisation : si un humain < seuil → +montant pour LUI SEUL, −1 pt pour lui (modèle v5.30).
-    // Miroir EXACT de resolveDay (sinon les points recalculés divergent de la base). Comme resolveDay,
-    // PAS de renflouement sur la dernière journée (rien à miser ensuite).
+    // recapitalisation : si un humain < seuil → capital REMONTÉ À RECAP_TARGET pour LUI SEUL, −1 pt pour
+    // lui (modèle v5.30). Miroir EXACT de resolveDay (sinon les points recalculés divergent de la base).
+    // Comme resolveDay, PAS de renflouement sur la dernière journée (rien à miser ensuite).
     const isLastDay=(d===((L.num_days||0)-1));
     const broke=isLastDay?[]:players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
-    if(broke.length){ broke.forEach(p=>{ if(st[p.id]){ st[p.id].capital+=RECAP_AMOUNT; st[p.id].points-=1; } }); }
+    if(broke.length){ broke.forEach(p=>{ if(st[p.id]){ st[p.id].capital=RECAP_TARGET; st[p.id].points-=1; } }); }
     snaps.push(players.map(p=>({ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
       points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star })));
   }
@@ -5705,7 +5724,11 @@ function closeRulesFull(){ navBack(); }
 // (sinon on casse worstLoss ≤ capital) · après paiement l'acheteur garde ≥ TRADE_MIN_CAP.
 // L'option est PAYANTE par joueur (le proposeur) → péage branché en Phase 4 ; ouvert à tous
 // pour l'instant (tests). Le montant n'ajoute pas de capital : il est TRANSFÉRÉ au vendeur.
-const TRADE_MIN_CAP = RECAP_THRESHOLD;   // 10 € : plancher pour pouvoir encore miser
+// Plancher volontairement CALÉ sur le seuil de renflouement (30 € depuis v6.82) : sous ce niveau, le
+// jeu considère qu'on ne peut plus miser correctement. Garder le lien ferme aussi la porte à un abus :
+// sans lui, on pourrait s'acheter une carte hors de prix pour tomber sous le seuil et se faire remonter
+// à 40 € — soit une carte payée par le renflouement, pour 1 petit point.
+const TRADE_MIN_CAP = RECAP_THRESHOLD;
 function tr2(x){ return Math.round(x*100)/100; }
 function tradeRunning(){ return !!(L && L.status==="running"); }
 function humanOpponents(){ return players.filter(p=>!p.is_ai && p.id!==S.myId); }
@@ -5955,7 +5978,7 @@ function viewRules(){
  * ⚠️ À LIRE AVANT DE MODIFIER UNE RÈGLE DU JEU.
  * Cet écran est la référence complète. Il est écrit pour ne PAS pouvoir mentir sur ce qui est
  * calculable : toutes les valeurs chiffrées sont INJECTÉES depuis les constantes du moteur
- * (STAKE_CAP, STAKE_CAP_INVEST, FORGOT_PENALTY, SHOP_CAP, RECAP_THRESHOLD, RECAP_AMOUNT,
+ * (STAKE_CAP, STAKE_CAP_INVEST, FORGOT_PENALTY, SHOP_CAP, RECAP_THRESHOLD, RECAP_TARGET,
  * CUSTOM_MAX, DBL_FACTOR), les listes viennent des tables (CARDS, GAGES, REWARDS, MODES,
  * FORMULAS) et les passages qui dépendent du mode se calculent (isBoth/isReward). Changer une
  * constante ou ajouter une carte met donc ces règles à jour TOUT SEUL.
@@ -5990,7 +6013,7 @@ function viewRulesFull(){
 
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
      ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton Capitaine. <b>Ton capital ne descend jamais sous 0.</b>")}<br>
-     ${t("<b>💸 Recapitalisation :</b> si un joueur tombe sous <b>{a} €</b> il ne peut plus miser. Il reçoit alors <b>+{b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).",{a:RECAP_THRESHOLD,b:RECAP_AMOUNT})} ${t("Cela n'arrive <b>pas sur la dernière journée</b> : il n'y a plus rien à miser ensuite.")}<br>
+     ${t("<b>💸 Recapitalisation :</b> si un joueur finit une journée sous <b>{a} €</b>, il n'a plus de quoi miser vraiment : son capital est <b>remonté à {b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).",{a:RECAP_THRESHOLD,b:RECAP_TARGET})} ${t("On <b>remonte à</b> {b} €, on n'ajoute pas {b} € : que tu finisses à {c} € ou à 2 €, tu repars avec {b} €. Perdre davantage ne rapporte donc rien.",{b:RECAP_TARGET,c:RECAP_THRESHOLD-1})} ${t("Cela n'arrive <b>pas sur la dernière journée</b> : il n'y a plus rien à miser ensuite.")}<br>
      ${t("🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.",{a:STALE_MATCH_H})}<br>
      ${t("⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.")}`)}
 
