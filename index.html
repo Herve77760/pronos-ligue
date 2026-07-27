@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.79";
+const APP_VERSION = "v6.81";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -268,8 +268,12 @@ const SPORTS=[
  {ic:"⚽",draw:true, t:["PSG","OM","Lyon","Monaco","Lille","Rennes","Real","Barça","Atlético","Séville",
                        "Bayern","Dortmund","Leipzig","Man City","Liverpool","Arsenal","Chelsea","Tottenham",
                        "Milan","Inter","Juventus","Naples","Roma","Benfica","Porto","Ajax"]},
+ // 🎾 `pools` = circuits SÉPARÉS : on ne tire jamais un homme contre une femme (signalé par Hervé).
+ // `t` reste la liste complète (repli si un circuit manque de joueurs libres).
  {ic:"🎾",draw:false,t:["Alcaraz","Sinner","Djokovic","Zverev","Rune","Medvedev","Fritz","Tsitsipas",
-                        "Swiatek","Sabalenka","Gauff","Rybakina","Pegula","Paolini"]},
+                        "Swiatek","Sabalenka","Gauff","Rybakina","Pegula","Paolini"],
+                    pools:[["Alcaraz","Sinner","Djokovic","Zverev","Rune","Medvedev","Fritz","Tsitsipas"],
+                           ["Swiatek","Sabalenka","Gauff","Rybakina","Pegula","Paolini"]]},
  {ic:"🏀",draw:false,t:["Lakers","Celtics","Warriors","Bucks","Nuggets","Heat","Suns","Mavs",
                         "Knicks","76ers","Thunder","Grizzlies"]},
 ];
@@ -2003,11 +2007,22 @@ function showDuelPtsInfo(pid){
   infoModal("🥇",t("Points du duel"), bareme+lastNote+ctx);
 }
 // Détail de l'« effet » d'une carte bonus : gain avec la carte vs sans la carte (impact enregistré à la résolution)
-function showBonusImpact(pid){
-  const bt=bets.find(b=>b.player_id===pid); if(!bt||!bt.card||!bt.card.id) return;
+// Données (paris/duels) de la journée D. Les globals `bets`/`duels` ne contiennent QUE la journée
+// `loadedDay` : dès que la résolution auto a rechargé la journée suivante, lire les globals pour une
+// journée déjà affichée renvoie du vide. On retombe alors sur l'historique (chartBets/standDuels) —
+// même logique que le swap interne de recapBody, mais utilisable HORS rendu (bug Hervé : plus rien
+// ne se passait au clic sur un bonus quand on venait de valider en dernier).
+function dayData(D){
+  if(loadedDay!==D && Array.isArray(chartBets) && Array.isArray(standDuels))
+    return { bets: chartBets.filter(b=>b.day===D), duels: standDuels.filter(x=>x.day===D) };
+  return { bets: bets||[], duels: duels||[] };
+}
+function showBonusImpact(pid,day){
+  const DD=dayData(day!=null?day:loadedDay); const bz=DD.bets, dz=DD.duels;
+  const bt=bz.find(b=>b.player_id===pid); if(!bt||!bt.card||!bt.card.id) return;
   const c=bt.card, C=CARDS[c.id], im=c.impact||{}; const net=(bt.net!=null)?bt.net:0;
-  const d=duels.find(x=>x.home_id===pid||x.away_id===pid); const oppId=d?(d.home_id===pid?d.away_id:d.home_id):null;
-  const oppB=oppId?bets.find(b=>b.player_id===oppId):null; const oppNet=(oppB&&oppB.net!=null)?oppB.net:0;
+  const d=dz.find(x=>x.home_id===pid||x.away_id===pid); const oppId=d?(d.home_id===pid?d.away_id:d.home_id):null;
+  const oppB=oppId?bz.find(b=>b.player_id===oppId):null; const oppNet=(oppB&&oppB.net!=null)?oppB.net:0;
   const hasSelf=im.self!=null&&Math.abs(im.self)>=0.01, hasOpp=im.opp!=null&&Math.abs(im.opp)>=0.01;
   let body=`<div class="mini muted" style="text-align:left">${esc(t(C.d))}</div>
     <div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("L'<b>effet</b> = le gain <b>avec</b> la carte moins le gain qu'il y aurait eu <b>sans</b> la carte.")}</div>`;
@@ -2075,9 +2090,16 @@ function makeSchedule(n){ let arr=[...Array(n).keys()]; const rounds=[];
 // dans la même liste (signalé par Giulian : 3× Bayern–City). Repli sur l'effectif complet si les
 // équipes libres viennent à manquer, pour ne jamais bloquer le tirage.
 function genFixture(maxKo,sportImpose,pris){ const s=sportImpose||pick(SPORTS);
-  const libres=pris?s.t.filter(x=>!pris.has(x)):s.t;
-  const src=(libres.length>=2)?libres:s.t;
-  const a=pick(src); const restants=src.filter(x=>x!==a); const b=restants.length?pick(restants):pick(s.t.filter(x=>x!==a));
+  // Circuits séparés (tennis ATP / WTA) : les deux adversaires sortent du MÊME pool. On choisit un
+  // circuit qui a encore au moins 2 joueurs libres ; sinon on retombe sur la liste complète du sport.
+  let roster=s.t;
+  if(Array.isArray(s.pools)){
+    const ok=s.pools.filter(p=>(pris?p.filter(x=>!pris.has(x)):p).length>=2);
+    roster = ok.length ? pick(ok) : pick(s.pools);
+  }
+  const libres=pris?roster.filter(x=>!pris.has(x)):roster;
+  const src=(libres.length>=2)?libres:roster;
+  const a=pick(src); const restants=src.filter(x=>x!==a); const b=restants.length?pick(restants):pick(roster.filter(x=>x!==a));
   if(pris){ pris.add(a); pris.add(b); }
   // Cotes COHÉRENTES : on part de probabilités qui somment à 100 %, + une marge bookmaker (~5-9 %), puis cote = 1/(p×marge).
   const M=rnd(1.05,1.09); const odd=p=>Math.max(1.05,+(1/(p*M)).toFixed(2));
@@ -3613,7 +3635,9 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
   const extra=(o.soloAR!=null)
     ? kv("🤖 "+t("Format"), o.soloAR===1?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"), 'solo')
     : kv("🎭 "+t("Enjeu"), isBoth()?t("Gage + récompense"):(isReward()?t("Récompense"):t("Gage")), 'enjeu');
-  return kv("⏱️ "+t("Rythme"), t(leagueFormula().n), 'formula')
+  // Rythme masqué en données SIMULÉES : la journée se résout dès que tout le monde a validé, le délai
+  // classique/fast n'a aucune valeur ajoutée là (Hervé, cohérent avec création + salon v6.76/v6.78).
+  return ((L.data_mode==='real') ? kv("⏱️ "+t("Rythme"), t(leagueFormula().n), 'formula') : '')
    + kv("🎛️ "+t("Mode"), t(MODES[getMode()].n), 'mode')
    + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"), 'data')
    + extra; }
@@ -4450,7 +4474,7 @@ function recapBody(D){
     const nameCell=(p,side)=>`<span class="mini muted">${side}</span> <b>${avaName(p)}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}`;
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
-      return `<div class="mini blue clik" onclick="showBonusImpact('${bt.player_id}')" style="margin-top:4px" title="${t("Toucher pour le détail : gain avec la carte vs sans la carte")}">🃏 ${C.e} ${esc(t(C.n))}${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</div>`; };
+      return `<div class="mini blue clik" onclick="showBonusImpact('${bt.player_id}',${D})" style="margin-top:4px" title="${t("Toucher pour le détail : gain avec la carte vs sans la carte")}">🃏 ${C.e} ${esc(t(C.n))}${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</div>`; };
     const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
       const impB=(bt)=> !!(bt&&bt.picks&&bt.picks[i]&&bt.picks[i].orig!=null) || cardOnMatch(bt.card,i); const imp=impB(hB)||impB(aB);
       return `<div class="clik" style="border-top:2px solid color-mix(in srgb,var(--ink) 22%,transparent);${imp?'border-left:3px solid var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent);border-radius:0 10px 10px 0;padding:10px 8px 10px 9px;':'padding:10px 2px;'}" onclick="toggleRecapMatch(${i})">
@@ -5176,7 +5200,7 @@ function showLeagueInfo(lid){
   const real=(lg.data_mode==="real");
   const row=(lab,val)=>`<div class="box row" style="text-align:left"><b>${lab}</b><span class="chip" style="flex:0 0 auto">${val}</span></div>`;
   let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg.status)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
-    <div class="box" style="text-align:left"><div class="row"><b>${t("Format")}</b><span class="chip" style="flex:0 0 auto">${t(f.n)}</span></div><div class="mini muted" style="margin-top:5px">${t(f.d)}</div></div>
+    ${real?`<div class="box" style="text-align:left"><div class="row"><b>${t("Format")}</b><span class="chip" style="flex:0 0 auto">${t(f.n)}</span></div><div class="mini muted" style="margin-top:5px">${t(f.d)}</div></div>`:''}
     ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"))}
     ${row(t("🎭 Enjeu"), rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)"))}
     ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"))}
