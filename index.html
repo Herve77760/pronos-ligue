@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.00";
+const APP_VERSION = "v7.02";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -556,6 +556,10 @@ const ODDS_BASE="https://api.the-odds-api.com/v4";
 // départagée en prolongation puis aux tirs au but, le marché est donc à 2 issues comme le basket.
 const REAL_GROUPS=["Soccer","Basketball","Tennis"];
 const GROUP_EMOJI={Soccer:"⚽",Basketball:"🏀",Tennis:"🎾"};
+// Emojis des sports DU JEU, dérivés de GROUP_EMOJI pour qu'ajouter un sport n'oblige pas à penser
+// à une seconde liste. Les matchs simulés utilisent les mêmes emojis (voir SPORTS), donc cette
+// liste vaut pour les deux modes. Sert au détail « Par sport » des stats (v7.02).
+const SPORT_EMOJIS=Object.keys(GROUP_EMOJI).map(k=>GROUP_EMOJI[k]);
 // Convertit un événement The Odds API en "fixture" du jeu, avec cotes h2h figées.
 function oddsEventToFixture(ev, group){
   const bk=(ev.bookmakers||[])[0]; if(!bk) return null;
@@ -998,6 +1002,7 @@ let STAND_H2H=null, STAND_H2H_LG=null;
 let palmares=null, adminData=null, palmOpen="", myStatsData=null;
 let adminUsers=null, adminPwd="";
 let adminReports=null, repOpen="";   // remontées des joueurs (v6.98) + n° de celle dépliée
+let admOpen="";                      // chapitre ouvert de l'écran Admin (v7.02)
 let endStats=null; // bilan de fin de ligue (calculé une fois quand la ligue est terminée)
 
 /* ============ utils ============ */
@@ -1847,6 +1852,10 @@ const EN={
   "Ton dossier complet, toutes tes ligues.":"Your complete file, across all your leagues.",
   // --- Dossier détaillé de l'option 📊 (v7.00) ---
   "Ton dossier complet, toutes tes ligues. Touche une ligne pour savoir ce que le chiffre veut dire.":"Your complete file, across all your leagues. Tap any line to find out what the number means.",
+  "Ligues comptées":"Leagues counted", "Fermée avant terme":"Closed before the end", "solo vs IA":"solo vs AI",
+  "{a} fermée(s) avant terme — hors totaux":"{a} closed before the end — excluded from totals",
+  "{a} en solo face à l'IA — paris comptés, sans titre":"{a} solo vs the AI — bets counted, no title",
+  "Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>.":"A league <b>closed before its end</b> counts towards nothing: its final standings are meaningless, and including them would skew everything. It stays viewable below. A league <b>in progress</b> does count normally.<br><br>In a <b>solo league against the AI</b>, your bets count (ROI, hit rate, records) — they were real picks — but finishing 1st against a bot adds <b>no title and no podium</b>.",
   "Tes coups":"Your standout bets", "Cote moyenne gagnée":"Average winning odds",
   "Plus gros prono gagné":"Biggest single win", "Plus grosse mise":"Biggest stake",
   "Points par journée":"Points per matchday", "Évolution du ROI":"ROI over time",
@@ -2258,10 +2267,16 @@ function toast(m){ const t=document.createElement("div"); t.className="toast"; t
 // validation instantanés pendant la saisie restent des toasts : un modal bloquant à chaque geste
 // serait pénible. `msg` peut contenir du HTML (nos propres libellés).
 function infoWin(msg,emoji){ infoModal(emoji||"✅","", `<div style="text-align:center;line-height:1.55;font-size:15px">${msg}</div>`); }
-function infoModal(emoji,title,bodyHTML){ closeCardInfo();
+// `sansOk` (facultatif, v7.01) : supprime le bouton « OK 👍 » ajouté d'office. Sur une modale de
+// LECTURE il conclut bien ; sur un FORMULAIRE il devient un deuxième bouton principal à côté de
+// « Envoyer », et on ne sait plus lequel valide (signalé par Hervé). L'appelant fournit alors ses
+// propres boutons. ⚠️ Qui passe `sansOk` DOIT proposer une sortie (annuler), sinon la modale
+// n'aurait plus qu'un clic hors cadre pour se fermer — invisible pour la plupart des joueurs.
+function infoModal(emoji,title,bodyHTML,sansOk){ closeCardInfo();
   const o=document.createElement("div"); o.id="cardModal"; o.className="modal";
   o.addEventListener("click",e=>{ if(e.target===o) closeCardInfo(); });
-  o.innerHTML=`<div class="mbox"><div style="font-size:34px">${emoji}</div><h2 style="margin:6px 0 4px">${esc(title)}</h2>${bodyHTML}<button class="btn" style="margin-top:16px" onclick="closeCardInfo()">OK 👍</button></div>`;
+  const ok=sansOk?"":`<button class="btn" style="margin-top:16px" onclick="closeCardInfo()">OK 👍</button>`;
+  o.innerHTML=`<div class="mbox"><div style="font-size:34px">${emoji}</div><h2 style="margin:6px 0 4px">${esc(title)}</h2>${bodyHTML}${ok}</div>`;
   document.body.appendChild(o); }
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return;
   // La pastille seule ne suffit pas : ici on explique ce que le niveau engage concrètement.
@@ -3771,9 +3786,12 @@ function openReport(kind){
         <textarea id="rep_${c.k}" maxlength="${REPORT_MAX}" style="width:100%;height:${c.req?66:50}px;font:15px/1.4 inherit" placeholder="${esc(t(c.ph))}"></textarea>
       </div>`).join("")}
      <div id="repErr" class="mini" style="text-align:left;color:var(--red)"></div>
-     <button class="btn" id="repSend" onclick="sendReport('${kind}')">${t("📨 Envoyer")}</button>
-     <details style="margin-top:10px;text-align:left"><summary class="mini muted clik">${t("Le contexte technique de ton écran est joint automatiquement — voir")}</summary>
-       <textarea readonly style="width:100%;height:130px;font:12px/1.4 ui-monospace,monospace;margin-top:6px" onclick="this.select()">${esc(bugContext(kind))}</textarea></details>`);
+     <details style="margin:4px 0 12px;text-align:left"><summary class="mini muted clik">${t("Le contexte technique de ton écran est joint automatiquement — voir")}</summary>
+       <textarea readonly style="width:100%;height:130px;font:12px/1.4 ui-monospace,monospace;margin-top:6px" onclick="this.select()">${esc(bugContext(kind))}</textarea></details>
+     <div class="row" style="gap:8px">
+       <button class="btn" style="flex:1" id="repSend" onclick="sendReport('${kind}')">${t("📨 Envoyer")}</button>
+       <button class="btn ghost" style="flex:0 0 auto" onclick="closeCardInfo()">${t("Annuler")}</button>
+     </div>`, true);   // `true` = pas de bouton « OK 👍 » : sur un formulaire il rivalisait avec « Envoyer »
 }
 // Texte lisible d'une remontée — sert au mail ET au repli si l'enregistrement échoue.
 function reportText(kind, rep, num){
@@ -5394,7 +5412,8 @@ async function loadMyStats(){
     const mine=await q(db.from("players").select("id,league_id").eq("user_id",AUTH.id));
     const ids=[...new Set(mine.map(m=>m.league_id))];
     if(!ids.length){ myStatsData={leagues:[],agg:{},h2h:{}}; return; }
-    const lgs=await q(db.from("leagues").select("id,name,status,num_days,created_at,finished_at").in("id",ids));
+    // `current_day` ajouté en v7.02 : il sert à savoir si une ligue est allée à son TERME.
+    const lgs=await q(db.from("leagues").select("id,name,status,num_days,current_day,created_at,finished_at").in("id",ids));
     const pls=await q(db.from("players").select("id,name,emoji,is_ai,user_id,league_id,points,capital,duel_wins,best_day,best_odd").in("league_id",ids));
     const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").in("league_id",ids).not("net","is",null));
     const dls=await q(db.from("duels").select("id,league_id,day,home_id,away_id,fixtures").in("league_id",ids));
@@ -5405,7 +5424,7 @@ async function loadMyStats(){
     const betsByLg={}, plsByLg={}; bts.forEach(b=>{(betsByLg[b.league_id]=betsByLg[b.league_id]||[]).push(b);}); pls.forEach(p=>{(plsByLg[p.league_id]=plsByLg[p.league_id]||[]).push(p);});
     const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0);
     const leagues=[]; const h2h={};
-    let tPicks=0,tWon=0,tStaked=0,tNet=0,titles=0,podiums=0,gBestOdd=0; let gBest={net:-1e9,lg:null};
+    let tPicks=0,tWon=0,tStaked=0,tNet=0,titles=0,podiums=0,gBestOdd=0,nbLigues=0; let gBest={net:-1e9,lg:null};
     /* ---- v7.00 : le dossier détaillé de l'option payante 📊 (demandé par Hervé) --------------
        ⚠️ AUCUNE requête supplémentaire : tout ci-dessous se calcule sur les paris, cotes et
        résultats DÉJÀ chargés plus haut. Enrichir cet écran ne coûte donc rien, ni en base ni en
@@ -5430,13 +5449,21 @@ async function loadMyStats(){
       const base=win?st*(odd-1):-st;
       return {st,odd,win,base,cap:(bt.captain===i),gain:(bt.captain===i)?base*2:base};
     };
+    // Une ligue FERMÉE AVANT SON TERME ne compte dans AUCUN total (v7.02, Hervé). L'écran de fin
+    // dit lui-même que son classement est « purement indicatif » : l'intégrer aux stats lui
+    // donnerait le poids d'un championnat joué. ⚠️ MÊME CRITÈRE que l'écran de fin, volontairement
+    // recopié à l'identique — deux définitions de « ligue terminée » finiraient par diverger.
+    // Une ligue EN COURS, elle, compte : c'est justement le moment où on regarde ses stats.
+    const alleeAuTerme=lg=>!(lg.status==="done" && !((lg.num_days|0)>0 && (lg.current_day|0)>=(lg.num_days|0)));
     ids.forEach(lid=>{ const mp=myPid[lid]; if(!mp) return; const lg=lgMap[lid]||{};
+      const compte=alleeAuTerme(lg);   // false = ligue abandonnée : visible dans la liste, hors totaux
       const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp).sort((x,y)=>(x.day|0)-(y.day|0));
       let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
+      run=0;   // une série de duels ne traverse pas deux championnats différents : elle repart à zéro
       myBets.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures; days++;
         if(fx){ picks+=b.picks.length; won+=winCount(b,fx);
-          b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; if(o>gBestOdd)gBestOdd=o; } });
-          b.picks.forEach((p,i)=>{ const inf=pickInfo(b,i,fx[i]); if(!inf) return; const f=fx[i];
+          b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; if(compte&&o>gBestOdd)gBestOdd=o; } });
+          if(compte) b.picks.forEach((p,i)=>{ const inf=pickInfo(b,i,fx[i]); if(!inf) return; const f=fx[i];
             if(inf.win){ sumWinOdd+=inf.odd; nWinOdd++; }
             if(inf.gain>bestPick.g) Object.assign(bestPick,{g:inf.gain,odd:inf.odd,st:inf.st,cap:inf.cap,
               m:(f.home||'?')+" – "+(f.away||'?'),lg:lg.name,day:b.day});
@@ -5444,20 +5471,29 @@ async function loadMyStats(){
               m:(f.home||'?')+" – "+(f.away||'?'),lg:lg.name,day:b.day});
             if(inf.cap){ capExtra+=inf.base; capCount++; }   // le doublement ajoute exactement le gain de base
             const B=inf.odd<1.8?buckets.fav:(inf.odd<=3?buckets.eq:buckets.out); B.p++; if(inf.win)B.w++;
-            const sp=f.sport||"?"; bySport[sp]=bySport[sp]||{p:0,w:0}; bySport[sp].p++; if(inf.win)bySport[sp].w++;
+            // Détail par sport limité aux SPORTS DU JEU (v7.02, Hervé). L'historique contient
+            // encore du rugby, joué avant son retrait en v6.96 : l'afficher laisserait croire
+            // qu'on peut toujours parier dessus. ⚠️ Ces paris restent comptés dans TOUT le reste
+            // (réussite, ROI, profil, records) — l'argent a bien été joué, on ne réécrit pas
+            // l'histoire ; on ne détaille simplement plus un sport qui n'existe plus dans le jeu.
+            const sp=f.sport||"?";
+            if(SPORT_EMOJIS.indexOf(sp)>=0){ bySport[sp]=bySport[sp]||{p:0,w:0}; bySport[sp].p++; if(inf.win)bySport[sp].w++; }
           }); }
         const mise=gainMise(b.picks,fx).mise; staked+=mise; const n=(b.net!=null)?b.net:0; net+=n;
-        allDays++; if(n>0) posDays++;
-        chrono.push({t:(lg.created_at||'')+"#"+String(1000+(b.day|0)), mise, net:n});
         if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
-        if(n>gBest.net) gBest={net:n,lg:lg.name};
-        if(b.card&&b.card.id){ cc[b.card.id]=(cc[b.card.id]||0)+1;
-          // Rendement réel d'un bonus : `impact.self` est écrit à la résolution et vaut
-          // « mon net AVEC la carte moins mon net SANS elle ». C'est la seule mesure juste —
-          // imputer le net de la journée entière à la carte serait faux.
-          const K=byCard[b.card.id]=byCard[b.card.id]||{n:0,net:0};
-          K.n++; K.net+=(b.card.impact&&+b.card.impact.self)||0; }
-        if(d){ const oppId=d.home_id===mp?d.away_id:d.home_id; const opp=plMap[oppId];
+        if(b.card&&b.card.id) cc[b.card.id]=(cc[b.card.id]||0)+1;   // carte fétiche : par ligue, même abandonnée
+        if(compte){
+          allDays++; if(n>0) posDays++;
+          chrono.push({t:(lg.created_at||'')+"#"+String(1000+(b.day|0)), mise, net:n});
+          if(n>gBest.net) gBest={net:n,lg:lg.name};
+          if(b.card&&b.card.id){
+            // Rendement réel d'un bonus : `impact.self` est écrit à la résolution et vaut
+            // « mon net AVEC la carte moins mon net SANS elle ». C'est la seule mesure juste —
+            // imputer le net de la journée entière à la carte serait faux.
+            const K=byCard[b.card.id]=byCard[b.card.id]||{n:0,net:0};
+            K.n++; K.net+=(b.card.impact&&+b.card.impact.self)||0; }
+        }
+        if(d && compte){ const oppId=d.home_id===mp?d.away_id:d.home_id; const opp=plMap[oppId];
           const ob=(betsByLg[lid]||[]).find(x=>x.player_id===oppId&&x.day===b.day);
           const H=Object.assign({net:n},gainMise(b.picks,fx)); const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
           const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2(lg));
@@ -5468,11 +5504,16 @@ async function loadMyStats(){
             if(r.win==='h') h2h[key].w++; else if(r.win==='a') h2h[key].l++; else h2h[key].d++; } } });
       const humans=classe((plsByLg[lid]||[]).filter(p=>!p.is_ai), lg);
       const rank=humans.findIndex(p=>p.id===mp)+1, total=humans.length; const me=plMap[mp]||{};
-      if(lg.status==="done"&&rank>=1){ if(rank===1) titles++; if(rank<=3) podiums++; }
-      tPicks+=picks; tWon+=won; tStaked+=staked; tNet+=net; tPoints+=(me.points||0);
+      // ⚠️ SOLO CONTRE L'IA : aucun titre, aucun podium (v7.02, Hervé). Finir 1er quand on est le
+      // seul humain n'est pas un championnat gagné — sinon n'importe qui gonfle son palmarès en
+      // enchaînant des parties solo. En revanche les PARIS de ces ligues comptent normalement
+      // (ROI, réussite, records) : ces pronos-là étaient de vrais pronos.
+      const solo=(humans.length<=1);
+      if(lg.status==="done" && compte && !solo && rank>=1){ if(rank===1) titles++; if(rank<=3) podiums++; }
+      if(compte){ tPicks+=picks; tWon+=won; tStaked+=staked; tNet+=net; tPoints+=(me.points||0); nbLigues++; }
       const favCard=Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||null;
       leagues.push({id:lid,name:lg.name||'?',status:lg.status,created_at:lg.created_at,finished_at:lg.finished_at,
-        rank,total,points:me.points||0,capital:me.capital||0,days,picks,won,hit:picks?Math.round(won/picks*100):0,
+        compte,solo,rank,total,points:me.points||0,capital:me.capital||0,days,picks,won,hit:picks?Math.round(won/picks*100):0,
         staked:Math.round(staked),net,roi:staked?Math.round(net/staked*100):0,bestOdd,best,worst,favCard}); });
     // ---- Repère : les MÊMES calculs pour les autres joueurs humains de mes ligues. -------------
     // Sans repère, « ROI 12 % » ne veut rien dire : c'est excellent ou médiocre selon la table.
@@ -5480,6 +5521,7 @@ async function loadMyStats(){
     // et moi aussi — sinon je me comparerais en partie à moi-même.
     let oPicks=0,oWon=0,oStaked=0,oNet=0,oPlayers=0;
     ids.forEach(lid=>{ const mp=myPid[lid];
+      if(!alleeAuTerme(lgMap[lid]||{})) return;   // même filtre que mes totaux, sinon la comparaison serait biaisée
       (plsByLg[lid]||[]).forEach(p=>{ if(p.is_ai||p.id===mp) return;
         const bz=(betsByLg[lid]||[]).filter(b=>b.player_id===p.id); if(!bz.length) return;
         oPlayers++;
@@ -5493,7 +5535,10 @@ async function loadMyStats(){
     const curve=[]; let cM=0,cN=0;
     chrono.forEach(x=>{ cM+=x.mise; cN+=x.net; curve.push(cM?Math.round(cN/cM*100):0); });
     leagues.sort((a,b)=>{ const fa=a.finished_at||a.created_at||'',fb=b.finished_at||b.created_at||''; return fa<fb?1:(fa>fb?-1:0); });
-    myStatsData={ agg:{leagues:leagues.length,titles,podiums,picks:tPicks,won:tWon,hit:tPicks?Math.round(tWon/tPicks*100):0,
+    // `leagues` = celles RETENUES dans les totaux (nbLigues), pas le nombre de lignes affichées :
+    // la liste du bas montre aussi les ligues abandonnées, qui ne comptent nulle part ailleurs.
+    myStatsData={ agg:{leagues:nbLigues, exclues:leagues.filter(l=>!l.compte).length, solos:leagues.filter(l=>l.solo&&l.compte).length,
+      titles,podiums,picks:tPicks,won:tWon,hit:tPicks?Math.round(tWon/tPicks*100):0,
       staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest,
       avgWinOdd:nWinOdd?+(sumWinOdd/nWinOdd).toFixed(2):0,
       bestPick:(bestPick.g>-1e8)?bestPick:null, bigStake:(bigStake.st>=0)?bigStake:null,
@@ -5526,7 +5571,8 @@ const STAT_INFO={
   captain:{t:"Rendement du Capitaine",d:"Ce que le doublement t'a rapporté <b>en plus</b>, ou coûté. Un chiffre négatif ne condamne pas la mécanique : il dit que tu doubles trop souvent sur des paris incertains."},
   cards:{t:"Bonus les plus rentables",d:"Le gain réel de chaque bonus : ton résultat AVEC la carte moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable."},
   regul:{t:"Régularité",d:"Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats."},
-  sports:{t:"Par sport",d:"Ta réussite sport par sport. N'a de sens qu'en <b>données réelles</b> : en matchs simulés, les rencontres sont tirées au hasard."}
+  sports:{t:"Par sport",d:"Ta réussite sport par sport. N'a de sens qu'en <b>données réelles</b> : en matchs simulés, les rencontres sont tirées au hasard."},
+  perimetre:{t:"Ligues comptées",d:"Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>."}
 };
 function showStatInfo(k){ const s=STAT_INFO[k]; if(!s) return;
   infoModal("📊", t(s.t), `<div class="mini muted" style="text-align:left;line-height:1.6">${t(s.d)}</div>`); }
@@ -5557,9 +5603,15 @@ function viewStats(){
   if(d.error) return h+`<div class="err">${esc(d.error)}</div>`;
   if(!d.leagues.length) return h+`<div class="box mini muted">${t("Pas encore de partie jouée.")}</div>`;
   const a=d.agg;
-  const sgn=v=>`<span class="${v>=0?'green':'red'}">${v>=0?'+':''}${fmt(v)} €</span>`;
+  // ⚠️ NE PAS rajouter de « + » ici : `fmt` signe DÉJÀ les valeurs positives (v7.02 — un
+  // « ++12,50 € » s'affichait dans Tes coups, le Capitaine et les bonus rentables).
+  // Cette fonction ne fait que la COULEUR ; le signe est l'affaire de `fmt`.
+  const sgn=v=>`<span class="${v>=0?'green':'red'}">${fmt(v)} €</span>`;
   h+=`<div class="box"><b class="mini">🏅 ${t("Ma carrière")}</b>
-    ${line(t("Ligues jouées"), a.leagues)}
+    ${lineI("perimetre", t("Ligues comptées"), a.leagues)}
+    ${(a.exclues||a.solos)?`<div class="mini muted" style="margin:-3px 0 6px">${
+        [a.exclues?t("{a} fermée(s) avant terme — hors totaux",{a:a.exclues}):'',
+         a.solos?t("{a} en solo face à l'IA — paris comptés, sans titre",{a:a.solos}):''].filter(Boolean).join(" · ")}</div>`:''}
     ${line(t("Titres 🥇 / podiums 🏆"), a.titles+" / "+a.podiums)}
     ${lineI("hit", t("Pronos gagnés"), a.won+"/"+a.picks+" ("+a.hit+" %)")}
     ${lineI("roi", t("Rentabilité (ROI)"), `<span class="${a.roi>=0?'green':'red'}">${a.roi} %</span>`)}
@@ -5612,7 +5664,11 @@ function viewStats(){
     h+=`</div>`; }
   h+=`<div class="box"><b class="mini">📋 ${t("Par ligue")}</b>
     <div class="mini muted" style="margin:4px 0 6px">${t("Touche une ligue pour son détail.")}</div>
-    ${d.leagues.map(l=>`<div class="box row clik" style="margin:6px 0" onclick="showLeagueStat('${l.id}')"><div><b class="mini">${esc(l.name)}</b><div class="mini muted">${l.status==='done'?t("Terminée"):t("En cours")}${l.rank?' · '+t("{a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div></div><span class="chip">${l.points} pts →</span></div>`).join("")}
+    ${d.leagues.map(l=>{
+      // Une ligue hors totaux reste consultable, mais grisée et étiquetée : la faire disparaître
+      // laisserait croire à une perte de données, l'afficher sans marque à un total faux.
+      const etat=!l.compte?t("Fermée avant terme"):(l.status==='done'?t("Terminée"):t("En cours"));
+      return `<div class="box row clik" style="margin:6px 0${l.compte?'':';opacity:.55'}" onclick="showLeagueStat('${l.id}')"><div><b class="mini">${esc(l.name)}</b><div class="mini muted">${etat}${l.solo?' · '+t("solo vs IA"):''}${l.rank&&l.compte?' · '+t("{a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div></div><span class="chip">${l.points} pts →</span></div>`; }).join("")}
   </div>
   ${(L&&L.status==="done")?`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button>`:''}`;  // partage : seulement une fois la ligue terminée
   return h; }
@@ -6159,6 +6215,29 @@ async function adminSetReportStatus(id, st){
     adminReports=await q(db.rpc("admin_list_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Recharge les remontées (mot de passe admin requis).":("Statut : "+e.message)); } }
 function toggleReport(n){ repOpen=(repOpen===String(n))?"":String(n); render(); }
+// Suppression d'une remontée. ⚠️ Irréversible côté base (ni corbeille ni archive, voir la
+// migration) : la confirmation n'est donc pas une politesse, c'est le seul filet.
+async function adminDeleteReport(id, num){
+  if(!confirm("Supprimer définitivement la remontée n° "+num+" ?\n\nAction irréversible.")) return;
+  try{ await q(db.rpc("admin_delete_report",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_id:id}));
+    if(repOpen===String(num)) repOpen="";
+    adminReports=await q(db.rpc("admin_list_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Recharge les remontées (mot de passe admin requis)."
+      :(/admin_delete_report|schema cache|function/i.test(e.message)?("Suppression : "+e.message+" (ré-exécute MIGRATION-remontees.sql dans Supabase)"):("Suppression : "+e.message))); } }
+// Vidage groupé : uniquement les remontées MARQUÉES « traité ». Un « tout supprimer » effacerait
+// des remontées jamais lues — c'est bridé côté base aussi, pas seulement ici.
+async function adminPurgeReports(){
+  const n=(adminReports||[]).filter(r=>r.status==="traite").length;
+  if(!n){ showErr("Aucune remontée marquée « traité » à supprimer."); return; }
+  if(!confirm("Supprimer définitivement les "+n+" remontée(s) marquées « traité » ?\n\nAction irréversible.")) return;
+  try{ await q(db.rpc("admin_purge_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd}));
+    repOpen="";
+    adminReports=await q(db.rpc("admin_list_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); showErr(""); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Recharge les remontées (mot de passe admin requis)."
+      :(/admin_purge_reports|schema cache|function/i.test(e.message)?("Vidage : "+e.message+" (ré-exécute MIGRATION-remontees.sql dans Supabase)"):("Vidage : "+e.message))); } }
+// Chapitres de l'écran Admin (v7.02, Hervé : « il y a plein de choses sur une seule page »).
+// Un seul chapitre ouvert à la fois, même schéma que le palmarès (`palmOpen`).
+function toggleAdm(k){ admOpen=(admOpen===k)?"":k; render(); }
 async function adminLoadUsers(){ const el=$("adminPwd"); const pwd=el?el.value:""; if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
   try{ adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:pwd})); adminPwd=pwd; showErr(""); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect.":("Erreur : "+e.message)); } }
@@ -6402,9 +6481,15 @@ function viewAdmin(){
   if(!adminData) return back+`<div class="box">Chargement des stats…</div>`;
   if(adminData.error) return back+`<div class="err">${esc(adminData.error)}</div>`;
   const a=adminData; const st=(k,v)=>`<div class="box row"><span class="muted">${k}</span><b class="num">${v}</b></div>`;
-  return `${back}
-    <div class="box"><h2 style="margin-top:0">🛠 Tableau de bord admin</h2><div class="mini muted">Statistiques globales du jeu.</div></div>
-    ${st("🏆 Ligues créées", a.leagues)}
+  // CHAPITRES (v7.02, Hervé : « il y a plein de choses sur une seule page »). Un seul ouvert à la
+  // fois, même schéma que le palmarès : sur mobile, tout déplié d'un coup, l'écran était illisible
+  // et il fallait faire défiler très longtemps pour atteindre la gestion des comptes.
+  // Chaque en-tête porte son CHIFFRE CLÉ : on sait quoi ouvrir sans avoir à tout ouvrir.
+  const sec=(k,titre,resume,corps)=>`<div class="box" style="padding:0;overflow:hidden">
+      <div class="row clik" style="justify-content:space-between;align-items:center;padding:11px 13px" onclick="toggleAdm('${k}')">
+        <b class="mini">${titre}</b><span class="mini muted">${resume} ${admOpen===k?'▾':'▸'}</span></div>
+      ${admOpen===k?`<div style="padding:0 13px 12px">${corps}</div>`:''}</div>`;
+  const cActivite=`${st("🏆 Ligues créées", a.leagues)}
     <div class="box"><div class="mini muted" style="margin-bottom:8px">Ligues par statut</div>
       <div class="row mini"><span>🕓 Salon <b class="num">${a.byStatus.lobby}</b></span><span>🎬 Prépa <b class="num">${a.byStatus.prep}</b></span><span>▶️ En cours <b class="num">${a.byStatus.running}</b></span><span>🏁 Fini <b class="num">${a.byStatus.done}</b></span></div></div>
     <div class="box"><div class="mini muted" style="margin-bottom:8px">📈 Personnes actives <span class="mini">(au moins une action datée)</span></div>
@@ -6412,25 +6497,25 @@ function viewAdmin(){
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table>
       <tr><th>Jour</th><th style="text-align:right">Actifs</th><th style="text-align:right">Paris</th><th style="text-align:right">Ligues</th><th style="text-align:right">Nouveaux</th></tr>
       ${a.daily.map(r=>`<tr><td class="mini">${r.d}</td><td class="num">${r.users?`<b class="clik" onclick="showActiveNames('${r.d}')" title="Voir qui">${r.users}</b>`:'–'}</td><td class="num muted">${r.bets||'–'}</td><td class="num muted">${r.leagues||'–'}</td><td class="num muted">${r.newp||'–'}</td></tr>`).join("")}</table></div>
-    <div class="box mini muted">ℹ️ <b>Actifs</b> = personnes distinctes (1 personne = 1, même sur plusieurs ligues) ayant fait <b>au moins une action datée</b> ce jour-là : valider un prono, rejoindre ou créer une ligue, proposer ou répondre à un rachat, enchérir ou voter à la préparation.<br>⚠️ Restent <b>invisibles</b> : les simples connexions, et la <b>modification</b> d'un prono déjà enregistré (la date de création ne bouge pas). Une table d'événements les rendrait visibles — prévu en Phase 2. Les horodatages de préparation ne sont lisibles que <b>pendant</b> la préparation.<br>Les journées <b>oubliées</b> ne comptent pas : la ligne vide créée à la résolution n'est pas une activité. <b>Nouveaux</b> = 1ʳᵉ arrivée d'une personne dans une ligue.<br>🤖 Tous les compteurs de paris et de bonus <b>excluent le joueur IA</b> : il joue automatiquement, ce n'est pas de l'usage.</div>
-    ${st("🎮 Joueurs (comptes distincts ayant rejoint)", a.activeAccounts)}
+    <div class="box mini muted">ℹ️ <b>Actifs</b> = personnes distinctes (1 personne = 1, même sur plusieurs ligues) ayant fait <b>au moins une action datée</b> ce jour-là : valider un prono, rejoindre ou créer une ligue, proposer ou répondre à un rachat, enchérir ou voter à la préparation.<br>⚠️ Restent <b>invisibles</b> : les simples connexions, et la <b>modification</b> d'un prono déjà enregistré (la date de création ne bouge pas). Une table d'événements les rendrait visibles — prévu en Phase 2. Les horodatages de préparation ne sont lisibles que <b>pendant</b> la préparation.<br>Les journées <b>oubliées</b> ne comptent pas : la ligne vide créée à la résolution n'est pas une activité. <b>Nouveaux</b> = 1ʳᵉ arrivée d'une personne dans une ligue.<br>🤖 Tous les compteurs de paris et de bonus <b>excluent le joueur IA</b> : il joue automatiquement, ce n'est pas de l'usage.</div>`;
+  const cUsage=`${st("🎮 Joueurs (comptes distincts ayant rejoint)", a.activeAccounts)}
     ${st("🎫 Participations (joueur × ligue)", a.participations)}
     ${st("🧾 Paris enregistrés — humains", a.totalBets)}
     ${st("🧮 Journées résolues — humains", a.resolvedBets)}
-    ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
-    ${(()=>{ const nb=(a.quota&&a.quota.remaining!=null)?a.quota.remaining:liveQuota;
+    ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}`;
+  const cApi=`${(()=>{ const nb=(a.quota&&a.quota.remaining!=null)?a.quota.remaining:liveQuota;
       if(nb==null) return `<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API restants</span><span class="mini muted">jamais relevé — s'affichera au prochain appel réel</span></div>`;
       const qd=(a.quota&&a.quota.at)?a.quota.at:null;
       const age=qd?`relevé ${fmtWhen(new Date(qd).getTime())}`:'relevé à l\'instant';
       return `<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API restants <span class="mini">(${esc(age)})</span></span><b class="num ${nb<50?'red':(nb<150?'gold':'')}">${nb}</b></div>`
-        + (nb<50?`<div class="box mini" style="border-color:var(--red);background:rgba(229,105,95,.10)"><b class="red">⚠️ Quota bientôt épuisé</b><div class="mini muted" style="margin-top:3px">Sans crédits, les vrais résultats ne remontent plus : les journées en données réelles restent bloquées et les joueurs ne voient que des horloges. Les ligues en matchs simulés ne sont pas concernées.</div></div>`:''); })()}
-    <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués <span class="mini">(par des humains)</span></div>
+        + (nb<50?`<div class="box mini" style="border-color:var(--red);background:rgba(229,105,95,.10)"><b class="red">⚠️ Quota bientôt épuisé</b><div class="mini muted" style="margin-top:3px">Sans crédits, les vrais résultats ne remontent plus : les journées en données réelles restent bloquées et les joueurs ne voient que des horloges. Les ligues en matchs simulés ne sont pas concernées.</div></div>`:''); })()}`;
+  const cJeu=`<div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués <span class="mini">(par des humains)</span></div>
       ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b class="num">${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
     ${(()=>{ const bloc=(titre,liste,vide)=>`<div class="box"><div class="mini muted" style="margin-bottom:6px">${titre} <span class="mini">(cumul des votes sur toutes les ligues)</span></div>
       ${(liste&&liste.length)?liste.slice(0,10).map((g,i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${esc(g.t)}</span><b>${g.votes} vote${g.votes>1?'s':''}${g.wins?` · ${g.wins}× retenu`:''}</b></div>`).join(""):`<div class="mini muted">${vide}</div>`}</div>`;
       return bloc("🎭 Gages les plus choisis", a.topGages, "Aucun vote de gage enregistré pour l'instant.")
-           + bloc("🏆 Récompenses les plus choisies", a.topRewards, "Aucun vote de récompense enregistré pour l'instant."); })()}
-    ${(()=>{ // ✉️ Remontées des joueurs (v6.98). Écran admin volontairement NON traduit.
+           + bloc("🏆 Récompenses les plus choisies", a.topRewards, "Aucun vote de récompense enregistré pour l'instant."); })()}`;
+  const cRemontees=`${(()=>{ // ✉️ Remontées des joueurs (v6.98). Écran admin volontairement NON traduit.
       const badge=k=>k==="bug"?'<span class="chip" style="flex:0 0 auto;background:rgba(229,105,95,.15);color:#e5695f;border:1px solid rgba(229,105,95,.4)">🐛 bug</span>'
                               :'<span class="chip" style="flex:0 0 auto;background:rgba(212,175,55,.15);color:var(--gold);border:1px solid rgba(212,175,55,.4)">💡 idée</span>';
       const stLab={nouveau:"🆕 nouveau", vu:"👀 vu", traite:"✅ traité"};
@@ -6452,20 +6537,22 @@ function viewAdmin(){
               <textarea readonly style="width:100%;height:150px;font:12px/1.4 ui-monospace,monospace;margin-top:5px" onclick="this.select()">${esc(r.context||'')}</textarea></details>
             <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
               ${["nouveau","vu","traite"].filter(s=>s!==r.status).map(s=>`<button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetReportStatus('${r.id}','${s}')">${stLab[s]}</button>`).join('')}
+              <button class="btn ghost sm" style="flex:0 0 auto;border-color:var(--red);color:var(--red)" onclick="adminDeleteReport('${r.id}',${r.num})">🗑 Supprimer</button>
             </div>`:''}
         </div>`; }).join('')}</div>`;
       const nouv=adminReports?adminReports.filter(r=>r.status==="nouveau").length:0;
-      return `<div class="box"><div class="mini muted" style="margin-bottom:6px">✉️ Remontées des joueurs — bugs et idées${nouv?` <b style="color:var(--gold)">· ${nouv} nouvelle${nouv>1?'s':''}</b>`:''}</div>
-        <label class="mini muted">Ton mot de passe admin</label>
+      const traitees=adminReports?adminReports.filter(r=>r.status==="traite").length:0;
+      return `<label class="mini muted">Ton mot de passe admin</label>
         <input id="adminPwdRep" type="password" value="${esc(adminPwd)}" placeholder="••••••" autocomplete="off">
-        <div style="height:8px"></div>
-        <button class="btn ghost" onclick="adminLoadReports()">${adminReports?'🔄 Rafraîchir':'📬 Charger les remontées'}</button>
-        ${corps}</div>`; })()}
-    <div class="box"><div class="mini muted" style="margin-bottom:6px">🔑 Ton compte admin</div>
-      <div class="mini muted" style="margin-bottom:8px">Tu es connecté : tu peux changer <b>ton propre</b> mot de passe sans connaître l'ancien.</div>
-      <button class="btn ghost" style="border-color:var(--gold);color:var(--gold)" onclick="changeMyPassword()">🔑 Changer MON mot de passe</button></div>
-    <div class="box"><div class="mini muted" style="margin-bottom:6px">👤 Gestion des comptes — réinitialiser un mot de passe</div>
-      <label class="mini muted">Ton mot de passe admin</label>
+        <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn ghost" style="flex:1" onclick="adminLoadReports()">${adminReports?'🔄 Rafraîchir':'📬 Charger les remontées'}</button>
+          ${traitees?`<button class="btn ghost" style="flex:0 0 auto;border-color:var(--red);color:var(--red)" onclick="adminPurgeReports()">🧹 Vider les ${traitees} traitée${traitees>1?'s':''}</button>`:''}
+        </div>
+        ${corps}`; })()}
+    `;
+  const cMoi=`<div class="mini muted" style="margin-bottom:8px">Tu es connecté : tu peux changer <b>ton propre</b> mot de passe sans connaître l'ancien.</div>
+      <button class="btn ghost" style="border-color:var(--gold);color:var(--gold)" onclick="changeMyPassword()">🔑 Changer MON mot de passe</button>`;
+  const cComptes=`<label class="mini muted">Ton mot de passe admin</label>
       <input id="adminPwd" type="password" value="${esc(adminPwd)}" placeholder="••••••" autocomplete="off">
       <div style="height:8px"></div>
       <button class="btn ghost" onclick="adminLoadUsers()">${adminUsers?'🔄 Rafraîchir la liste':'🔓 Charger les comptes'}</button>
@@ -6481,7 +6568,20 @@ function viewAdmin(){
             <div class="row" style="gap:5px;flex-wrap:wrap;margin-top:5px">${SHOP_ORDER.map(k=>{ const on=oo?(oo.indexOf(k)>=0):false; return `<span class="chip clik" onclick="adminSetOptions('${u.id}','${k}')" style="flex:0 0 auto;border:1px solid ${on?'var(--green)':'var(--border)'};color:${on?'var(--green)':'var(--muted)'};background:${on?'rgba(37,192,125,.12)':'transparent'}">${on?'✓':'🔒'} ${OPT_LABELS[k]}</span>`; }).join('')}</div>
             <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetAllOptions('${u.id}',true)">Tout activer</button><button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetAllOptions('${u.id}',false)">Tout verrouiller</button></div>
             <div class="mini muted" style="margin-top:4px;opacity:.8">Effet à la prochaine connexion de ce compte.</div>`; })()}
-          </div>`).join(''):'<div class="mini muted">Aucun compte.</div>'}</div>`:'<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin, puis charge la liste pour gérer les accès (couper / réactiver), les options premium et les mots de passe.</div>'}</div>`;
+          </div>`).join(''):'<div class="mini muted">Aucun compte.</div>'}</div>`:'<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin, puis charge la liste pour gérer les accès (couper / réactiver), les options premium et les mots de passe.</div>'}`;
+  const nouv=adminReports?adminReports.filter(r=>r.status==="nouveau").length:0;
+  const quotaTxt=(()=>{ const nb=(a.quota&&a.quota.remaining!=null)?a.quota.remaining:liveQuota;
+    return nb==null?"jamais relevé":(nb+" crédits"); })();
+  return `${back}
+    <div class="box"><h2 style="margin-top:0">🛠 Tableau de bord admin</h2>
+      <div class="mini muted">Touche un chapitre pour l'ouvrir. Un seul à la fois.</div></div>
+    ${sec("activite","📈 Activité", a.leagues+" ligues", cActivite)}
+    ${sec("usage","🎮 Usage du jeu", a.totalBets+" paris", cUsage)}
+    ${sec("api","📡 Crédits API", quotaTxt, cApi)}
+    ${sec("jeu","🃏 Bonus, gages & récompenses", a.cardsPlayed+" cartes", cJeu)}
+    ${sec("remontees","✉️ Remontées des joueurs", (adminReports?(adminReports.length+" au total"+(nouv?" · "+nouv+" 🆕":"")):"non chargées"), cRemontees)}
+    ${sec("comptes","👤 Gestion des comptes", (adminUsers?adminUsers.length+" comptes":"non chargés"), cComptes)}
+    ${sec("moi","🔑 Mon compte admin", "", cMoi)}`;
 }
 
 /* ============ render / poll ============ */
