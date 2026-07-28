@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.88";
+const APP_VERSION = "v6.89";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -587,6 +587,7 @@ async function fetchRealPool(){
   const winH=(_f.bet||24); const tightMax=cutoffMin+winH*3600000;
   const out=[];
   for(const k of keys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
+    noteQuota(r.headers.get("x-requests-remaining"));   // c'est le poste le plus coûteux : on en profite pour relever le solde
     if(!r.ok) continue; const arr=await r.json();
     arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; out.push(f); } });
   }catch(e){}
@@ -619,6 +620,18 @@ let liveRes={};   // derniers résultats réels récupérés par evId (pour l'op
 // `liveResErr` = toutes les compétitions interrogées ont échoué. `liveQuota` = crédits restants
 // annoncés par l'API (en-tête `x-requests-remaining`), affiché dans l'écran admin.
 let liveResErr=false, liveQuota=null;
+// Le compteur de crédits doit survivre au rechargement de page, sinon il n'est JAMAIS visible :
+// il n'était renseigné que si CETTE page avait appelé l'API, or sur l'écran admin on n'est dans
+// aucune ligue — donc aucun appel (défaut de conception de la v6.87, signalé par Hervé).
+// On le persiste donc dans le cache partagé : mesuré par n'importe quel client, lisible par l'admin.
+function noteQuota(rem){ if(rem==null) return; liveQuota=+rem;
+  try{ cacheWrite("quota",{remaining:+rem, at:new Date().toISOString()}); }catch(e){} }
+// Relève le solde SANS RIEN CONSOMMER : l'endpoint /sports est gratuit (documenté « does not count
+// against the usage quota ») mais renvoie quand même l'en-tête du solde. Appelé à l'ouverture de
+// l'écran admin → le chiffre y est toujours à jour, sans jamais coûter un crédit.
+async function refreshQuota(){
+  try{ const r=await fetch(`${ODDS_BASE}/sports/?apiKey=${ODDS_KEY}`); noteQuota(r.headers.get("x-requests-remaining")); }catch(e){}
+}
 // 💰 CACHE DU POOL (mitigation quota, en attendant le stockage serveur de la Phase 2).
 // Construire le pool coûte ~24 crédits (1 par compétition interrogée) et c'était refait à chaque
 // ouverture de l'écran de sélection ET par le remplissage auto — dans CHAQUE navigateur ouvert.
@@ -689,7 +702,7 @@ async function fetchRealResults(sportKeys){
   const map={}; let ok=0, ko=0;
   for(const k of sportKeys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/scores/?apiKey=${ODDS_KEY}&daysFrom=3&dateFormat=iso`);
     // ⚠️ NE PAS nommer cette variable `q` : elle masquerait la fonction q() des appels Supabase.
-    const rem=r.headers.get("x-requests-remaining"); if(rem!=null) liveQuota=+rem;   // crédits restants → écran admin
+    noteQuota(r.headers.get("x-requests-remaining"));   // crédits restants → écran admin
     if(!r.ok){ ko++; continue; } ok++; const arr=await r.json();
     arr.forEach(ev=>{ const done=!!ev.completed; let res=null;
       if(done && Array.isArray(ev.scores)){ const sc=n=>{ const o=ev.scores.find(x=>x.name===n); return o!=null?parseFloat(o.score):null; };
@@ -5779,6 +5792,10 @@ function viewPalmares(){
 }
 async function loadAdmin(){
   try{
+    // Solde de crédits API : lu depuis le cache partagé (relevé par n'importe quel client lors de son
+    // dernier appel). Sans ça, l'écran admin n'affichait jamais rien — voir noteQuota().
+    await refreshQuota();                               // gratuit : le chiffre est toujours à jour ici
+    const quota=await cacheRead("quota", Infinity);
     const lgs=await q(db.from("leagues").select("id,status,gage,prep_summary,created_at"));
     const pls=await q(db.from("players").select("id,name,is_ai,user_id,created_at"));
     const allBts=await q(db.from("bets").select("card,net,created_at,player_id,submitted"));
@@ -5863,7 +5880,7 @@ async function loadAdmin(){
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
       activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
       resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]), topGages, topRewards,
-      daily, active7, active30, everActive, totalBets:btsH.length };
+      daily, active7, active30, everActive, totalBets:btsH.length, quota };
   }catch(e){ adminData={error:e.message}; }
 }
 // Admin : clic sur le nombre d'actifs d'un jour → la liste des noms (voir qui fait quoi).
@@ -5898,7 +5915,12 @@ function viewAdmin(){
     ${st("🧾 Paris enregistrés — humains", a.totalBets)}
     ${st("🧮 Journées résolues — humains", a.resolvedBets)}
     ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}
-    ${(liveQuota!=null)?`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API résultats restants <span class="mini">(The Odds API, ce mois-ci)</span></span><b class="num ${liveQuota<50?'red':(liveQuota<150?'gold':'')}">${liveQuota}</b></div>${liveQuota<50?`<div class="box mini" style="border-color:var(--red);background:rgba(229,105,95,.10)"><b class="red">⚠️ Quota bientôt épuisé</b><div class="mini muted" style="margin-top:3px">Sans crédits, les vrais résultats ne remontent plus : les journées en données réelles restent bloquées et les joueurs ne voient que des horloges. Les ligues en matchs simulés ne sont pas concernées.</div></div>`:''}`:''}
+    ${(()=>{ const nb=(a.quota&&a.quota.remaining!=null)?a.quota.remaining:liveQuota;
+      if(nb==null) return `<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API restants</span><span class="mini muted">jamais relevé — s'affichera au prochain appel réel</span></div>`;
+      const qd=(a.quota&&a.quota.at)?a.quota.at:null;
+      const age=qd?`relevé ${fmtWhen(new Date(qd).getTime())}`:'relevé à l\'instant';
+      return `<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API restants <span class="mini">(${esc(age)})</span></span><b class="num ${nb<50?'red':(nb<150?'gold':'')}">${nb}</b></div>`
+        + (nb<50?`<div class="box mini" style="border-color:var(--red);background:rgba(229,105,95,.10)"><b class="red">⚠️ Quota bientôt épuisé</b><div class="mini muted" style="margin-top:3px">Sans crédits, les vrais résultats ne remontent plus : les journées en données réelles restent bloquées et les joueurs ne voient que des horloges. Les ligues en matchs simulés ne sont pas concernées.</div></div>`:''); })()}
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués <span class="mini">(par des humains)</span></div>
       ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b class="num">${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
     ${(()=>{ const bloc=(titre,liste,vide)=>`<div class="box"><div class="mini muted" style="margin-bottom:6px">${titre} <span class="mini">(cumul des votes sur toutes les ligues)</span></div>
