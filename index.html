@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.03";
+const APP_VERSION = "v7.05";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -981,6 +981,32 @@ function fixtureKickoff(f){ if(!f) return null;
   return null; }
 // Étiquette « 🕐 demain 19:35 » (vide si l'heure est inconnue). Arrondi 5 min pour un rendu propre.
 function koLabel(f){ let ts=fixtureKickoff(f); if(!ts) return ""; ts=Math.round(ts/300000)*300000; return `<span class="mini muted">🕐 ${esc(fmtWhen(ts))}</span>`; }
+// ÉTAT D'UN MATCH SANS SON RÉSULTAT (v7.05, demandé par Hervé). Sur les écrans d'APRÈS clôture,
+// un joueur sans l'option ⏱️ voyait « 🕐 aujourd'hui 00:30 » sur un match joué depuis vingt
+// heures : il en déduisait que le match n'avait pas encore eu lieu. On dit donc où en est la
+// rencontre — sans jamais dévoiler qui a gagné, ce qui reste réservé à l'option.
+// ⚠️ `liveRes` est alimenté pour TOUS les joueurs (c'est lui qui déclenche la résolution de la
+// journée) ; seul son AFFICHAGE est premium. On peut donc s'en servir ici sans rien divulguer.
+// À défaut, on estime par le temps écoulé, avec la même durée de match que le déclencheur de
+// récupération des résultats (MATCH_DUREE_MIN) — une seule constante, pas deux règles.
+// ⚠️ Un match reporté sera annoncé « terminé » à tort pendant quelques heures, jusqu'à ce que
+// la règle d'annulation automatique (STALE_MATCH_H) prenne le relais et affiche « 🚫 annulé ».
+// C'est assumé : afficher une heure de coup d'envoi dépassée trompait bien davantage.
+function matchEtat(f){
+  const r=liveRes[f && f.evId];
+  if(r && r.completed) return "fini";
+  const ts=fixtureKickoff(f); if(!ts) return "avant";
+  const ecoule=Date.now()-ts;
+  if(ecoule >= MATCH_DUREE_MIN*60000) return "fini";
+  return ecoule>=0 ? "encours" : "avant";
+}
+// Heure du coup d'envoi tant que le match n'a pas commencé, puis son état.
+function koOuEtat(f){
+  const e=matchEtat(f);
+  if(e==="fini")    return `<span class="mini muted">🏁 ${t("terminé")}</span>`;
+  if(e==="encours") return `<span class="mini muted">⏱️ ${t("en cours")}</span>`;
+  return koLabel(f);
+}
 // Le match i porte-t-il le logo de la carte ? (gère les cartes à 2 cibles comme le Coup Double → logo sur les 2 matchs)
 function cardOnMatch(card,i){ return !!(card&&card.id&&(card.target===i||(CARDS[card.id]&&CARDS[card.id].two&&card.target2===i))); }
 function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ ${t("Choix des matchs avant {a}",{a:'<b>'+fmtWhen(dt.sel)+'</b>'})} · ${leagueFormula().n}</div>`:''; }
@@ -1201,6 +1227,7 @@ const EN={
   "Capitaine et bonus sur des matchs différents":"Captain and bonus on different matches",
   "Mise de 1 € min. sur chaque pari":"Min €1 stake on each bet", "Valider mes pronostics →":"Confirm my picks →",
   "(toi)":"(you)", "✓ validé":"✓ done", "en cours":"in progress",
+  "terminé":"finished",   // état d'un MATCH sur l'écran Résultats, sans dévoiler le score (v7.05)
   "🔒 Tes pronos (verrouillés — consultation seule)":"🔒 Your picks (locked — view only)",
   "🃏 Bonus joué :":"🃏 Bonus played:", "(visible par toi seul jusqu'aux résultats)":"(visible only to you until the results)",
   "Aucun bonus joué ce jour.":"No bonus played this day.",
@@ -3039,7 +3066,11 @@ function viewHome(){
     ${(myLeagues&&myLeagues.length)
       ? `<div style="height:8px"></div><button class="btn ghost sm" onclick="startEssai()">${t("🎓 Revoir le tuto")}</button>`
       : `<div style="height:8px"></div><button class="btn ghost" onclick="startEssai()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`}
-    ${(AUTH&&AUTH.id===ADMIN_ID)?`<div style="height:8px"></div><button class="btn ghost sm" onclick="openAdmin()">${t("🛠 Admin")}</button>`:''}`;
+    `;
+  // v7.04 (Hervé) : le bouton « 🛠 Admin » a été RETIRÉ de l'accueil. Il faisait doublon avec
+  // « ⚙️ Espace admin » de l'écran Profil, seul point d'entrée conservé. Motif : l'accueil de
+  // l'administrateur doit être EXACTEMENT celui de n'importe quel joueur — sans quoi on teste
+  // un écran que personne d'autre ne voit. ⚠️ Ne pas le remettre « pour aller plus vite ».
 }
 function viewLeagues(){
   return `<div class="box"><button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
@@ -5204,8 +5235,8 @@ function waitingResultsBody(d){
     const v=liveVerdict(f,sel);
     if(v) return v.ok==null ? `<span class="mini muted">${v.txt}</span>` : `<b class="${v.ok?'green':'red'}">${v.txt}</b>`;
     if(f.canceled) return `<span class="mini muted">🚫 ${t("annulé")}</span>`;
-    // Pas encore terminé : on affiche l'HEURE du coup d'envoi (Hervé) plutôt qu'un simple ⏳.
-    return koLabel(f)||`<span class="mini muted">⏳</span>`; };
+    // Résultat pas encore remonté : heure du coup d'envoi, puis état du match (v7.05).
+    return koOuEtat(f)||`<span class="mini muted">⏳</span>`; };
   const myBetNow=myBet();   // pour savoir ce que J'AI parié, duel par duel
   const myDuelId=(myDuel()||{}).id;
   const affiche = dz=>{ const fx=dz.fixtures||[]; if(!fx.length) return ''; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{}; const mine=(dz.id===myDuelId);
@@ -5213,8 +5244,8 @@ function waitingResultsBody(d){
       <div class="mini" style="margin-bottom:3px"><b>${mine?'⚔️ ':''}${avaName(hn)} ${t("vs")} ${avaName(an)}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
       ${fx.map((f,i)=>{ /* mon prono UNIQUEMENT sur mon duel : ailleurs on n'a pas à trancher */
         const sel=(mine && myBetNow && Array.isArray(myBetNow.picks) && myBetNow.picks[i]) ? myBetNow.picks[i].sel : null;
-        const rp=resPart(f,sel); /* résultat live si dispo, sinon l'heure du coup d'envoi (Hervé v6.42) */
-        return `<div class="row mini" style="padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span class="muted">${esc(f.home)} – ${esc(f.away)}</span><span style="flex:0 0 auto">${rp||koLabel(f)||'<span class="mini muted">⏳</span>'}</span></div>`; }).join('')}
+        const rp=resPart(f,sel); /* résultat live si dispo ; sinon heure du coup d'envoi puis état (v7.05) */
+        return `<div class="row mini" style="padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span class="muted">${esc(f.home)} – ${esc(f.away)}</span><span style="flex:0 0 auto">${rp||koOuEtat(f)||'<span class="mini muted">⏳</span>'}</span></div>`; }).join('')}
     </div>`; };
   const anyfx=(duels||[]).some(x=>Array.isArray(x.fixtures)&&x.fixtures.length);
   if(!anyfx){ h+=`<div class="box mini muted">${t("Les 5 matchs ne sont pas encore choisis.")}</div>`; }
