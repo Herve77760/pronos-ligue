@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.97";
+const APP_VERSION = "v7.00";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -997,6 +997,7 @@ let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDu
 let STAND_H2H=null, STAND_H2H_LG=null;
 let palmares=null, adminData=null, palmOpen="", myStatsData=null;
 let adminUsers=null, adminPwd="";
+let adminReports=null, repOpen="";   // remontées des joueurs (v6.98) + n° de celle dépliée
 let endStats=null; // bilan de fin de ligue (calculé une fois quand la ligue est terminée)
 
 /* ============ utils ============ */
@@ -1639,9 +1640,10 @@ const EN={
   // --- Fiches de vente premium par option (pitchs) ---
   "Bonus complets":"Full bonus set", "Résultats en direct":"Live results",
   "Données réelles":"Real data",
-  "Joue sur de vrais matchs — vraies cotes, vrais résultats.":"Play on real matches — real odds, real results.",
+  "Crée tes ligues sur de vrais matchs — vraies cotes, vrais résultats.":"Create your leagues on real matches — real odds, real results.",
   "Les affiches, les <b>cotes</b> et les <b>résultats</b> viennent du sport réel : de quoi prouver qui pronostique le mieux sur du concret.":"The fixtures, <b>odds</b> and <b>results</b> come from real sport: a way to prove who predicts best on the real thing.",
-  "Bonus inclus : tu vois les <b>matchs terminés en direct</b> (✓ / ✗ sur ton prono) dès qu'ils tombent, sans attendre la fin de la journée.":"Bonus included: you see <b>finished matches live</b> (✓ / ✗ on your pick) as they come in, without waiting for the end of the matchday.",
+  "Tu peux créer tes propres ligues en données réelles, ou basculer une ligue existante.":"You can create your own real-data leagues, or switch an existing one over.",
+  "Sans cette option tu peux quand même <b>jouer</b> dans une ligue en données réelles créée par quelqu'un d'autre.":"Without this option you can still <b>play</b> in a real-data league created by someone else.",
   "Un bonus te fait de l'œil ? Rachète-le.":"Got your eye on a bonus? Buy it.",
   "Repère une carte qu'un adversaire garde au chaud, propose ton prix. S'il dit oui, elle est à toi.":"Spot a card an opponent is sitting on, name your price. If they say yes, it's yours.",
   "La seule option qui te laisse <b>agir en pleine partie</b> : le coup de pouce au bon moment.":"The only option that lets you <b>act mid-game</b>: the boost at just the right moment.",
@@ -1654,10 +1656,12 @@ const EN={
   "Envie de t'entraîner en solo — ou, soyons honnêtes, petite panne d'amis ce soir ? L'IA répond présent.":"Fancy some solo practice — or, let's be honest, a little short on friends tonight? The AI's got you.",
   "Il te manque un joueur pour être pair, et pas envie d'attendre Pierrot qui met 3 plombes à valider ? L'IA complète en deux secondes.":"One player short of an even count, and don't feel like waiting for slowpoke Pierrot? The AI fills in in two seconds.",
   "Elle joue le jeu à fond, mais ne subit ni gage ni récompense — trop classe pour ça.":"It plays for real, but takes no forfeit or reward — too classy for that.",
-  "Bien plus que le classement : ton dossier perso complet.":"Way more than the standings: your complete personal file.",
-  "Le détail <b>ligue par ligue</b> : la partie en cours et toutes les précédentes.":"The <b>league-by-league</b> breakdown: the current one and all the past ones.",
-  "Ton <b>face-à-face</b> contre chaque pote, tes records compilés, tes tendances.":"Your <b>head-to-head</b> against each mate, your compiled records, your trends.",
-  "Le palmarès ne montre que le top 5 ; ici, c'est ton dossier complet, rien que le tien.":"The hall of fame only shows the top 5; here it's your full file, yours alone.",
+  "Bien plus que le classement : ce que tes chiffres disent de ton jeu.":"Way more than the standings: what your numbers say about how you play.",
+  "Ton <b>profil de pronostiqueur</b> : es-tu meilleur sur les favoris ou sur les outsiders ?":"Your <b>predictor profile</b>: are you better on favourites or on underdogs?",
+  "Ta <b>rentabilité comparée</b> à celle des autres joueurs de tes ligues — le seul vrai repère.":"Your <b>return compared</b> with the other players in your leagues — the only real benchmark.",
+  "Le rendement réel du <b>👑 Capitaine</b> et de chacun de tes bonus : lesquels te rapportent vraiment.":"The real return of the <b>👑 Captain</b> and of each of your bonuses: which ones actually pay off.",
+  "La <b>courbe de ta progression</b>, tes records, ta régularité, ton face-à-face contre chaque pote.":"Your <b>progress curve</b>, your records, your consistency, your head-to-head against each mate.",
+  "Chaque chiffre est expliqué : ce qu'il mesure, et ce qu'un bon chiffre veut dire.":"Every figure is explained: what it measures, and what a good number looks like.",
   "Touche une option pour voir tous ses détails.":"Tap an option to see all its details.",
   "Regarde tes pronos vivre (ou mourir) en direct.":"Watch your picks come alive (or die) live.",
   "Dès qu'un vrai match se termine : le résultat + ton prono ✓ ou ✗, sans attendre la fin de la journée.":"The moment a real match ends: the result + your pick ✓ or ✗, without waiting for the day to finish.",
@@ -1705,10 +1709,11 @@ const EN={
   "Touche la carte pour relire son effet. Ton adversaire ne la découvrira qu'aux résultats.":"Tap the card to re-read what it does. Your opponent won't see it until the results.",
   "Résultats momentanément indisponibles":"Results temporarily unavailable",
   "La source des résultats ne répond pas pour l'instant — ce n'est pas lié à tes pronos. La journée se résoudra automatiquement dès qu'elle répondra à nouveau.":"The results source isn't responding right now — nothing to do with your picks. The matchday will settle automatically as soon as it's back.",
-  // Argumentaire « Résultats en direct » (PITCHES.live) — même option achetée que « Données réelles ».
+  // Argumentaire de l'option ⏱️ « Résultats en direct » (PITCHES.live) — option À PART ENTIÈRE
+  // depuis la v6.99 : elle ne fait plus partie de 📡 « Données réelles ».
   "Suis tes pronos tomber un par un, sans attendre la fin de la journée.":"Watch your picks land one by one, without waiting for the end of the matchday.",
   "Dès qu'un vrai match se termine : le résultat, et <b>✓ ou ✗ sur ton prono</b>.":"As soon as a real match ends: the result, and <b>✓ or ✗ on your pick</b>.",
-  "Fait partie de l'option 📡 <b>Données réelles</b> : en la débloquant, tu pourras aussi créer tes propres ligues sur de vrais matchs.":"Part of the 📡 <b>Real data</b> option: unlocking it also lets you create your own leagues on real matches.",
+  "⚠️ N'a d'effet que dans une ligue en <b>données réelles</b> : une ligue en matchs simulés se résout d'un bloc, il n'y a rien à suivre en direct.":"⚠️ Only has any effect in a <b>real-data</b> league: a simulated league settles in one go, so there is nothing to follow live.",
   // Divers (v6.25)
   "✅ prêt":"✅ ready", "à valider":"to confirm", "Aller sur mes ligues":"Go to my leagues",
   "Gage/récompense votés + enchères validées":"Forfeit/reward voted + auction confirmed",
@@ -1755,7 +1760,7 @@ const EN={
   "Pronos des joueurs · {a}/{b}":"Players' picks · {a}/{b}",
   "<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.":"<b>Premium option active</b>: as soon as betting closes (before the results), you see {a}'s picks + stakes. The 🃏 bonuses stay hidden until the results.",
   "<b>Option premium</b> : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.":"<b>Premium option</b>: as soon as betting closes (before the results), you'd see {a}'s picks + stakes. Before the close, nobody sees anything. Without it → 🔒 until the results.",
-  "Inclus dans ton option 📡 <b>Données réelles</b> : tu vois les matchs terminés au fil de l'eau, avec ✓ ou ✗ sur <b>tes</b> pronos. Les gains en € restent dévoilés à tous à la résolution.":"Included in your 📡 <b>Real data</b> option: you see matches as they finish, with ✓ or ✗ on <b>your</b> picks. The € winnings are still revealed to everyone at resolution.",
+  "Grâce à ton option ⏱️ <b>Résultats en direct</b> : tu vois les matchs terminés au fil de l'eau, avec ✓ ou ✗ sur <b>tes</b> pronos. Les gains en € restent dévoilés à tous à la résolution.":"Thanks to your ⏱️ <b>Live results</b> option: you see matches as they finish, with ✓ or ✗ on <b>your</b> picks. The € winnings are still revealed to everyone at resolution.",
   "🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.":"🔒 Without the “See the opponent” option, {a}'s column stays hidden until the results.",
   // Légende du classement (v6.12)
   "Comprendre le classement":"Understanding the standings", "monte":"up", "stable":"steady", "descend":"down", "comprendre le classement":"understand the standings",
@@ -1840,6 +1845,41 @@ const EN={
   "Toutes les options premium du jeu. <b>Souscris à celles qui t'intéressent</b> — paiement désactivé pendant la phase de test.":"All the game's premium options. <b>Subscribe to the ones you want</b> — payment disabled during the test phase.",
   // --- Stats perso cross-ligue ---
   "Ton dossier complet, toutes tes ligues.":"Your complete file, across all your leagues.",
+  // --- Dossier détaillé de l'option 📊 (v7.00) ---
+  "Ton dossier complet, toutes tes ligues. Touche une ligne pour savoir ce que le chiffre veut dire.":"Your complete file, across all your leagues. Tap any line to find out what the number means.",
+  "Tes coups":"Your standout bets", "Cote moyenne gagnée":"Average winning odds",
+  "Plus gros prono gagné":"Biggest single win", "Plus grosse mise":"Biggest stake",
+  "Points par journée":"Points per matchday", "Évolution du ROI":"ROI over time",
+  "cote":"odds", "mise":"stake",
+  "La courbe apparaîtra après quelques journées jouées.":"The curve will appear after a few matchdays.",
+  "Ton profil de pronostiqueur":"Your predictor profile",
+  "Favoris <span class='muted'>(cote &lt; 1,80)</span>":"Favourites <span class='muted'>(odds &lt; 1.80)</span>",
+  "Équilibrés <span class='muted'>(1,80 à 3,00)</span>":"Even matches <span class='muted'>(1.80 to 3.00)</span>",
+  "Outsiders <span class='muted'>(cote &gt; 3,00)</span>":"Underdogs <span class='muted'>(odds &gt; 3.00)</span>",
+  "Face aux autres":"Against the others",
+  "Moyenne des {a} autres joueurs de tes ligues (joueur IA exclu).":"Average of the {a} other players in your leagues (AI player excluded).",
+  "Rendement du Capitaine":"Captain's return", "Apporté par le doublement":"Added by the doubling",
+  "sur {a} journées avec Capitaine":"across {a} matchdays with a Captain",
+  "Bonus les plus rentables":"Most profitable bonuses",
+  "Régularité":"Consistency", "Journées dans le vert":"Matchdays in the green",
+  "Plus longue série de duels gagnés":"Longest run of duels won", "Par sport":"By sport",
+  // Fiches d'explication (STAT_INFO) — passent par t(variable), INVISIBLES pour check-i18n :
+  // toute nouvelle fiche doit voir sa clé EN ajoutée ici À LA MAIN, sinon aucune alerte.
+  "La part de tes pronos qui sont tombés justes. Utile, mais insuffisant seul : on peut gagner souvent en jouant des favoris et perdre de l'argent quand même.":"The share of your picks that came in. Useful, but not enough on its own: you can win often on favourites and still lose money.",
+  "Ce que rapporte chaque euro misé : résultat net ÷ total misé. <b>+20 %</b> = 20 centimes gagnés par euro joué. Au-dessus de 0 tu gagnes de l'argent, en dessous tu en perds — c'est la mesure la plus honnête de ton niveau.":"What each euro staked returns: net result ÷ total staked. <b>+20%</b> = 20 cents earned per euro played. Above 0 you're making money, below you're losing it — the most honest measure of your level.",
+  "Tes gains moins tes mises, sur toutes tes ligues. Il dépend de combien tu joues : un joueur prudent peut être meilleur avec un net plus petit — regarde le ROI pour comparer.":"Your winnings minus your stakes, across all leagues. It depends on how much you play: a cautious player can be better with a smaller net — use ROI to compare.",
+  "La cote moyenne de tes pronos <b>gagnants</b>. Proche de 1,50 : tu gagnes sur du solide. Au-dessus de 2,50 : tu gagnes sur du risqué, plus rare mais plus payant.":"The average odds of your <b>winning</b> picks. Near 1.50: you win on safe bets. Above 2.50: you win on risky ones — rarer, but it pays more.",
+  "Le plus gros coup de ta carrière, en cote. C'est le trophée de la table — celui qu'on ressort à chaque repas.":"The biggest hit of your career, in odds. The table's trophy — the one you bring up at every dinner.",
+  "Le gain d'un <b>seul</b> prono : mise × (cote − 1), doublé s'il était Capitaine. À ne pas confondre avec ta meilleure journée, qui additionne tous tes paris du jour.":"The gain from a <b>single</b> pick: stake × (odds − 1), doubled if it was your Captain. Not to be confused with your best matchday, which adds up every bet that day.",
+  "Le montant le plus élevé que tu aies posé sur un seul match. Le pari se joue au <b>résultat net</b> : miser gros n'est pas gagner, ça amplifie juste les deux sens.":"The largest amount you've put on a single match. Duels are settled on <b>net result</b>: betting big isn't winning, it just amplifies both directions.",
+  "Ta moyenne de points de championnat par journée jouée. Repère : <b>1,5</b> c'est correct, <b>2</b> ou plus c'est le rythme d'un vainqueur.":"Your average championship points per matchday played. Benchmark: <b>1.5</b> is decent, <b>2</b> or more is winner's pace.",
+  "Ta rentabilité cumulée, journée après journée, toutes ligues confondues. Une courbe qui monte = tu progresses ; en dents de scie = tu joues gros et irrégulier. Les paris n'ayant pas de date en base, l'axe suit <b>l'ordre des journées jouées</b>, pas le calendrier.":"Your cumulative return, matchday after matchday, across all leagues. A rising curve = you're improving; a jagged one = you play big and erratically. Bets carry no date in the database, so the axis follows <b>the order matchdays were played</b>, not the calendar.",
+  "Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise.":"Your success rate by match type: <b>favourites</b> (odds under 1.80), <b>even</b>, <b>underdogs</b> (above 3.00). It necessarily drops towards underdogs — what matters is knowing where YOU are strongest.",
+  "Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu.":"The same figures for the other players in your leagues (AI player excluded). The only real benchmark: a ROI is judged against your table, not in the abstract.",
+  "Ce que le doublement t'a rapporté <b>en plus</b>, ou coûté. Un chiffre négatif ne condamne pas la mécanique : il dit que tu doubles trop souvent sur des paris incertains.":"What the doubling earned you <b>on top</b>, or cost you. A negative figure doesn't condemn the mechanic: it says you double too often on shaky picks.",
+  "Le gain réel de chaque bonus : ton résultat AVEC la carte moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable.":"Each bonus's real gain: your result WITH the card minus what it would have been WITHOUT it. ⚠️ Not to be confused with the most <b>played</b> bonus — the most played is rarely the most profitable.",
+  "Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats.":"How many matchdays you finish in the green, and your longest run of duels won. Two players on the same ROI don't have the same consistency — and consistency is what wins championships.",
+  "Ta réussite sport par sport. N'a de sens qu'en <b>données réelles</b> : en matchs simulés, les rencontres sont tirées au hasard.":"Your success rate sport by sport. Only meaningful with <b>real data</b>: in simulated matches, fixtures are drawn at random.",
   "Chargement…":"Loading…", "Pas encore de partie jouée.":"No game played yet.",
   "Ma carrière":"My career", "Ligues jouées":"Leagues played", "Titres 🥇 / podiums 🏆":"Titles 🥇 / podiums 🏆",
   "Par ligue":"By league", "Touche une ligue pour son détail.":"Tap a league for its details.",
@@ -2026,15 +2066,32 @@ const EN={
   "un bonus":"a bonus",
   // — Phase 4d : règles du jeu —
   "← Retour":"← Back", "📖 Règles du jeu":"📖 Game rules",
-  "Signaler un bug":"Report a bug", "📋 Copier le rapport":"📋 Copy the report",
-  "📋 Rapport copié — colle-le dans ton message.":"📋 Report copied — paste it into your message.",
-  "Copie le rapport ci-dessous et envoie-le à l'organisateur (WhatsApp, SMS, mail — comme tu veux). Il contient le <b>contexte technique</b> de ton écran : c'est ce qui permet de retrouver le problème.":"Copy the report below and send it to the organiser (WhatsApp, SMS, email — whatever suits you). It carries the <b>technical context</b> of your screen: that's what makes the problem findable.",
-  "⚠️ Pense à compléter les 3 lignes du bas : ce que tu faisais, ce que tu attendais, ce qui s'est passé.":"⚠️ Remember to fill in the 3 lines at the bottom: what you were doing, what you expected, what happened.",
-  "La copie automatique n'a pas fonctionné. Sélectionne le texte ci-dessous et copie-le à la main.":"Automatic copying didn't work. Select the text below and copy it by hand.",
+  // --- Remontées des joueurs : formulaire bug / idée (v6.98) ---
+  // ⚠️ Les libellés des CHAMPS (REPORT_FORM) passent par t(variable) : `check-i18n` ne peut pas
+  // les détecter, il ne voit que les t("littéral"). Ils sont donc à tenir à jour À LA MAIN ici —
+  // ajouter une question au formulaire sans sa clé EN ne déclenchera AUCUNE alerte.
+  "Signaler un bug":"Report a bug", "Proposer une idée":"Suggest an idea",
   "Envoyer un message":"Send a message", "Que veux-tu envoyer ?":"What do you want to send?",
-  "Un bug":"A bug", "Une idée / un avis":"An idea / feedback", "Proposer une idée / un avis":"Suggest an idea / feedback", "📋 Copier":"📋 Copy",
-  "Écris ton idée ou ton avis dans la dernière ligne, puis copie le tout et envoie-le à l'organisateur. Le <b>contexte technique</b> de ta page est joint automatiquement.":"Write your idea or feedback on the last line, then copy it all and send it to the organiser. The <b>technical context</b> of your page is attached automatically.",
-  "⚠️ Complète la dernière ligne : ton idée ou ton avis.":"⚠️ Fill in the last line: your idea or feedback.",
+  "Un bug":"A bug", "Une idée":"An idea", "📨 Envoyer":"📨 Send", "Envoi…":"Sending…",
+  "Réponds aux trois questions : c'est ce qui permet de retrouver le problème. Le rapport est <b>enregistré</b> dès que tu valides — rien ne se perd.":"Answer the three questions: that's what makes the problem findable. The report is <b>saved</b> as soon as you confirm — nothing gets lost.",
+  "Décris ton idée. Elle est <b>enregistrée</b> dès que tu valides — rien ne se perd.":"Describe your idea. It is <b>saved</b> as soon as you confirm — nothing gets lost.",
+  "Le contexte technique de ton écran est joint automatiquement — voir":"The technical context of your screen is attached automatically — view",
+  "⚠️ Merci de remplir : {a}":"⚠️ Please fill in: {a}",
+  "Bug enregistré":"Bug saved", "Idée enregistrée":"Idea saved",
+  "C'est la remontée <b>n° {a}</b>.":"This is report <b>no. {a}</b>.", "C'est bien enregistré.":"It has been saved.",
+  "Merci — elle sera lue.":"Thank you — it will be read.",
+  "Tu peux aussi prévenir par mail tout de suite. Ce n'est pas obligatoire : le message est déjà enregistré.":"You can also send an email right away. It isn't required: the message is already saved.",
+  "📧 Prévenir par mail":"📧 Notify by email",
+  "Enregistrement impossible":"Could not be saved",
+  "Ton message n'a pas pu être enregistré. Rien n'est perdu : copie le texte ci-dessous et envoie-le à {a}.":"Your message could not be saved. Nothing is lost: copy the text below and send it to {a}.",
+  // Champs du formulaire (t(variable) — invisibles pour check-i18n, voir avertissement ci-dessus)
+  "Que faisais-tu ?":"What were you doing?", "À quoi t'attendais-tu ?":"What did you expect?",
+  "Que s'est-il passé à la place ?":"What happened instead?",
+  "Ton idée":"Your idea", "Pourquoi ce serait mieux ?":"Why would it be better?", "Facultatif":"Optional",
+  "Ex. : je validais mes pronos de la journée 3":"E.g. I was confirming my picks for matchday 3",
+  "Ex. : revenir sur la page des résultats":"E.g. to land back on the results screen",
+  "Ex. : la page est restée bloquée":"E.g. the page froze",
+  "Ex. : rejouer une ligue terminée à l'identique":"E.g. replay a finished league with the same setup",
   "<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.":"<b>Goal:</b> a prediction championship among friends, on real events and real odds. Everyone starts with <b>100 virtual €</b>; the winner is whoever has the most <b>championship points</b>.",
   "📚 Voir les règles détaillées →":"📚 See the detailed rules →", "📚 Règles détaillées":"📚 Detailed rules",
   "📚 Comment marche le jeu":"📚 How the game works",
@@ -2236,28 +2293,33 @@ const PITCHES={
     "Envie de t'entraîner en solo — ou, soyons honnêtes, petite panne d'amis ce soir ? L'IA répond présent.",
     "Il te manque un joueur pour être pair, et pas envie d'attendre Pierrot qui met 3 plombes à valider ? L'IA complète en deux secondes.",
     "Elle joue le jeu à fond, mais ne subit ni gage ni récompense — trop classe pour ça."]},
-  stats:{e:"📊",t:"Mes stats",hook:"Bien plus que le classement : ton dossier perso complet.",pts:[
-    "Le détail <b>ligue par ligue</b> : la partie en cours et toutes les précédentes.",
-    "Ton <b>face-à-face</b> contre chaque pote, tes records compilés, tes tendances.",
-    "Le palmarès ne montre que le top 5 ; ici, c'est ton dossier complet, rien que le tien."]},
+  // v7.00 : argumentaire réécrit avec le contenu réellement livré. Il promettait « tes tendances »
+  // pour sept lignes de compteurs — Hervé : « les infos données sont trop légères, il faut donner
+  // plus d'info puisqu'on fait payer cette option ». Ce qui se vend maintenant, c'est l'ANALYSE.
+  stats:{e:"📊",t:"Mes stats",hook:"Bien plus que le classement : ce que tes chiffres disent de ton jeu.",pts:[
+    "Ton <b>profil de pronostiqueur</b> : es-tu meilleur sur les favoris ou sur les outsiders ?",
+    "Ta <b>rentabilité comparée</b> à celle des autres joueurs de tes ligues — le seul vrai repère.",
+    "Le rendement réel du <b>👑 Capitaine</b> et de chacun de tes bonus : lesquels te rapportent vraiment.",
+    "La <b>courbe de ta progression</b>, tes records, ta régularité, ton face-à-face contre chaque pote.",
+    "Chaque chiffre est expliqué : ce qu'il mesure, et ce qu'un bon chiffre veut dire."]},
   recap:{e:"📤",t:"Partager ma saison",hook:"Ta saison, prête à balancer sur le groupe.",pts:[
     "Un résumé stylé — classement, points, coups d'éclat — envoyé en un tap sur WhatsApp.",
     "Pour immortaliser ton titre… ou chambrer le dernier (on sait tous qui c'est).",
     "L'excuse parfaite pour relancer la bande dans la foulée."]},
-  direct:{e:"📡",t:"Données réelles",hook:"Joue sur de vrais matchs — vraies cotes, vrais résultats.",pts:[
+  // ⚠️ `direct` et `live` sont DEUX OPTIONS DISTINCTES depuis la v6.99 (tranché par Hervé).
+  // Elles étaient un seul achat, présenté sous deux noms — ce qui semait la confusion, à juste
+  // titre : parier sur de vrais matchs et suivre les résultats au fil de l'eau ne sont pas la
+  // même chose. `direct` ouvre le TYPE DE LIGUE, `live` ouvre le SUIVI PENDANT la journée.
+  direct:{e:"📡",t:"Données réelles",hook:"Crée tes ligues sur de vrais matchs — vraies cotes, vrais résultats.",pts:[
     "Les affiches, les <b>cotes</b> et les <b>résultats</b> viennent du sport réel : de quoi prouver qui pronostique le mieux sur du concret.",
-    "Bonus inclus : tu vois les <b>matchs terminés en direct</b> (✓ / ✗ sur ton prono) dès qu'ils tombent, sans attendre la fin de la journée.",
+    "Tu peux créer tes propres ligues en données réelles, ou basculer une ligue existante.",
+    "Sans cette option tu peux quand même <b>jouer</b> dans une ligue en données réelles créée par quelqu'un d'autre.",
     "Les gains en € restent pour la fin, dévoilés à tous d'un coup — le clou du spectacle."]},
-  // MÊME option que `direct` (la clé d'ACHAT reste 'direct'), présentée sous l'angle RÉSULTATS EN
-  // DIRECT. Pourquoi deux argumentaires pour une seule option (signalé par Hervé) : dans une ligue
-  // DÉJÀ en données réelles, le joueur qui n'a pas l'option se moque du discours « joue sur de vrais
-  // matchs » — il y joue déjà. Ce qui lui manque, c'est de voir les matchs tomber au fil de l'eau.
-  // Le dernier point nomme l'option achetée pour qu'il n'y ait aucune surprise au moment de souscrire.
-  live:{e:"📡",t:"Résultats en direct",hook:"Suis tes pronos tomber un par un, sans attendre la fin de la journée.",pts:[
+  live:{e:"⏱️",t:"Résultats en direct",hook:"Suis tes pronos tomber un par un, sans attendre la fin de la journée.",pts:[
     "Dès qu'un vrai match se termine : le résultat, et <b>✓ ou ✗ sur ton prono</b>.",
     "Le frisson du direct, montagnes russes comprises.",
     "Les gains en € restent pour la fin, dévoilés à tous d'un coup — le clou du spectacle.",
-    "Fait partie de l'option 📡 <b>Données réelles</b> : en la débloquant, tu pourras aussi créer tes propres ligues sur de vrais matchs."]},
+    "⚠️ N'a d'effet que dans une ligue en <b>données réelles</b> : une ligue en matchs simulés se résout d'un bloc, il n'y a rien à suivre en direct."]},
   gageperso:{e:"✏️",t:"Gage & récompense sur mesure",hook:"Impose TON défi (ou ta récompense) au lieu de piocher dans la liste.",pts:[
     "Écris ton propre gage pour le dernier — ou ta propre récompense pour le champion.",
     "Ta touche perso : une vanne qui vous ressemble, pas une option générique de la liste.",
@@ -2287,17 +2349,15 @@ function hasOpt(k){ if(AUTH && AUTH.id===ADMIN_ID) return true; const o=optsSet(
 // Renvoie true si l'option est utilisable ; sinon ouvre l'argumentaire premium (verrou) et renvoie false.
 function requireOpt(k){ if(hasOpt(k)) return true; showPremiumInfo(k); return false; }
 // stopPropagation : le badge est souvent dans une ligne cliquable, on ne veut pas déclencher la ligne.
-// `pitch` (facultatif) = argumentaire à AFFICHER, si différent de l'option achetée. Sert à présenter
-// la même option sous l'angle qui parle au joueur là où il se trouve (cf. PITCHES.live).
-function premBadge(key,pitch){ const lock=key&&!hasOpt(key);
-  const args=`'${key||''}'`+(pitch?`,'${pitch}'`:'');
-  return `<span class="prem${lock?' lock':''}" onclick="event.stopPropagation();showPremiumInfo(${args})" title="${t("Fonction premium")}">${lock?t("🔒 Premium"):t("✨ Premium")}</span>`; }
+// (v6.99 : le 2ᵉ argument « argumentaire différent de l'option achetée » a été RETIRÉ. Il n'existait
+// que pour vendre `direct` sous le nom « Résultats en direct » ; les deux options étant désormais
+// séparées, chaque badge vend exactement ce qu'il débite — plus besoin de dissocier les deux.)
+function premBadge(key){ const lock=key&&!hasOpt(key);
+  return `<span class="prem${lock?' lock':''}" onclick="event.stopPropagation();showPremiumInfo('${key||''}')" title="${t("Fonction premium")}">${lock?t("🔒 Premium"):t("✨ Premium")}</span>`; }
 // « pack » = souscrire à TOUT : il est « possédé » si les 6 options le sont.
 function ownsOpt(key){ return key==='pack' ? SHOP_ORDER.every(k=>hasOpt(k)) : hasOpt(key); }
-// `pitchKey` : quel argumentaire MONTRER. Tout le reste (possédée ? souscription ?) reste keyé sur
-// `key`, l'option réellement achetée — on ne vend jamais autre chose que ce qui est débité.
-function showPremiumInfo(key,pitchKey){
-  const p=PITCHES[pitchKey||key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:PREM_LOCKED;
+function showPremiumInfo(key){
+  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:PREM_LOCKED;
   const footer=`<div class="mini" style="text-align:left;margin-top:12px;border-top:1px solid var(--border);padding-top:8px">${t(foot)}</div>`;
   const subBtn=(key&&!owned)?`<button class="btn" style="margin-top:12px" onclick="subscribeOpt('${key}')">🔓 ${t("Souscrire à cette option")}</button>`:'';
   if(!p){ infoModal("✨", t("Fonction premium"), `<div class="mini muted" style="text-align:left">${t(foot)}</div>`); return; }
@@ -2321,7 +2381,7 @@ async function subscribeOpt(key){
   catch(e){ showErr("Souscription : "+e.message); }
 }
 // 🛒 BOUTIQUE — toutes les options premium en un endroit + le Pack complet (souscrire à tout d'un coup).
-const SHOP_ORDER=["rachat","bonuscomplets","ia","stats","direct","gageperso","voiradv"];   // "recap" (Partager ma saison) retiré : gratuit par défaut (v6.65)
+const SHOP_ORDER=["rachat","bonuscomplets","ia","stats","direct","live","gageperso","voiradv"];   // "recap" (Partager ma saison) retiré : gratuit par défaut (v6.65) ; "live" séparé de "direct" en v6.99
 // Garde volontairement DANS la fonction, pas seulement sur la visibilité du bouton : aujourd'hui la
 // boutique est un simple catalogue (aucune écriture en base), mais la phase 4 y mettra de vrais
 // boutons « Débloquer ». Si le bouton réapparaissait un jour hors connexion, l'écran resterait
@@ -3311,7 +3371,7 @@ function cancelCreate(){ newLg=null; navBack(); }
 function setNew(k,v){ if(!newLg) newLg=newLgDefaults();
   if(k==='type' && v==='solo' && !requireOpt('ia')) return;          // jouer seul vs IA = option premium
   if(k==='mode' && v==='complet' && !requireOpt('bonuscomplets')) return; // jeu complet des cartes = premium
-  if(k==='data' && v==='real' && !requireOpt('direct')) return;      // données réelles / direct = premium
+  if(k==='data' && v==='real' && !requireOpt('direct')) return;      // choisir des données réelles = option 📡 (le suivi en direct, lui, dépend de ⏱️ `live`)
   newLg[k]=v; render(); }
 function viewCreate(){
   if(!newLg) newLg=newLgDefaults();
@@ -3664,52 +3724,99 @@ function bugContext(kind){
   }
   l.push("Appareil : "+(navigator.userAgent||"?"));
   l.push("Écran    : "+(window.innerWidth||"?")+"×"+(window.innerHeight||"?"));
-  l.push("");
-  if(idea){
-    l.push("--- Mon idée / avis ci-dessous ---");
-    l.push("Mon idée / avis : ");
-  } else {
-    l.push("--- Décris le problème ci-dessous ---");
-    l.push("Ce que je faisais : ");
-    l.push("Ce que j'attendais : ");
-    l.push("Ce qui s'est passé : ");
-  }
+  // v6.98 : plus de lignes « Ce que je faisais : … » à compléter à la main. Ces questions sont
+  // devenues les CHAMPS du formulaire (REPORT_FORM) ; `bugContext` ne produit plus que le
+  // contexte technique, stocké tel quel dans la colonne `context`.
   return l.join("\n");
 }
-async function copyBugReport(kind){
-  const txt=bugContext(kind);
-  // ⚠️ navigator.clipboard est indisponible hors HTTPS et peut être refusé → on ne peut PAS
-  // supposer que ça marche (contrairement à copyCode() juste au-dessus, qui ignore l'échec).
-  // Repli : on affiche le rapport dans la modale, sélectionnable à la main.
-  let ok=false;
-  try{ if(navigator.clipboard&&navigator.clipboard.writeText){ await navigator.clipboard.writeText(txt); ok=true; } }catch(e){}
-  if(ok){ toast(t("📋 Rapport copié — colle-le dans ton message.")); return; }
-  const idea=(kind==="idea");
-  infoModal(idea?"💡":"🐛", idea?t("Proposer une idée / un avis"):t("Signaler un bug"), `<div class="mini muted" style="text-align:left;margin-bottom:8px">${t("La copie automatique n'a pas fonctionné. Sélectionne le texte ci-dessous et copie-le à la main.")}</div>
-     <textarea readonly style="width:100%;height:220px;font:16px/1.45 ui-monospace,monospace" onclick="this.select()">${esc(txt)}</textarea>`);
-}
-// Point d'entrée du bouton ✉️ : on choisit d'abord bug ou idée/avis (même contexte technique joint).
+/* ---- REMONTÉES DES JOUEURS : bugs et idées (v6.98, demandé par Hervé) --------------------
+   Avant : un pavé de texte à copier soi-même, puis à envoyer par ses propres moyens. Trois
+   défauts — le joueur devait faire la démarche jusqu'au bout, la copie échouait EN SILENCE hors
+   HTTPS, et rien n'était conservé : une remontée non transmise était perdue sans que personne
+   ne le sache. Maintenant : un vrai formulaire, enregistré en base (source de vérité), puis une
+   PROPOSITION d'alerte par mail. Si le mail n'est pas envoyé, la remontée existe quand même.
+   ⚠️ L'envoi automatique d'un mail depuis une page statique demanderait soit une clé de service
+   dans le navigateur (donc offerte à qui veut inonder la boîte), soit un bout de serveur. D'où
+   ce montage : la base garantit qu'on ne perd rien, le mail n'est qu'une notification. */
+const REPORT_MAIL="themaestroleagueapp@gmail.com";
+// Le LIBELLÉ de chaque question est stocké AVEC la réponse (voir sendReport). Sans ça, une
+// remontée d'il y a six mois deviendrait illisible dès qu'on reformule une question.
+const REPORT_FORM={
+  bug:[ {k:"faisais", q:"Que faisais-tu ?",                ph:"Ex. : je validais mes pronos de la journée 3",   req:true},
+        {k:"attendu", q:"À quoi t'attendais-tu ?",         ph:"Ex. : revenir sur la page des résultats",        req:true},
+        {k:"passe",   q:"Que s'est-il passé à la place ?", ph:"Ex. : la page est restée bloquée",               req:true} ],
+  idea:[{k:"idee",    q:"Ton idée",                        ph:"Ex. : rejouer une ligue terminée à l'identique", req:true},
+        {k:"pourquoi",q:"Pourquoi ce serait mieux ?",      ph:"Facultatif",                                     req:false} ]
+};
+const REPORT_MAX=2000;   // par champ — borne aussi appliquée côté base, où le client ne peut pas mentir
+// Point d'entrée du bouton ✉️ : on choisit d'abord bug ou idée (même contexte technique joint).
 function openBugReport(){
   infoModal("✉️", t("Envoyer un message"), `<div class="mini muted" style="text-align:left;margin-bottom:10px">${t("Que veux-tu envoyer ?")}</div>
      <div class="row" style="gap:8px">
        <button class="btn" style="flex:1" onclick="openReport('bug')">🐛 ${t("Un bug")}</button>
-       <button class="btn ghost" style="flex:1" onclick="openReport('idea')">💡 ${t("Une idée / un avis")}</button>
+       <button class="btn ghost" style="flex:1" onclick="openReport('idea')">💡 ${t("Une idée")}</button>
      </div>`);
 }
 function openReport(kind){
   const idea=(kind==="idea");
+  const champs=REPORT_FORM[kind]||REPORT_FORM.bug;
   const intro = idea
-    ? t("Écris ton idée ou ton avis dans la dernière ligne, puis copie le tout et envoie-le à l'organisateur. Le <b>contexte technique</b> de ta page est joint automatiquement.")
-    : t("Copie le rapport ci-dessous et envoie-le à l'organisateur (WhatsApp, SMS, mail — comme tu veux). Il contient le <b>contexte technique</b> de ton écran : c'est ce qui permet de retrouver le problème.");
-  const hint = idea
-    ? t("⚠️ Complète la dernière ligne : ton idée ou ton avis.")
-    : t("⚠️ Pense à compléter les 3 lignes du bas : ce que tu faisais, ce que tu attendais, ce qui s'est passé.");
-  infoModal(idea?"💡":"🐛", idea?t("Proposer une idée / un avis"):t("Signaler un bug"), `<div class="mini muted" style="text-align:left">${intro}</div>
-     <div class="mini muted" style="text-align:left;margin-top:6px">${hint}</div>
+    ? t("Décris ton idée. Elle est <b>enregistrée</b> dès que tu valides — rien ne se perd.")
+    : t("Réponds aux trois questions : c'est ce qui permet de retrouver le problème. Le rapport est <b>enregistré</b> dès que tu valides — rien ne se perd.");
+  infoModal(idea?"💡":"🐛", idea?t("Proposer une idée"):t("Signaler un bug"),
+    `<div class="mini muted" style="text-align:left">${intro}</div>
      <div style="height:10px"></div>
-     <textarea readonly id="bugTxt" style="width:100%;height:180px;font:16px/1.45 ui-monospace,monospace" onclick="this.select()">${esc(bugContext(kind))}</textarea>
-     <div style="height:8px"></div>
-     <button class="btn" onclick="copyBugReport('${kind}')">${t("📋 Copier")}</button>`);
+     ${champs.map(c=>`<div style="text-align:left;margin-bottom:9px">
+        <label class="mini muted">${t(c.q)}${c.req?' <b style="color:var(--red)">*</b>':''}</label>
+        <textarea id="rep_${c.k}" maxlength="${REPORT_MAX}" style="width:100%;height:${c.req?66:50}px;font:15px/1.4 inherit" placeholder="${esc(t(c.ph))}"></textarea>
+      </div>`).join("")}
+     <div id="repErr" class="mini" style="text-align:left;color:var(--red)"></div>
+     <button class="btn" id="repSend" onclick="sendReport('${kind}')">${t("📨 Envoyer")}</button>
+     <details style="margin-top:10px;text-align:left"><summary class="mini muted clik">${t("Le contexte technique de ton écran est joint automatiquement — voir")}</summary>
+       <textarea readonly style="width:100%;height:130px;font:12px/1.4 ui-monospace,monospace;margin-top:6px" onclick="this.select()">${esc(bugContext(kind))}</textarea></details>`);
+}
+// Texte lisible d'une remontée — sert au mail ET au repli si l'enregistrement échoue.
+function reportText(kind, rep, num){
+  const l=[];
+  l.push((kind==="idea"?"--- The Maestro League — idée":"--- The Maestro League — bug")+(num?(" n° "+num):"")+" ---");
+  rep.forEach(x=>{ l.push(""); l.push(x.q); l.push(x.a); });
+  l.push(""); l.push(bugContext(kind));
+  return l.join("\n");
+}
+async function sendReport(kind){
+  const champs=REPORT_FORM[kind]||REPORT_FORM.bug;
+  const rep=[]; let manque=null;
+  for(const c of champs){
+    const el=$("rep_"+c.k), v=((el&&el.value)||"").trim();
+    if(c.req && !v){ if(!manque) manque=c; }
+    if(v) rep.push({q:t(c.q), a:v.slice(0,REPORT_MAX)});
+  }
+  const err=$("repErr");
+  if(manque){ if(err) err.textContent=t("⚠️ Merci de remplir : {a}",{a:t(manque.q)});
+    const el=$("rep_"+manque.k); if(el) el.focus(); return; }
+  const btn=$("repSend"); if(btn){ btn.disabled=true; btn.textContent=t("Envoi…"); }
+  let num=null, echec=null;
+  try{
+    num=await q(db.rpc("submit_report",{ p_kind:kind, p_player_name:(AUTH&&AUTH.name)||null,
+      p_league_code:(L&&L.code)||null, p_app_version:APP_VERSION, p_answers:rep, p_context:bugContext(kind) }));
+  }catch(e){ echec=e.message||String(e); }
+  const txt=reportText(kind, rep, num);
+  if(echec!=null){
+    // ⚠️ NE JAMAIS perdre ce que le joueur vient d'écrire. Si la base refuse (table absente,
+    // réseau coupé), on lui rend son texte en entier plutôt qu'un message d'erreur sec.
+    infoModal("📋", t("Enregistrement impossible"),
+      `<div class="mini muted" style="text-align:left">${t("Ton message n'a pas pu être enregistré. Rien n'est perdu : copie le texte ci-dessous et envoie-le à {a}.",{a:esc(REPORT_MAIL)})}</div>
+       <div class="mini muted" style="text-align:left;margin-top:4px;opacity:.75">${esc(echec)}</div>
+       <textarea readonly style="width:100%;height:200px;font:12px/1.4 ui-monospace,monospace;margin-top:8px" onclick="this.select()">${esc(txt)}</textarea>`);
+    return;
+  }
+  const idea=(kind==="idea");
+  const sujet=(idea?"Idée":"Bug")+(num?(" n° "+num):"")+" — The Maestro League "+APP_VERSION;
+  const lien="mailto:"+REPORT_MAIL+"?subject="+encodeURIComponent(sujet)+"&body="+encodeURIComponent(txt);
+  infoModal("✅", idea?t("Idée enregistrée"):t("Bug enregistré"),
+    `<div style="text-align:center;line-height:1.55;font-size:15px">${num?t("C'est la remontée <b>n° {a}</b>.",{a:num}):t("C'est bien enregistré.")}<br>${t("Merci — elle sera lue.")}</div>
+     <div class="mini muted" style="text-align:left;margin-top:12px">${t("Tu peux aussi prévenir par mail tout de suite. Ce n'est pas obligatoire : le message est déjà enregistré.")}</div>
+     <a class="btn ghost" style="display:block;margin-top:8px;text-decoration:none" href="${lien}">${t("📧 Prévenir par mail")}</a>`);
 }
 async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
@@ -3720,7 +3827,7 @@ async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode : "+e.message); } busy=false; }
 async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
-  if(m==="real" && !requireOpt('direct')) return;   // résultats en direct (données réelles) = option premium
+  if(m==="real" && !requireOpt('direct')) return;   // basculer la ligue en données réelles = option 📡 (pas ⏱️ : voir v6.99)
   busy=true;
   try{ await q(db.from("leagues").update({data_mode:m}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode données : "+e.message+" (ajoute la colonne 'data_mode')"); } busy=false; }
@@ -4442,7 +4549,10 @@ function afterCloseDuelHTML(){
   const iAmHome=md.home_id===S.myId; const opp=pById(iAmHome?md.away_id:md.home_id)||{};
   const mine=myBet(); const oppBet=bets.find(b=>b.player_id===(iAmHome?md.away_id:md.home_id));
   const seeOpp=hasOpt('voiradv'); const lab=(f,s)=> s==="1"?f.home:(s==="2"?f.away:t("Nul"));
-  const liveOn = L.data_mode==="real" && hasOpt('direct');
+  // v6.99 : le suivi en direct dépend de l'option `live`, PAS de `direct`. `direct` ouvre le type
+  // de ligue (jouer sur de vrais matchs), `live` ouvre le suivi PENDANT la journée. Les deux
+  // conditions restent nécessaires : en ligue simulée il n'y a rien à suivre au fil de l'eau.
+  const liveOn = L.data_mode==="real" && hasOpt('live');
   const noteBox=`<div class="box" style="border:1px dashed var(--gold-dim);background:rgba(231,184,75,.08)"><div class="mini" style="color:var(--gold-hi);line-height:1.5">👁️ ${seeOpp?t("<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.",{a:esc(opp.name||'?')}):t("<b>Option premium</b> : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.",{a:esc(opp.name||'?')})}</div>${seeOpp?'':`<div style="margin-top:6px">${premBadge('voiradv')}</div>`}</div>`;
   const GH='display:grid;grid-template-columns:1fr 1fr;gap:8px';
   const cell=(m,html)=>`<div style="background:var(--card2);border:1px solid ${m?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:6px 7px;text-align:center;font-size:12px">${html}</div>`;
@@ -5062,7 +5172,7 @@ function waitingResultsBody(d){
   const org=me()&&me().is_organizer;
   const isCurrent=(L.status==="running" && d===(L.current_day||0));
   const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
-  const liveShow = closed && L.data_mode==="real" && hasOpt('direct');
+  const liveShow = closed && L.data_mode==="real" && hasOpt('live');   // v6.99 : option `live`, distincte de `direct`
   let h=`<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
     <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — en attente des résultats."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}</div>${lastDayBanner(d)}`;
   // Résultat en direct (option premium, données réelles) à droite d'une ligne d'affiche.
@@ -5090,11 +5200,11 @@ function waitingResultsBody(d){
     // restent privés jusqu'à la résolution ; la comparaison 2 colonnes Toi/adversaire vit sur l'onglet Pronos.
     const myId=(myDuel()||{}).id;
     const ordD=[...(duels||[])].sort((a,b)=>((a.id===myId)?0:1)-((b.id===myId)?0:1));
-    h+=`<div class="box"><b class="mini">${liveShow?'📡 '+t("Résultats en direct"):t("Les affiches du jour")}</b>${liveShow?`<div class="mini muted" style="margin-top:2px">${t("Inclus dans ton option 📡 <b>Données réelles</b> : tu vois les matchs terminés au fil de l'eau, avec ✓ ou ✗ sur <b>tes</b> pronos. Les gains en € restent dévoilés à tous à la résolution.")}</div>`:''}${ordD.map(affiche).join('')}</div>`;
+    h+=`<div class="box"><b class="mini">${liveShow?'⏱️ '+t("Résultats en direct"):t("Les affiches du jour")}</b>${liveShow?`<div class="mini muted" style="margin-top:2px">${t("Grâce à ton option ⏱️ <b>Résultats en direct</b> : tu vois les matchs terminés au fil de l'eau, avec ✓ ou ✗ sur <b>tes</b> pronos. Les gains en € restent dévoilés à tous à la résolution.")}</div>`:''}${ordD.map(affiche).join('')}</div>`;
     // Source injoignable (quota API épuisé, réseau…) : on le DIT. Sans ce message, l'écran n'affiche
     // que des horloges et le joueur croit que les matchs n'ont pas été joués (signalé par Hervé).
     if(liveShow && liveResErr) h+=`<div class="box mini" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10)"><b class="gold">📡 ${t("Résultats momentanément indisponibles")}</b><div class="mini muted" style="margin-top:3px">${t("La source des résultats ne répond pas pour l'instant — ce n'est pas lié à tes pronos. La journée se résoudra automatiquement dès qu'elle répondra à nouveau.")}</div></div>`;
-    if(closed && L.data_mode==="real" && !hasOpt('direct')) h+=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 ${t("Voir les matchs terminés en direct")}</span>${premBadge('direct','live')}</div>`;
+    if(closed && L.data_mode==="real" && !hasOpt('live')) h+=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">⏱️ ${t("Voir les matchs terminés en direct")}</span>${premBadge('live')}</div>`;
   }
   if(closed){
     h+=`<div class="box mini muted" style="text-align:center">${(L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Pronos clôturés — résolution automatique en cours…")}</div>`;
@@ -5296,53 +5406,205 @@ async function loadMyStats(){
     const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0);
     const leagues=[]; const h2h={};
     let tPicks=0,tWon=0,tStaked=0,tNet=0,titles=0,podiums=0,gBestOdd=0; let gBest={net:-1e9,lg:null};
+    /* ---- v7.00 : le dossier détaillé de l'option payante 📊 (demandé par Hervé) --------------
+       ⚠️ AUCUNE requête supplémentaire : tout ci-dessous se calcule sur les paris, cotes et
+       résultats DÉJÀ chargés plus haut. Enrichir cet écran ne coûte donc rien, ni en base ni en
+       crédits d'API — c'est ce qui rend l'option confortable à étoffer autant qu'on veut. */
+    let sumWinOdd=0, nWinOdd=0;                 // cote moyenne des pronos GAGNÉS
+    let capExtra=0, capCount=0;                 // ce que le 👑 Capitaine a rapporté EN PLUS
+    let posDays=0, allDays=0, tPoints=0;        // régularité et points par journée
+    let bestRun=0, run=0;                       // meilleure série de duels gagnés
+    const bestPick={g:-1e9}, bigStake={st:-1};  // plus gros prono gagné / plus grosse mise
+    const buckets={fav:{p:0,w:0},eq:{p:0,w:0},out:{p:0,w:0}};   // profil par tranche de cote
+    const bySport={}, byCard={};                // réussite par sport, rendement par bonus
+    const chrono=[];                            // courbe du ROI, dans l'ordre de jeu
+    // Gain d'UN prono, à la règle du jeu : Double Chance (cote pleine du résultat sorti) et
+    // 👑 Capitaine (doublé) compris. ⚠️ N'intègre PAS l'effet des AUTRES bonus (assurance…) :
+    // ceux-ci se lisent dans `card.impact`, et le `net` de la journée reste la référence.
+    const pickInfo=(bt,i,f)=>{
+      if(!f||f.canceled) return null;
+      const p=(bt.picks||[])[i]||{}; const st=+p.stake||0; const c=bt.card;
+      const isDC=!!(c&&c.id==="chance"&&c.target===i&&c.sel2);
+      const win=isDC?(f.res===p.sel||f.res===c.sel2):(p.sel===f.res);
+      const odd=isDC?dcWinOdd(f,p.sel,c.sel2):oddOf(f,p.sel);
+      const base=win?st*(odd-1):-st;
+      return {st,odd,win,base,cap:(bt.captain===i),gain:(bt.captain===i)?base*2:base};
+    };
     ids.forEach(lid=>{ const mp=myPid[lid]; if(!mp) return; const lg=lgMap[lid]||{};
-      const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp);
+      const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp).sort((x,y)=>(x.day|0)-(y.day|0));
       let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
       myBets.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures; days++;
         if(fx){ picks+=b.picks.length; won+=winCount(b,fx);
-          b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; if(o>gBestOdd)gBestOdd=o; } }); }
-        staked+=gainMise(b.picks,fx).mise; const n=(b.net!=null)?b.net:0; net+=n;
+          b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; if(o>gBestOdd)gBestOdd=o; } });
+          b.picks.forEach((p,i)=>{ const inf=pickInfo(b,i,fx[i]); if(!inf) return; const f=fx[i];
+            if(inf.win){ sumWinOdd+=inf.odd; nWinOdd++; }
+            if(inf.gain>bestPick.g) Object.assign(bestPick,{g:inf.gain,odd:inf.odd,st:inf.st,cap:inf.cap,
+              m:(f.home||'?')+" – "+(f.away||'?'),lg:lg.name,day:b.day});
+            if(inf.st>bigStake.st) Object.assign(bigStake,{st:inf.st,win:inf.win,
+              m:(f.home||'?')+" – "+(f.away||'?'),lg:lg.name,day:b.day});
+            if(inf.cap){ capExtra+=inf.base; capCount++; }   // le doublement ajoute exactement le gain de base
+            const B=inf.odd<1.8?buckets.fav:(inf.odd<=3?buckets.eq:buckets.out); B.p++; if(inf.win)B.w++;
+            const sp=f.sport||"?"; bySport[sp]=bySport[sp]||{p:0,w:0}; bySport[sp].p++; if(inf.win)bySport[sp].w++;
+          }); }
+        const mise=gainMise(b.picks,fx).mise; staked+=mise; const n=(b.net!=null)?b.net:0; net+=n;
+        allDays++; if(n>0) posDays++;
+        chrono.push({t:(lg.created_at||'')+"#"+String(1000+(b.day|0)), mise, net:n});
         if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
         if(n>gBest.net) gBest={net:n,lg:lg.name};
-        if(b.card&&b.card.id) cc[b.card.id]=(cc[b.card.id]||0)+1;
+        if(b.card&&b.card.id){ cc[b.card.id]=(cc[b.card.id]||0)+1;
+          // Rendement réel d'un bonus : `impact.self` est écrit à la résolution et vaut
+          // « mon net AVEC la carte moins mon net SANS elle ». C'est la seule mesure juste —
+          // imputer le net de la journée entière à la carte serait faux.
+          const K=byCard[b.card.id]=byCard[b.card.id]||{n:0,net:0};
+          K.n++; K.net+=(b.card.impact&&+b.card.impact.self)||0; }
         if(d){ const oppId=d.home_id===mp?d.away_id:d.home_id; const opp=plMap[oppId];
-          if(opp&&!opp.is_ai){ const ob=(betsByLg[lid]||[]).find(x=>x.player_id===oppId&&x.day===b.day);
-            const H=Object.assign({net:n},gainMise(b.picks,fx)); const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
-            const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2(lg)); const key=opp.user_id||opp.name;
+          const ob=(betsByLg[lid]||[]).find(x=>x.player_id===oppId&&x.day===b.day);
+          const H=Object.assign({net:n},gainMise(b.picks,fx)); const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
+          const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2(lg));
+          // Série : comptée sur TOUS les duels, adversaire IA compris — c'est ta série à toi.
+          if(r.win==='h'){ run++; if(run>bestRun) bestRun=run; } else run=0;
+          if(opp&&!opp.is_ai){ const key=opp.user_id||opp.name;
             h2h[key]=h2h[key]||{name:opp.name,emoji:opp.emoji,w:0,l:0,d:0};
             if(r.win==='h') h2h[key].w++; else if(r.win==='a') h2h[key].l++; else h2h[key].d++; } } });
       const humans=classe((plsByLg[lid]||[]).filter(p=>!p.is_ai), lg);
       const rank=humans.findIndex(p=>p.id===mp)+1, total=humans.length; const me=plMap[mp]||{};
       if(lg.status==="done"&&rank>=1){ if(rank===1) titles++; if(rank<=3) podiums++; }
-      tPicks+=picks; tWon+=won; tStaked+=staked; tNet+=net;
+      tPicks+=picks; tWon+=won; tStaked+=staked; tNet+=net; tPoints+=(me.points||0);
       const favCard=Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||null;
       leagues.push({id:lid,name:lg.name||'?',status:lg.status,created_at:lg.created_at,finished_at:lg.finished_at,
         rank,total,points:me.points||0,capital:me.capital||0,days,picks,won,hit:picks?Math.round(won/picks*100):0,
         staked:Math.round(staked),net,roi:staked?Math.round(net/staked*100):0,bestOdd,best,worst,favCard}); });
+    // ---- Repère : les MÊMES calculs pour les autres joueurs humains de mes ligues. -------------
+    // Sans repère, « ROI 12 % » ne veut rien dire : c'est excellent ou médiocre selon la table.
+    // ⚠️ Le joueur IA est exclu (il joue automatiquement, ce n'est pas un adversaire de référence),
+    // et moi aussi — sinon je me comparerais en partie à moi-même.
+    let oPicks=0,oWon=0,oStaked=0,oNet=0,oPlayers=0;
+    ids.forEach(lid=>{ const mp=myPid[lid];
+      (plsByLg[lid]||[]).forEach(p=>{ if(p.is_ai||p.id===mp) return;
+        const bz=(betsByLg[lid]||[]).filter(b=>b.player_id===p.id); if(!bz.length) return;
+        oPlayers++;
+        bz.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures;
+          if(fx){ oPicks+=b.picks.length; oWon+=winCount(b,fx); }
+          oStaked+=gainMise(b.picks,fx).mise; oNet+=(b.net!=null)?b.net:0; }); }); });
+    // ---- Courbe du ROI, dans l'ordre où les journées ont été jouées. ---------------------------
+    // ⚠️ Les paris ne portent PAS de date en base, seulement un numéro de journée : l'axe est donc
+    // « au fil des journées jouées » (ligues classées par date de création), pas un axe calendaire.
+    chrono.sort((a,b)=>a.t<b.t?-1:(a.t>b.t?1:0));
+    const curve=[]; let cM=0,cN=0;
+    chrono.forEach(x=>{ cM+=x.mise; cN+=x.net; curve.push(cM?Math.round(cN/cM*100):0); });
     leagues.sort((a,b)=>{ const fa=a.finished_at||a.created_at||'',fb=b.finished_at||b.created_at||''; return fa<fb?1:(fa>fb?-1:0); });
     myStatsData={ agg:{leagues:leagues.length,titles,podiums,picks:tPicks,won:tWon,hit:tPicks?Math.round(tWon/tPicks*100):0,
-      staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest}, leagues, h2h };
+      staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest,
+      avgWinOdd:nWinOdd?+(sumWinOdd/nWinOdd).toFixed(2):0,
+      bestPick:(bestPick.g>-1e8)?bestPick:null, bigStake:(bigStake.st>=0)?bigStake:null,
+      capExtra:Math.round(capExtra*100)/100, capCount, ptsPerDay:allDays?+(tPoints/allDays).toFixed(2):0,
+      posDays, allDays, bestRun, buckets, bySport, byCard, curve,
+      others:{players:oPlayers, hit:oPicks?Math.round(oWon/oPicks*100):null, roi:oStaked?Math.round(oNet/oStaked*100):null}},
+      leagues, h2h };
   }catch(e){ myStatsData={error:e.message}; }
 }
 async function openStats(){ if(!requireOpt('stats')) return; myStatsData=null; navOpen("stats"); await loadMyStats(); render(); }
+/* ===== FICHES D'EXPLICATION (v7.00, demandé par Hervé) =======================================
+ * « Il faut donner plus d'info puisqu'on fait payer cette option » — et surtout des chiffres
+ * COMPRÉHENSIBLES. Chaque ligne de l'écran est cliquable et ouvre sa fiche : ce que ça mesure,
+ * comment c'est calculé, et ce qu'un bon chiffre veut dire. Sans cette dernière phrase, un ROI
+ * de 12 % ne dit rien à personne.
+ * ⚠️ Ces textes passent par t(variable) : `check-i18n` ne les voit pas. Leurs clés EN sont
+ * regroupées dans le dictionnaire et sont à tenir à jour À LA MAIN (même piège qu'en v6.98). */
+const STAT_INFO={
+  hit:{t:"Pronos gagnés",d:"La part de tes pronos qui sont tombés justes. Utile, mais insuffisant seul : on peut gagner souvent en jouant des favoris et perdre de l'argent quand même."},
+  roi:{t:"Rentabilité (ROI)",d:"Ce que rapporte chaque euro misé : résultat net ÷ total misé. <b>+20 %</b> = 20 centimes gagnés par euro joué. Au-dessus de 0 tu gagnes de l'argent, en dessous tu en perds — c'est la mesure la plus honnête de ton niveau."},
+  net:{t:"Résultat net cumulé",d:"Tes gains moins tes mises, sur toutes tes ligues. Il dépend de combien tu joues : un joueur prudent peut être meilleur avec un net plus petit — regarde le ROI pour comparer."},
+  avgodd:{t:"Cote moyenne gagnée",d:"La cote moyenne de tes pronos <b>gagnants</b>. Proche de 1,50 : tu gagnes sur du solide. Au-dessus de 2,50 : tu gagnes sur du risqué, plus rare mais plus payant."},
+  bestodd:{t:"Plus grosse cote gagnée",d:"Le plus gros coup de ta carrière, en cote. C'est le trophée de la table — celui qu'on ressort à chaque repas."},
+  bestpick:{t:"Plus gros prono gagné",d:"Le gain d'un <b>seul</b> prono : mise × (cote − 1), doublé s'il était Capitaine. À ne pas confondre avec ta meilleure journée, qui additionne tous tes paris du jour."},
+  bigstake:{t:"Plus grosse mise",d:"Le montant le plus élevé que tu aies posé sur un seul match. Le pari se joue au <b>résultat net</b> : miser gros n'est pas gagner, ça amplifie juste les deux sens."},
+  ptsday:{t:"Points par journée",d:"Ta moyenne de points de championnat par journée jouée. Repère : <b>1,5</b> c'est correct, <b>2</b> ou plus c'est le rythme d'un vainqueur."},
+  curve:{t:"Évolution du ROI",d:"Ta rentabilité cumulée, journée après journée, toutes ligues confondues. Une courbe qui monte = tu progresses ; en dents de scie = tu joues gros et irrégulier. Les paris n'ayant pas de date en base, l'axe suit <b>l'ordre des journées jouées</b>, pas le calendrier."},
+  profil:{t:"Ton profil de pronostiqueur",d:"Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise."},
+  others:{t:"Face aux autres",d:"Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu."},
+  captain:{t:"Rendement du Capitaine",d:"Ce que le doublement t'a rapporté <b>en plus</b>, ou coûté. Un chiffre négatif ne condamne pas la mécanique : il dit que tu doubles trop souvent sur des paris incertains."},
+  cards:{t:"Bonus les plus rentables",d:"Le gain réel de chaque bonus : ton résultat AVEC la carte moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable."},
+  regul:{t:"Régularité",d:"Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats."},
+  sports:{t:"Par sport",d:"Ta réussite sport par sport. N'a de sens qu'en <b>données réelles</b> : en matchs simulés, les rencontres sont tirées au hasard."}
+};
+function showStatInfo(k){ const s=STAT_INFO[k]; if(!s) return;
+  infoModal("📊", t(s.t), `<div class="mini muted" style="text-align:left;line-height:1.6">${t(s.d)}</div>`); }
+// Courbe du ROI en SVG écrit à la main : l'app tient en UN fichier, embarquer une bibliothèque de
+// graphiques pèserait plus lourd que tout le reste. Les couleurs passent par les variables CSS,
+// donc le thème clair comme le thème sombre restent lisibles sans code en double.
+function sparkROI(curve){
+  const pts=(curve||[]).filter(x=>isFinite(x));
+  if(pts.length<2) return `<div class="mini muted">${t("La courbe apparaîtra après quelques journées jouées.")}</div>`;
+  const W=300,H=76,P=6;
+  let mn=Math.min(...pts,0), mx=Math.max(...pts,0); if(mx-mn<2) mx=mn+2;
+  const X=i=>P+i*(W-2*P)/(pts.length-1), Y=v=>H-P-((v-mn)/(mx-mn))*(H-2*P);
+  const d=pts.map((v,i)=>(i?"L":"M")+X(i).toFixed(1)+" "+Y(v).toFixed(1)).join(" ");
+  const last=pts[pts.length-1], col=last>=0?"var(--green)":"var(--red)";
+  const zero=(mn<0&&mx>0)?`<line x1="${P}" y1="${Y(0).toFixed(1)}" x2="${W-P}" y2="${Y(0).toFixed(1)}" stroke="var(--border)" stroke-dasharray="3 3" stroke-width="1"/>`:"";
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="76" preserveAspectRatio="none" role="img" aria-label="${t("Évolution du ROI")}">
+      ${zero}<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="3.5" fill="${col}"/></svg>
+    <div class="row" style="justify-content:space-between"><span class="mini muted">${t("{a} journées",{a:pts.length})}</span><b class="mini ${last>=0?'green':'red'}">${last} %</b></div>`;
+}
 function viewStats(){
   const d=myStatsData; const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
+  // Ligne CLIQUABLE : le libellé porte un ⓘ discret et ouvre la fiche du chiffre.
+  const lineI=(k,lab,val)=>`<div class="row clik" style="justify-content:space-between;margin:7px 0" onclick="showStatInfo('${k}')"><span class="mini muted">${lab} <span style="opacity:.55">ⓘ</span></span><b class="mini">${val}</b></div>`;
   let h=`<div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge('stats')}</h2>
-      <div class="mini muted">${t("Ton dossier complet, toutes tes ligues.")}</div></div>`;
+      <div class="mini muted">${t("Ton dossier complet, toutes tes ligues. Touche une ligne pour savoir ce que le chiffre veut dire.")}</div></div>`;
   if(!d) return h+`<div class="box mini muted">${t("Chargement…")}</div>`;
   if(d.error) return h+`<div class="err">${esc(d.error)}</div>`;
   if(!d.leagues.length) return h+`<div class="box mini muted">${t("Pas encore de partie jouée.")}</div>`;
   const a=d.agg;
+  const sgn=v=>`<span class="${v>=0?'green':'red'}">${v>=0?'+':''}${fmt(v)} €</span>`;
   h+=`<div class="box"><b class="mini">🏅 ${t("Ma carrière")}</b>
     ${line(t("Ligues jouées"), a.leagues)}
     ${line(t("Titres 🥇 / podiums 🏆"), a.titles+" / "+a.podiums)}
-    ${line(t("Pronos gagnés"), a.won+"/"+a.picks+" ("+a.hit+" %)")}
-    ${line(t("Rentabilité (ROI)"), `<span class="${a.roi>=0?'green':'red'}">${a.roi} %</span>`)}
-    ${line(t("Résultat net cumulé"), `<span class="${a.net>=0?'green':'red'}">${fmt(a.net)} €</span>`)}
-    ${line(t("Plus grosse cote gagnée"), a.bestOdd?a.bestOdd.toFixed(2):'–')}
+    ${lineI("hit", t("Pronos gagnés"), a.won+"/"+a.picks+" ("+a.hit+" %)")}
+    ${lineI("roi", t("Rentabilité (ROI)"), `<span class="${a.roi>=0?'green':'red'}">${a.roi} %</span>`)}
+    ${lineI("net", t("Résultat net cumulé"), `<span class="${a.net>=0?'green':'red'}">${fmt(a.net)} €</span>`)}
+    ${lineI("ptsday", t("Points par journée"), a.ptsPerDay)}
     ${line(t("Meilleure journée"), (a.best&&a.best.net>-1e8)?`<span class="green">${fmt(a.best.net)} €</span>${a.best.lg?' ('+esc(a.best.lg)+')':''}`:'–')}
-  </div>`;
+  </div>
+  <div class="box"><b class="mini clik" onclick="showStatInfo('curve')">📈 ${t("Évolution du ROI")} <span style="opacity:.55">ⓘ</span></b>
+    <div style="margin-top:6px">${sparkROI(a.curve)}</div></div>
+  <div class="box"><b class="mini">🎯 ${t("Tes coups")}</b>
+    ${lineI("avgodd", t("Cote moyenne gagnée"), a.avgWinOdd?a.avgWinOdd.toFixed(2):'–')}
+    ${lineI("bestodd", t("Plus grosse cote gagnée"), a.bestOdd?a.bestOdd.toFixed(2):'–')}
+    ${lineI("bestpick", t("Plus gros prono gagné"), a.bestPick?`${sgn(a.bestPick.g)}${a.bestPick.cap?' 👑':''}`:'–')}
+    ${a.bestPick?`<div class="mini muted" style="margin:-3px 0 8px">${esc(a.bestPick.m)} · ${t("cote")} ${a.bestPick.odd.toFixed(2)} · ${t("mise")} ${fmt(a.bestPick.st)} €</div>`:''}
+    ${lineI("bigstake", t("Plus grosse mise"), a.bigStake?`${fmt(a.bigStake.st)} € ${a.bigStake.win?'<span class="green">✓</span>':'<span class="red">✗</span>'}`:'–')}
+    ${a.bigStake?`<div class="mini muted" style="margin:-3px 0 2px">${esc(a.bigStake.m)}${a.bigStake.lg?' · '+esc(a.bigStake.lg):''}</div>`:''}
+  </div>
+  ${(()=>{ const B=a.buckets||{}, r=(o)=>o&&o.p?`${Math.round(o.w/o.p*100)} % <span class="muted">(${o.w}/${o.p})</span>`:'–';
+    if(!B.fav||!(B.fav.p+B.eq.p+B.out.p)) return '';
+    return `<div class="box"><b class="mini clik" onclick="showStatInfo('profil')">🧭 ${t("Ton profil de pronostiqueur")} <span style="opacity:.55">ⓘ</span></b>
+      ${line(t("Favoris <span class='muted'>(cote &lt; 1,80)</span>"), r(B.fav))}
+      ${line(t("Équilibrés <span class='muted'>(1,80 à 3,00)</span>"), r(B.eq))}
+      ${line(t("Outsiders <span class='muted'>(cote &gt; 3,00)</span>"), r(B.out))}</div>`; })()}
+  ${(()=>{ const o=a.others||{}; if(!o.players||o.hit==null) return '';
+    const cmp=(mine,them)=>{ const dd=mine-them; return `<b class="mini">${mine} %</b> <span class="mini ${dd>=0?'green':'red'}">(${dd>=0?'+':''}${dd})</span>`; };
+    return `<div class="box"><b class="mini clik" onclick="showStatInfo('others')">⚖️ ${t("Face aux autres")} <span style="opacity:.55">ⓘ</span></b>
+      <div class="mini muted" style="margin:4px 0 6px">${t("Moyenne des {a} autres joueurs de tes ligues (joueur IA exclu).",{a:o.players})}</div>
+      ${line(t("Pronos gagnés"), cmp(a.hit,o.hit))}
+      ${line(t("Rentabilité (ROI)"), cmp(a.roi,o.roi))}</div>`; })()}
+  <div class="box"><b class="mini clik" onclick="showStatInfo('captain')">👑 ${t("Rendement du Capitaine")} <span style="opacity:.55">ⓘ</span></b>
+    ${line(t("Apporté par le doublement"), a.capCount?sgn(a.capExtra):'–')}
+    ${a.capCount?`<div class="mini muted">${t("sur {a} journées avec Capitaine",{a:a.capCount})}</div>`:''}</div>
+  ${(()=>{ const ks=Object.keys(a.byCard||{}).filter(k=>CARDS[k]); if(!ks.length) return '';
+    ks.sort((x,y)=>a.byCard[y].net-a.byCard[x].net);
+    return `<div class="box"><b class="mini clik" onclick="showStatInfo('cards')">🃏 ${t("Bonus les plus rentables")} <span style="opacity:.55">ⓘ</span></b>
+      ${ks.slice(0,5).map(k=>{ const C=CARDS[k], v=a.byCard[k];
+        return `<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${C.e} ${esc(t(C.n))} <span class="muted">×${v.n}</span></span><b class="mini">${sgn(Math.round(v.net*100)/100)}</b></div>`; }).join("")}</div>`; })()}
+  <div class="box"><b class="mini clik" onclick="showStatInfo('regul')">🔁 ${t("Régularité")} <span style="opacity:.55">ⓘ</span></b>
+    ${line(t("Journées dans le vert"), a.allDays?`${a.posDays}/${a.allDays} (${Math.round(a.posDays/a.allDays*100)} %)`:'–')}
+    ${line(t("Plus longue série de duels gagnés"), a.bestRun||'–')}</div>
+  ${(()=>{ const ks=Object.keys(a.bySport||{}).filter(k=>k!=="?"); if(ks.length<2) return '';
+    ks.sort((x,y)=>a.bySport[y].p-a.bySport[x].p);
+    return `<div class="box"><b class="mini clik" onclick="showStatInfo('sports')">🌍 ${t("Par sport")} <span style="opacity:.55">ⓘ</span></b>
+      ${ks.map(k=>{ const v=a.bySport[k];
+        return line(k+" <span class='muted'>"+v.p+"</span>", `${Math.round(v.w/v.p*100)} % <span class="muted">(${v.w}/${v.p})</span>`); }).join("")}</div>`; })()}`;
   const opps=Object.keys(d.h2h);
   if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face")}</b>`;
     opps.map(k=>d.h2h[k]).sort((x,y)=>(y.w+y.l+y.d)-(x.w+x.l+x.d)).forEach(r=>{
@@ -5883,7 +6145,20 @@ async function closeLeagueFromHome(lid){
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
 function openCoulisses(){ navOpen("coulisses"); }
 async function openPalmares(){ S.view="palmares"; palmares=null; palmOpen=""; render(); await loadPalmares(); render(); }
-async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; render(); await loadAdmin(); render(); }
+async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; adminReports=null; repOpen=""; render(); await loadAdmin(); render(); }
+// Remontées des joueurs — lecture réservée à l'admin. La table est SCELLÉE (aucune policy) :
+// impossible de la lire avec la clé publique, tout passe par cette RPC protégée par mot de passe.
+async function adminLoadReports(){
+  const el=$("adminPwdRep"); const pwd=(el&&el.value)||adminPwd;
+  if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
+  try{ adminReports=await q(db.rpc("admin_list_reports",{p_admin_id:AUTH.id,p_admin_password:pwd})); adminPwd=pwd; showErr(""); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect."
+      :(/admin_list_reports|schema cache|function/i.test(e.message)?("Remontées : "+e.message+" (exécute MIGRATION-remontees.sql dans Supabase)"):("Erreur : "+e.message))); } }
+async function adminSetReportStatus(id, st){
+  try{ await q(db.rpc("admin_set_report_status",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_id:id,p_status:st}));
+    adminReports=await q(db.rpc("admin_list_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Recharge les remontées (mot de passe admin requis).":("Statut : "+e.message)); } }
+function toggleReport(n){ repOpen=(repOpen===String(n))?"":String(n); render(); }
 async function adminLoadUsers(){ const el=$("adminPwd"); const pwd=el?el.value:""; if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
   try{ adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:pwd})); adminPwd=pwd; showErr(""); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect.":("Erreur : "+e.message)); } }
@@ -5921,7 +6196,7 @@ async function adminSetAllOptions(uid, all){
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute OPTIONS-ADMIN.sql dans Supabase)")); } }
 // Libellés courts des options pour l'écran Admin (français ; l'écran Admin n'est pas traduit).
-const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Cartes complètes", ia:"🤖 Joueur IA", stats:"📊 Stats perso", recap:"📤 Partage", direct:"📡 Données réelles", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
+const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Cartes complètes", ia:"🤖 Joueur IA", stats:"📊 Stats perso", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
@@ -6155,6 +6430,37 @@ function viewAdmin(){
       ${(liste&&liste.length)?liste.slice(0,10).map((g,i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${esc(g.t)}</span><b>${g.votes} vote${g.votes>1?'s':''}${g.wins?` · ${g.wins}× retenu`:''}</b></div>`).join(""):`<div class="mini muted">${vide}</div>`}</div>`;
       return bloc("🎭 Gages les plus choisis", a.topGages, "Aucun vote de gage enregistré pour l'instant.")
            + bloc("🏆 Récompenses les plus choisies", a.topRewards, "Aucun vote de récompense enregistré pour l'instant."); })()}
+    ${(()=>{ // ✉️ Remontées des joueurs (v6.98). Écran admin volontairement NON traduit.
+      const badge=k=>k==="bug"?'<span class="chip" style="flex:0 0 auto;background:rgba(229,105,95,.15);color:#e5695f;border:1px solid rgba(229,105,95,.4)">🐛 bug</span>'
+                              :'<span class="chip" style="flex:0 0 auto;background:rgba(212,175,55,.15);color:var(--gold);border:1px solid rgba(212,175,55,.4)">💡 idée</span>';
+      const stLab={nouveau:"🆕 nouveau", vu:"👀 vu", traite:"✅ traité"};
+      let corps;
+      if(!adminReports) corps=`<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin puis charge les remontées. Elles sont <b>illisibles</b> avec la clé publique : seule cette page peut les afficher.</div>`;
+      else if(!adminReports.length) corps=`<div class="mini muted" style="margin-top:10px">Aucune remontée pour l'instant.</div>`;
+      else corps=`<div style="margin-top:12px">${adminReports.map(r=>{
+        const ouvert=(repOpen===String(r.num));
+        const rep=Array.isArray(r.answers)?r.answers:[];
+        const resume=(rep[0]&&rep[0].a)?String(rep[0].a).slice(0,90):"(vide)";
+        return `<div class="box" style="text-align:left;${r.status==='traite'?'opacity:.6':''}">
+          <div class="row" style="gap:8px;align-items:flex-start">
+            <div style="min-width:0"><b>n° ${r.num}</b> ${badge(r.kind)}
+              <div class="mini muted" style="margin-top:3px">${esc(r.player_name||'anonyme')}${r.league_code?' · ligue '+esc(r.league_code):''} · ${esc(r.app_version||'?')} · ${new Date(r.created_at).toLocaleString('fr-FR')}</div></div>
+            <span class="chip" style="flex:0 0 auto">${stLab[r.status]||esc(r.status)}</span></div>
+          <div class="mini clik" style="margin-top:6px" onclick="toggleReport(${r.num})">${ouvert?'▾':'▸'} ${esc(resume)}${resume.length>=90?'…':''}</div>
+          ${ouvert?`${rep.map(x=>`<div style="margin-top:8px"><div class="mini muted">${esc(x.q)}</div><div class="mini" style="white-space:pre-wrap">${esc(x.a)}</div></div>`).join('')}
+            <details style="margin-top:8px"><summary class="mini muted clik">Contexte technique</summary>
+              <textarea readonly style="width:100%;height:150px;font:12px/1.4 ui-monospace,monospace;margin-top:5px" onclick="this.select()">${esc(r.context||'')}</textarea></details>
+            <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
+              ${["nouveau","vu","traite"].filter(s=>s!==r.status).map(s=>`<button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetReportStatus('${r.id}','${s}')">${stLab[s]}</button>`).join('')}
+            </div>`:''}
+        </div>`; }).join('')}</div>`;
+      const nouv=adminReports?adminReports.filter(r=>r.status==="nouveau").length:0;
+      return `<div class="box"><div class="mini muted" style="margin-bottom:6px">✉️ Remontées des joueurs — bugs et idées${nouv?` <b style="color:var(--gold)">· ${nouv} nouvelle${nouv>1?'s':''}</b>`:''}</div>
+        <label class="mini muted">Ton mot de passe admin</label>
+        <input id="adminPwdRep" type="password" value="${esc(adminPwd)}" placeholder="••••••" autocomplete="off">
+        <div style="height:8px"></div>
+        <button class="btn ghost" onclick="adminLoadReports()">${adminReports?'🔄 Rafraîchir':'📬 Charger les remontées'}</button>
+        ${corps}</div>`; })()}
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🔑 Ton compte admin</div>
       <div class="mini muted" style="margin-bottom:8px">Tu es connecté : tu peux changer <b>ton propre</b> mot de passe sans connaître l'ancien.</div>
       <button class="btn ghost" style="border-color:var(--gold);color:var(--gold)" onclick="changeMyPassword()">🔑 Changer MON mot de passe</button></div>
