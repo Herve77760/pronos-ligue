@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.93";
+const APP_VERSION = "v6.94";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -620,15 +620,28 @@ function afficheScore(f){ const fav=Math.min(f.oh||99, f.oa||99); return prestig
 // spéciale : un samedi, les 5 grands championnats jouent → panachage naturel ; un soir de Ligue des
 // Champions, elle seule a des matchs → elle prend toutes les places, avec ses plus belles affiches.
 // (Avant : tri à plat par prestige de compétition → 7 matchs du MÊME championnat un samedi.)
-function tourDeRole(list,n){
+// `decalage` (facultatif) : décale le point de DÉPART du tour de rôle. Deux ligues créées le même
+// jour puisent dans la même réserve commune et recevaient donc exactement la même liste (signalé
+// par Hervé). En décalant selon la ligue, chacune reçoit un mélange différent — SANS perdre en
+// qualité : chaque compétition propose toujours sa plus belle affiche d'abord, seul l'ordre de
+// service change, donc ce qui varie c'est QUI obtient la place en plus quand le compte ne tombe
+// pas juste. Variation volontairement modérée : privilégier les plus belles affiches limite par
+// construction la diversité possible.
+function tourDeRole(list,n,decalage){
   const parComp={}; list.forEach(e=>{ const k=e.compKey||"?"; (parComp[k]=parComp[k]||[]).push(e); });
-  const comps=Object.keys(parComp).sort((a,b)=>(parComp[b][0].prio||0)-(parComp[a][0].prio||0));
+  let comps=Object.keys(parComp).sort((a,b)=>(parComp[b][0].prio||0)-(parComp[a][0].prio||0));
   comps.forEach(k=>parComp[k].sort((x,y)=>afficheScore(y)-afficheScore(x)));
+  if(decalage && comps.length>1){ const o=((decalage%comps.length)+comps.length)%comps.length;
+    comps=comps.slice(o).concat(comps.slice(0,o)); }
   const out=[]; let encore=true;
   while(out.length<n && encore){ encore=false;
     for(const k of comps){ const arr=parComp[k];
       if(arr.length){ out.push(arr.shift()); encore=true; if(out.length>=n) break; } } }
   return out; }
+// Empreinte stable d'une ligue+journée → sert de décalage. Stable = la même ligue revoit la même
+// liste si elle recharge la page (sinon les affiches changeraient sous les yeux du joueur).
+function ligueDecalage(){ const s=((L&&L.id)||"")+":"+((L&&L.current_day)||0);
+  let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 async function fetchRealPool(){
   const sr=await fetch(`${ODDS_BASE}/sports/?apiKey=${ODDS_KEY}`); if(!sr.ok) throw new Error("sports "+sr.status);
   const sports=await sr.json(); const grp={}; sports.forEach(s=>grp[s.key]=s.group);
@@ -684,10 +697,11 @@ function selectPool(all){
   const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/rugby/tennis)
   // Football et variété remplis SÉPARÉMENT (pour tenir le quota 75/25), chacun par tour de rôle
   // entre ses compétitions → panachage des championnats un samedi, concentration un soir de C1.
-  const pool=[...tourDeRole(primary.filter(e=>e.grp==="Soccer"), socTarget),
-              ...tourDeRole(primary.filter(e=>e.grp!=="Soccer"), N-socTarget)];
+  const dec=ligueDecalage();   // deux ligues du même jour ne reçoivent pas la même liste
+  const pool=[...tourDeRole(primary.filter(e=>e.grp==="Soccer"), socTarget, dec),
+              ...tourDeRole(primary.filter(e=>e.grp!=="Soccer"), N-socTarget, dec)];
   const completer=src=>{ const reste=src.filter(e=>pool.indexOf(e)<0);
-    tourDeRole(reste, N-pool.length).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
+    tourDeRole(reste, N-pool.length, dec).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
   if(pool.length<N) completer(primary);
   if(pool.length<N) completer(dispo);
   // Ordre d'AFFICHAGE : les plus belles affiches en tête. N'affecte pas la composition du lot,
@@ -4135,7 +4149,11 @@ function quickBar(active){
 function noResultsYet(){ toast(t("Aucune journée terminée pour l'instant — les résultats arriveront après la clôture.")); }
 
 /* --- selection --- */
-let selPool=null, selChosen=[], selLoading=false;
+// `selFor` = ligue+journée auxquelles se rapportent `selPool`/`selChosen` (v6.94, signalé par Hervé).
+// Sans lui, ces globals SURVIVAIENT d'une ligue à l'autre : en créant une 2ᵉ ligue, l'écran de
+// choix des matchs réaffichait le pool précédent AVEC les 5 matchs déjà cochés de la ligue d'avant.
+// Même schéma que `betFor` pour les paris, qui corrigeait exactement ce type de fuite.
+let selPool=null, selChosen=[], selLoading=false, selFor=null;
 async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
   try{ selPool=await fetchRealPoolCached(); }catch(e){ selPool=null; }
   // 🛟 Anti-blocage (phase de test) : si l'API réelle est indisponible (plus de crédits, intersaison,
@@ -4146,6 +4164,10 @@ async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
   selLoading=false; render(); }
 function viewSelect(d,dayLbl,opp){
   const real=(L.data_mode==="real");
+  // Changement de ligue OU de journée → on repart d'une sélection VIERGE. Sans ce garde-fou, les
+  // 5 matchs cochés dans la ligue précédente réapparaissaient cochés dans la suivante.
+  const selKey=L.id+":"+(L.current_day||0);
+  if(selFor!==selKey){ selFor=selKey; selPool=null; selChosen=[]; selLoading=false; }
   if(!selPool && !selLoading){ if(real){ loadRealPool(); } else { selPool=genPool(POOL_N,leagueFormula().bet); selChosen=[]; } }
   if(real && (selLoading || !selPool)) return `${quickBar('')}<div class="box">${t("⏳ Chargement des vrais matchs à venir…")}</div>`;
   if(real && selPool.length<5) return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
