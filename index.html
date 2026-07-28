@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.05";
+const APP_VERSION = "v7.10";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -622,10 +622,20 @@ const _normNom=s=>(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f
   .replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
 function prestigeCount(f){ const est=n=>{ const x=_normNom(n); return PRESTIGE.some(p=>x.indexOf(p)>=0); };
   return (est(f.home)?1:0)+(est(f.away)?1:0); }
+// HEURE CONFORTABLE (v7.08, Hervé) — coup d'envoi entre 12 h et 23 h dans le fuseau du joueur.
+// Motif : en intersaison, la réserve se remplit de championnats sud-américains dont les matchs
+// tombent à 00h30-01h00 heure française. Une journée qui se joue à 1 h du matin n'a aucune saveur
+// pour un groupe d'amis — on ne voit le résultat que le lendemain.
+// ⚠️ PRÉFÉRENCE, PAS FILTRE : un match de nuit reste proposé s'il n'y a que ça (juillet !), et un
+// choc de prestige nocturne passe toujours devant un match anonyme de l'après-midi — le bonus (6)
+// pèse moins qu'une équipe de prestige (10). C'est le réglage voulu : départager à qualité égale.
+function heureConfortable(f){ const ts=fixtureKickoff(f); if(!ts) return false;
+  const h=new Date(ts).getHours(); return h>=12 && h<23; }
 // Note d'une affiche. Le PRESTIGE domine — un choc entre deux grands noms passe devant tout — puis
 // l'ÉQUILIBRE, mesuré par la cote du favori : plus elle est haute, moins le match est joué d'avance.
 // Un 1,05 contre 15,00 n'a aucun intérêt à pronostiquer, tout le monde coche le favori.
-function afficheScore(f){ const fav=Math.min(f.oh||99, f.oa||99); return prestigeCount(f)*10 + Math.min(fav,6); }
+function afficheScore(f){ const fav=Math.min(f.oh||99, f.oa||99);
+  return prestigeCount(f)*10 + Math.min(fav,6) + (heureConfortable(f)?6:0); }
 
 // Tour de rôle entre compétitions : on prend la meilleure affiche de chacune, chacune son tour,
 // dans l'ordre de prestige de la compétition. Répond aux DEUX cas voulus par Hervé sans règle
@@ -745,21 +755,45 @@ function selectPool(all){
   // joueur continuerait à se voir proposer du rugby pendant trois jours.
   const dispo=(all||[]).filter(e=>{ const t=new Date(e&&e.commence).getTime();
     return !isNaN(t) && t>=cutoffMin && REAL_GROUPS.includes(e.grp); });
+  const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/tennis)
+  const dec=ligueDecalage();   // deux ligues du même jour ne reçoivent pas la même liste
+  // Construit un lot de N affiches À PARTIR D'UN VIVIER DONNÉ. Sorti en fonction (v7.10) pour
+  // pouvoir être rejoué sur un vivier plus étroit — voir le resserrement plus bas.
   // Créneau serré = rythme de la formule : les matchs du jour se jouent groupés, donc les résultats
   // tombent ensemble (toute la ligue attend le dernier match). Repli sur la fenêtre large si creux.
-  const tightMax=cutoffMin+(_f.bet||24)*3600000;
-  const tight=dispo.filter(e=>new Date(e.commence).getTime()<=tightMax);
-  const primary=(tight.length>=5)?tight:dispo;
-  const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/tennis)
-  // Football et variété remplis SÉPARÉMENT (pour tenir le quota 75/25), chacun par tour de rôle
-  // entre ses compétitions → panachage des championnats un samedi, concentration un soir de C1.
-  const dec=ligueDecalage();   // deux ligues du même jour ne reçoivent pas la même liste
-  const pool=[...tourDeRole(primary.filter(e=>e.grp==="Soccer"), socTarget, dec),
-              ...tourDeRole(primary.filter(e=>e.grp!=="Soccer"), N-socTarget, dec)];
-  const completer=src=>{ const reste=src.filter(e=>pool.indexOf(e)<0);
-    tourDeRole(reste, N-pool.length, dec).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
-  if(pool.length<N) completer(primary);
-  if(pool.length<N) completer(dispo);
+  const batir=cand=>{
+    const tightMax=cutoffMin+(_f.bet||24)*3600000;
+    const tight=cand.filter(e=>new Date(e.commence).getTime()<=tightMax);
+    const primary=(tight.length>=5)?tight:cand;
+    // Football et variété remplis SÉPARÉMENT (pour tenir le quota 75/25), chacun par tour de rôle
+    // entre ses compétitions → panachage des championnats un samedi, concentration un soir de C1.
+    const pool=[...tourDeRole(primary.filter(e=>e.grp==="Soccer"), socTarget, dec),
+                ...tourDeRole(primary.filter(e=>e.grp!=="Soccer"), N-socTarget, dec)];
+    const completer=src=>{ const reste=src.filter(e=>pool.indexOf(e)<0);
+      tourDeRole(reste, N-pool.length, dec).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
+    if(pool.length<N) completer(primary);
+    if(pool.length<N) completer(cand);
+    return pool.slice(0,N);
+  };
+  /* ---- PAS DE MATCH AU-DELÀ DE 72 H tant qu'on peut faire autrement (v7.10, règle d'Hervé) ----
+     Le problème mesuré le 28/07 : quand le créneau serré ne contenait pas assez de matchs, la
+     complétion puisait directement dans TOUTE la fenêtre de récolte (8 jours). Une journée
+     Classique proposait 5 matchs groupés à 51-53 h, puis un trou de 47 h, puis trois matchs à
+     100-102 h. Or une journée ne se résout que quand le DERNIER match est terminé : elle restait
+     ouverte 4 jours, alors que 14 matchs étaient disponibles sous 96 h.
+     LA RÈGLE : un match au-delà de 72 h doit être REMPLACÉ par un autre — s'il en existe un.
+     On part donc de ce qui tient sous 72 h, puis on ne repousse la limite que **de 6 h en 6 h**,
+     juste assez pour compléter les N places. On ne dépasse que du strict nécessaire.
+     ⚠️ On repasse par `batir` à chaque palier (et non un simple « ajoute le plus proche ») : le
+     quota 75 % football / 25 % variété et le panachage entre championnats restent respectés.
+     ⚠️ En creux de calendrier — intersaison, trêve — il n'y aura parfois rien sous 72 h et la
+     journée s'étalera quand même. C'est accepté : mieux vaut une journée longue qu'une liste
+     incomplète. Le cas est rare (Hervé). */
+  const limite72=Date.now()+ETALEMENT_MAX_H*3600000;
+  let pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=limite72));
+  for(let extra=6; pool.length<N && extra<=HARVEST_WINDOW_D*24; extra+=6){
+    pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=limite72+extra*3600000));
+  }
   // Ordre d'AFFICHAGE : les plus belles affiches en tête. N'affecte pas la composition du lot,
   // déjà arrêtée par les tours de rôle ci-dessus.
   return pool.slice(0,N).sort((a,b)=>afficheScore(b)-afficheScore(a));
@@ -818,12 +852,18 @@ const CLAIM_TTL         = 2*60*1000;       // 2 min — si le client qui a pris 
 
 // Lit une entrée du cache partagé. `ttl` = âge maximum accepté (Infinity = « même périmé, donne »).
 // Renvoie null si absente, trop vieille, ou si la table n'est pas là.
+// `cacheAt` retient QUAND chaque entrée a été récoltée (v7.08). Sert à dater les cotes à l'écran :
+// la réserve étant mutualisée jusqu'à 3 jours, un parieur régulier verra l'écart avec les cotes du
+// jour et le lira comme un manque de sérieux. Le dire coûte une ligne et lève l'ambiguïté.
+const cacheAt={};
 async function cacheRead(key, ttl){
   try{
     const r=await q(db.from("api_cache").select("payload,fetched_at").eq("k",key));
     const row=Array.isArray(r)?r[0]:r; if(!row||row.payload==null) return null;
-    if(ttl!==Infinity){ const age=Date.now()-new Date(row.fetched_at).getTime();
+    const at=new Date(row.fetched_at).getTime();
+    if(ttl!==Infinity){ const age=Date.now()-at;
       if(!(age>=0) || age>ttl) return null; }
+    if(!isNaN(at)) cacheAt[key]=at;
     return row.payload;
   }catch(e){ return null; }
 }
@@ -852,15 +892,27 @@ async function fetchRealPoolCached(){
   const partage=await cacheRead("pool", POOL_SHARED_TTL);                           // 2. réserve commune
   if(Array.isArray(partage) && partage.length) return garder(partage);
   if(await cacheClaim("pool")){                                                     // 3. à moi de récolter
-    const r=await fetchRealPool(); if(r&&r.length) await cacheWrite("pool",r); return garder(r||[]);
+    const r=await fetchRealPool(); if(r&&r.length){ await cacheWrite("pool",r); cacheAt.pool=Date.now(); } return garder(r||[]);
   }
   // 4. un autre client récolte déjà → on ressert la dernière réserve connue, même périmée : mieux
   //    vaut des affiches d'il y a quatre jours que dix crédits dépensés en double.
   const vieux=await cacheRead("pool", Infinity);
   if(Array.isArray(vieux) && vieux.length) return garder(vieux);
-  const r=await fetchRealPool(); if(r&&r.length) await cacheWrite("pool",r); return garder(r||[]);
+  const r=await fetchRealPool(); if(r&&r.length){ await cacheWrite("pool",r); cacheAt.pool=Date.now(); } return garder(r||[]);
 }
+// Étiquette « Cotes relevées … » — vide en matchs simulés (les cotes y sont tirées à l'instant).
+function cotesDatees(){ const at=cacheAt.pool; if(!at||!L||L.data_mode!=="real") return "";
+  return `<div class="mini muted" style="margin-top:4px">💱 ${t("Cotes relevées {a} — elles ne bougent plus une fois la journée lancée.",{a:fmtWhen(at)})}</div>`; }
 const STALE_MATCH_H=24; // h après le coup d'envoi prévu → match non terminé réputé ANNULÉ (mises rendues)
+// Ligues à l'abandon (v7.07, réglages d'Hervé). Deux seuils DIFFÉRENTS, et c'est voulu :
+// on SIGNALE d'abord, on ferme ensuite — sans le palier d'alerte, une ligue disparaîtrait sans
+// que personne n'ait eu l'occasion de la relancer.
+const LIGUE_ALERTE_J=7;    // signalée « à l'arrêt » sur l'écran admin
+const LIGUE_FERME_J=14;    // fermée automatiquement, comme une fermeture AVANT TERME
+// Au-delà de ce délai, la liste d'affiches est jugée trop étalée et on tente de la resserrer
+// (v7.10, seuil fixé par Hervé). En dessous, on ne touche à RIEN : une journée déjà raisonnable
+// ne doit pas voir sa composition changer. Voir selectPool.
+const ETALEMENT_MAX_H=72;
 // Récupère les résultats réels (scores) par compétition → map evId -> {completed, res(1/N/2)}.
 async function fetchRealResults(sportKeys){
   const map={}; let ok=0, ko=0;
@@ -2205,7 +2257,9 @@ const EN={
   "À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.":"Next to each player in the standings, an arrow shows their <b>movement</b> since the previous matchday: <b>green ▲</b> (climbs), <b>=</b> (steady), <b>red ▼</b> (drops). It's <b>purely indicative</b>: no bonus or penalty attached.",
   "🃏 Cartes bonus (enchères)":"🃏 Bonus cards (auction)",
   "Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.":"At the start, a <b>preparation</b> phase: everyone votes for the forfeit <b>and</b> bids blind on the bonuses, without waiting for the others. Each bonus goes to the <b>highest bidder</b> (tie → first to bid); non-winners are <b>refunded</b>. Total bids ≤ <b>{a} €</b>, up to as many bonuses as there are matchdays. Winning bids are deducted from your <b>starting capital</b>. Max 1 card played per matchday. Some cards are <b>targeted</b> 🎯: you choose the match yourself when betting.",
+  "Cotes relevées {a} — elles ne bougent plus une fois la journée lancée.":"Odds taken {a} — they no longer move once the matchday is under way.",
   "😴 Oubli":"😴 Forgetting",
+  "💤 <b>Ligue abandonnée</b> : si <b>plus personne</b> ne joue pendant <b>{a} jours</b>, la ligue se ferme toute seule. Elle est alors considérée comme <b>fermée avant son terme</b> : <b>aucun vainqueur, aucun perdant</b>, et <b>ni gage ni récompense</b> ne s'appliquent. Elle ne compte pas non plus dans les statistiques.":"💤 <b>Abandoned league</b>: if <b>nobody at all</b> plays for <b>{a} days</b>, the league closes by itself. It then counts as <b>closed before its end</b>: <b>no winner, no loser</b>, and <b>neither forfeit nor reward</b> applies. It is left out of the statistics too.",
   "Pas de validation à temps → <b>aucun pari pris en compte</b>, <b>−2 pts</b> au classement et <b>−{a} % du capital</b>.":"No validation in time → <b>no bet counted</b>, <b>−2 pts</b> in the standings and <b>−{a}% of capital</b>.",
   "⏰ Pari non validé à temps":"⏰ Bet not validated in time",
   "Aucun pari pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital.":"No bet counted that day → <b>−2 pts</b> in the standings and <b>−25%</b> of your capital.",
@@ -4412,7 +4466,7 @@ function viewSelect(d,dayLbl,opp){
      <div class="mini muted" style="margin-top:8px">${t("Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.")}</div>
      <button class="btn ghost sm" style="margin-top:8px" onclick="selPool=null;render()">${t("🔄 Réessayer")}</button></div>`;
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
-     <div class="mini muted" style="margin-top:6px">${t("Choisis 5 rencontres ({a}/5) — imposées à {b}.",{a:selChosen.length,b:esc(opp.name)})}</div>${selLineHTML()}</div>
+     <div class="mini muted" style="margin-top:6px">${t("Choisis 5 rencontres ({a}/5) — imposées à {b}.",{a:selChosen.length,b:esc(opp.name)})}</div>${selLineHTML()}${cotesDatees()}</div>
      ${selPool.map((f,i)=>{const on=selChosen.includes(i);return `<div class="box row" onclick="toggleSel(${i})" style="cursor:pointer;${on?'border-color:var(--green)':''}">
        <div class="row" style="gap:9px"><span class="sport">${f.sport}</span><div><b>${esc(f.home)} – ${esc(f.away)}</b>
        <div class="mini muted">${cote(f.oh)}${f.draw?' / '+cote(f.od):''} / ${cote(f.oa)}${koLabel(f)?' · '+koLabel(f):''}</div></div></div><span class="chip ${on?'g':''}">${on?'✓':'+'}</span></div>`;}).join("")}
@@ -4651,7 +4705,7 @@ function viewWait(dayLbl){
   const dt=dayTimes();
   const head = `<div class="box"><div class="row"><b>${dayLbl}</b>${md?`<span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span>`:''}</div>
      ${md?`<div class="mini muted" style="margin-top:4px">${t("Duel vs {a}",{a:'<b>'+avaName(opp)+'</b>'})}</div>`:''}
-     <div class="mini muted" style="margin-top:4px">${editable?t("Pronos enregistrés ✅"):t("Paris clôturés 🔒")}</div>${betLineHTML()}</div>`;
+     <div class="mini muted" style="margin-top:4px">${editable?t("Pronos enregistrés ✅"):t("Paris clôturés 🔒")}</div>${betLineHTML()}${cotesDatees()}</div>`;
   const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}<div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
 
   // ── ÉTAT « VALIDÉS » (avant clôture) : la liste des 5 pronos + bouton Modifier (cf. maquette écran ⑥)
@@ -4689,32 +4743,10 @@ function viewWait(dayLbl){
 }
 // onclick pour aller sur l'onglet Résultats à la bonne journée (réutilisé par la barre + les renvois).
 function resultsTabOnclick(){ return "openResults("+resultsDefaultDay()+")"; }
-function publicBetsHTML(){
-  const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
-  const isMine=d=>(d.home_id===S.myId||d.away_id===S.myId);
-  // Ton duel d'abord : c'est celui qu'on vient voir. Les autres suivent dans l'ordre habituel (tri stable).
-  const ord=[...duels].sort((a,b)=>(isMine(a)?0:1)-(isMine(b)?0:1));
-  // Deux colonnes alignées — domicile à gauche, extérieur à droite — pour comparer les deux pronos
-  // d'un coup d'œil. Les noms passent en en-tête (une seule fois) au lieu d'être répétés à chaque
-  // ligne : sur mobile c'est la place qu'il faut pour que les 2 colonnes tiennent côte à côte.
-  const GRID='display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;align-items:baseline';
-  return ord.map(d=>{ const fx=d.fixtures||[]; if(!fx.length) return "";
-    const parts=[d.home_id,d.away_id].map(pid=>[pid, bets.find(b=>b.player_id===pid)]);
-    const nm=pid=> pid===S.myId?t("toi"):esc((pById(pid)||{}).name||"?");
-    const mien=isMine(d);
-    const cell=(pid,bt,f,i,right)=>{ const al=right?' style="text-align:right"':'';
-      if(bt&&bt.picks&&bt.picks.length&&bt.picks[i]) return `<div${al}><b>${esc(selLabel(f,bt.picks[i].sel))}</b> · ${bt.picks[i].stake}€</div>`;
-      const pp=pById(pid)||{}; return `<div${al}>${pp.is_ai?'<i>'+t("caché (IA)")+'</i>':'<i class="red">'+t("⏰ pronos non faits")+'</i>'}</div>`; };
-    return `<div class="box"${mien?' style="border-color:var(--accent)"':''}>
-      ${mien?`<div style="margin-bottom:6px"><span class="chip b">${t("ton duel")}</span></div>`:''}
-      <div class="mini" style="${GRID};padding-bottom:6px;border-bottom:1px solid var(--border)">
-        <div><div class="muted">${t("🏠 domicile")}</div><b>${nm(d.home_id)}</b></div>
-        <div style="text-align:right"><div class="muted">${t("extérieur ✈️")}</div><b>${nm(d.away_id)}</b></div></div>
-      ${fx.map((f,i)=>`<div class="mini" style="margin:8px 0"><div class="row" style="gap:8px;justify-content:space-between"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>${koLabel(f)}</div>
-        <div class="muted" style="${GRID};margin-top:3px">${cell(parts[0][0],parts[0][1],f,i,false)}${cell(parts[1][0],parts[1][1],f,i,true)}</div></div>`).join("")}
-      </div>`;
-  }).join("");
-}
+// (v7.09) publicBetsHTML a ete SUPPRIMEE : definie mais jamais appelee -- verifie, une seule
+// occurrence dans tout le fichier. Elle affichait les paris de tous les joueurs cote a cote ;
+// ce role est tenu par l'onglet Pronos apres cloture (afterCloseDuelHTML) et par l'ecran
+// Resultats. Repere lors de l'analyse complete du 2026-07-28.
 
 /* ============ RESOLUTION (cards engine) ============ */
 function aiPlay(cap,fx,hand,day,numDays){
@@ -6414,9 +6446,11 @@ async function loadAdmin(){
     // dernier appel). Sans ça, l'écran admin n'affichait jamais rien — voir noteQuota().
     await refreshQuota();                               // gratuit : le chiffre est toujours à jour ici
     const quota=await cacheRead("quota", Infinity);
-    const lgs=await q(db.from("leagues").select("id,status,gage,prep_summary,created_at"));
-    const pls=await q(db.from("players").select("id,name,is_ai,user_id,created_at"));
-    const allBts=await q(db.from("bets").select("card,net,created_at,player_id,submitted"));
+    // v7.06 : `code,name,num_days,current_day,data_mode` et `league_id` sur les paris servent à la
+    // liste « Toutes les ligues » — l'admin ne voyait QUE ses propres ligues, donc rien du terrain.
+    const lgs=await q(db.from("leagues").select("id,code,name,status,num_days,current_day,data_mode,gage,prep_summary,created_at"));
+    const pls=await q(db.from("players").select("id,name,is_ai,user_id,league_id,created_at"));
+    const allBts=await q(db.from("bets").select("card,net,created_at,player_id,submitted,league_id"));
     // Rachats de bonus : 2 actions humaines datées par ligne (proposition, puis réponse).
     // Table absente sur une base pas encore migrée → on continue sans, plutôt que de tout casser.
     let trs=[]; try{ trs=await q(db.from("trades").select("from_player,to_player,created_at,resolved_at")); }catch(e){ trs=[]; }
@@ -6494,7 +6528,48 @@ async function loadAdmin(){
     const classer=tal=>Object.keys(tal).map(t=>({t,votes:tal[t].votes,wins:tal[t].wins})).sort((a,b)=> b.votes-a.votes || b.wins-a.wins);
     const topGages=classer(gageTally), topRewards=classer(rewTally);
     const activeAccounts=new Set(pls.filter(p=>!p.is_ai&&p.user_id).map(p=>p.user_id)); // 1 personne = 1, même sur plusieurs ligues
-    adminData={ leagues:lgs.length,
+    /* ---- Toutes les ligues (v7.06, Hervé) ---------------------------------------------------
+       « En tant qu'admin je ne peux pas voir les ligues ouvertes par les autres. » L'écran ne
+       montrait que des COMPTEURS ; impossible de savoir laquelle vit, laquelle est morte, ni de
+       repérer un groupe bloqué. ⚠️ Volontairement limité à la phase de TEST : c'est une vue sur
+       les parties d'autrui. À revoir avant une ouverture publique.
+       « Dernière activité » = le prono humain le plus récent de la ligue, à défaut sa création.
+       Les connexions et les modifications de prono ne sont pas datées (cf. note de l'écran). */
+    const derniere={}; const humParLg={};
+    const vu=(lid,ts)=>{ if(!lid) return; const t=new Date(ts).getTime();
+      if(!isNaN(t) && (derniere[lid]==null || t>derniere[lid])) derniere[lid]=t; };
+    btsH.forEach(b=>vu(b.league_id,b.created_at));
+    // ⚠️ L'ARRIVÉE d'un joueur compte aussi : sans elle, un SALON où des gens s'inscrivent encore
+    // serait jugé mort sur la seule date de création de la ligue — et fermé à tort.
+    pls.forEach(p=>{ if(p.is_ai||!p.league_id) return; vu(p.league_id,p.created_at);
+      (humParLg[p.league_id]=humParLg[p.league_id]||new Set()).add(p.user_id||p.id); });
+    const allLeagues=lgs.map(l=>{
+      const cree=new Date(l.created_at).getTime();
+      const maj=derniere[l.id]||cree;
+      return { id:l.id, code:l.code||'?', name:l.name||'?', status:l.status, data:l.data_mode||'sim',
+               day:l.current_day|0, days:l.num_days|0, joueurs:(humParLg[l.id]||new Set()).size,
+               cree, maj, dormante:Math.floor((Date.now()-maj)/86400000) };
+    }).sort((a,b)=>b.maj-a.maj);
+    /* ---- FERMETURE AUTOMATIQUE des ligues à l'abandon (v7.07, réglage d'Hervé : 14 jours) -----
+       Traitée comme une fermeture AVANT TERME : `current_day` reste inférieur à `num_days`, donc
+       l'écran de fin affiche « Ligue fermée avant son terme », sans vainqueur ni perdant, sans
+       gage — et les statistiques l'excluent. Exactement le comportement d'une fermeture manuelle.
+       ⚠️ AUCUN serveur ne tourne aujourd'hui (cf. Phase 2) : le balayage a lieu quand l'ADMIN
+       ouvre cet écran. Effet secondaire HEUREUX — un joueur qui revient sur sa ligue avant ce
+       balayage la relance normalement (la journée en retard se résout), donc on ne ferme que ce
+       que plus personne ne réclame.
+       ⚠️ `.neq("status","done")` : garde-fou contre une double fermeture si deux onglets balaient
+       en même temps — on n'écrase pas la date de fin d'une ligue déjà close. */
+    let fermeesAuto=0;
+    for(const l of allLeagues.filter(x=>x.status!=="done" && x.dormante>=LIGUE_FERME_J)){
+      try{
+        const r=await q(db.from("leagues").update({status:"done"}).eq("id",l.id).neq("status","done").select("id"));
+        if(r && r.length){ fermeesAuto++; l.status="done"; l.fermeeAuto=true;
+          // Colonne absente sur une base pas encore migrée → on n'échoue pas pour autant.
+          try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",l.id)); }catch(e){} }
+      }catch(e){}
+    }
+    adminData={ allLeagues, fermeesAuto, leagues:lgs.length,
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
       activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
       resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]), topGages, topRewards,
@@ -6605,12 +6680,38 @@ function viewAdmin(){
             <div class="row" style="gap:6px;margin-top:6px"><button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetAllOptions('${u.id}',true)">Tout activer</button><button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetAllOptions('${u.id}',false)">Tout verrouiller</button></div>
             <div class="mini muted" style="margin-top:4px;opacity:.8">Effet à la prochaine connexion de ce compte.</div>`; })()}
           </div>`).join(''):'<div class="mini muted">Aucun compte.</div>'}</div>`:'<div class="mini muted" style="margin-top:6px">Saisis ton mot de passe admin, puis charge la liste pour gérer les accès (couper / réactiver), les options premium et les mots de passe.</div>'}`;
+  // Toutes les ligues du jeu (v7.06). Trois groupes : ce qui vit, ce qui dort, ce qui est fini —
+  // c'est la question à laquelle l'écran doit répondre d'un coup d'œil.
+  const DORMANTE_J=LIGUE_ALERTE_J;   // au-delà, une ligue non terminée est signalée comme à l'arrêt
+  const cLigues=(()=>{
+    const tout=a.allLeagues||[];
+    if(!tout.length) return `<div class="mini muted">Aucune ligue.</div>`;
+    const finie=l=>l.status==="done";
+    const dort=l=>!finie(l) && l.dormante>=DORMANTE_J;
+    const vive=l=>!finie(l) && !dort(l);
+    const etat={lobby:"🕓 salon", prep:"🎬 prépa", starting:"🎬 prépa", running:"▶️ en cours", done:"🏁 finie"};
+    const ligne=l=>`<div class="box row" style="text-align:left;align-items:flex-start;gap:8px;margin:6px 0">
+        <div style="min-width:0"><b class="mini">${esc(l.name)}</b> <span class="chip" style="flex:0 0 auto">${esc(l.code)}</span>
+          <div class="mini muted" style="margin-top:3px">${etat[l.status]||esc(l.status)}${l.days?` · J${l.day}/${l.days}`:''} · ${l.joueurs} joueur${l.joueurs>1?'s':''} · ${l.data==='real'?'📡 réel':'🎮 simulé'}</div>
+          <div class="mini muted" style="opacity:.8">créée le ${new Date(l.cree).toLocaleDateString('fr-FR')} · dernière activité ${l.dormante===0?"aujourd'hui":("il y a "+l.dormante+" j")}</div></div>
+        ${dort(l)?`<span class="chip" style="flex:0 0 auto;background:rgba(229,105,95,.15);color:#e5695f;border:1px solid rgba(229,105,95,.4)">à l'arrêt</span>`:''}
+      </div>`;
+    const bloc=(titre,liste)=>liste.length?`<div class="mini muted" style="margin:10px 0 2px">${titre} — ${liste.length}</div>${liste.map(ligne).join("")}`:'';
+    const auto=a.fermeesAuto|0;
+    return (auto?`<div class="box mini" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10)"><b class="gold">🧹 ${auto} ligue${auto>1?'s':''} fermée${auto>1?'s':''} automatiquement</b><div class="mini muted" style="margin-top:3px">Sans aucune activité depuis ${LIGUE_FERME_J} jours. Fermeture <b>avant terme</b> : ni vainqueur, ni perdant, ni gage.</div></div>`:'')
+         + bloc("▶️ Actives", tout.filter(vive))
+         + bloc("💤 À l'arrêt depuis "+DORMANTE_J+" jours ou plus", tout.filter(dort))
+         + bloc("🏁 Terminées", tout.filter(finie))
+         + `<div class="mini muted" style="margin-top:10px">« Dernière activité » = prono validé ou arrivée d'un joueur le plus récent (à défaut, la création). Les simples connexions ne sont pas datées.<br>Une ligue sans activité depuis <b>${LIGUE_FERME_J} jours</b> est fermée automatiquement, avant terme et sans vainqueur.</div>`;
+  })();
+  const nbDort=(a.allLeagues||[]).filter(l=>l.status!=="done" && l.dormante>=DORMANTE_J).length;
   const nouv=adminReports?adminReports.filter(r=>r.status==="nouveau").length:0;
   const quotaTxt=(()=>{ const nb=(a.quota&&a.quota.remaining!=null)?a.quota.remaining:liveQuota;
     return nb==null?"jamais relevé":(nb+" crédits"); })();
   return `${back}
     <div class="box"><h2 style="margin-top:0">🛠 Tableau de bord admin</h2>
       <div class="mini muted">Touche un chapitre pour l'ouvrir. Un seul à la fois.</div></div>
+    ${sec("ligues","🏆 Toutes les ligues", (a.leagues+" au total"+(nbDort?" · "+nbDort+" à l'arrêt":"")), cLigues)}
     ${sec("activite","📈 Activité", a.leagues+" ligues", cActivite)}
     ${sec("usage","🎮 Usage du jeu", a.totalBets+" paris", cUsage)}
     ${sec("api","📡 Crédits API", quotaTxt, cApi)}
@@ -7089,7 +7190,8 @@ function viewRules(){
      ${cardsAZ().map(card).join("")}</div>
    <div class="box"><b>${t("🤝 Racheter un bonus")}</b> <span class="prem" onclick="showPremiumInfo('rachat')">${t("✨ Premium")}</span>
      <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})} <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i></div></div>
-   <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b>, <b>{b} pt</b> au classement et <b>−{a} % du capital</b>.",{a:pct(forgotPenShown()),b:forgotPtsShown()})}</div></div>
+   <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b>, <b>{b} pt</b> au classement et <b>−{a} % du capital</b>.",{a:pct(forgotPenShown()),b:forgotPtsShown()})}
+     <br><br>${t("💤 <b>Ligue abandonnée</b> : si <b>plus personne</b> ne joue pendant <b>{a} jours</b>, la ligue se ferme toute seule. Elle est alors considérée comme <b>fermée avant son terme</b> : <b>aucun vainqueur, aucun perdant</b>, et <b>ni gage ni récompense</b> ne s'appliquent. Elle ne compte pas non plus dans les statistiques.",{a:LIGUE_FERME_J})}</div></div>
    <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
 }
 
