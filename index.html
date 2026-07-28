@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v6.94";
+const APP_VERSION = "v6.97";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -545,8 +545,17 @@ function enjeuOutcome(kind){ const s=(L&&L.prep_summary)||{}; const both=(s.enje
 // serveur reste le sujet de la Phase 2 (et la seule vraie protection contre un usage détourné).
 const ODDS_KEY="7be2e48e9638afa4e0f0aad561d56055";
 const ODDS_BASE="https://api.the-odds-api.com/v4";
-const REAL_GROUPS=["Soccer","Basketball","Tennis","Rugby League","Rugby Union"];
-const GROUP_EMOJI={Soccer:"⚽",Basketball:"🏀",Tennis:"🎾","Rugby League":"🏉","Rugby Union":"🏉"};
+// SPORTS AUTORISÉS EN MODE RÉEL (v6.96, Hervé) — uniquement les sports décrits dans les règles.
+// L'API en propose une douzaine d'autres (cricket, football américain, baseball, rugby, boxe…) ;
+// en ouvrir un sans l'écrire dans les règles surprend le joueur, qui se retrouve à parier sur un
+// sport dont il ignore qu'il fait partie du jeu.
+// Cette liste est le SEUL endroit à modifier pour ajouter un sport (récolte ET sélection s'y fient).
+// HOCKEY SUR GLACE — étudié puis ÉCARTÉ le 28/07 (Hervé : « pas suffisamment suivi »). Deux raisons
+// de ne pas rouvrir le sujet à la légère : (1) la seule compétition proposée par l'API est la NHL,
+// (2) l'argument du match nul ne tient pas — la NHL l'a supprimé en 2005, toute rencontre est
+// départagée en prolongation puis aux tirs au but, le marché est donc à 2 issues comme le basket.
+const REAL_GROUPS=["Soccer","Basketball","Tennis"];
+const GROUP_EMOJI={Soccer:"⚽",Basketball:"🏀",Tennis:"🎾"};
 // Convertit un événement The Odds API en "fixture" du jeu, avec cotes h2h figées.
 function oddsEventToFixture(ev, group){
   const bk=(ev.bookmakers||[])[0]; if(!bk) return null;
@@ -561,7 +570,7 @@ function oddsEventToFixture(ev, group){
   if(draw) f.od=Math.round(od*100)/100;
   return f;
 }
-// Pool de vrais matchs À VENIR (foot/basket/tennis/rugby), cotes figées. Limité en nb d'appels (quota).
+// Pool de vrais matchs À VENIR (foot/basket/tennis), cotes figées. Limité en nb d'appels (quota).
 // Priorité des compétitions : plus le nombre est grand, plus l'affiche est "grosse".
 const LEAGUE_PRIO={
   soccer_uefa_champs_league:100, soccer_uefa_europa_league:96, soccer_uefa_europa_conference_league:92,
@@ -570,8 +579,7 @@ const LEAGUE_PRIO={
   soccer_conmebol_copa_libertadores:88, soccer_conmebol_copa_sudamericana:80,
   soccer_usa_mls:82, soccer_mexico_ligamx:80, soccer_netherlands_eredivisie:80, soccer_portugal_primeira_liga:80,
   soccer_brazil_campeonato:76, soccer_argentina_primera_division:74,
-  basketball_nba:98, basketball_euroleague:90, basketball_wnba:70, basketball_nba_summer_league:58,
-  rugbyleague_nrl:66
+  basketball_nba:98, basketball_euroleague:90, basketball_wnba:70, basketball_nba_summer_league:58
 };
 function leaguePrio(key,group){ if(LEAGUE_PRIO[key]!=null) return LEAGUE_PRIO[key];
   // Tennis : les tournois changent CHAQUE SEMAINE (le Washington Open d'aujourd'hui n'existera plus
@@ -666,19 +674,58 @@ async function fetchRealPool(){
   // de plus : le prix est au CHAMPIONNAT interrogé, jamais au nombre de matchs rapportés.
   const cutoffMin=Date.now();
   const cutoffMax=cutoffMin+HARVEST_WINDOW_D*24*3600000;
-  const out=[]; const comps=new Set();
-  for(const k of keys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
+  // MÉMOIRE DES COMPÉTITIONS VIDES (v6.97, demandée par Hervé) — le plus gros gisement d'économie.
+  // Mesure du 28/07 : 17 championnats interrogés pour 8 productifs. Un championnat qui ne rapporte
+  // rien est facturé COMME LES AUTRES : en intersaison, Premier League, Liga et Bundesliga coûtent
+  // 1 crédit chacune tous les 3 jours pour rien. ⚠️ Aucun signal gratuit ne permet de les éviter :
+  // vérifié le 28/07, /sports renvoie `active:true` pour EPL, Liga, Bundesliga et Serie A alors que
+  // les quatre répondent à vide. Il faut donc mémoriser ce qu'on a constaté.
+  // RÈGLE : un championnat vide est sauté à la récolte SUIVANTE, puis retesté. Une récolte sur deux.
+  // Choix assumé : la facture des championnats vides est divisée par deux, et on ne peut pas rater
+  // une reprise de championnat de plus de ~6 jours (2 récoltes). Un oubli plus long (14 jours,
+  // 30 jours) économiserait davantage mais ferait manquer la reprise de la Ligue 1 ou de la NBA.
+  const memo=(await cacheRead("vides", Infinity))||{};
+  const sautes=[]; const out=[]; const comps=new Set();
+  for(const k of keys){
+    if(memo[k]===true){ memo[k]=false; sautes.push(k); continue; }   // sauté ce coup-ci, retesté au suivant
+    try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
     noteQuota(r.headers.get("x-requests-remaining"));   // c'est le poste le plus coûteux : on en profite pour relever le solde
     if(!r.ok) continue; const arr=await r.json();
+    const avant=out.length;
     arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
+    // « Vide » = n'a rien rapporté d'UTILISABLE dans la fenêtre. Ce n'est pas la même chose qu'une
+    // réponse vide de l'API : un championnat peut renvoyer des matchs tous situés au-delà des
+    // 8 jours. Dans les deux cas le crédit est parti et la compétition n'a rien apporté.
+    if(out.length===avant) memo[k]=true; else delete memo[k];
   }catch(e){}
     // Arrêt anticipé — c'est LUI qui fixe la facture (1 crédit par championnat interrogé).
     // Le seuil porte sur le nombre de championnats PRODUCTIFS, pas sur le nombre d'appels : en
     // intersaison beaucoup répondent à vide, et s'arrêter sur un compteur d'appels donnerait une
     // réserve famélique. Il faut aussi assez de championnats DIFFÉRENTS, sinon le tour de rôle
     // n'aurait rien à panacher un samedi.
-    if(comps.size>=8 && out.length>=30 && out.filter(e=>e.grp!=="Soccer").length>=5) break;
+    // MESURE DU 28/07 (récolte réelle, facture reconstituée au crédit près) : 17 championnats
+    // interrogés pour 8 productifs — un championnat qui répond À VIDE est facturé quand même.
+    // En retirant le rugby (2 compétitions productives ce jour-là), le seuil de 8 aurait poussé la
+    // récolte encore plus loin dans le football de second rang, donc PLUS cher. Seuil ramené à 6 :
+    // les 6 premiers productifs donnaient déjà ~58 matchs et 26 hors football, largement de quoi
+    // tenir 3 jours à 9 affiches. On coupe la queue de liste, pas la qualité.
+    if(comps.size>=6 && out.length>=30 && out.filter(e=>e.grp!=="Soccer").length>=5) break;
   }
+  // FILET — si la récolte précédente avait tout trouvé vide, TOUT serait sauté et la réserve
+  // repartirait vide : l'app n'aurait plus une seule affiche à proposer. L'économie ne doit jamais
+  // aller jusqu'à casser le jeu. Dans ce cas seulement, on retente les compétitions sautées.
+  if(!out.length && sautes.length){
+    for(const k of sautes){
+      try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
+        noteQuota(r.headers.get("x-requests-remaining"));
+        if(!r.ok) continue; const arr=await r.json(); const avant=out.length;
+        arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
+        if(out.length===avant) memo[k]=true; else delete memo[k];
+      }catch(e){}
+      if(comps.size>=6 && out.length>=30) break;
+    }
+  }
+  await cacheWrite("vides", memo);
   return out;
 }
 // Sélection des affiches proposées à UNE ligue, à partir de la réserve commune (v6.92).
@@ -688,13 +735,18 @@ async function fetchRealPool(){
 function selectPool(all){
   const _f=leagueFormula();
   const cutoffMin=Date.now()+((_f.sel||24)+(_f.bet||24))*3600000;
-  const dispo=(all||[]).filter(e=>{ const t=new Date(e&&e.commence).getTime(); return !isNaN(t) && t>=cutoffMin; });
+  // Second filtre sur les sports (v6.96) — indispensable, et pas redondant avec la récolte : la
+  // réserve est mutualisée jusqu'à 3 jours, donc elle contient encore les sports récoltés AVANT ce
+  // changement. Sans ce filtre, retirer un sport ne prendrait effet qu'à la récolte suivante et le
+  // joueur continuerait à se voir proposer du rugby pendant trois jours.
+  const dispo=(all||[]).filter(e=>{ const t=new Date(e&&e.commence).getTime();
+    return !isNaN(t) && t>=cutoffMin && REAL_GROUPS.includes(e.grp); });
   // Créneau serré = rythme de la formule : les matchs du jour se jouent groupés, donc les résultats
   // tombent ensemble (toute la ligue attend le dernier match). Repli sur la fenêtre large si creux.
   const tightMax=cutoffMin+(_f.bet||24)*3600000;
   const tight=dispo.filter(e=>new Date(e.commence).getTime()<=tightMax);
   const primary=(tight.length>=5)?tight:dispo;
-  const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/rugby/tennis)
+  const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/tennis)
   // Football et variété remplis SÉPARÉMENT (pour tenir le quota 75/25), chacun par tour de rôle
   // entre ses compétitions → panachage des championnats un samedi, concentration un soir de C1.
   const dec=ligueDecalage();   // deux ligues du même jour ne reçoivent pas la même liste
@@ -1738,7 +1790,7 @@ const EN={
   "Tu prends <b>{b} pt</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>{b} pt</b> in the standings and lose <b>{a} %</b> of your balance.",
   "Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.":"Each day, the player with the <b>best net result in the whole league</b> earns a <b>+1 bonus point</b> (on top of the duel points). Ties are broken by the biggest winnings.",
   "<b>Départage au classement final</b> (à points égaux) : <b>cagnotte</b>, puis le <b>résultat des confrontations directes</b> entre les joueurs concernés, puis plus gros gain, puis plus grosse cote.":"<b>Final standings tie-break</b> (equal points): <b>balance</b>, then the <b>head-to-head record</b> between the players involved, then biggest win, then biggest odds.",
-  "La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend la carte 🧈 {c} jouable.":"The list offers <b>{a} fixtures</b>, of which about <b>{b} % football</b> — the rest (tennis, basketball, rugby) for variety. If there isn't enough football available, the remainder comes from the other sports. Football ⚽ being the only sport with <b>3 outcomes</b> (win, draw, loss), it is what makes the 🧈 {c} card playable.",
+  "La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend la carte 🧈 {c} jouable.":"The list offers <b>{a} fixtures</b> from <b>football, basketball and tennis</b> — the only sports in the game —, of which about <b>{b} % football</b>. If there isn't enough football available, the remainder comes from basketball and tennis. Football ⚽ being the only sport with <b>3 outcomes</b> (win, draw, loss), it is what makes the 🧈 {c} card playable.",
   "Étape précédente d'abord":"Previous step first",
   "⏳ Étape précédente d'abord : tous les duels doivent avoir leurs 5 matchs.":"⏳ Previous step first: every duel must have its 5 matches.",
   "Un duel n'a pas encore ses 5 matchs. Clôturer maintenant empêcherait les joueurs concernés de parier, et la journée ne pourrait pas se résoudre.":"One duel doesn't have its 5 matches yet. Closing now would stop those players from betting, and the matchday couldn't be resolved.",
@@ -2382,6 +2434,30 @@ function getSeen(){ return +(localStorage.getItem("pl_seen_"+S.leagueId)||0); }
 function setSeen(v){ localStorage.setItem("pl_seen_"+S.leagueId, v); }
 async function q(p){ const {data,error}=await p; if(error) throw new Error(error.message); return data; }
 function genCode(){ let s=""; const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; for(let i=0;i<5;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; }
+// Crée une ligue en RÉESSAYANT tant que le code tiré est déjà pris (v6.95, demandé par Hervé).
+//
+// ⚠️ La garantie d'unicité vient de la BASE (`code text unique not null` dans schema.sql), jamais
+// d'un SELECT préalable : deux joueurs peuvent tirer le même code au même instant, et seul un index
+// unique tranche sans condition de course. On tente donc l'insertion, et on retire un code si elle
+// est refusée pour doublon.
+//
+// Pourquoi c'est nécessaire : 32^5 = 33,5 millions de codes, mais la collision suit le paradoxe des
+// anniversaires — ~1,5 % de risque au bout de 1 000 ligues, ~31 % à 5 000, ~78 % à 10 000. Elle est
+// donc rare aujourd'hui et CERTAINE à l'échelle. Sans ce réessai, le joueur voyait une erreur
+// Postgres brute (« duplicate key value violates unique constraint ») et sa ligue n'était pas créée.
+//
+// ⚠️ Un code n'est JAMAIS recyclé : fermer une ligue la passe en statut « done », la ligne reste en
+// base, donc son code reste à jamais pris. C'est voulu — un ancien code ne doit pas ramener des
+// joueurs vers une autre partie.
+async function insertLeagueCodeUnique(champs){
+  let derniere=null;
+  for(let i=0;i<6;i++){
+    const code=genCode();
+    try{ return await q(db.from("leagues").insert(Object.assign({},champs,{code})).select().single()); }
+    catch(e){ derniere=e; if(!/duplicate|unique|23505/i.test(e.message||"")) throw e; }
+  }
+  throw derniere||new Error("code de ligue introuvable");
+}
 
 /* ============ schedule ============ */
 function makeSchedule(n){ let arr=[...Array(n).keys()]; const rounds=[];
@@ -3304,7 +3380,8 @@ async function createLeague(){
   if(solo && !requireOpt('ia')) return;   // jouer seul vs IA = option premium (sécurité)
   busy=true; showErr("");
   try{
-    const code=genCode();
+    // Le code est tiré par insertLeagueCodeUnique (qui réessaie en cas de doublon) : on lit ensuite
+    // `lg.code`, jamais un code tiré ici — sinon on afficherait au joueur un code différent du sien.
     const mode = (newLg.mode==='complet' && hasOpt('bonuscomplets')) ? 'complet' : 'simple';
     const data = (newLg.data==='real' && hasOpt('direct')) ? 'real' : 'sim';
     const formula = (newLg.formula==='fast') ? 'fast' : 'classique';
@@ -3318,11 +3395,11 @@ async function createLeague(){
       if(both) st.optionsR = drawItems("reward", mode);
       st.votes={}; st.voteTs={}; st.bids={}; st.bidTs={}; if(both){ st.votesR={}; st.voteTsR={}; }
     }
-    const lg=await q(db.from("leagues").insert({code,name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,gage:JSON.stringify(st)}).select().single());
+    const lg=await insertLeagueCodeUnique({name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,gage:JSON.stringify(st)});
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||defaultAvatar(0),is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     newLg=null;
     if(solo){ await startLeagueCore(lg); openLeague(lg.id, pl.id, true); }  // SOLO : démarre direct (pas de lobby)
-    else { openLeague(lg.id, pl.id, true); leagueCreatedModal(code); }
+    else { openLeague(lg.id, pl.id, true); leagueCreatedModal(lg.code); }
   }catch(e){ showErr("Création : "+e.message); } busy=false;
 }
 async function joinLeague(code){
@@ -3692,16 +3769,16 @@ async function relaunchLeague(){
   if(busy||!L||!AUTH)return; if(!(me()&&me().is_organizer))return; busy=true; showErr("");
   try{
     const humans=players.filter(p=>!p.is_ai && p.user_id); // on réutilise les joueurs humains
-    const code=genCode();
+    // Code tiré par insertLeagueCodeUnique → on lit `lg.code` ensuite, pas un code tiré ici.
     // Le lobby est désormais verrouillé (réglages figés à la création) → on reporte les réglages de la
     // ligue précédente sur la nouvelle, sinon l'organisateur n'aurait aucun moyen de les définir.
     let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
     const st={ mode:(o.mode||'simple') }; if(o.soloAR!=null) st.soloAR=o.soloAR; else st.enjeu=o.enjeu||'gage';
-    const lg=await q(db.from("leagues").insert({code,name:L.name,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula:(L.formula||'classique'),data_mode:(L.data_mode||'sim'),gage:JSON.stringify(st)}).select().single());
+    const lg=await insertLeagueCodeUnique({name:L.name,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula:(L.formula||'classique'),data_mode:(L.data_mode||'sim'),gage:JSON.stringify(st)});
     const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:p.emoji||EMOJIS[i]||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
     const inserted=await q(db.from("players").insert(rows).select());
     const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
-    openLeague(lg.id, mine.id, true); leagueCreatedModal(code);
+    openLeague(lg.id, mine.id, true); leagueCreatedModal(lg.code);
   }catch(e){ showErr("Relance : "+e.message); } busy=false; }
 // Confirmation de création — dans une fenêtre fermable (et non un toast fugace) pour laisser le
 // temps de lire et de noter le code à partager. Le modal survit au render() du lobby (appendChild body).
@@ -6602,7 +6679,7 @@ function viewRulesFull(){
    ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.")+' <i>'+t("(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)")+'</i>')}
 
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
-     ${li(t("La liste proposée contient <b>{a} rencontres</b>, dont environ <b>{b} % de football</b> — le reste (tennis, basket, rugby) pour la variété. S'il n'y a pas assez de football disponible, le complément vient des autres sports. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend la carte 🧈 {c} jouable.",{a:POOL_N,b:75,c:t(CARDS.chance.n)}))}
+     ${li(t("La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend la carte 🧈 {c} jouable.",{a:POOL_N,b:75,c:t(CARDS.chance.n)}))}
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
      ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec la carte Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
      ${li(t("Tu désignes un <b>👑 Capitaine</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>."))}
