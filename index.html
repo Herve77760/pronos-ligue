@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.17";
+const APP_VERSION = "v7.18";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1072,6 +1072,7 @@ let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0
 let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[], trades=[], myResolvedOut=[], tradeToasted=new Set();
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null, standTrades=null;
+let standHist=false;   // ligue terminée : afficher le classement journée par journée au lieu du bilan (v7.18)
 // Confrontations directes de la ligue COURANTE, alimentées par computeStandHist :
 // STAND_H2H["idA|idB"] = points de duel gagnés par A contre B sur toute la saison.
 // STAND_H2H_LG mémorise à quelle ligue elles appartiennent — sans ce garde-fou, l'écran
@@ -1716,6 +1717,19 @@ const EN={
   "Ligues":"Leagues", "Profil":"Profile", "Pronos":"Picks", "Classt":"Rank", "Langue":"Language", "Thème":"Theme", "Stats":"Stats",
   "Clair / sombre":"Light / dark", "Espace admin":"Admin area", "🔑 Changer mon mot de passe":"🔑 Change my password",
   "Palmarès":"Hall of fame",
+  // Fiche détaillée d'un gage / d'une récompense sur l'écran final (v7.18)
+  // Avatar : confirmation avant remplacement (v7.18)
+  "Choisir cet avatar ?":"Use this avatar?",
+  "Remplacer ton image personnelle par cet avatar ?\n\nTon image sera retirée — il faudra la recharger pour la remettre.":"Replace your own picture with this avatar?\n\nYour picture will be removed — you'd have to upload it again.",
+  "Ton avatar et ton pseudo se règlent sur l'écran 👤 Profil.":"Your avatar and display name are set on the 👤 Profile screen.",
+  "Le gage":"The forfeit", "La récompense":"The reward",
+  "touche pour voir en quoi ça consiste":"tap to see what it involves",
+  "Pas de description pour celui-ci — à régler entre vous.":"No description for this one — settle it between you.",
+  "À réaliser par <b>{a}</b>.":"To be carried out by <b>{a}</b>.",
+  "Remportée par <b>{a}</b>.":"Won by <b>{a}</b>.",
+  "Choisi par <b>{a}</b>.":"Chosen by <b>{a}</b>.", "Choisie par <b>{a}</b>.":"Chosen by <b>{a}</b>.",
+  "Voir le classement journée par journée":"See the standings matchday by matchday",
+  "Revenir au bilan de la ligue":"Back to the league summary",
   "📋 Résultats · J{a}":"📋 Results · MD{a}", "Les affiches du jour":"Today's fixtures", "vs":"vs", "Les 5 matchs ne sont pas encore choisis.":"The 5 matches haven't been picked yet.",
   "Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.":"Matchday in progress — picks and stakes will be revealed once the day is over.",
   "✅ Cette option est <b>active sur ton compte</b>. Profites-en !":"✅ This option is <b>active on your account</b>. Enjoy!",
@@ -3082,6 +3096,20 @@ function howItWorksHTML(){
    ${t("• <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2), et un 🃏 <b>bonus</b> si tu le souhaites (facultatif).")}<br>
    ${t("• Le <b>vainqueur du duel</b> du jour marque des points.")}<br>
    ${fin}</div></div>`; }
+// Changement d'avatar depuis la GRILLE d'illustrations — avec confirmation (v7.18, Hervé : « j'ai
+// cliqué par erreur sur un avatar et ça a enlevé mon image, j'ai dû la remettre »).
+// ⚠️ La confirmation est ICI et pas dans `setAvatar` : après un envoi de fichier, l'utilisateur
+// vient déjà de choisir explicitement son image — lui redemander serait une confirmation de trop.
+// Le message est plus insistant quand on remplace une PHOTO CHARGÉE : c'est la perte réelle,
+// l'illustration se retrouve en un clic, l'image chargée demande de la retrouver et de la renvoyer.
+function choisirAvatar(v){
+  if(AUTH && AUTH.avatar===v) return;                        // déjà le sien : rien à confirmer
+  const photo=/^https?:\/\//.test(AUTH&&AUTH.avatar||"");
+  const q1=photo ? t("Remplacer ton image personnelle par cet avatar ?\n\nTon image sera retirée — il faudra la recharger pour la remettre.")
+                 : t("Choisir cet avatar ?");
+  if(!confirm(q1)) return;
+  setAvatar(v);
+}
 async function setAvatar(em){
   try{
     await db.auth.updateUser({ data:{ username:AUTH.name, avatar:em } });
@@ -3090,19 +3118,10 @@ async function setAvatar(em){
     if(S.leagueId){ await refresh(); } else { await loadMyLeagues(); }
   }catch(e){ showErr("Avatar : "+e.message); }
 }
-// Avatar PERSO : le joueur saisit/colle n'importe quel emoji. On garde le 1er « caractère » emoji
-// (segmentation Intl si dispo, sinon repli sur la chaîne brute nettoyée) et on réutilise setAvatar.
-// Emojis RÉSERVÉS au jeu : éléments (Capitaine, trophée, cible, IA, ⭐, 🃏, balles) + tous les bonus
-// (CARDS[*].e). Interdits comme avatar perso, sinon confusion (demandé par Hervé). Comparaison sans le
-// sélecteur de variante FE0F pour attraper 🛡 comme 🛡️.
-function reservedEmojiSet(){ const s=new Set(["👑","🏆","🎯","🤖","⭐","🃏","⚽","🎾","🏀","🏉","🏈"]);
-  try{ Object.keys(CARDS).forEach(id=>{ if(CARDS[id]&&CARDS[id].e) s.add(CARDS[id].e); }); }catch(e){}
-  const out=new Set(); s.forEach(e=>out.add((""+e).replace(/️/g,""))); return out; }
-function setCustomAvatar(){ const el=$("customAv"); let v=(el&&el.value||"").trim(); if(!v){ showErr(t("Colle un emoji d'abord.")); return; }
-  try{ if(typeof Intl!=="undefined" && Intl.Segmenter){ const seg=new Intl.Segmenter().segment(v); const first=seg[Symbol.iterator]().next(); if(first&&first.value) v=first.value.segment; } }catch(e){}
-  v=v.slice(0,16); // garde-fou longueur (un emoji composite peut faire plusieurs unités UTF-16)
-  if(reservedEmojiSet().has(v.replace(/️/g,""))){ showErr(t("Cet emoji est déjà utilisé dans le jeu (bonus, Capitaine…) — choisis-en un autre.")); return; }
-  setAvatar(v); }
+// (v7.18) `setCustomAvatar` et `reservedEmojiSet` SUPPRIMÉS : l'avatar est désormais soit une
+// illustration intégrée, soit une image chargée — plus d'emoji personnel (décision d'Hervé). Ces
+// deux fonctions n'avaient plus aucun appelant. La liste EMOJIS reste utilisée comme avatar de
+// repli à la création d'un joueur (voir createLeague / démarrage), elle n'est PAS supprimée.
 // Upload d'une image perso → Supabase Storage (bucket public "avatars"). On redimensionne l'image en
 // 256×256 côté client (canvas) pour rester léger, on remplace le fichier de CE compte (upsert), puis on
 // stocke l'URL publique comme avatar. Nécessite un bucket "avatars" public + policy d'upload (voir doc).
@@ -4518,8 +4537,12 @@ function viewDay(){
 }
 // recapFocus=null : en quittant un récap vers le classement, on oublie le joueur consulté, pour
 // qu'au retour le récap réaffiche MON compte par défaut (et non le dernier nom cliqué — signalé par Hervé).
-function goStandings(){ S.view='standings'; standDay=null; recapFocus=null; render(); refresh(); }
+function goStandings(){ S.view='standings'; standDay=null; standHist=false; recapFocus=null; render(); refresh(); }
 function setStandDay(d){ standDay=d; render(); }
+// Ligue TERMINÉE : l'onglet Classement affiche l'écran de fin (choix d'Hervé). `standHist` permet
+// d'en sortir pour consulter le classement journée par journée, avec ses flèches ▲▼ — inaccessible
+// jusqu'ici sur une ligue finie, alors que tout le calcul était déjà prévu pour (v7.18).
+function setStandHist(v){ standHist=!!v; standDay=null; render(); }
 function navBtns(){ return `<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" onclick="goStandings()">📊 Classement</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">📅 Résultats J${L.current_day}</button>`:''}</div>`; }
 function standingsBtn(){ return `<div style="height:8px"></div><button class="btn ghost" onclick="goStandings()">Voir le classement</button>`; }
 // Barre d'accès rapide (icônes) — présente sur Résultats / Recap / Classement
@@ -6146,18 +6169,32 @@ function showStandingsInfo(){
      <b>▲ = ▼</b> — ${t("À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.")}
    </div>`);
 }
+// ⭐ CUMUL DU MEILLEUR PRONOSTIQUEUR sur les `nbJours` premières journées : meilleur net de la
+// ligue chaque jour, les oublis exclus (picks vide), départage par ordre d'arrivée.
+// ⚠️ Extrait en fonction en v7.18 pour être PARTAGÉ par le classement courant et le classement
+// final : deux copies de la même règle finiraient par diverger (cf. recapitalisation, v7.16).
+function starCumul(nbJours){
+  const sc={}; players.forEach(p=>sc[p.id]=0);
+  if(!chartBets) return sc;
+  const byDay={}; chartBets.forEach(b=>{ if(b.day<nbJours){(byDay[b.day]=byDay[b.day]||[]).push(b);} });
+  for(let d=0;d<nbJours;d++){ const arr=byDay[d]; if(!arr||!arr.length)continue; let best=null,bn=-1e9,bo=1e9;
+    arr.forEach(b=>{ if(Array.isArray(b.picks)&&b.picks.length===0) return; const RR=Math.round((b.net||0)*100)/100;
+      const pp=pById(b.player_id); const o=pp?(pp.join_order||0):0; if(RR>bn||(RR===bn&&o<bo)){bn=RR;best=b.player_id;bo=o;} });
+    if(best!=null)sc[best]++; }
+  return sc;
+}
 function viewStandings(){
   // Ligue terminée → l'onglet Classement EST l'écran de fin (vainqueur + classement final + bilan),
   // toujours accessible (avant, il n'était joignable que via l'onglet Pronos). Demandé par Hervé.
-  if(L && L.status==="done") return viewEnd();
+  // ⚠️ `!standHist` (v7.18) : le bilan reste l'écran par défaut d'une ligue terminée, mais on peut
+  // désormais en sortir pour parcourir les journées et leurs flèches ▲▼. Tout le calcul le
+  // permettait déjà (`R` gère le cas « done ») — seul ce renvoi anticipé le rendait inatteignable.
+  if(L && L.status==="done" && !standHist) return viewEnd();
   const meP=me(); const hand=meP&&meP.hand?meP.hand:[]; const used=meP&&meP.cards_used?meP.cards_used:[];
   const humansLive=classe(players).filter(p=>!p.is_ai); const lastH=humansLive[humansLive.length-1];
   const R = (L.status==="done" ? (L.num_days||0) : (L.current_day||0)); // journées résolues
   const snaps = computeStandHist();
-  // ⭐ cumul (meilleur net de la ligue chaque journée, hors oubli) pour la vue actuelle
-  const sc={}; players.forEach(p=>sc[p.id]=0);
-  if(chartBets){ const byDay={}; chartBets.forEach(b=>{ if(b.day<R){(byDay[b.day]=byDay[b.day]||[]).push(b);} });
-    for(let d=0;d<R;d++){ const arr=byDay[d]; if(!arr||!arr.length)continue; let best=null,bn=-1e9,bo=1e9; arr.forEach(b=>{ if(Array.isArray(b.picks)&&b.picks.length===0) return; const RR=Math.round((b.net||0)*100)/100; const pp=pById(b.player_id); const o=pp?(pp.join_order||0):0; if(RR>bn||(RR===bn&&o<bo)){bn=RR;best=b.player_id;bo=o;} }); if(best!=null)sc[best]++; } }
+  const sc=starCumul(R);   // ⭐ cumul — voir starCumul(), partagé avec le classement final
   // journée sélectionnée (défaut = dernière résolue = classement actuel)
   let sd = (standDay==null)? R-1 : standDay; if(sd>R-1) sd=R-1; if(sd<0) sd=R-1;
   const useLive = R<1 || sd>=R-1 || !snaps[sd];
@@ -6180,6 +6217,7 @@ function viewStandings(){
       <button class="btn ghost sm" ${shownIdx<R-1?'':'disabled'} onclick="setStandDay(${shownIdx+1})">${t("Suiv. ▶")}</button></div>`
     : `<h2>${t("Classement · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days})}</h2>`;
   return `${quickBar('standings')}
+    ${standHist?`<div class="row" style="margin:2px 0 6px"><button class="btn ghost sm" style="width:auto" onclick="setStandHist(false)">← ${t("Revenir au bilan de la ligue")}</button></div>`:''}
     ${nav}
     <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Cap.")}</th></tr>
       ${ord.map((p,i)=>{const bp=p.star||0; const dp=p.points-bp;
@@ -6198,16 +6236,35 @@ function viewStandings(){
 // Enjeu(x) à l'écran final. En mode "both" il y en a DEUX → on affiche les deux encadrés.
 // Enjeu FINAL (ligue terminée) — présentation « podium », bien visible (demandé par Hervé) : gros
 // libellé, cadre coloré, nom du destinataire mis en avant comme celui du champion.
+// Fiche d'un gage / d'une récompense (v7.18, demandé par Hervé) : le classement final n'affichait
+// que le NOM. « Le plongeon givré 🥶 » ne dit rien à qui n'a pas participé au vote — et plus rien
+// à personne quelques semaines plus tard. La DESCRIPTION existait déjà dans `GAGES` (champ `d`,
+// affiché au moment du vote) : elle n'était simplement jamais reprise à l'arrivée.
+function showEnjeuInfo(kind){
+  const eo=enjeuOutcome(kind||undefined); if(!eo||!eo.ok||!eo.title) return;
+  const rew=eo.rew, titre=eo.perso?eo.title:t(eo.title), d=eo.desc?(eo.perso?eo.desc:t(eo.desc)):'';
+  const qui=(eo.target&&eo.target.name)||'?';
+  infoModal(rew?"🏆":"🎭", rew?t("La récompense"):t("Le gage"),
+    `<div style="font-size:17px;font-weight:700">${esc(titre)}</div>
+     <div class="mini muted" style="text-align:left;margin-top:10px;line-height:1.6">${d?esc(d):t("Pas de description pour celui-ci — à régler entre vous.")}</div>
+     <div class="mini muted" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px;line-height:1.6">
+       ${rew?t("Remportée par <b>{a}</b>.",{a:esc(qui)}):t("À réaliser par <b>{a}</b>.",{a:esc(qui)})}
+       ${eo.chooser?(rew?t("Choisie par <b>{a}</b>.",{a:esc(eo.chooser.name)}):t("Choisi par <b>{a}</b>.",{a:esc(eo.chooser.name)})):''}
+     </div>`);
+}
 function enjeuFinalHTML(){
   if(isSolo()) return ''; // solo : aucun enjeu (ni dernier ni champion à départager entre humains)
   const bloc=kind=>{ const eo=enjeuOutcome(kind); if(!eo.ok||!eo.title) return ''; const rew=eo.rew;
     const item=esc(eo.perso?eo.title:t(eo.title));
-    return `<div class="box" style="border:2px solid ${rew?'var(--green)':'var(--red)'};background:${rew?'rgba(61,90,43,.12)':'rgba(90,43,43,.12)'};text-align:center;margin-top:10px">
+    // Tout le bloc est cliquable → fiche détaillée. Un simple nom ne suffit pas à comprendre
+    // l'enjeu, et c'est l'écran qu'on relit le plus longtemps après la fin d'une ligue.
+    return `<div class="box clik" onclick="showEnjeuInfo('${kind||''}')" style="border:2px solid ${rew?'var(--green)':'var(--red)'};background:${rew?'rgba(61,90,43,.12)':'rgba(90,43,43,.12)'};text-align:center;margin-top:10px">
       <div style="font-size:15px;font-weight:800;letter-spacing:.5px" class="${rew?'gold':'red'}">${rew?t("🏆 LA RÉCOMPENSE"):t("🎭 LE GAGE")}</div>
       <div style="font-size:22px;font-weight:800;margin-top:4px">${avaName(eo.target)}</div>
       <div class="mini muted" style="margin-top:2px">${rew?t("remporte :"):t("doit réaliser :")}</div>
       <div style="font-size:17px;font-weight:700;margin-top:3px">${item}</div>
       ${eo.chooser?`<div class="mini muted" style="margin-top:5px">${rew?t("récompense choisie par {a} 🥄",{a:esc(eo.chooser.name)}):t("gage choisi par {a} 🏆",{a:esc(eo.chooser.name)})}</div>`:''}
+      <div class="mini muted" style="margin-top:6px;opacity:.85">👉 ${t("touche pour voir en quoi ça consiste")}</div>
     </div>`; };
   return isBoth() ? (bloc("gage")+bloc("reward")) : bloc();
 }
@@ -6360,8 +6417,15 @@ function viewEnd(){
    ${abandoned?'':enjeuFinalHTML()}
    <h2>${abandoned?t("Classement à la fermeture"):t("Classement final")}</h2>
    ${abandoned?`<div class="mini muted" style="margin:-4px 0 10px;text-align:center">${t("État du classement au moment de la fermeture — <b>purement indicatif</b>, sans vainqueur ni perdant désigné.")}</div>`:''}
-   <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
-     ${ord.map((p,i)=>`<tr><td>${i+1}</td><td>${avaName(p)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td><td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`).join("")}</table></div>
+   ${/* MÊME FORMAT que les classements de journée (v7.18, demandé par Hervé) : colonnes Duel et
+        ⭐ comprises. Le total « Pts » seul ne disait pas d'où venaient les points ; on retrouve
+        désormais la même lecture que pendant la saison. `starCumul` est la fonction PARTAGÉE avec
+        l'écran de classement — pas une seconde implémentation. */
+     (()=>{ const Rf=(L.num_days||0); const scF=starCumul(Rf); const starOnF=starMech(players.length);
+       return `<div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th>${starOnF?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
+     ${ord.map((p,i)=>{ const bp=scF[p.id]||0; const dp=p.points-bp;
+       return `<tr><td>${i+1}</td><td>${avaName(p)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td><td class="num">${dp}</td>${starOnF?`<td class="num">${bp||'–'}</td>`:''}<td class="num"><b>${p.points}</b></td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>`; })()}
+   <div class="row" style="margin:6px 0 10px"><button class="btn ghost sm" style="width:auto" onclick="setStandHist(true)">📊 ${t("Voir le classement journée par journée")}</button></div>
    ${endRecapHTML()}
    ${ptsChart()}
    ${capChart()}
@@ -7043,11 +7107,12 @@ function viewProfil(){
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><b class="mini">✏️ ${t("Pseudo affiché")}</b><button class="btn ghost sm" onclick="changeMyUsername()">${t("Modifier")}</button></div>
       <div class="mini muted" style="margin-top:3px">${t("C'est le nom vu dans toutes tes ligues. Ton identifiant de connexion, lui, ne change pas.")}</div>
       <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${Array.from({length:AV_COUNT},(_,i)=>{const v="av:"+i, on=AUTH.avatar===v; return `<button class="btn ghost sm" onclick="setAvatar('${v}')" style="padding:4px;line-height:0;border-radius:50%${on?';border-color:var(--accent)':''}">${avatarSvg(i,36)}</button>`;}).join("")}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${Array.from({length:AV_COUNT},(_,i)=>{const v="av:"+i, on=AUTH.avatar===v; return `<button class="btn ghost sm" onclick="choisirAvatar('${v}')" style="padding:4px;line-height:0;border-radius:50%${on?';border-color:var(--accent)':''}">${avatarSvg(i,36)}</button>`;}).join("")}</div>
       <div class="mini muted" style="margin-top:14px">${t("📷 Ou charge ta propre image")}</div>
       <div class="row" style="gap:8px;margin-top:6px;align-items:center"><label class="btn ghost sm" style="cursor:pointer">${t("Choisir une image")}<input type="file" accept="image/*" onchange="uploadAvatar(this)" style="display:none"></label><span id="avUpMsg" class="mini muted"></span></div>
-      <div class="mini muted" style="margin-top:14px">${t("✨ Ou colle un emoji")}</div>
-      <div class="row" style="gap:8px;margin-top:6px"><input id="customAv" maxlength="16" placeholder="🙂" style="width:70px;text-align:center;font-size:20px"><button class="btn ghost sm" onclick="setCustomAvatar()">${t("Utiliser")}</button></div></div>
+      ${/* ✨ « Ou colle un emoji » RETIRÉ en v7.18 (Hervé) : l'avatar est soit une illustration
+           intégrée, soit une image chargée. Un emoji ne se distinguait pas de ceux du jeu
+           (bonus, Capitaine…) et donnait des profils illisibles à 26 px. */''}</div>
     <div class="box"><div class="row" style="justify-content:space-between;align-items:center"><b class="mini">🌐 ${t("Langue")}</b><button class="btn ghost sm" onclick="toggleLang()">${lang==='en'?'🇬🇧 English':'🇫🇷 Français'}</button></div>
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><b class="mini">🌗 ${t("Thème")}</b><button class="btn ghost sm" onclick="toggleTheme()">${t("Clair / sombre")}</button></div></div>
     <div class="box"><b class="mini">🔑 ${t("Mot de passe")}</b><div style="height:6px"></div><button class="btn ghost" onclick="changeMyPassword()">${t("🔑 Changer mon mot de passe")}</button></div>
@@ -7061,8 +7126,11 @@ function viewSettings(){
   return `<button class="btn ghost sm" onclick="closeSettings()">${t("← Retour")}</button>
     <div class="box"><h2 style="margin-top:0">${t("⚙️ Paramètres du compte")}</h2>
       <div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b>${esc(AUTH.name)}</b>${avatarHTML(AUTH.avatar,42)}</div>
-      <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${EMOJIS.map(em=>`<button class="btn ghost sm" onclick="setAvatar('${em}')" style="font-size:20px;padding:6px 9px;line-height:1${em===AUTH.avatar?';border-color:var(--accent)':''}">${em}</button>`).join("")}</div>
+      ${/* (v7.18) Grille d'EMOJIS retirée ici aussi : l'avatar se choisit sur l'écran Profil,
+           et seulement parmi les illustrations ou une image chargée. Cet écran n'est plus
+           atteignable (son bouton ⚙️ est masqué en permanence), mais le laisser proposer des
+           emojis aurait fait revenir l'option le jour où il le redeviendrait. */''}
+      <div class="mini muted" style="margin-top:14px">${t("Ton avatar et ton pseudo se règlent sur l'écran 👤 Profil.")}</div>
     </div>
     <div class="box"><b class="mini">${t("📚 Comment marche le jeu")}</b>
       <div class="mini muted" style="margin-top:5px">${t("Le fonctionnement complet, dans le détail : calendrier, mises, Capitaine, points, cartes bonus, enjeu final.")}</div>
