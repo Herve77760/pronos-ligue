@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.19";
+const APP_VERSION = "v7.20";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4542,7 +4542,14 @@ function setStandDay(d){ standDay=d; render(); }
 // Ligue TERMINÉE : l'onglet Classement affiche l'écran de fin (choix d'Hervé). `standHist` permet
 // d'en sortir pour consulter le classement journée par journée, avec ses flèches ▲▼ — inaccessible
 // jusqu'ici sur une ligue finie, alors que tout le calcul était déjà prévu pour (v7.18).
-function setStandHist(v){ standHist=!!v; standDay=null; render(); }
+function setStandHist(v){ standHist=!!v; standDay=null;
+  // ⚠️ `S.view='standings'` INDISPENSABLE (corrigé v7.20, signalé par Hervé) : l'écran de fin est
+  // aussi rendu par l'onglet **Pronos** d'une ligue terminée (viewGame → viewEnd). Le bouton s'y
+  // trouvait donc, mais lever le drapeau n'y changeait rien — viewGame réaffichait le même écran.
+  // On voyait juste la page remonter en haut. Le bouton signifie « va au classement par journée » :
+  // il doit donc NAVIGUER, pas seulement basculer un état.
+  if(v) S.view='standings';
+  render(); }
 function navBtns(){ return `<div class="row" style="gap:8px;margin-top:10px"><button class="btn ghost sm" onclick="goStandings()">📊 Classement</button>${L.current_day>=1?`<button class="btn ghost sm" onclick="openResults(${L.current_day-1})">📅 Résultats J${L.current_day}</button>`:''}</div>`; }
 function standingsBtn(){ return `<div style="height:8px"></div><button class="btn ghost" onclick="goStandings()">Voir le classement</button>`; }
 // Barre d'accès rapide (icônes) — présente sur Résultats / Recap / Classement
