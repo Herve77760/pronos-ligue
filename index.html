@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.16";
+const APP_VERSION = "v7.17";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5296,11 +5296,13 @@ function recapBody(D){
     b.picks.forEach((pk,i)=>{ const f=fx[i]; const st=+pk.stake||0; if(!f||f.canceled||st<=0) return;
       if(!bm||st>bm.st) bm={st,pid:b.player_id,f,gagne:(f.res===pk.sel)}; }); });
   if(bm) divers.push(`💰 ${t("Plus grosse mise : {a} — {b} € sur {c} ({d}).",{a:nm2(bm.pid),b:fmt(bm.st).replace('+',''),c:esc(bm.f.home+' – '+bm.f.away),d:bm.gagne?t("gagné"):t("perdu")})}`);
-  // Journée COLLECTIVE : tout le monde dans le vert, ou personne. Ne vaut qu'à partir de deux
-  // humains — dans une partie solo contre l'IA, « tout le monde » n'a pas de sens.
-  const hum=inDay.filter(p=>!p.is_ai);
-  if(hum.length>=2){
-    const nets=hum.map(p=>netMap[p.id]||0);
+  // Journée COLLECTIVE : tout le monde dans le vert, ou personne.
+  // ⚠️ LE JOUEUR IA EST COMPTÉ (v7.17, signalé par Hervé). Il excluait la lecture du fait :
+  // « tout le monde » affiché alors que l'IA était dans le rouge, c'est faux pour qui regarde le
+  // classement. Même principe que la recapitalisation (v7.16) : l'IA est un concurrent du
+  // championnat, elle joue des duels et figure au classement — elle compte comme les autres.
+  if(inDay.length>=2){
+    const nets=inDay.map(p=>netMap[p.id]||0);
     if(nets.every(n=>n>0)) divers.push(`🌞 ${t("Journée faste : <b>tout le monde</b> finit dans le vert.")}`);
     else if(nets.every(n=>n<0)) divers.push(`🌧️ ${t("Journée noire : <b>personne</b> ne s'en sort — tout le monde est dans le rouge.")}`);
   }
