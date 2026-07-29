@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.14";
+const APP_VERSION = "v7.16";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1826,7 +1826,15 @@ const EN={
   "✨ Faits marquants":"✨ Highlights",
   "Meilleur résultat du jour : {a} (<b class=\"green\">{b}€</b>).":"Best result of the day: {a} (<b class=\"green\">{b}€</b>).",
   "Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).":"Biggest hit: {a} on {b} (<b class=\"green\">{c}€</b>).",
-  "a joué {a} — ça s'est retourné : <b class=\"green\">{b}€</b> pour {c}.":"played {a} — it backfired: <b class=\"green\">{b}€</b> for {c}.",
+  // Faits marquants — bonus retournés (v7.15). L'ancienne clé « … <b class="green">{b}€</b> pour
+  // {c} » est supprimée : elle ne disait que le gain de l'adversaire, jamais ce que ça avait
+  // coûté au joueur, et ne se déclenchait que sur les cartes visant l'adversaire.
+  "a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.":"played {a} — it backfired: <b class=\"red\">{b}€</b> for {d}, and <b class=\"green\">{b2}€</b> for {c}.",
+  "a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.":"played {a} — it backfired on {d}: <b class=\"red\">{b}€</b>.",
+  "Plus grosse mise : {a} — {b} € sur {c} ({d}).":"Biggest stake: {a} — €{b} on {c} ({d}).",
+  "gagné":"won", "perdu":"lost",
+  "Journée faste : <b>tout le monde</b> finit dans le vert.":"A good day: <b>everyone</b> finishes in the green.",
+  "Journée noire : <b>personne</b> ne s'en sort — tout le monde est dans le rouge.":"A dark day: <b>nobody</b> made it — everyone is in the red.",
   "a réussi {a} : <b class=\"green\">{b}€</b>.":"nailed {a}: <b class=\"green\">{b}€</b>.",
   "a volé le bonus de {c}.":"stole {c}'s bonus.",
   // Bonus « Demi-portion » (v6.39)
@@ -5070,7 +5078,12 @@ async function resolveDay(){
     // rester identique dans computeStandHist().
     let recapNote=null;
     const willBeDone=(D+1)>=fresh.num_days;
-    const broke = willBeDone ? [] : ps.filter(p=>!p.is_ai && upd[p.id].capital < RECAP_THRESHOLD);
+    // ⚠️ LE JOUEUR IA EST CONCERNÉ AUSSI (v7.16, signalé par Hervé sur EUEYM : l'IA à 18,42 €
+    // ne recevait rien). L'exclusion `!p.is_ai` d'origine n'était justifiée nulle part et allait
+    // contre le but même de la règle : une IA ruinée ne peut plus miser, les duels contre elle
+    // deviennent gagnés d'avance et le championnat perd son intérêt pour les humains. Elle est
+    // au classement, elle joue des duels : elle suit la même règle, −1 point compris.
+    const broke = willBeDone ? [] : ps.filter(p=>upd[p.id].capital < RECAP_THRESHOLD);
     if(broke.length){ broke.forEach(p=>{ upd[p.id].capital = RECAP_TARGET; upd[p.id].points -= 1; });
       recapNote={day:D+1, target:RECAP_TARGET, seuil:RECAP_THRESHOLD, penalty:1, names:broke.map(p=>p.name)}; }
     for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
@@ -5246,23 +5259,52 @@ function recapBody(D){
     </div>`;
   }
   // ✨ Faits marquants de la journée (dont bonus qui se sont retournés contre leur joueur) — demandé par Hervé.
-  const faits=[];
+  /* ORDRE DE PRIORITÉ FIXÉ PAR HERVÉ (v7.15) — trois groupes, dans cet ordre :
+       1. un bonus qui s'est RETOURNÉ contre celui qui l'a joué,
+       2. un bonus BIEN joué, qui lui a rapporté,
+       3. les faits divers (plus gros gain, plus grosse mise, journée collective…).
+     ⚠️ CORRECTION DU DÉFAUT DE FOND (signalé sur EUEYM J2, ❄️ Effet Kiss Cool à −5,39 €) :
+     le retournement était déduit du TYPE de carte (`C.oppT`, celles qui visent l'adversaire).
+     Une carte qui ne vise personne mais dont l'effet se retourne — Kiss Cool, Ça passe ou ça
+     casse, Beurre… — n'était donc JAMAIS signalée. On se fonde désormais sur le FAIT CONSTATÉ :
+     `impact.self`, écrit à la résolution, qui vaut « mon net AVEC la carte moins SANS elle ». */
+  const FAIT_MIN=1;   // en € — en deçà, ce n'est pas un fait marquant mais du bruit d'arrondi
+  const retournes=[], reussis=[], divers=[];
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
+    const self=+im.self||0, opp=+im.opp||0;
     const wp=pById(b.player_id)||{}; const whoNm=avatarHTML(wp.emoji)+' '+(b.player_id===S.myId?t("toi"):esc(wp.name||'?'));
     const dd=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const oid=dd?(dd.home_id===b.player_id?dd.away_id:dd.home_id):null; const op=oid!=null?(pById(oid)||{}):{}; const oppNm=avatarHTML(op.emoji)+' '+esc(op.name||'?');
-    if(C.oppT && (im.opp||0)>=1) faits.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"green\">{b}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.opp),c:oppNm})}`);
-    else if((im.self||0)>=5) faits.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(im.self)})}`);
-    else if(c.stole) faits.push(`🥷 <b>${whoNm}</b> ${t("a volé le bonus de {c}.",{c:oppNm})}`);
+    if(self<=-FAIT_MIN){
+      // Deux formulations : la carte a PROFITÉ à l'adversaire, ou elle a simplement coûté.
+      if(opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(self),b2:fmt(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+      else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+    }
+    else if(self>=FAIT_MIN) reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(self)})}`);
+    else if(c.stole) reussis.push(`🥷 <b>${whoNm}</b> ${t("a volé le bonus de {c}.",{c:oppNm})}`);
   });
-  // Faits GÉNÉRAUX (pour qu'un résumé apparaisse même sans bonus marquant — demandé par Hervé) :
-  // meilleur résultat net du jour + plus gros pari gagnant.
+  // Faits DIVERS — pour qu'un résumé apparaisse même sans bonus marquant.
   const nm2=pid=>{ const p=pById(pid)||{}; return avatarHTML(p.emoji)+' '+(pid===S.myId?t("toi"):esc(p.name||'?')); };
   const inDay=players.filter(p=>duels.some(d=>d.home_id===p.id||d.away_id===p.id));
   if(inDay.length){ const best=inDay.slice().sort((a,b)=>(netMap[b.id]||0)-(netMap[a.id]||0))[0];
-    if(best && (netMap[best.id]||0)>0) faits.unshift(`🏅 ${t("Meilleur résultat du jour : {a} (<b class=\"green\">{b}€</b>).",{a:nm2(best.id),b:fmt(netMap[best.id]||0)})}`); }
+    if(best && (netMap[best.id]||0)>0) divers.push(`🏅 ${t("Meilleur résultat du jour : {a} (<b class=\"green\">{b}€</b>).",{a:nm2(best.id),b:fmt(netMap[best.id]||0)})}`); }
   let bc=null; bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[]; if(!Array.isArray(b.picks)) return;
     b.picks.forEach((pk,i)=>{ const f=fx[i]; if(!f||f.canceled||f.res!==pk.sel) return; const g=Math.round((+pk.stake||0)*(oddOf(f,pk.sel)-1)*100)/100; if(g>0 && (!bc||g>bc.g)) bc={g,pid:b.player_id,f,sel:pk.sel}; }); });
-  if(bc) faits.push(`💥 ${t("Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).",{a:nm2(bc.pid),b:esc(bc.f.home+' – '+bc.f.away),c:fmt(bc.g)})}`);
+  if(bc) divers.push(`💥 ${t("Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).",{a:nm2(bc.pid),b:esc(bc.f.home+' – '+bc.f.away),c:fmt(bc.g)})}`);
+  // Plus grosse MISE de la journée — demandée par Hervé, distincte du plus gros gain : elle dit
+  // qui a osé, gagnant ou perdant.
+  let bm=null; bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[]; if(!Array.isArray(b.picks)) return;
+    b.picks.forEach((pk,i)=>{ const f=fx[i]; const st=+pk.stake||0; if(!f||f.canceled||st<=0) return;
+      if(!bm||st>bm.st) bm={st,pid:b.player_id,f,gagne:(f.res===pk.sel)}; }); });
+  if(bm) divers.push(`💰 ${t("Plus grosse mise : {a} — {b} € sur {c} ({d}).",{a:nm2(bm.pid),b:fmt(bm.st).replace('+',''),c:esc(bm.f.home+' – '+bm.f.away),d:bm.gagne?t("gagné"):t("perdu")})}`);
+  // Journée COLLECTIVE : tout le monde dans le vert, ou personne. Ne vaut qu'à partir de deux
+  // humains — dans une partie solo contre l'IA, « tout le monde » n'a pas de sens.
+  const hum=inDay.filter(p=>!p.is_ai);
+  if(hum.length>=2){
+    const nets=hum.map(p=>netMap[p.id]||0);
+    if(nets.every(n=>n>0)) divers.push(`🌞 ${t("Journée faste : <b>tout le monde</b> finit dans le vert.")}`);
+    else if(nets.every(n=>n<0)) divers.push(`🌧️ ${t("Journée noire : <b>personne</b> ne s'en sort — tout le monde est dans le rouge.")}`);
+  }
+  const faits=retournes.concat(reussis, divers);
   const faitsBox = faits.length ? `<h2>${t("✨ Faits marquants")}</h2><div class="box"><div class="mini" style="line-height:1.8">${faits.map(x=>'• '+x).join('<br>')}</div></div>` : '';
   return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
       <div class="row">
@@ -5498,11 +5540,13 @@ function computeStandHist(){
     forgot.forEach(pid=>{ if(!st[pid]) return; st[pid].points+=forgotPtsOf();
       const bb=betAt[d+'|'+pid]; const penInNet=!!(bb && (bb.net||0)<0);
       if(!penInNet) st[pid].capital=Math.max(0,Math.round(st[pid].capital*(1-forgotPenOf())*100)/100); });
-    // recapitalisation : si un humain < seuil → capital REMONTÉ À RECAP_TARGET pour LUI SEUL, −1 pt pour
+    // recapitalisation : si un joueur < seuil → capital REMONTÉ À RECAP_TARGET pour LUI SEUL, −1 pt pour
     // lui (modèle v5.30). Miroir EXACT de resolveDay (sinon les points recalculés divergent de la base).
     // Comme resolveDay, PAS de renflouement sur la dernière journée (rien à miser ensuite).
+    // ⚠️ Le joueur IA est concerné COMME LES AUTRES depuis la v7.16 : toute divergence avec
+    // resolveDay ferait diverger le classement rejoué de celui écrit en base.
     const isLastDay=(d===((L.num_days||0)-1));
-    const broke=isLastDay?[]:players.filter(p=>!p.is_ai && st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
+    const broke=isLastDay?[]:players.filter(p=>st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
     if(broke.length){ broke.forEach(p=>{ if(st[p.id]){ st[p.id].capital=RECAP_TARGET; st[p.id].points-=1; } }); }
     snaps.push(players.map(p=>({ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
       points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star })));
