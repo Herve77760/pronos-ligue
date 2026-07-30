@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.22";
+const APP_VERSION = "v7.23";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1546,6 +1546,10 @@ const EN={
   "📅 Journée 1 — tes pronos":"📅 Day 1 — your predictions", "📅 Journée 2 — tes pronos":"📅 Day 2 — your predictions",
   "Choisis un résultat par match et, si tu veux, un 👑 Capitaine (gain/perte ×2). Mise fixe {a} € par pari.":"Pick one result per match and, if you want, a 👑 Captain (gain/loss ×2). Fixed stake €{a} per bet.",
   "il y a <b>5 matchs</b> par journée (ici 3 pour aller vite), et tu peux jouer <b>1 bonus</b> par journée.":"there are <b>5 matches</b> per day (3 here to go fast), and you can play <b>1 bonus</b> per day.",
+  // Onglet Pronos d'une ligue terminée (v7.23) — il annonce la fin et renvoie au bilan.
+  "Saison terminée":"Season over",
+  "Il n'y a plus de pronostics à saisir pour cette ligue.":"There are no more predictions to enter for this league.",
+  "Voir le bilan de la saison":"See the season review", "Revoir les résultats":"Review the results",
   "📅 Résultats — Journée 1":"📅 Results — Day 1", "📅 Résultats — Journée 2":"📅 Results — Day 2",
   "Léa":"Léa", "Classement après J1":"Standings after day 1", "Journée 2 →":"Day 2 →",
   "🎲 Journée 2 — choisis les matchs":"🎲 Day 2 — pick the matches",
@@ -2890,6 +2894,11 @@ async function refresh(){
     // Lancement du championnat : dès que la prépa bascule en "running", on amène le joueur sur les
     // 🎬 Coulisses (résumé d'ouverture : gage + enchères), et non direct sur les pronos (demandé par Hervé).
     if(L.status==="running" && (prevLeagueStatus==="prep"||prevLeagueStatus==="starting") && S.view==="game"){ S.view="coulisses"; }
+    // Ligue TERMINÉE : on ouvre sur 📊 Classt, pas sur ⚽ Pronos (v7.23, demandé par Hervé). Il n'y a
+    // plus rien à parier ; le bilan est l'écran qui a du sens. ⚠️ `prevLeagueStatus===null` = PREMIER
+    // chargement de cette ligue : sans cette condition, chaque tour de polling ramènerait le joueur
+    // sur le classement alors qu'il consulte les résultats ou les règles.
+    if(L.status==="done" && prevLeagueStatus===null && S.view==="game"){ S.view="standings"; standHist=false; standDay=null; }
     prevLeagueStatus=L.status;
     if(L.status==="lobby") maybeAutoStartFull();   // ligue pleine → clôture auto + démarrage
     showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay); maybePrepModal(); maybeFormulaModal();
@@ -3704,10 +3713,19 @@ function viewGame(){
   if(L.status==="lobby"||L.status==="prep") return viewPrepTabs();
   if(L.status==="starting") return `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
   if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">⚙️</div><b>Résolution de la journée…</b><div class="mini muted" style="margin-top:6px">Calcul des gains en cours.</div></div>`;
-  // Ligue terminée → écran de fin (champion + classement final). Le récap de la dernière journée n'est
-  // plus affiché ici : les résultats sont dans l'onglet 📋 Résultats (l'onglet Pronos ne montre jamais
-  // de résultats — choix Hervé).
-  if(L.status==="done") return viewEnd();
+  // Ligue terminée → l'onglet Pronos annonce la fin de saison et RENVOIE au bilan (v7.23, demandé par
+  // Hervé). Avant, il affichait le bilan lui-même : la barre du bas disait « ⚽ Pronos » alors que le
+  // contenu était le classement final — c'est ce qui l'a fait chercher au mauvais endroit. Le bilan
+  // n'a plus qu'un seul écran d'accueil, l'onglet 📊 Classt. Les résultats restent dans 📋 Résultats
+  // (l'onglet Pronos ne montre jamais de résultats — choix Hervé).
+  if(L.status==="done") return `<div class="box" style="text-align:center">
+    <div style="font-size:34px">🏁</div>
+    <b>${t("Saison terminée")}</b>
+    <div class="mini muted" style="margin-top:6px">${t("Il n'y a plus de pronostics à saisir pour cette ligue.")}</div>
+    <div style="height:12px"></div>
+    <button class="btn" onclick="goStandings()">🏆 ${t("Voir le bilan de la saison")}</button>
+    <div style="height:8px"></div>
+    <button class="btn ghost" onclick="${resultsTabOnclick()}">📋 ${t("Revoir les résultats")}</button></div>`;
   // Anti-flash (D5) : après avoir consulté l'onglet Résultats (qui charge une journée passée dans
   // duels/bets), on ne montre PAS ces données périmées sur Pronos — on attend le rechargement.
   if(loadedDay!==L.current_day) return `<div class="box" style="text-align:center"><div style="font-size:24px">⏳</div><div class="mini muted" style="margin-top:6px">${t("Chargement de la journée…")}</div></div>`;
@@ -5467,7 +5485,12 @@ function waitingResultsBody(d){
 }
 let recapOpen=-1, recapFocus=null;
 function toggleRecapMatch(i){ recapOpen=recapOpen===i?-1:i; render(); }
-function ackRecap(){ recapOpen=-1; recapFocus=null; setSeen(L.current_day); refresh(); }
+// ⚠️ Sur une ligue TERMINÉE, le bouton de ce récap promet « 🏆 Voir le classement final → ». Depuis
+// v7.23 l'onglet Pronos n'affiche plus le bilan mais un message de fin de saison : sans ce renvoi,
+// le bouton tiendrait à moitié sa promesse. On l'envoie donc explicitement sur 📊 Classt.
+function ackRecap(){ recapOpen=-1; recapFocus=null; setSeen(L.current_day);
+  if(L && L.status==="done"){ S.view="standings"; standHist=false; standDay=null; }
+  refresh(); }
 
 /* ============ STANDINGS ============ */
 // Comparateur du classement. v2 (demande d'Hervé) : points → cagnotte → [confrontations directes,
