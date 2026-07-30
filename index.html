@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.21";
+const APP_VERSION = "v7.22";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6483,7 +6483,12 @@ async function closeLeagueFromHome(lid){
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
 function openCoulisses(){ navOpen("coulisses"); }
 async function openPalmares(){ S.view="palmares"; palmares=null; palmOpen=""; render(); await loadPalmares(); render(); }
-async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; adminReports=null; repOpen=""; render(); await loadAdmin(); render(); }
+// ⚠️ `admOpen=""` (v7.22, Hervé) : en revenant sur l'écran Admin, les chapitres doivent être
+// REPLIÉS. `repOpen` l'était déjà, pas `admOpen` — on retrouvait donc le chapitre laissé ouvert
+// la fois précédente, ce qui fait arriver au milieu d'un contenu qu'on n'a pas demandé.
+// ⚠️ `quitterConsultation` ne passe PAS par ici et pose volontairement `admOpen="ligues"` : après
+// avoir consulté la ligue d'un autre, on revient là d'où l'on vient. Ne pas uniformiser.
+async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; adminReports=null; repOpen=""; admOpen=""; render(); await loadAdmin(); render(); }
 // Remontées des joueurs — lecture réservée à l'admin. La table est SCELLÉE (aucune policy) :
 // impossible de la lire avec la clé publique, tout passe par cette RPC protégée par mot de passe.
 async function adminLoadReports(){
