@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.20";
+const APP_VERSION = "v7.21";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6347,25 +6347,31 @@ function lineChart(series, labels, title, lo, hi){
 }
 async function loadEndStats(){
   try{
+    // (v7.21) La requête sur `duels`, ainsi que `betAt` et `duelByDay`, ont été SUPPRIMÉES : elles
+    // ne servaient qu'au rejeu maison du championnat, remplacé par computeStandHist(). Une requête
+    // de moins à chaque ouverture d'un bilan.
     const bz=await q(db.from("bets").select("day,player_id,net,card,picks").eq("league_id",L.id));
-    const dz=await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",L.id));
     const N=L.num_days||0; const pmap={}; players.forEach(p=>pmap[p.id]=p);
     const nm=pid=>{const p=pmap[pid]||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
-    const betAt={}; bz.forEach(b=>{ betAt[b.day+'|'+b.player_id]=b; });
-    const duelByDay={}; dz.forEach(d=>{ (duelByDay[d.day]=duelByDay[d.day]||[]).push(d); });
     let bigDay=null, worstDay=null;
     bz.forEach(b=>{ const v=b.net||0; if(bigDay===null||v>bigDay.net) bigDay={pid:b.player_id,day:b.day,net:v}; if(worstDay===null||v<worstDay.net) worstDay={pid:b.player_id,day:b.day,net:v}; });
-    const cumPts={}; players.forEach(p=>cumPts[p.id]=0);
+    /* ---- HISTORIQUE DU CLASSEMENT — repris de computeStandHist() (corrigé v7.21) -------------
+       ⚠️ Ce bloc REFAISAIT son propre rejeu du championnat : troisième copie de la règle de
+       points, après `resolveDay` et `computeStandHist`. Et elle était FAUSSE sur un point précis,
+       repéré par Hervé sur la ligue 2M46X : le départage à égalité de points utilisait
+       `p.capital`, la cagnotte **FINALE**, au lieu de celle de la journée concernée. À la J3 le
+       joueur IA menait (même total de points, cagnotte du jour supérieure), mais le bilan
+       annonçait « Giulian a tenu la tête de bout en bout » parce qu'il comparait les cagnottes de
+       la fin. Elle ignorait aussi les enchères de départ, la recapitalisation et les rachats.
+       `computeStandHist` gère tout cela et applique `classe()`, le tri officiel du classement.
+       Une seule source de vérité — même leçon que la recapitalisation (v7.16) et l'étoile (v7.18). */
+    const snapsH=computeStandHist();
     const rankHist={}; players.forEach(p=>rankHist[p.id]=[]); const leaderByDay=[];
     for(let d=0;d<N;d++){
-      (duelByDay[d]||[]).forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
-        const H=Object.assign({net:(hb&&hb.net)||0}, gainMise(hb&&hb.picks, du.fixtures));
-        const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
-        const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // forfait (pronos non validés)
-        const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); if(cumPts[du.home_id]!=null)cumPts[du.home_id]+=r.h; if(cumPts[du.away_id]!=null)cumPts[du.away_id]+=r.a; });
-      const rows=players.map(p=>{ const b=betAt[d+'|'+p.id]; const du=(duelByDay[d]||[]).find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, du&&du.fixtures); return {id:p.id, net:(b&&b.net)||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; });
-      const sid=dayStar(rows,isScoring2()); if(sid!=null&&cumPts[sid]!=null&&starMech(players.length))cumPts[sid]+=1;
-      const ord=[...players].sort((a,b)=>(cumPts[b.id]-cumPts[a.id])||(b.capital-a.capital)); ord.forEach((p,idx)=>rankHist[p.id][d]=idx+1); leaderByDay.push(ord[0]?ord[0].id:null);
+      const s=snapsH[d]; if(!s||!s.length){ leaderByDay.push(null); continue; }
+      const ord=classe(s);
+      ord.forEach((p,idx)=>{ if(rankHist[p.id]) rankHist[p.id][d]=idx+1; });
+      leaderByDay.push(ord[0]?ord[0].id:null);
     }
     let leadChanges=0; const daysLed={};
     leaderByDay.forEach((pid,i)=>{ if(pid) daysLed[pid]=(daysLed[pid]||0)+1; if(i>0&&pid&&pid!==leaderByDay[i-1]) leadChanges++; });
