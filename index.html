@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.46";
+const APP_VERSION = "v7.48";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1824,6 +1824,10 @@ const EN={
   "📅 Journée 1 — tes pronos":"📅 Day 1 — your predictions", "📅 Journée 2 — tes pronos":"📅 Day 2 — your predictions",
   "Choisis un résultat par match et, si tu veux, un 👑 Capitaine (gain/perte ×2). Mise fixe {a} € par pari.":"Pick one result per match and, if you want, a 👑 Captain (gain/loss ×2). Fixed stake €{a} per bet.",
   "il y a <b>5 matchs</b> par journée (ici 3 pour aller vite), et tu peux jouer <b>1 bonus</b> par journée.":"there are <b>5 matches</b> per day (3 here to go fast), and you can play <b>1 bonus</b> per day.",
+  // État des options en boutique (v7.47).
+  "Active jusqu'au {a}":"Active until {a}", "Active sur ton compte":"Active on your account",
+  "Expirée le {a} — à reprendre":"Expired on {a} — take it again",
+  "Toutes les options sont actives sur ton compte.":"Every option is active on your account.",
   // Validité d'un an des options premium (v7.45).
   "Valable jusqu'au <b>{a}</b>. Au-delà, l'option s'arrête et devra être reprise.":"Valid until <b>{a}</b>. After that the option stops and has to be taken again.",
   "Cette option a expiré le <b>{a}</b>. Reprends-la pour la réactiver.":"This option expired on <b>{a}</b>. Take it again to reactivate it.",
@@ -2856,9 +2860,27 @@ const SHOP_ORDER=["rachat","bonuscomplets","ia","stats","direct","live","gageper
 // fermé. Une garde d'affichage seule ne protège rien — la fonction est appelable autrement.
 function openShop(){ if(!AUTH) return; navOpen("shop"); }
 function viewShop(){
+  /* ⚠️ v7.47 — LA BOUTIQUE NE DISAIT PAS CE QU'ON POSSÈDE DÉJÀ (signalé par Hervé sur le compte de
+     Giulian, qui avait plusieurs options actives). Seul le badge changeait — « ✨ Premium » au lieu
+     de « 🔒 Premium » —, nuance invisible : la page donnait l'impression qu'aucune option n'était
+     souscrite et qu'il fallait tout acheter. On écrit donc l'état en toutes lettres, avec son
+     échéance, et le bouton d'achat disparaît sur ce qui est déjà actif.
+     ⚠️ DEUX ÉTATS SEULEMENT (arbitrage d'Hervé, v7.48) : active avec son échéance, ou rien —
+     l'option est alors simplement à souscrire. J'avais ajouté un troisième état « ⌛ Expirée »
+     pour expliquer à celui qui perd l'accès POURQUOI sa fonction s'est arrêtée. Hervé a jugé la
+     boutique trop bavarde pour un cas qui ne concerne qu'une poignée de gens quelques jours par
+     an — et il a raison sur un point décisif : **l'explication existe déjà dans la fiche de
+     l'option** (« Cette option a expiré le … », v7.45), c'est-à-dire précisément là où va celui
+     qui cherche à comprendre, puisque c'est là qu'on souscrit. On ne perd que le signal au
+     premier coup d'œil. */
+  const etat=k=>{ if(k==='pack'){ return ownsOpt('pack')
+        ? `<div class="mini green" style="margin-top:4px">✅ ${t("Toutes les options sont actives sur ton compte.")}</div>` : ''; }
+    if(!hasOpt(k)) return '';
+    const fin=optFin(k);
+    return `<div class="mini green" style="margin-top:4px">✅ ${fin?t("Active jusqu'au {a}",{a:new Date(fin).toLocaleDateString()}):t("Active sur ton compte")}</div>`; };
   const card=(k,hi)=>{ const p=PITCHES[k]; return `<div class="box clik" ${hi?'style="border-color:var(--accent)"':''} onclick="showPremiumInfo('${k}')">
     <div class="row" style="justify-content:space-between;align-items:center;gap:8px"><b>${p.e} ${t(p.t)}</b>${premBadge(k)}</div>
-    <div class="mini muted" style="margin-top:4px">${t(p.hook,{n:CARD_IDS.length})}</div></div>`; };
+    <div class="mini muted" style="margin-top:4px">${t(p.hook,{n:CARD_IDS.length})}</div>${etat(k)}</div>`; };
   return `<div class="box"><h2 style="margin-top:0">🛒 ${t("Boutique")}</h2>
       <div class="mini muted">${t("Toutes les options premium du jeu. <b>Souscris à celles qui t'intéressent</b> — paiement désactivé pendant la phase de test.")}</div>
       <div class="mini muted" style="margin-top:6px">👉 ${t("Touche une option pour voir tous ses détails.")}</div></div>
