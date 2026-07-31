@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.26";
+const APP_VERSION = "v7.27";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -603,6 +603,29 @@ function leaguePrio(key,group){ if(LEAGUE_PRIO[key]!=null) return LEAGUE_PRIO[ke
   if(group==="Tennis") return /wimbledon|us_open|french_open|aus_open/.test(key)?92:60;
   if(group==="Soccer") return 60; if(group==="Basketball") return 50; return 45; }
 
+/* ─── ZONE : les grands tournois, puis l'Europe, l'Amérique du Sud en SECOURS ────────────────
+   v7.27, règle donnée par Hervé : « considérer toujours en premier les matchs européens et si
+   vraiment rien de dispo, prendre les compétitions d'Amérique du Sud. Attention de mettre en
+   priorité, si cela devait arriver, les matchs de Coupe du monde par exemple. »
+
+   ⚠️ POURQUOI CETTE RÈGLE EST AU-DESSUS DES NOTES, ET PAS DEDANS. Le 31/07, l'Écosse, la Suisse,
+   l'Autriche et la Coupe d'Angleterre jouaient toutes le week-end, à 16h-21h — et aucune n'était
+   proposée. La récolte s'arrête dès 6 compétitions productives : elle trouvait la WNBA, deux
+   tournois de tennis, la Libertadores, les qualif. de LdC et la MLS, puis s'arrêtait bien avant
+   d'arriver aux championnats européens. Résultat : des matchs à 1h du matin. Aucun réglage de
+   notes ne corrigeait ça durablement — l'Amérique du Sud est LÉGITIMEMENT prestigieuse en
+   février. C'est donc l'ORDRE D'INTERROGATION qui devait changer, pas l'estime des compétitions.
+
+   ⚠️ `uefa_euro(_|$)` et pas `uefa_euro` : sans la borne, le motif attraperait aussi
+   `soccer_uefa_europa_league`, qui deviendrait un tournoi mondial. */
+const TOURNOI_MONDIAL=/fifa_world_cup|uefa_euro(_|$)|copa_america/;
+// Marqueurs de ce qui n'est PAS européen. Liste volontairement large : une compétition inconnue
+// est traitée comme européenne, donc interrogée tôt. C'est le sens de l'erreur qu'on préfère —
+// au pire on interroge trop tôt un championnat exotique, et la préférence d'horaire (12h-23h)
+// fera le tri à l'affichage. L'inverse ferait rater la reprise d'un championnat européen.
+const HORS_EUROPE=/conmebol|brazil|argentina|chile|colombia|peru|uruguay|paraguay|bolivia|ecuador|venezuela|mexico|usa_|_mls|china|korea|japan|australia|india|africa|egypt|saudi|qatar/;
+function zoneRang(key){ if(TOURNOI_MONDIAL.test(key)) return 0; return HORS_EUROPE.test(key)?2:1; }
+
 // ─── ÉQUIPES ET JOUEURS DE PRESTIGE (v6.90, demandé par Hervé) ───────────────────────────────
 // Sur des matchs RÉELS, l'app ne connaît ni les clubs ni leur niveau : elle ne reçoit que des noms
 // et des cotes. Cette liste lui donne le minimum de « culture » nécessaire pour reconnaître une
@@ -687,9 +710,21 @@ async function fetchRealPool(){
   // reste du football. En pratique l'arrêt tombe vers la 8ᵉ compétition. Le plafond de 24 ne sert
   // plus que de filet en intersaison profonde.
   const parPrio=(a,b)=>leaguePrio(b.key,grp[b.key])-leaguePrio(a.key,grp[a.key]);
-  const foot=active.filter(s=>s.group==="Soccer").sort(parPrio);
-  const autres=active.filter(s=>s.group!=="Soccer").sort(parPrio);
-  const keys=[...foot.slice(0,3), ...autres.slice(0,5), ...foot.slice(3)].map(s=>s.key).slice(0,24);
+  // v7.27 : le football est d'abord trié par ZONE (grands tournois, puis Europe, puis le reste),
+  // et seulement ensuite par note. Le tri par note seul faisait passer le foot sud-américain —
+  // légitimement prestigieux — devant des championnats européens qui jouaient le soir même.
+  const parZonePuisPrio=(a,b)=> (zoneRang(a.key)-zoneRang(b.key)) || parPrio(a,b);
+  const foot=active.filter(s=>s.group==="Soccer").sort(parZonePuisPrio);
+  const autres=active.filter(s=>s.group!=="Soccer").sort(parPrio);   // basket/tennis : la note suffit
+  const proches=foot.filter(s=>zoneRang(s.key)<2);    // tournois mondiaux + Europe
+  const secours=foot.filter(s=>zoneRang(s.key)===2);  // Amérique du Sud & co, uniquement s'il faut
+  // ⚠️ Les places de SECOURS sont RÉSERVÉES, pas simplement mises à la fin. L'Europe compte à elle
+  // seule plus de 30 compétitions : coupées au plafond de 24, les compétitions de secours ne
+  // seraient JAMAIS interrogées — et une trêve hivernale où l'Europe dort ne proposerait plus rien.
+  // Elles ne coûtent quand même rien la plupart du temps : l'arrêt anticipé survient avant.
+  const PLAFOND_COMPS=24, PLACES_SECOURS=4;
+  const tete=[...proches.slice(0,3), ...autres.slice(0,5), ...proches.slice(3)].slice(0,PLAFOND_COMPS-PLACES_SECOURS);
+  const keys=[...tete, ...secours.slice(0,PLACES_SECOURS)].map(s=>s.key);
   // FENÊTRE DE RÉCOLTE — volontairement large et INDÉPENDANTE de toute ligue (v6.92, Hervé).
   // Avant, elle partait de la clôture des paris de la ligue en cours : la récolte n'était donc
   // valable que pour CETTE ligue, à CET instant — impossible à mutualiser plus de quelques heures.
