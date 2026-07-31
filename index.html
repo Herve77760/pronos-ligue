@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.36";
+const APP_VERSION = "v7.38";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -732,11 +732,19 @@ function heureConfortable(f){ const ts=fixtureKickoff(f); if(!ts) return false;
    ⚠️ HEURE LOCALE DE L'APPAREIL, comme `heureConfortable` : c'est le joueur à domicile qui
    choisit les matchs, donc c'est son fuseau qui décide. Cohérent avec le reste du jeu, et sans
    conséquence pour un groupe d'amis dans le même pays. */
-const FIN_SOIREE_H=22, FIN_SOIREE_MAX_H=8;
+/* ⚠️ v7.37 — LE PLAFOND DE 8 H A ÉTÉ SUPPRIMÉ (demande d'Hervé). La règle devient simple :
+   la fenêtre va jusqu'à 22 h du DERNIER JOUR QU'ELLE TOUCHE. Une fenêtre finissant dimanche à 3 h
+   du matin était coupée à 11 h par le plafond — donc le dimanche entier (14 h-19 h en Europe)
+   sautait, alors que c'est justement là que sont les matchs. « Il faut pouvoir autoriser un
+   créneau un peu plus large pour tenir compte de matchs plus intéressants. »
+   ⚠️ Ce qui empêche la journée de s'étirer inutilement n'est plus ce plafond, mais le CRÉNEAU
+   DENSE de `batir` : si une seule journée contient de quoi remplir la liste, c'est elle qui est
+   servie, et la fenêtre large ne sert que de réservoir. Les deux changements vont ensemble —
+   remettre un plafond ici sans toucher au créneau dense reproduirait le défaut. */
+const FIN_SOIREE_H=22;
 function finDeSoiree(ts){
   const soir=new Date(ts); soir.setHours(FIN_SOIREE_H,0,0,0);
-  if(soir.getTime()<=ts) return ts;   // la fenêtre finit déjà après 22h : on ne la rallonge pas
-  return Math.min(soir.getTime(), ts+FIN_SOIREE_MAX_H*3600000);
+  return (soir.getTime()<=ts) ? ts : soir.getTime();   // déjà après 22 h → on ne rallonge pas
 }
 // Note d'une affiche. Le PRESTIGE domine — un choc entre deux grands noms passe devant tout — puis
 // l'ÉQUILIBRE, mesuré par la cote du favori : plus elle est haute, moins le match est joué d'avance.
@@ -912,8 +920,26 @@ function selectPool(all){
   // Créneau serré = rythme de la formule : les matchs du jour se jouent groupés, donc les résultats
   // tombent ensemble (toute la ligue attend le dernier match). Repli sur la fenêtre large si creux.
   const batir=cand=>{
-    const tightMax=cutoffMin+(_f.bet||24)*3600000;
-    const tight=cand.filter(e=>new Date(e.commence).getTime()<=tightMax);
+    /* ⚠️ v7.37 — CRÉNEAU GLISSANT, et non plus les premières heures de la fenêtre.
+       Avant : « tout ce qui tient dans les `bet` premières heures ». Ça marchait tant que la
+       fenêtre commençait au bon moment ; depuis que la rallonge du soir peut la faire démarrer
+       à 3 h du matin, ces premières heures tombaient sur une plage VIDE — le regroupement ne
+       servait plus à rien et la journée s'étalait sur deux jours sans raison.
+       ⚠️ ON PREND LE PREMIER CRÉNEAU QUI SUFFIT, PAS LE PLUS FOURNI. Le plus dense faisait gagner
+       un jour lointain mais riche contre un jour proche mais suffisant — l'inverse exact de la
+       règle de proximité d'Hervé (v7.35 : « les matchs de mardi, ce sera pour la journée
+       suivante »). On parcourt donc les créneaux dans l'ordre CHRONOLOGIQUE et on s'arrête au
+       premier qui contient de quoi faire une journée ; le plus fourni ne sert que de repli.
+       C'est ce qui permet de garder une fenêtre large — pour aller chercher les belles affiches
+       du lendemain soir quand la veille est pauvre — SANS étaler la journée quand elle est riche.
+       ⚠️ Coût : quadratique, mais sur ~60 matchs au plus — négligeable, et fait une seule fois. */
+    const largeur=(_f.bet||24)*3600000;
+    const debuts=cand.map(e=>new Date(e.commence).getTime()).sort((a,b)=>a-b);
+    const creneau=t0=>cand.filter(x=>{ const t=new Date(x.commence).getTime(); return t>=t0 && t<=t0+largeur; });
+    let tight=[];
+    for(const t0 of debuts){ const grp=creneau(t0);
+      if(grp.length>=5){ tight=grp; break; }              // le premier qui suffit gagne
+      if(grp.length>tight.length) tight=grp; }            // sinon on retient le plus fourni
     const primary=(tight.length>=5)?tight:cand;
     // Football et variété remplis SÉPARÉMENT (pour tenir le quota 75/25), chacun par tour de rôle
     // entre ses compétitions → panachage des championnats un samedi, concentration un soir de C1.
@@ -1234,6 +1260,47 @@ function fixtureKickoff(f){ if(!f) return null;
   if(f.commence){ const ts=new Date(f.commence).getTime(); return isNaN(ts)?null:ts; }
   if(f.ko!=null){ const dt=dayTimes(); if(dt.ok&&dt.bet) return dt.bet + f.ko*3600000; }
   return null; }
+/* ─── ÉTIQUETTE DE COMPÉTITION (v7.38, demandée par Hervé) ──────────────────────────────────
+   « Mets le petit drapeau du pays ou de la compétition, pour savoir sur quoi on joue. »
+   ⚠️ DRAPEAU **ET** NOM COURT, pas le drapeau seul : 🏴󠁧󠁢󠁥󠁮󠁧󠁿 ne dit pas si on joue la Premier League
+   ou la Coupe d'Angleterre, et 🇩🇪 ne distingue pas la Bundesliga du DFB-Pokal. Le drapeau donne
+   le pays d'un coup d'œil, le mot lève l'ambiguïté.
+   ⚠️ Pas de LOGO possible : la Ligue des Champions et la NBA n'ont pas d'emoji, et l'app tient en
+   un seul fichier — embarquer des images gonflerait le tout pour trois pictogrammes. On utilise
+   donc 🏆 pour les compétitions européennes et 🌍 pour les tournois de sélections.
+   ⚠️ Les matchs SIMULÉS n'ont pas de `compKey` : ils ne portent aucune étiquette, c'est voulu. */
+const COMP_NOM={
+  soccer_uefa_champs_league:"🏆 Ligue des Champions", soccer_uefa_champs_league_qualification:"🏆 Qualif. C1",
+  soccer_uefa_europa_league:"🏆 Ligue Europa", soccer_uefa_europa_conference_league:"🏆 Conference",
+  soccer_uefa_nations_league:"🌍 Ligue des Nations", soccer_fifa_world_cup:"🌍 Coupe du monde",
+  soccer_uefa_european_championship:"🌍 Euro", soccer_fifa_club_world_cup:"🌍 Mondial des clubs",
+  soccer_fifa_world_cup_qualifiers_europe:"🌍 Qualif. Mondial", soccer_uefa_euro_qualification:"🌍 Qualif. Euro",
+  soccer_epl:"🏴󠁧󠁢󠁥󠁮󠁧󠁿 Premier League", soccer_efl_champ:"🏴󠁧󠁢󠁥󠁮󠁧󠁿 Championship",
+  soccer_england_efl_cup:"🏴󠁧󠁢󠁥󠁮󠁧󠁿 Coupe de la Ligue", soccer_fa_cup:"🏴󠁧󠁢󠁥󠁮󠁧󠁿 FA Cup",
+  soccer_spain_la_liga:"🇪🇸 Liga", soccer_spain_copa_del_rey:"🇪🇸 Copa del Rey",
+  soccer_france_ligue_one:"🇫🇷 Ligue 1", soccer_france_ligue_two:"🇫🇷 Ligue 2",
+  soccer_france_coupe_de_france:"🇫🇷 Coupe de France",
+  soccer_italy_serie_a:"🇮🇹 Serie A", soccer_italy_coppa_italia:"🇮🇹 Coppa Italia",
+  soccer_germany_bundesliga:"🇩🇪 Bundesliga", soccer_germany_dfb_pokal:"🇩🇪 Coupe d'Allemagne",
+  soccer_netherlands_eredivisie:"🇳🇱 Eredivisie", soccer_portugal_primeira_liga:"🇵🇹 Primeira Liga",
+  soccer_spl:"🏴󠁧󠁢󠁳󠁣󠁴󠁿 Écosse", soccer_switzerland_superleague:"🇨🇭 Suisse",
+  soccer_austria_bundesliga:"🇦🇹 Autriche", soccer_greece_super_league:"🇬🇷 Grèce",
+  soccer_turkey_super_league:"🇹🇷 Turquie",
+  soccer_conmebol_copa_libertadores:"🏆 Libertadores", soccer_conmebol_copa_sudamericana:"🏆 Sudamericana",
+  soccer_usa_mls:"🇺🇸 MLS", soccer_mexico_ligamx:"🇲🇽 Liga MX",
+  soccer_brazil_campeonato:"🇧🇷 Brésil", soccer_argentina_primera_division:"🇦🇷 Argentine",
+  basketball_nba:"🇺🇸 NBA", basketball_wnba:"🇺🇸 WNBA", basketball_euroleague:"🏆 Euroligue",
+  basketball_nba_summer_league:"🇺🇸 Summer League"
+};
+function compNom(f){
+  const k=f&&f.compKey; if(!k) return "";
+  if(COMP_NOM[k]) return COMP_NOM[k];
+  // Repli pour ce qu'on n'a pas nommé — surtout le TENNIS, dont les tournois changent chaque
+  // semaine et ne peuvent pas être listés : « tennis_atp_washington_open » → « Washington Open ».
+  const s=k.replace(/^(soccer|basketball|tennis)_/,"").replace(/^(atp|wta)_/,"").replace(/_/g," ");
+  return s.charAt(0).toUpperCase()+s.slice(1);
+}
+function compBadge(f){ const n=compNom(f); return n?`<span class="mini muted">${esc(n)}</span>`:""; }
 // Étiquette « 🕐 demain 19:35 » (vide si l'heure est inconnue). Arrondi 5 min pour un rendu propre.
 function koLabel(f){ let ts=fixtureKickoff(f); if(!ts) return ""; ts=Math.round(ts/300000)*300000; return `<span class="mini muted">🕐 ${esc(fmtWhen(ts))}</span>`; }
 // ÉTAT D'UN MATCH SANS SON RÉSULTAT (v7.05, demandé par Hervé). Sur les écrans d'APRÈS clôture,
@@ -4863,7 +4930,7 @@ function viewSelect(d,dayLbl,opp){
      <div class="mini muted" style="margin-top:6px">${t("Choisis 5 rencontres ({a}/5) — imposées à {b}.",{a:selChosen.length,b:esc(opp.name)})}</div>${selLineHTML()}${cotesDatees()}${hateToiHTML(real)}</div>
      ${selPool.map((f,i)=>{const on=selChosen.includes(i);return `<div class="box row" onclick="toggleSel(${i})" style="cursor:pointer;${on?'border-color:var(--green)':''}">
        <div class="row" style="gap:9px"><span class="sport">${f.sport}</span><div><b>${esc(f.home)} – ${esc(f.away)}</b>
-       <div class="mini muted">${cote(f.oh)}${f.draw?' / '+cote(f.od):''} / ${cote(f.oa)}${koLabel(f)?' · '+koLabel(f):''}</div></div></div><span class="chip ${on?'g':''}">${on?'✓':'+'}</span></div>`;}).join("")}
+       <div class="mini muted">${compBadge(f)?compBadge(f)+' · ':''}${cote(f.oh)}${f.draw?' / '+cote(f.od):''} / ${cote(f.oa)}${koLabel(f)?' · '+koLabel(f):''}</div></div></div><span class="chip ${on?'g':''}">${on?'✓':'+'}</span></div>`;}).join("")}
      <div style="height:8px"></div><button class="btn" ${selChosen.length===5?'':'disabled'} onclick="saveSelection()">${t("Valider les 5 rencontres →")}</button>`;
 }
 function toggleSel(i){ const k=selChosen.indexOf(i); if(k>=0)selChosen.splice(k,1); else{ if(selChosen.length>=5)return; selChosen.push(i);} render(); }
@@ -4935,7 +5002,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
       const tgt = canTgt ? `<span class="tog tgt ${isTgt?'on':''}" onclick="setTarget(${i})">${tgtIcon}</span>` : ((targetCard&&myCard.id==="chance") ? `<span class="tog" style="opacity:.35" title="${t("{n} : uniquement sur un match avec match nul (3 issues)",{n:t(CARDS.chance.n)})}">${tgtIcon}</span>` : '');
       return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
         <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
-        ${koLabel(f)?`<div style="margin-top:3px">${koLabel(f)}</div>`:''}
+        ${(compBadge(f)||koLabel(f))?`<div style="margin-top:3px">${compBadge(f)}${compBadge(f)&&koLabel(f)?' · ':''}${koLabel(f)}</div>`:''}
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
         ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${cote(oddOf(f,v))}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
         ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">🏷️ ${t(CARDS.dbl.n)}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("cote combinée ≈ {a}",{a:'<b>'+cote(oddOf(fx[myCard.target],bet.picks[myCard.target].sel)*oddOf(fx[myCard.target2],bet.picks[myCard.target2].sel))+'</b>'}):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
@@ -5102,6 +5169,7 @@ function afterCloseDuelHTML(){
       const myTxt=mb?`${esc(lab(f,mb.sel))} · ${mb.stake}€${(mine.captain===i)?' 👑':''}${marque}`:'—';
       const opTxt=ob?(seeOpp?`${esc(lab(f,ob.sel))} · ${ob.stake}€${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—';
       return `<div class="box"><div class="row" style="margin-bottom:6px"><span style="font-weight:800;font-size:13px">${esc(f.home)} – ${esc(f.away)}</span>${liveTag(f, mb?mb.sel:null)}</div>
+        ${compBadge(f)?`<div style="margin-bottom:6px">${compBadge(f)}</div>`:''}
         <div style="${GH}"><div><div class="mini muted" style="text-align:center;margin-bottom:2px">👤 ${t("Toi")}</div>${cell(true,myTxt)}</div><div><div class="mini muted" style="text-align:center;margin-bottom:2px">${avaName(opp)}</div>${cell(false,opTxt)}</div></div></div>`; }).join("");
   return noteBox+bonusBox+cards;
 }
@@ -5129,7 +5197,7 @@ function viewWait(dayLbl){
       const selD=dc?`${esc(lab(f,b.sel))} / ${esc(lab(f,mine.card.sel2))}`:esc(lab(f,b.sel));
       const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel);
       const mk=`${i===mine.captain?' <span class="chip gold clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''}`;
-      return `<div class="box row"><span class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b>${mk}</span><span class="chip" style="flex:0 0 auto">${selD} @${cote(oddD)} · ${b.stake}€</span></div>`;
+      return `<div class="box row"><span class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b>${mk}${compBadge(f)?'<br>'+compBadge(f):''}</span><span class="chip" style="flex:0 0 auto">${selD} @${cote(oddD)} · ${b.stake}€</span></div>`;
     }).join("") : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
     const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
     const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
