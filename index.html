@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.38";
+const APP_VERSION = "v7.39";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5795,7 +5795,17 @@ function waitingResultsBody(d){
       ${fx.map((f,i)=>{ /* mon prono UNIQUEMENT sur mon duel : ailleurs on n'a pas à trancher */
         const sel=(mine && myBetNow && Array.isArray(myBetNow.picks) && myBetNow.picks[i]) ? myBetNow.picks[i].sel : null;
         const rp=resPart(f,sel); /* résultat live si dispo ; sinon heure du coup d'envoi puis état (v7.05) */
-        return `<div class="row mini" style="padding:2px 0;border-bottom:1px solid rgba(255,255,255,.04)"><span class="muted">${esc(f.home)} – ${esc(f.away)}</span><span style="flex:0 0 auto">${rp||koOuEtat(f)||'<span class="mini muted">⏳</span>'}</span></div>`; }).join('')}
+        /* ⚠️ v7.39 — LE SÉPARATEUR ÉTAIT INVISIBLE EN THÈME CLAIR. Il était écrit en blanc à 4 %
+           d'opacité : parfait sur fond sombre, rigoureusement invisible sur fond blanc. Les cinq
+           matchs formaient donc un pavé continu où l'œil ne rattachait plus un résultat à sa
+           rencontre (signalé par Hervé sur capture). `var(--border)` suit le thème.
+           ⚠️ Et surtout : DEUX LIGNES au lieu d'une. Sur mobile, « Caracas FC – Independiente
+           Santa Fe » passait à la ligne et venait buter contre son propre résultat. Le nom du
+           match et sa compétition occupent maintenant la ligne, le résultat est calé à droite. */
+        return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border);gap:10px;align-items:flex-start">
+          <div style="min-width:0"><div class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b></div>
+            ${compBadge(f)?`<div style="margin-top:1px">${compBadge(f)}</div>`:''}</div>
+          <span class="mini" style="flex:0 0 auto;text-align:right">${rp||koOuEtat(f)||'<span class="mini muted">⏳</span>'}</span></div>`; }).join('')}
     </div>`; };
   const anyfx=(duels||[]).some(x=>Array.isArray(x.fixtures)&&x.fixtures.length);
   if(!anyfx){ h+=`<div class="box mini muted">${t("Les 5 matchs ne sont pas encore choisis.")}</div>`; }
