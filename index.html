@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.40";
+const APP_VERSION = "v7.41";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5168,8 +5168,19 @@ function afterCloseDuelHTML(){
   const cards=md.fixtures.map((f,i)=>{ const mb=mine&&mine.picks&&mine.picks[i]; const ob=oppBet&&oppBet.picks&&oppBet.picks[i];
       // Carte À CIBLE : on la marque aussi sur le match visé (cardOnMatch gère les cartes à 2 cibles).
       const marque=cardOnMatch(mc,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${mc.id}')">${CARDS[mc.id].e}</span>`:'';
-      const myTxt=mb?`${esc(lab(f,mb.sel))} · ${mb.stake}€${(mine.captain===i)?' 👑':''}${marque}`:'—';
-      const opTxt=ob?(seeOpp?`${esc(lab(f,ob.sel))} · ${ob.stake}€${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—';
+      /* ⚠️ v7.41 — LA COTE MANQUAIT ICI (signalé par Hervé). On lisait « Cruzeiro · 12 € » sans
+         savoir ce que ça pouvait rapporter, alors que la même information figure sur l'écran
+         Résultats. La cote fait partie du pari autant que la mise : sans elle, impossible de
+         juger si l'adversaire a pris un risque ou joué la sécurité.
+         ⚠️ Cote SIMPLE, sans tenir compte des bonus : la carte de l'adversaire reste secrète
+         jusqu'à la résolution, et afficher une cote modifiée par une 🎲 Double Chance la
+         trahirait. C'est la cote du résultat choisi, rien de plus. */
+      const cd=s=>{ const o=oddOf(f,s); return o?` @${cote(o)}`:''; };
+      // ⚠️ MÊME ORDRE QUE L'ÉCRAN RÉSULTATS : « choix · mise @cote ». Hervé a montré la capture de
+      // l'écran de résolution comme modèle — deux écrans qui affichent la même chose doivent
+      // l'écrire pareil, sinon on relit deux fois pour comparer.
+      const myTxt=mb?`${esc(lab(f,mb.sel))} · ${mb.stake}€${cd(mb.sel)}${(mine.captain===i)?' 👑':''}${marque}`:'—';
+      const opTxt=ob?(seeOpp?`${esc(lab(f,ob.sel))} · ${ob.stake}€${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—';
       return `<div class="box"><div class="row" style="margin-bottom:6px"><span style="font-weight:800;font-size:13px">${esc(f.home)} – ${esc(f.away)}</span>${liveTag(f, mb?mb.sel:null)}</div>
         ${compBadge(f)?`<div style="margin-bottom:6px">${compBadge(f)}</div>`:''}
         <div style="${GH}"><div><div class="mini muted" style="text-align:center;margin-bottom:2px">👤 ${t("Toi")}</div>${cell(true,myTxt)}</div><div><div class="mini muted" style="text-align:center;margin-bottom:2px">${avaName(opp)}</div>${cell(false,opTxt)}</div></div></div>`; }).join("");
