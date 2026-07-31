@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.42";
+const APP_VERSION = "v7.44";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1332,7 +1332,14 @@ function koOuEtat(f){
 // Le match i porte-t-il le logo de la carte ? (gère les cartes à 2 cibles comme le Coup Double → logo sur les 2 matchs)
 function cardOnMatch(card,i){ return !!(card&&card.id&&(card.target===i||(CARDS[card.id]&&CARDS[card.id].two&&card.target2===i))); }
 function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ ${t("Choix des matchs avant {a}",{a:'<b>'+fmtWhen(dt.sel)+'</b>'})} · ${leagueFormula().n}</div>`:''; }
-function betLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ ${t("Clôture des paris {a}",{a:'<b>'+fmtWhen(dt.bet)+'</b>'})} · ${leagueFormula().n}</div>`:''; }
+/* ⚠️ v7.43 — CETTE LIGNE ANNONÇAIT LA MAUVAISE HEURE (signalé par Hervé sur la ligue DRDJ3).
+   Elle affichait l'échéance de la FORMULE (« demain 10h ») alors que la clôture réelle est, en
+   données réelles depuis la v7.32, le PREMIER COUP D'ENVOI du duel — 16h dans son cas. Le joueur
+   se croyait donc bloqué six heures trop tôt, et aurait pu renoncer à modifier un pari qu'il
+   pouvait encore changer. On lit la même source que `deadlinePassed()` : `duelDeadline`. */
+function betLineHTML(){ const dt=dayTimes(); if(!dt.ok) return '';
+  const t0=duelDeadline(myDuel())||dt.bet;
+  return `<div class="mini muted" style="margin-top:4px">⏳ ${t("Clôture des paris {a}",{a:'<b>'+fmtWhen(t0)+'</b>'})} · ${leagueFormula().n}</div>`; }
 
 /* ============ STATE ============ */
 let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0, nav:[], ptab:"infos" };
@@ -5826,6 +5833,15 @@ function waitingResultsBody(d){
        Ces duels-là gardent donc la ligne simple. */
     const oppD=mine?(pById(dz.home_id===S.myId?dz.away_id:dz.home_id)||{}):null;
     const oppBetD=mine?((bets||[]).find(x=>x.player_id===(dz.home_id===S.myId?dz.away_id:dz.home_id))||null):null;
+    /* ⚠️ v7.43 — FUITE INTRODUITE EN v7.42, SIGNALÉE PAR HERVÉ EN TESTANT AVEC LE COMPTE DE
+       GIULIAN. J'avais conditionné l'affichage des pronos adverses à `mine && closed` — c'est-à-dire
+       à la seule clôture. Or voir le pari de l'adversaire est une OPTION PAYANTE (`voiradv`), et
+       elle n'a rien à voir avec l'échéance : l'onglet Pronos, lui, teste bien `hasOpt('voiradv')`.
+       Résultat : n'importe qui voyait les pronos de son adversaire dès la clôture, l'option était
+       offerte à tout le monde et la règle du jeu contournée.
+       ⚠️ LA LEÇON : cette page recopiait la mise en page de l'onglet Pronos sans en recopier les
+       CONDITIONS. Avant de dupliquer un affichage, vérifier ce qui le protégeait. */
+    const voirAdv=hasOpt('voiradv');
     const paris=(mine && closed);
     const lab2=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
     const ligne=(b,capIdx,f,i)=>{ if(!b||!Array.isArray(b.picks)||!b.picks[i]) return '<span class="mini muted">—</span>';
@@ -5843,7 +5859,7 @@ function waitingResultsBody(d){
             <span class="mini" style="flex:0 0 auto;text-align:right">${rp||koOuEtat(f)||'<span class="mini muted">⏳</span>'}</span></div>
           <div style="${GH};margin-top:6px">
             <div>${cell(true,`<div class="mini muted">${t("Toi")}</div>${ligne(myBetNow,myBetNow?myBetNow.captain:-1,f,i)}`)}</div>
-            <div>${cell(false,`<div class="mini muted">${esc(oppD&&oppD.name||'?')}</div>${ligne(oppBetD,oppBetD?oppBetD.captain:-1,f,i)}`)}</div>
+            <div>${cell(false,`<div class="mini muted">${esc(oppD&&oppD.name||'?')}</div>${voirAdv?ligne(oppBetD,oppBetD?oppBetD.captain:-1,f,i):`<span class="mini" style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`}`)}</div>
           </div></div>`;
         /* ⚠️ v7.39 — LE SÉPARATEUR ÉTAIT INVISIBLE EN THÈME CLAIR. Il était écrit en blanc à 4 %
            d'opacité : parfait sur fond sombre, rigoureusement invisible sur fond blanc. Les cinq
