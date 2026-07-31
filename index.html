@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.34";
+const APP_VERSION = "v7.36";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -474,7 +474,16 @@ const COUV_FOOT_JOUR=7;      // objectif pour les 3 premiers jours = de quoi rem
 const COUV_FOOT_LOIN=3;      // objectif pour les jours 4 à 6, volontairement modeste
 const COUV_MAX_APPELS=18;    // plafond de compétitions interrogées = plafond de la facture
 const PRIO_MIN=70;           // plancher de qualité : en dessous, on n'interroge pas (Hervé)
-const ELARGIR_MAX_J=3;       // paliers d'élargissement si la fenêtre ne se remplit pas
+/* ⚠️ v7.35 — RAMENÉ DE 3 JOURS À 1 (règle d'Hervé, formulée sur un cas concret) : « si on choisit
+   les matchs maintenant, je veux l'Écosse, la Suisse et la Coupe d'Angleterre parce qu'ils ont
+   lieu dans les prochains jours. Les matchs de mardi avec la Ligue des Champions, ce sera pour la
+   journée SUIVANTE. Je ne veux pas qu'on me propose mardi directement parce que c'est plus
+   prestigieux. » À 3 jours, une fenêtre de week-end mal remplie allait chercher le mardi ; à
+   1 jour, c'est impossible.
+   ⚠️ NE PAS DESCENDRE À 0. En dessous de 5 matchs disponibles, l'app bascule la journée en matchs
+   SIMULÉS (repli ancien, voir loadRealPool) : supprimer tout élargissement transformerait une
+   fenêtre pauvre en journée fictive au milieu d'une ligue réelle — pire que le mal soigné. */
+const ELARGIR_MAX_J=1;       // palier d'élargissement si la fenêtre ne se remplit pas
 // Effectif maximum d'une ligue. Écrit à 4 endroits auparavant (création, relance, salon, règles) :
 // une seule source, sinon les places annoncées au salon pourraient contredire les règles.
 const MAX_PLAYERS=12;
@@ -948,7 +957,19 @@ function selectPool(all){
      ⚠️ On repasse par `batir` à chaque palier : le tour de rôle sert d'abord la meilleure affiche
      de chaque compétition, par ordre de prestige. C'est ce qui fait qu'un match de C1 à J+3 passe
      devant un match de Grèce à J+1 — l'inverse de ce que faisait l'ancienne boucle. */
+  /* Deux seuils, et ils ne servent pas à la même chose (v7.36) :
+     • ELARGIR_MAX_J (1 jour) = confort. On ouvre d'un jour pour tenter de compléter les 9 places.
+     • MIN_AFFICHES (5) = SURVIE. Un duel a besoin de 5 rencontres ; en dessous, il n'y a pas de
+       journée. Depuis que le repli sur des matchs fictifs est supprimé (règle d'Hervé), on
+       s'autorise donc à aller plus loin — jusqu'au bout de la réserve s'il le faut — plutôt que
+       de laisser une ligue réelle sans journée. Aller chercher un match à cinq jours reste
+       infiniment préférable à inventer des cotes. */
+  const MIN_AFFICHES=5;
   for(let j=1; pool.length<N && j<=ELARGIR_MAX_J; j++){
+    const large=finDeSoiree(limiteMax+j*24*3600000);
+    pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=large));
+  }
+  for(let j=ELARGIR_MAX_J+1; pool.length<MIN_AFFICHES && j<=HARVEST_WINDOW_D; j++){
     const large=finDeSoiree(limiteMax+j*24*3600000);
     pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=large));
   }
@@ -1609,7 +1630,8 @@ const EN={
   "Gages & récompenses":"Forfeits & rewards", "Le vote s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).":"Voting opens at kickoff (once the organizer closes registration).",
   "Enchères":"Auction", "Enchères aux bonus":"Bonus auction", "Enchères bonus":"Bonus auction", "Aller aux pronos →":"Go to predictions →",
   "Nombre de joueurs maximum atteint ({a}) — les inscriptions sont closes.":"Maximum number of players reached ({a}) — registration is closed.",
-  "Vrais matchs indisponibles — matchs simulés pour cette journée.":"Real matches unavailable — simulated matches for this matchday.",
+  // ⚠️ Clé retirée en v7.36 avec le repli lui-même : une ligue réelle ne bascule PLUS jamais en
+  // matchs fictifs (règle d'Hervé). Ne pas la réintroduire sans rouvrir cette décision.
   "Les enchères s'ouvriront au démarrage. En attendant, touche un bonus pour le découvrir.":"The auction opens at kickoff. Meanwhile, tap a bonus to discover it.",
   "Invite tes amis avec le code <b>{a}</b>.":"Invite your friends with code <b>{a}</b>.",
   // Écran de création (v6.05)
@@ -4800,11 +4822,17 @@ function noResultsYet(){ toast(t("Aucune journée terminée pour l'instant — l
 let selPool=null, selChosen=[], selLoading=false, selFor=null;
 async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
   try{ selPool=await fetchRealPoolCached(); }catch(e){ selPool=null; }
-  // 🛟 Anti-blocage (phase de test) : si l'API réelle est indisponible (plus de crédits, intersaison,
-  // erreur réseau) ou renvoie trop peu de matchs, on bascule SUR DES MATCHS SIMULÉS pour cette journée
-  // → le joueur n'est jamais coincé. La journée se résout alors comme en simulé (fixtures sans evId).
-  if(!selPool || selPool.length<5){ selPool=genPool(POOL_N,leagueFormula().bet); selChosen=[];
-    toast(t("Vrais matchs indisponibles — matchs simulés pour cette journée.")); }
+  /* ⚠️ v7.36 — LE REPLI SUR DES MATCHS SIMULÉS A ÉTÉ SUPPRIMÉ. Règle d'Hervé, sans ambiguïté :
+     « je ne veux absolument pas qu'une ligue réelle se transforme à un moment donné avec des
+     matchs fictifs. Je préfère oublier la règle des 75 % de foot plutôt. »
+     Avant, une réserve maigre basculait la journée en matchs inventés, au milieu d'une ligue
+     annoncée comme réelle — avec un simple toast que personne ne lit. Le pari portait alors sur
+     des cotes tirées au sort sans que le joueur l'ait choisi.
+     ⚠️ CE QUI REMPLACE LE REPLI : on complète avec du basket et du tennis (le quota de football
+     n'est qu'un objectif), et si la fenêtre ne suffit toujours pas, `selectPool` l'élargit jusqu'à
+     trouver au moins 5 vraies rencontres. En tout dernier recours, l'écran affiche « pas assez de
+     vrais matchs » avec un bouton Réessayer : la journée attend, elle ne devient jamais fictive. */
+  if(!selPool) selPool=[];
   selLoading=false; render(); }
 /* ---- « Choisis vite » (v7.33, demandé par Hervé) -------------------------------------------
    Depuis la v7.32, la fenêtre des matchs part de MAINTENANT + le temps de pari. Choisir tôt
