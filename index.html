@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.23";
+const APP_VERSION = "v7.24";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1546,6 +1546,13 @@ const EN={
   "📅 Journée 1 — tes pronos":"📅 Day 1 — your predictions", "📅 Journée 2 — tes pronos":"📅 Day 2 — your predictions",
   "Choisis un résultat par match et, si tu veux, un 👑 Capitaine (gain/perte ×2). Mise fixe {a} € par pari.":"Pick one result per match and, if you want, a 👑 Captain (gain/loss ×2). Fixed stake €{a} per bet.",
   "il y a <b>5 matchs</b> par journée (ici 3 pour aller vite), et tu peux jouer <b>1 bonus</b> par journée.":"there are <b>5 matches</b> per day (3 here to go fast), and you can play <b>1 bonus</b> per day.",
+  // Onglets du dossier de stats (v7.24) — réelles / simulées / tout.
+  "🔀 Tout":"🔀 All", "🎮 Simulées":"🎮 Simulated",
+  "Tes ligues des deux types réunies. Touche 📡 ou 🎮 pour séparer.":"Both kinds of league together. Tap 📡 or 🎮 to split them.",
+  "Uniquement tes ligues jouées sur de vrais matchs, avec les cotes du marché.":"Only your leagues played on real matches, with market odds.",
+  "Uniquement tes ligues en matchs simulés, où les cotes sont tirées au sort.":"Only your leagues on simulated matches, where odds are drawn at random.",
+  "Aucune ligue jouée sur de vrais matchs pour l'instant.":"No league played on real matches yet.",
+  "Aucune ligue jouée en matchs simulés pour l'instant.":"No league played on simulated matches yet.",
   // Onglet Pronos d'une ligue terminée (v7.23) — il annonce la fin et renvoie au bilan.
   "Saison terminée":"Season over",
   "Il n'y a plus de pronostics à saisir pour cette ligue.":"There are no more predictions to enter for this league.",
@@ -1962,7 +1969,7 @@ const EN={
   "Ligues comptées":"Leagues counted", "Fermée avant terme":"Closed before the end", "solo vs IA":"solo vs AI",
   "{a} fermée(s) avant terme — hors totaux":"{a} closed before the end — excluded from totals",
   "{a} en solo face à l'IA — paris comptés, sans titre":"{a} solo vs the AI — bets counted, no title",
-  "Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>.":"A league <b>closed before its end</b> counts towards nothing: its final standings are meaningless, and including them would skew everything. It stays viewable below. A league <b>in progress</b> does count normally.<br><br>In a <b>solo league against the AI</b>, your bets count (ROI, hit rate, records) — they were real picks — but finishing 1st against a bot adds <b>no title and no podium</b>.",
+  "Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>.":"A league <b>closed before its end</b> counts towards nothing: its final standings are meaningless, and including them would skew everything. It stays viewable below. A league <b>in progress</b> does count normally.<br><br>In a <b>solo league against the AI</b>, your bets count (ROI, hit rate, records) — they were real picks — but finishing 1st against a bot adds <b>no title and no podium</b>.<br><br>Finally, <b>this whole screen follows the tab you pick at the top</b>: 📡 keeps only leagues played on real matches, 🎮 those on simulated matches, 🔀 both. Comparing the two is meaningful: in simulated leagues the odds are drawn at random, in real ones they come from the market.",
   "Tes coups":"Your standout bets", "Cote moyenne gagnée":"Average winning odds",
   "Plus gros prono gagné":"Biggest single win", "Plus grosse mise":"Biggest stake",
   "Points par journée":"Points per matchday", "Évolution du ROI":"ROI over time",
@@ -5664,14 +5671,20 @@ function viewLeagueStats(){
   if(L&&L.status==="done") h+=`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button>`;   // partage : seulement une fois la ligue terminée
   return h; }
 // ✨ STATS PERSO CROSS-LIGUE — dossier complet sur TOUTES les ligues du joueur (chargé à l'ouverture).
+// ⚠️ Dossier VIDE à la forme des trois onglets (v7.24). Les sorties anticipées ci-dessous rendaient
+// l'ancienne forme plate `{leagues,agg,h2h}` : l'écran, qui lit maintenant `jeux[onglet]`, n'y aurait
+// rien trouvé et serait resté bloqué sur « Chargement… » pour un joueur sans aucune ligue.
+function statsVides(){ const v={agg:{},leagues:[],h2h:{}};
+  return { onglet:"tous", jeux:{tous:v, reel:v, sim:v} }; }
 async function loadMyStats(){
   try{
-    if(!AUTH){ myStatsData={leagues:[],agg:{},h2h:{}}; return; }
+    if(!AUTH){ myStatsData=statsVides(); return; }
     const mine=await q(db.from("players").select("id,league_id").eq("user_id",AUTH.id));
     const ids=[...new Set(mine.map(m=>m.league_id))];
-    if(!ids.length){ myStatsData={leagues:[],agg:{},h2h:{}}; return; }
+    if(!ids.length){ myStatsData=statsVides(); return; }
     // `current_day` ajouté en v7.02 : il sert à savoir si une ligue est allée à son TERME.
-    const lgs=await q(db.from("leagues").select("id,name,status,num_days,current_day,created_at,finished_at").in("id",ids));
+    // `data_mode` ajouté en v7.24 : il sépare les stats en trois onglets (réelles / simulées / tout).
+    const lgs=await q(db.from("leagues").select("id,name,status,num_days,current_day,created_at,finished_at,data_mode").in("id",ids));
     const pls=await q(db.from("players").select("id,name,emoji,is_ai,user_id,league_id,points,capital,duel_wins,best_day,best_odd").in("league_id",ids));
     const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").in("league_id",ids).not("net","is",null));
     const dls=await q(db.from("duels").select("id,league_id,day,home_id,away_id,fixtures").in("league_id",ids));
@@ -5681,20 +5694,6 @@ async function loadMyStats(){
     const dlById={}; dls.forEach(d=>dlById[d.id]=d);
     const betsByLg={}, plsByLg={}; bts.forEach(b=>{(betsByLg[b.league_id]=betsByLg[b.league_id]||[]).push(b);}); pls.forEach(p=>{(plsByLg[p.league_id]=plsByLg[p.league_id]||[]).push(p);});
     const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0);
-    const leagues=[]; const h2h={};
-    let tPicks=0,tWon=0,tStaked=0,tNet=0,titles=0,podiums=0,gBestOdd=0,nbLigues=0; let gBest={net:-1e9,lg:null};
-    /* ---- v7.00 : le dossier détaillé de l'option payante 📊 (demandé par Hervé) --------------
-       ⚠️ AUCUNE requête supplémentaire : tout ci-dessous se calcule sur les paris, cotes et
-       résultats DÉJÀ chargés plus haut. Enrichir cet écran ne coûte donc rien, ni en base ni en
-       crédits d'API — c'est ce qui rend l'option confortable à étoffer autant qu'on veut. */
-    let sumWinOdd=0, nWinOdd=0;                 // cote moyenne des pronos GAGNÉS
-    let capExtra=0, capCount=0;                 // ce que le 👑 Capitaine a rapporté EN PLUS
-    let posDays=0, allDays=0, tPoints=0;        // régularité et points par journée
-    let bestRun=0, run=0;                       // meilleure série de duels gagnés
-    const bestPick={g:-1e9}, bigStake={st:-1};  // plus gros prono gagné / plus grosse mise
-    const buckets={fav:{p:0,w:0},eq:{p:0,w:0},out:{p:0,w:0}};   // profil par tranche de cote
-    const bySport={}, byCard={};                // réussite par sport, rendement par bonus
-    const chrono=[];                            // courbe du ROI, dans l'ordre de jeu
     // Gain d'UN prono, à la règle du jeu : Double Chance (cote pleine du résultat sorti) et
     // 👑 Capitaine (doublé) compris. ⚠️ N'intègre PAS l'effet des AUTRES bonus (assurance…) :
     // ceux-ci se lisent dans `card.impact`, et le `net` de la journée reste la référence.
@@ -5713,7 +5712,31 @@ async function loadMyStats(){
     // recopié à l'identique — deux définitions de « ligue terminée » finiraient par diverger.
     // Une ligue EN COURS, elle, compte : c'est justement le moment où on regarde ses stats.
     const alleeAuTerme=lg=>!(lg.status==="done" && !((lg.num_days|0)>0 && (lg.current_day|0)>=(lg.num_days|0)));
+    /* ---- v7.24 : TROIS DOSSIERS au lieu d'un (demandé par Hervé) -----------------------------
+       « Voir ces stats sur des matchs réels, des matchs fictifs, et sur tous les types. » Tout le
+       calcul ci-dessous est donc enfermé dans `calcule(garde)`, appelé TROIS fois sur les mêmes
+       données déjà chargées : aucune requête supplémentaire, aucun crédit d'API.
+       ⚠️ Les compteurs sont déclarés DANS la fonction : laissés à l'extérieur, le deuxième appel
+       repartirait des totaux du premier et les trois onglets afficheraient des chiffres cumulés.
+       ⚠️ Le mélange des deux types n'aurait de toute façon pas beaucoup de sens à comparer : en
+       simulé les cotes sont tirées au sort, en réel elles viennent du marché. */
+    const calcule=garde=>{
+    const leagues=[]; const h2h={};
+    let tPicks=0,tWon=0,tStaked=0,tNet=0,titles=0,podiums=0,gBestOdd=0,nbLigues=0; let gBest={net:-1e9,lg:null};
+    /* ---- v7.00 : le dossier détaillé de l'option payante 📊 (demandé par Hervé) --------------
+       ⚠️ AUCUNE requête supplémentaire : tout ci-dessous se calcule sur les paris, cotes et
+       résultats DÉJÀ chargés plus haut. Enrichir cet écran ne coûte donc rien, ni en base ni en
+       crédits d'API — c'est ce qui rend l'option confortable à étoffer autant qu'on veut. */
+    let sumWinOdd=0, nWinOdd=0;                 // cote moyenne des pronos GAGNÉS
+    let capExtra=0, capCount=0;                 // ce que le 👑 Capitaine a rapporté EN PLUS
+    let posDays=0, allDays=0, tPoints=0;        // régularité et points par journée
+    let bestRun=0, run=0;                       // meilleure série de duels gagnés
+    const bestPick={g:-1e9}, bigStake={st:-1};  // plus gros prono gagné / plus grosse mise
+    const buckets={fav:{p:0,w:0},eq:{p:0,w:0},out:{p:0,w:0}};   // profil par tranche de cote
+    const bySport={}, byCard={};                // réussite par sport, rendement par bonus
+    const chrono=[];                            // courbe du ROI, dans l'ordre de jeu
     ids.forEach(lid=>{ const mp=myPid[lid]; if(!mp) return; const lg=lgMap[lid]||{};
+      if(!garde(lg)) return;   // onglet : ligue d'un autre type de données
       const compte=alleeAuTerme(lg);   // false = ligue abandonnée : visible dans la liste, hors totaux
       const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp).sort((x,y)=>(x.day|0)-(y.day|0));
       let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
@@ -5779,6 +5802,7 @@ async function loadMyStats(){
     // et moi aussi — sinon je me comparerais en partie à moi-même.
     let oPicks=0,oWon=0,oStaked=0,oNet=0,oPlayers=0;
     ids.forEach(lid=>{ const mp=myPid[lid];
+      if(!garde(lgMap[lid]||{})) return;          // même onglet que mes totaux
       if(!alleeAuTerme(lgMap[lid]||{})) return;   // même filtre que mes totaux, sinon la comparaison serait biaisée
       (plsByLg[lid]||[]).forEach(p=>{ if(p.is_ai||p.id===mp) return;
         const bz=(betsByLg[lid]||[]).filter(b=>b.player_id===p.id); if(!bz.length) return;
@@ -5795,7 +5819,7 @@ async function loadMyStats(){
     leagues.sort((a,b)=>{ const fa=a.finished_at||a.created_at||'',fb=b.finished_at||b.created_at||''; return fa<fb?1:(fa>fb?-1:0); });
     // `leagues` = celles RETENUES dans les totaux (nbLigues), pas le nombre de lignes affichées :
     // la liste du bas montre aussi les ligues abandonnées, qui ne comptent nulle part ailleurs.
-    myStatsData={ agg:{leagues:nbLigues, exclues:leagues.filter(l=>!l.compte).length, solos:leagues.filter(l=>l.solo&&l.compte).length,
+    return { agg:{leagues:nbLigues, exclues:leagues.filter(l=>!l.compte).length, solos:leagues.filter(l=>l.solo&&l.compte).length,
       titles,podiums,picks:tPicks,won:tWon,hit:tPicks?Math.round(tWon/tPicks*100):0,
       staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest,
       avgWinOdd:nWinOdd?+(sumWinOdd/nWinOdd).toFixed(2):0,
@@ -5803,7 +5827,11 @@ async function loadMyStats(){
       capExtra:Math.round(capExtra*100)/100, capCount, ptsPerDay:allDays?+(tPoints/allDays).toFixed(2):0,
       posDays, allDays, bestRun, buckets, bySport, byCard, curve,
       others:{players:oPlayers, hit:oPicks?Math.round(oWon/oPicks*100):null, roi:oStaked?Math.round(oNet/oStaked*100):null}},
-      leagues, h2h };
+      leagues, h2h }; };
+    // ⚠️ Les ligues d'avant la colonne `data_mode` (ou créées sans elle) sont du SIMULÉ : c'est le
+    // défaut du jeu, et c'est le même repli que partout ailleurs dans l'app — `(L.data_mode||'sim')`.
+    const estReel=lg=>(lg.data_mode||"sim")==="real";
+    myStatsData={ onglet:"tous", jeux:{ tous:calcule(()=>true), reel:calcule(estReel), sim:calcule(lg=>!estReel(lg)) } };
   }catch(e){ myStatsData={error:e.message}; }
 }
 async function openStats(){ if(!requireOpt('stats')) return; myStatsData=null; navOpen("stats"); await loadMyStats(); render(); }
@@ -5830,7 +5858,7 @@ const STAT_INFO={
   cards:{t:"Bonus les plus rentables",d:"Le gain réel de chaque bonus : ton résultat AVEC la carte moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable."},
   regul:{t:"Régularité",d:"Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats."},
   sports:{t:"Par sport",d:"Ta réussite sport par sport. N'a de sens qu'en <b>données réelles</b> : en matchs simulés, les rencontres sont tirées au hasard."},
-  perimetre:{t:"Ligues comptées",d:"Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>."}
+  perimetre:{t:"Ligues comptées",d:"Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>.<br><br>Enfin, <b>tout cet écran suit l'onglet choisi en haut</b> : 📡 ne retient que les ligues jouées sur de vrais matchs, 🎮 celles en matchs simulés, 🔀 les deux. Comparer les deux a du sens : en simulé les cotes sont tirées au sort, en réel elles viennent du marché."}
 };
 function showStatInfo(k){ const s=STAT_INFO[k]; if(!s) return;
   infoModal("📊", t(s.t), `<div class="mini muted" style="text-align:left;line-height:1.6">${t(s.d)}</div>`); }
@@ -5851,15 +5879,39 @@ function sparkROI(curve){
       <circle cx="${X(pts.length-1).toFixed(1)}" cy="${Y(last).toFixed(1)}" r="3.5" fill="${col}"/></svg>
     <div class="row" style="justify-content:space-between"><span class="mini muted">${t("{a} journées",{a:pts.length})}</span><b class="mini ${last>=0?'green':'red'}">${last} %</b></div>`;
 }
+/* ---- Onglets du dossier de stats (v7.24, demandé par Hervé) ---------------------------------
+   Les trois dossiers sont calculés d'avance par `loadMyStats` : changer d'onglet ne relance aucun
+   calcul ni aucune requête, c'est un simple changement de pointeur. */
+function statsVue(){ const D=myStatsData; return (D&&D.jeux)?D.jeux[D.onglet||"tous"]:null; }
+function setStatTab(k){ if(!myStatsData||!myStatsData.jeux||!myStatsData.jeux[k]) return;
+  myStatsData.onglet=k; render(); }
+function statTabsHTML(){
+  const D=myStatsData; if(!D||!D.jeux) return "";
+  const on=D.onglet||"tous";
+  // Un onglet VIDE reste visible mais grisé : le masquer laisserait croire que les stats réelles
+  // n'existent pas, alors qu'il n'y a simplement pas encore joué de ligue de ce type.
+  const b=(k,lab)=>{ const n=(D.jeux[k].leagues||[]).length;
+    return `<button class="btn ghost sm" style="flex:1${on===k?';border-color:var(--accent);color:var(--accent)':(n?'':';opacity:.5')}" onclick="setStatTab('${k}')">${lab}<span class="muted"> ${n}</span></button>`; };
+  return `<div class="row" style="gap:6px;margin-bottom:8px">${b("tous",t("🔀 Tout"))}${b("reel",t("📡 Réelles"))}${b("sim",t("🎮 Simulées"))}</div>
+    <div class="mini muted">${on==="reel"?t("Uniquement tes ligues jouées sur de vrais matchs, avec les cotes du marché.")
+      :(on==="sim"?t("Uniquement tes ligues en matchs simulés, où les cotes sont tirées au sort.")
+      :t("Tes ligues des deux types réunies. Touche 📡 ou 🎮 pour séparer."))}</div>`;
+}
 function viewStats(){
-  const d=myStatsData; const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
+  const d=statsVue(); const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   // Ligne CLIQUABLE : le libellé porte un ⓘ discret et ouvre la fiche du chiffre.
   const lineI=(k,lab,val)=>`<div class="row clik" style="justify-content:space-between;margin:7px 0" onclick="showStatInfo('${k}')"><span class="mini muted">${lab} <span style="opacity:.55">ⓘ</span></span><b class="mini">${val}</b></div>`;
   let h=`<div class="box"><h2 style="margin-top:0">📊 ${t("Mes stats")} ${premBadge('stats')}</h2>
       <div class="mini muted">${t("Ton dossier complet, toutes tes ligues. Touche une ligne pour savoir ce que le chiffre veut dire.")}</div></div>`;
+  // ⚠️ L'erreur vit sur `myStatsData`, PAS sur le dossier d'un onglet : elle est levée avant même
+  // que les trois dossiers existent. La tester sur `d` la rendrait invisible (v7.24).
+  if(myStatsData&&myStatsData.error) return h+`<div class="err">${esc(myStatsData.error)}</div>`;
   if(!d) return h+`<div class="box mini muted">${t("Chargement…")}</div>`;
-  if(d.error) return h+`<div class="err">${esc(d.error)}</div>`;
-  if(!d.leagues.length) return h+`<div class="box mini muted">${t("Pas encore de partie jouée.")}</div>`;
+  h+=`<div class="box">${statTabsHTML()}</div>`;
+  if(!d.leagues.length) return h+`<div class="box mini muted">${
+    (myStatsData.onglet==="reel")?t("Aucune ligue jouée sur de vrais matchs pour l'instant.")
+    :((myStatsData.onglet==="sim")?t("Aucune ligue jouée en matchs simulés pour l'instant.")
+    :t("Pas encore de partie jouée."))}</div>`;
   const a=d.agg;
   // ⚠️ NE PAS rajouter de « + » ici : `fmt` signe DÉJÀ les valeurs positives (v7.02 — un
   // « ++12,50 € » s'affichait dans Tes coups, le Capitaine et les bonus rentables).
@@ -5931,7 +5983,7 @@ function viewStats(){
   ${(L&&L.status==="done")?`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button>`:''}`;  // partage : seulement une fois la ligue terminée
   return h; }
 function showLeagueStat(lid){
-  const l=((myStatsData&&myStatsData.leagues)||[]).find(x=>x.id===lid); if(!l) return;
+  const V=statsVue(); const l=((V&&V.leagues)||[]).find(x=>x.id===lid); if(!l) return;
   const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:6px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   const body=`<div class="mini muted" style="text-align:left;margin-bottom:8px">${l.status==='done'?t("Terminée"):t("En cours")}${l.rank?' · '+t("Classement : {a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div>`
     +line(t("Points / capital"), l.points+" pts · "+eur(l.capital)+" €")
