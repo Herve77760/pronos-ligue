@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.48";
+const APP_VERSION = "v7.50";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -203,7 +203,7 @@ const validUser = u => /^[a-zA-Z0-9._-]{2,20}$/.test(u); // pseudo : 2–20, let
 // cible 🎯, trophée 🏆, joueur IA 🤖, balles ⚽🎾🏀…) → sinon confusion (signalé par Hervé).
 // Sélection CLASSIQUE (v6.48) : têtes de personnes variées (carnations, blonds, chauves, roux, barbus,
 // âges), quelques têtes « à lunettes » et « fun ». Le joueur peut aussi saisir SON emoji perso (setCustomAvatar).
-// ⚠️ Aucun emoji d'élément de jeu ici (pas de 🕵️ = carte, 👑 🏆 🎯 🤖 ⚽🎾🏀, ni bonus CARDS[*].e).
+// ⚠️ Aucun emoji d'élément de jeu ici (pas de 🕵️ = bonus, 👑 🏆 🎯 🤖 ⚽🎾🏀, ni bonus CARDS[*].e).
 const EMOJIS=["🧑🏻","🧑🏽","🧑🏾","🧑🏿","👨🏼","👨🏿","👩🏻","👩🏽","👩🏿","👱🏼‍♀️","🧑🏻‍🦲","👨🏿‍🦲","👩🏻‍🦰","🧔🏽","🧔🏿","👴🏼","👵🏻","🧕🏽","👳🏿","🤵🏼","👸🏾","💂🏻","👮🏾","🏋🏽‍♂️","🧑🏼‍🚀","🧑🏾‍🎤","🧑🏿‍🍳","🧑🏻‍💼","😎","🤓","🥸","🧐","🤠","🥳","🤡","🤪","🤩","😈","👽","👻","🧛","🦸🏿","🧙🏽","🎅"];
 
 /* ============ AVATARS (v6.50) ============
@@ -329,7 +329,7 @@ const REWARDS=[
 function gageDescOf(t){ const n=s=>(s||'').replace(/[^\p{L}]/gu,'').toLowerCase(); const g=GAGES.concat(REWARDS).find(x=>n(x.t)===n(t)); return g?g.d:''; }
 const CARDS={
  // f:5 depuis v6.84 — mesuré sur les parties jouées sous les règles actuelles : médiane +10,70 €
- // et moyenne +10,53 € d'écart créé dans le duel, la meilleure carte du jeu et de loin la plus
+ // et moyenne +10,53 € d'écart créé dans le duel, le meilleur bonus du jeu et de loin la plus
  // régulière. Elle était affichée 4/5, donc sous-enchérie : l'étoile guide les mises, une force
  // fausse empêche l'enchère de jouer son rôle de contrepoids.
  assurance:{e:"🛡",n:"Assurance tous risques",t:true, f:5, d:"Un pari choisi : s'il perd, mise remboursée."},
@@ -351,16 +351,16 @@ const CARDS={
  parachute:{e:"🪂",n:"Parachute",t:false, f:3, d:"Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie."},
  joker:    {e:"🃏",n:"Joker",t:true, f:2, retired:true, risk:true, d:"Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien."},
  chance:   {e:"🧈",n:"Le beurre et l'argent du beurre",t:true, f:5, d:"Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à la cote initiale du résultat qui tombe (aucune cote réduite)."},
- voleur:   {e:"🥷",n:"Voleur",t:false, f:5, d:"Tu prends le bonus que ton adversaire a joué ce jour-là : il ne s'applique pas, et la carte passe dans ta main pour une prochaine journée. ⚠️ Si ton adversaire ne joue aucun bonus ce jour-là, le Voleur ne sert à rien et est perdu. Sans intérêt non plus à la dernière journée : tu n'auras plus l'occasion de jouer ta prise."},
+ voleur:   {e:"🥷",n:"Voleur",t:false, f:5, d:"Tu prends le bonus que ton adversaire a joué ce jour-là : il ne s'applique pas, et le bonus passe dans ta main pour une prochaine journée. ⚠️ Si ton adversaire ne joue aucun bonus ce jour-là, le Voleur ne sert à rien et est perdu. Sans intérêt non plus à la dernière journée : tu n'auras plus l'occasion de jouer ta prise."},
  clone:    {e:"🧬",n:"Clone",t:false, f:4, d:"Tu rejoues à l'identique le bonus que ton adversaire a joué ce jour-là — sur le même match s'il était ciblé. ⚠️ Si ton adversaire ne joue aucun bonus ce jour-là (ou joue le 🥷 Voleur, ou 📈 Investisseur), le Clone ne sert à rien et est perdu."},
 };
 // Indicateur de force d'un bonus (1 à 5 muscles) affiché aux enchères / infos.
 function forceHTML(id){ const f=(CARDS[id]&&CARDS[id].f)||3; return `<span class="chip gold" title="Force ${f}/5" style="flex:0 0 auto">💪 ${f}/5</span>`; }
-// Niveau de RISQUE d'une carte (v6.84, demandé par Hervé). La force dit ce que la carte peut
+// Niveau de RISQUE d'un bonus (v6.84, demandé par Hervé). La force dit ce que le bonus peut
 // RAPPORTER ; il manquait ce qu'elle peut COÛTER. Les joueurs enchérissaient donc à l'aveugle sur
 // la moitié de la question — or l'enchère est le seul contrepoids qui équilibre le jeu.
 // Deux niveaux seulement (choix d'Hervé) : `risk:true` = elle peut se retourner contre toi.
-// ⚠️ Ton VALORISANT, jamais alarmiste : étiqueter ces cartes « danger » les rendrait invendables
+// ⚠️ Ton VALORISANT, jamais alarmiste : étiqueter ces bonus « danger » les rendrait invendables
 // aux enchères et ferait disparaître le sel du jeu (le retournement de 🎁 est VOULU). On les
 // présente donc comme réservées aux joueurs sûrs de leurs pronos, pas comme des pièges.
 function riskHTML(id){ const c=CARDS[id]; if(!c) return '';
@@ -368,20 +368,20 @@ function riskHTML(id){ const c=CARDS[id]; if(!c) return '';
     ? `<span class="chip b" title="${t("Elle peut rapporter gros comme se retourner contre toi.")}" style="flex:0 0 auto;white-space:nowrap">⚔️ ${t("Double tranchant")}</span>`
     : `<span class="chip g" title="${t("Au pire elle ne sert à rien : elle ne peut pas se retourner contre toi.")}" style="flex:0 0 auto;white-space:nowrap">🟢 ${t("Sans risque")}</span>`; }
 const COMMON=["assurance","double"];
-// `.filter(retired)` : retirer une carte dans CARDS suffit à la sortir du tirage. Sans ce filtre,
-// une carte retirée continuerait d'être distribuée ici (piège rencontré en retirant 🍽️ Gourmand).
+// `.filter(retired)` : retirer un bonus dans CARDS suffit à la sortir du tirage. Sans ce filtre,
+// un bonus retiré continuerait d'être distribuée ici (piège rencontré en retirant 🍽️ Gourmand).
 const RANDOM_POOL=["miroir","gourmand","face","cadeau","sniper","invest","roi","tout","sangsue","parachute","joker","chance","dbl"].filter(id=>!CARDS[id].retired);
-const CARD_IDS=Object.keys(CARDS).filter(id=>!CARDS[id].retired); // cartes actives (hors retirées) — enchères / règles / IA
-// Cartes triées par NOM AFFICHÉ (donc dans la langue en cours) — pour les écrans de règles.
+const CARD_IDS=Object.keys(CARDS).filter(id=>!CARDS[id].retired); // bonus actives (hors retirées) — enchères / règles / IA
+// Bonus triées par NOM AFFICHÉ (donc dans la langue en cours) — pour les écrans de règles.
 function cardsAZ(){ return CARD_IDS.slice().sort((a,b)=>t(CARDS[a].n).localeCompare(t(CARDS[b].n),undefined,{sensitivity:"base"})); }
-// Mode de contenu : "complet" (tout) ou "simple" (moins de cartes/gages, pour débuter).
-// Mode simple : 6 cartes de forces aussi variées que possible (2×f5, 2×f4, 2×f3 — seules forces actives).
+// Mode de contenu : "complet" (tout) ou "simple" (moins de bonus/gages, pour débuter).
+// Mode simple : 6 bonus de forces aussi variées que possible (2×f5, 2×f4, 2×f3 — seules forces actives).
 const SIMPLE_CARDS=["assurance","dbl","double","tout","parachute","miroir"]; // 🛡5 · 🏷️5 · 🐗4 · 🔥4 · 🪂3 · ❄️3
 function modeCards(m){ return (m==="simple") ? CARD_IDS.filter(id=>SIMPLE_CARDS.includes(id)) : CARD_IDS; }
 function modeGagePool(m){ return (m==="simple") ? GAGES.filter(g=>g.s) : GAGES.slice(); }
 const MODES={
-  complet:{n:"🎛️ Complet", d:"Toutes les cartes bonus et un large choix de gages — le jeu dans toute sa richesse."},
-  simple: {n:"🎯 Simple",  d:"Moins de cartes bonus et de gages — parfait pour débuter ou jouer vite."}
+  complet:{n:"🎛️ Complet", d:"Tous les bonus et un large choix de gages — le jeu dans toute sa richesse."},
+  simple: {n:"🎯 Simple",  d:"Moins de bonus et de gages — parfait pour débuter ou jouer vite."}
 };
 function handSize(d){ if(d>=18)return 8; if(d>=15)return 6; if(d>=12)return 5; if(d>=9)return 4; if(d>=6)return 3; return 2; }
 function dealHand(nDays){ const size=handSize(nDays); const nc=Math.round(size/2); const hand=[];
@@ -403,8 +403,13 @@ const RECAP_THRESHOLD=30, RECAP_TARGET=40;
 const FORMULAS={
   // ⚠️ Les durées citées dans `d:` doivent suivre `sel`/`bet` — ce texte est lu par les joueurs et
   // un chiffre qui ment est pire que pas de chiffre. Fenêtre des matchs = bet → sel+2×bet (v7.32).
-  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis <b>tu peux modifier tes pronos jusqu'au premier coup d'envoi</b> (au moins 12h). Les matchs proposés se jouent <b>entre 12h et 36h</b>."},
-  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis <b>tu peux modifier tes pronos jusqu'au premier coup d'envoi</b> (au moins 24h). Les matchs proposés se jouent <b>entre 24h et 72h</b>."}
+  /* ⚠️ AUCUNE BALISE HTML DANS `d:` — ces textes sont affichés via `esc()` à trois endroits (les
+     deux fenêtres de changement de format et le formulaire de création). J'y avais mis des <b> en
+     v7.33 : ils s'affichaient tels quels, en clair, au milieu de la phrase (signalé par Hervé).
+     Si une mise en gras devient nécessaire ici, c'est l'échappement qu'il faut revoir aux trois
+     endroits — pas ajouter une balise en espérant que ça passe. */
+  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 12h et 36h."},
+  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 24h et 72h."}
 };
 // Format EFFECTIF de la journée courante. `L.formula` = format initial (colonne). L'organisateur peut
 // le changer EN COURS, effectif à la journée suivante : chaque changement est empilé dans le JSON `gage`
@@ -488,7 +493,7 @@ const ELARGIR_MAX_J=1;       // palier d'élargissement si la fenêtre ne se rem
 // une seule source, sinon les places annoncées au salon pourraient contredire les règles.
 const MAX_PLAYERS=12;
 const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
-const STAKE_CAP_INVEST=0.7; // … 70 % avec la carte Investisseur
+const STAKE_CAP_INVEST=0.7; // … 70 % avec le bonus Investisseur
 const FORGOT_PENALTY=0.25;  // ANCIEN barème : pari non validé à temps → −25 % du capital
 // ─── Barème v2 (décision d'Hervé, 19/07/2026) ────────────────────────────────────────────────
 // Points du duel = RÉSULTAT (V=2, N=1, D=0) + 1 pt si le net du joueur est positif.
@@ -782,7 +787,7 @@ function ligueDecalage(){ const s=((L&&L.id)||"")+":"+((L&&L.current_day)||0);
 async function fetchRealPool(){
   const sr=await fetch(`${ODDS_BASE}/sports/?apiKey=${ODDS_KEY}`); if(!sr.ok) throw new Error("sports "+sr.status);
   const sports=await sr.json(); const grp={}; sports.forEach(s=>grp[s.key]=s.group);
-  // ⚠️ v7.31 — PLANCHER DE QUALITÉ (règle d'Hervé : « on ne va pas en dessous de 70 »). Écarte
+  // ⚠️ v7.31 — PLANCHER DE QUALITÉ (règle d'Hervé : « on ne va pas en dessous de 70 »). Ébonus
   // d'un coup la quinzaine de championnats sans note : Suède, Finlande, Irlande, League 2
   // anglaise, Serie B… On ne les interroge plus JAMAIS, même en creux de calendrier — mieux vaut
   // une journée courte qu'une journée de deuxième division scandinave.
@@ -1329,7 +1334,7 @@ function koOuEtat(f){
   if(e==="encours") return `<span class="mini muted">⏱️ ${t("en cours")}</span>`;
   return koLabel(f);
 }
-// Le match i porte-t-il le logo de la carte ? (gère les cartes à 2 cibles comme le Coup Double → logo sur les 2 matchs)
+// Le match i porte-t-il le logo du bonus ? (gère les bonus à 2 cibles comme le Coup Double → logo sur les 2 matchs)
 function cardOnMatch(card,i){ return !!(card&&card.id&&(card.target===i||(CARDS[card.id]&&CARDS[card.id].two&&card.target2===i))); }
 function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ ${t("Choix des matchs avant {a}",{a:'<b>'+fmtWhen(dt.sel)+'</b>'})} · ${leagueFormula().n}</div>`:''; }
 /* ⚠️ v7.43 — CETTE LIGNE ANNONÇAIT LA MAUVAISE HEURE (signalé par Hervé sur la ligue DRDJ3).
@@ -1429,7 +1434,7 @@ const EN={
   "⚖️ Tout est une question de <b>stratégie</b> : miser pour t'<b>armer de bonus</b>… mais en gardant assez d'<b>argent pour parier gros</b> ensuite. Ce que tu remportes est retiré de tes 100 €.":"⚖️ It's all about <b>strategy</b>: bid to <b>arm yourself with bonuses</b>… while keeping enough <b>money to bet big</b> afterwards. Whatever you win is taken from your 100 €.",
   "⚠️ Ces enchères n'ont lieu qu'<b>une seule fois, au départ</b> — ne te loupe pas ! (Tu pourras tout de même <b>racheter ou vendre</b> des bonus à tes adversaires en cours de saison.)":"⚠️ This auction happens <b>only once, at the start</b> — don't blow it! (You'll still be able to <b>buy or sell</b> bonuses with your opponents during the season.)",
   "On t'a pré-rempli des mises pour l'exemple — <b>ajuste-les</b> librement, ou mets 0 pour garder ton capital.":"We prefilled some bids as an example — <b>adjust them</b> freely, or set 0 to keep your capital.",
-  "Touche une carte pour lire sa fiche.":"Tap a card to read its details.",
+  "Touche un bonus pour lire sa fiche.":"Tap a bonus to read its details.",
   "Les 4 joueurs ont misé en secret. Le <b>plus offrant</b> remporte le bonus ; à <b>égalité</b>, le plus <b>rapide</b> l'emporte.":"All 4 players bid in secret. The <b>highest bidder</b> wins the bonus; on a <b>tie</b>, the <b>fastest</b> wins.",
   "{a} · {b} €":"{a} · {b} €",
   "<b>Égalité</b> à {a} € — tu avais misé <b>en premier</b>, le bonus est pour toi.":"<b>Tie</b> at {a} € — you bid <b>first</b>, so the bonus is yours.",
@@ -1547,11 +1552,11 @@ const EN={
   "🧈 2ᵉ résultat couvert ({n})":"🧈 2nd result covered ({n})",
   "Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.":"You win at the odds of whichever result comes in: {a} or {b} — for a single stake.",
   "Mise (€)":"Stake (€)", "min 1€":"min €1",
-  "🃏 Carte bonus (1 max/jour)":"🃏 Bonus card (1 max/day)", "✕ retirer":"✕ remove", "optionnel":"optional",
-  "→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire cette carte.":"→ no eligible match today (needs a match with a draw option): remove this card.",
+  "🃏 Bonus (1 max/jour)":"🃏 Bonus bonus (1 max/day)", "✕ retirer":"✕ remove", "optionnel":"optional",
+  "→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire ce bonus.":"→ no eligible match today (needs a match with a draw option): remove this bonus.",
   "→ touche le 🎯 du pari ciblé.":"→ tap the 🎯 of the targeted bet.",
   "→ choisis le 2ᵉ résultat sur le match ciblé.":"→ pick the 2nd result on the targeted match.",
-  "Plus de cartes en main.":"No cards left in hand.",
+  "Plus de bonus en main.":"No bonuses left in hand.",
   "Choisis ton Capitaine 👑":"Choose your Captain 👑", "Mise trop élevée":"Stake too high",
   "Choisis la cible 🎯":"Choose the target 🎯", "Choisis le 2ᵉ résultat 🎲":"Choose the 2nd result 🎲",
   "Capitaine et bonus sur des matchs différents":"Captain and bonus on different matches",
@@ -1565,7 +1570,7 @@ const EN={
   "🃏 bonus caché jusqu'aux résultats":"🃏 bonus hidden until the results",
   "Tes pronos sont validés ✓. On attend les autres.":"Your picks are in ✓. Waiting for the others.",
   "Paris de la journée (publics)":"Bets of the day (public)",
-  "Tous les pronos sont verrouillés et visibles. Les 🃏 cartes bonus ne seront révélées qu'après les résultats.":"All picks are locked and visible. The 🃏 bonus cards are only revealed after the results.",
+  "Tous les pronos sont verrouillés et visibles. Les 🃏 bonus ne seront révélées qu'après les résultats.":"All picks are locked and visible. The 🃏 bonus bonuses are only revealed after the results.",
   "✅ Tous les pronos sont validés — résolution automatique en cours…":"✅ All picks are in — automatic resolution under way…",
   "✅ Tous les pronos sont validés — on attend les vrais résultats.":"✅ All picks are in — waiting for the real results.",
   "✅ Tes pronos (modifiables jusqu'à la clôture)":"✅ Your picks (editable until close)",
@@ -1615,8 +1620,8 @@ const EN={
   // Comment ça marche + salon + préparation (phase 3)
   "💡 Comment ça marche ?":"💡 How it works",
   "Championnat de pronos entre amis — tu démarres avec <b>100 € virtuels</b>.":"A prediction championship among friends — you start with <b>€100 virtual</b>.",
-  "• <b>Enchères bonus</b> : tu mises en aveugle sur les cartes bonus que tu veux (jusqu'à <b>{a} €</b>) ; ce que tu remportes est retiré de tes 100 €.":"• <b>Bonus auction</b>: bid blindly on the bonus cards you want (up to <b>€{a}</b>); what you win is deducted from your €100.",
-  "• <b>🃏 Bonus = le nerf de la stratégie</b> : bien joués, ils peuvent <b>renverser une journée</b> — tripler un gain, <b>siphonner</b> l'adversaire, lui <b>voler</b> une carte, amortir une perte… Tu les remportes aux <b>enchères</b> (mise en aveugle, jusqu'à <b>{a} €</b> ; ce que tu gagnes est retiré de tes 100 €).":"• <b>🃏 Bonuses = the heart of the strategy</b>: played well, they can <b>turn a matchday around</b> — triple a win, <b>siphon</b> your opponent, <b>steal</b> their card, cushion a loss… You win them at <b>auction</b> (blind bids, up to <b>€{a}</b>; what you win is deducted from your €100).",
+  "• <b>Enchères bonus</b> : tu mises en aveugle sur les bonus que tu veux (jusqu'à <b>{a} €</b>) ; ce que tu remportes est retiré de tes 100 €.":"• <b>Bonus auction</b>: bid blindly on the bonus bonuses you want (up to <b>€{a}</b>); what you win is deducted from your €100.",
+  "• <b>🃏 Bonus = le nerf de la stratégie</b> : bien joués, ils peuvent <b>renverser une journée</b> — tripler un gain, <b>siphonner</b> l'adversaire, lui <b>voler</b> un bonus, amortir une perte… Tu les remportes aux <b>enchères</b> (mise en aveugle, jusqu'à <b>{a} €</b> ; ce que tu gagnes est retiré de tes 100 €).":"• <b>🃏 Bonuses = the heart of the strategy</b>: played well, they can <b>turn a matchday around</b> — triple a win, <b>siphon</b> your opponent, <b>steal</b> their bonus, cushion a loss… You win them at <b>auction</b> (blind bids, up to <b>€{a}</b>; what you win is deducted from your €100).",
   "• <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2).":"• <b>Each day</b>: bet on <b>5 matches</b> — total stakes ≤ <b>50% of your balance</b> — with a 👑 <b>Captain</b> (gains/losses ×2).",
   "• Le <b>vainqueur du duel</b> du jour marque des points.":"• The day's <b>duel winner</b> scores points.",
   "Format actuel :":"Current format:",
@@ -1734,10 +1739,10 @@ const EN={
   "🎓 Première fois ? Apprendre en 2 min":"🎓 First time? Learn in 2 min",
   "Bienvenue dans The Maestro League !":"Welcome to The Maestro League!", "C'est parti →":"Let's go →", "On te montre tout en 2 minutes — en jouant.":"We'll show you everything in 2 minutes — by playing.",
   "Accueil":"Home", "Après 2 journées":"After 2 matchdays", "Une vraie saison continue…":"A real season goes on…", "Voir le classement final 🏆 →":"See final standings 🏆 →",
-  "Bien plus qu'un jeu de pronos : un <b>championnat entre amis</b> où la <b>stratégie</b> fait la différence. Tu gères un <b>capital</b>, tu remportes des <b>bonus</b> aux enchères (doubler une mise, siphonner l'adversaire, lui <b>voler</b> une carte…), et un seul coup peut provoquer un <b>retournement</b>. Et à la fin, le <b>dernier fait un gage</b>, le <b>champion</b> soulève la coupe. 🎉":"Far more than a prediction game: a <b>championship among friends</b> where <b>strategy</b> makes the difference. You manage a <b>balance</b>, win <b>bonuses</b> at auction (double a stake, siphon your opponent, <b>steal</b> their card…), and a single move can trigger a <b>turnaround</b>. And at the end, the <b>last-placed player does a forfeit</b>, the <b>champion</b> lifts the cup. 🎉",
+  "Bien plus qu'un jeu de pronos : un <b>championnat entre amis</b> où la <b>stratégie</b> fait la différence. Tu gères un <b>capital</b>, tu remportes des <b>bonus</b> aux enchères (doubler une mise, siphonner l'adversaire, lui <b>voler</b> un bonus…), et un seul coup peut provoquer un <b>retournement</b>. Et à la fin, le <b>dernier fait un gage</b>, le <b>champion</b> soulève la coupe. 🎉":"Far more than a prediction game: a <b>championship among friends</b> where <b>strategy</b> makes the difference. You manage a <b>balance</b>, win <b>bonuses</b> at auction (double a stake, siphon your opponent, <b>steal</b> their bonus…), and a single move can trigger a <b>turnaround</b>. And at the end, the <b>last-placed player does a forfeit</b>, the <b>champion</b> lifts the cup. 🎉",
   "⚠️ Ce que tu remportes est <b>retiré de tes 100 €</b> — donc moins de capital pour <b>parier</b> ensuite. Mise ce qui te semble juste (total ≤ 40 €).":"⚠️ What you win is <b>deducted from your €100</b> — so less balance to <b>bet</b> afterwards. Bid what feels right (total ≤ €40).",
-  "Chaque bonus revient au plus offrant (à égalité, le plus rapide). Touche une carte pour sa fiche.":"Each bonus goes to the highest bidder (on a tie, the fastest). Tap a card for its details.",
-  "Mise sur les <b>3 bonus</b> (tu ne connais pas les mises de Léa). Chaque bonus revient au plus offrant ; à égalité, le plus rapide. Touche une carte pour sa fiche.":"Bid on the <b>3 bonuses</b> (you don't know Léa's bids). Each bonus goes to the highest bidder; on a tie, the fastest. Tap a card for its details.",
+  "Chaque bonus revient au plus offrant (à égalité, le plus rapide). Touche un bonus pour sa fiche.":"Each bonus goes to the highest bidder (on a tie, the fastest). Tap a bonus for its details.",
+  "Mise sur les <b>3 bonus</b> (tu ne connais pas les mises de Léa). Chaque bonus revient au plus offrant ; à égalité, le plus rapide. Touche un bonus pour sa fiche.":"Bid on the <b>3 bonuses</b> (you don't know Léa's bids). Each bonus goes to the highest bidder; on a tie, the fastest. Tap a bonus for its details.",
   "Mise sur les 3 bonus (1 € min.)":"Bid on the 3 bonuses (€1 min.)",
   "ℹ️ Le nombre de points tient compte de plusieurs facteurs (résultat du duel, net, ⭐ meilleur pronostiqueur…) — ici on reste simple.":"ℹ️ Points depend on several factors (duel result, net, ⭐ best forecaster…) — kept simple here.",
   "🦊 Léa a dépensé <b>{a} €</b> → sa cagnotte pour parier : <b>{b} €</b>.":"🦊 Léa spent <b>€{a}</b> → her pot to bet with: <b>€{b}</b>.",
@@ -1764,7 +1769,7 @@ const EN={
   // tuto corrigé le même jour — la laisser, c'était risquer de la voir resservie un jour.
   "Et comment les obtenir ? →":"And how to get them? →",
   "🃏 Les enchères":"🃏 The auction", "🃏 Résultat des enchères":"🃏 Auction result",
-  "En début de ligue, chaque bonus revient au <b>plus offrant</b> (perdu = <b>remboursé</b>). Mise ce que tu veux sur 1 ou 2 cartes, puis valide.":"At the start of a league, each bonus goes to the <b>highest bidder</b> (lost = <b>refunded</b>). Bid what you want on 1 or 2 cards, then confirm.",
+  "En début de ligue, chaque bonus revient au <b>plus offrant</b> (perdu = <b>remboursé</b>). Mise ce que tu veux sur 1 ou 2 bonus, puis valide.":"At the start of a league, each bonus goes to the <b>highest bidder</b> (lost = <b>refunded</b>). Bid what you want on 1 or 2 bonuses, then confirm.",
   "Valider mes enchères →":"Confirm my bids →",
   "✓ à toi · {a} €":"✓ yours · €{a}", "🦊 Léa · {a} €":"🦊 Léa · €{a}", "🦊 Léa":"🦊 Léa",
   "Toi {a} € · 🦊 Léa {b} €":"You €{a} · 🦊 Léa €{b}",
@@ -1867,7 +1872,7 @@ const EN={
   "🎉 Voilà une saison complète ! Tu connais tout l'enchaînement. Prêt pour une vraie ligue entre amis ?":"🎉 That's a full season! You know the whole flow. Ready for a real league with friends?",
   "▶️ Partie d'essai (2 journées contre Léa)":"▶️ Practice game (2 days vs Léa)",
   "Commencer la journée 1 →":"Start day 1 →", "Dépasse 40 € — réduis tes mises":"Over €40 — reduce your bids",
-  "Chaque bonus revient au plus offrant (à égalité, le plus rapide). Total ≤ 40 € ; seules les mises gagnées sont retirées de tes 100 €. Touche une carte pour sa fiche.":"Each bonus goes to the highest bidder (on a tie, the fastest). Total ≤ €40; only winning bids are deducted from your €100. Tap a card for its details.",
+  "Chaque bonus revient au plus offrant (à égalité, le plus rapide). Total ≤ 40 € ; seules les mises gagnées sont retirées de tes 100 €. Touche un bonus pour sa fiche.":"Each bonus goes to the highest bidder (on a tie, the fastest). Total ≤ €40; only winning bids are deducted from your €100. Tap a bonus for its details.",
   "<b>Égalité</b> ({a} € chacun) → tu avais misé <b>en premier</b>, le bonus est pour toi.":"<b>Tie</b> (€{a} each) → you bid <b>first</b>, so the bonus is yours.",
   "Léa a misé {b} €, pas toi → le bonus lui revient.":"Léa bid €{b}, you didn't → the bonus goes to her.",
   "🃏 Bonus remportés":"🃏 Bonuses won",
@@ -1899,16 +1904,16 @@ const EN={
   "La ligue démarre ! À toi de faire tes <b>votes de préparation</b> (gage et/ou récompense selon la ligue) et tes <b>enchères sur les bonus</b>.":"The league is starting! Time to cast your <b>preparation votes</b> (forfeit and/or reward depending on the league) and place your <b>bonus bids</b>.",
   "⚔️ Le duel en détail":"⚔️ The duel in detail", "Résultats de la journée":"Results of the day",
   "👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.":"👉 Tap a player for their duel · tap a <b>gain</b> for the detailed calculation.",
-  "Joueur":"Player", "Gain":"Gain", "Duel":"Duel", "Carte":"Card",
+  "Joueur":"Player", "Gain":"Gain", "Duel":"Duel", "Bonus":"bonus",
   "◀ Préc.":"◀ Prev.", "Suiv. ▶":"Next ▶", "Continuer →":"Continue →", "Voir le classement général":"View overall standings", "← Retour au jeu":"← Back to the game",
   "Étape {a} sur {b}":"Step {a} of {b}", "Suivant →":"Next →", "← Précédent":"← Back",
   "💪 Force {a}/5":"💪 Strength {a}/5", "Capitaine (pari doublé)":"Captain (doubled bet)",
-  "Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.":"Each day you secretly pick <b>one</b> of your bets as Captain: its <b>gain AND loss are doubled</b> (×2). It's not a bonus card — you choose one every day.",
+  "Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas un bonus — tu en choisis un à chaque journée.":"Each day you secretly pick <b>one</b> of your bets as Captain: its <b>gain AND loss are doubled</b> (×2). It's not a bonus bonus — you choose one every day.",
   "Meilleur pronostiqueur":"Best predictor",
   "Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.":"Each day, the player with the <b>best net gain in the whole league</b> earns <b>+1 bonus point</b> (on top of duel points). Ties are broken by the biggest gain, then the biggest stake.",
   // Textes de calcul & d'effet (phase 4b)
   "son gain":"their gain", "gain adverse":"opponent's gain", "effet :":"effect:",
-  "Toucher pour le détail : gain avec la carte vs sans la carte":"Tap for details: gain with the card vs without",
+  "Toucher pour le détail : gain avec le bonus vs sans le bonus":"Tap for details: gain with the bonus vs without",
   "Points du duel":"Duel points",
   "Le vainqueur du duel est celui au <b>meilleur résultat net</b> (gains − mises).<br>• <b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> si négatif.<br>• <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> si négatif.<br>• <b>Match nul</b> : <b>1 pt</b> chacun.":"The duel winner is the one with the <b>best net result</b> (gains − stakes).<br>• <b>Winner</b>: <b>3 pts</b> if their net is positive, <b>1 pt</b> if negative.<br>• <b>Loser</b>: <b>1 pt</b> if their net is positive, <b>0 pt</b> if negative.<br>• <b>Draw</b>: <b>1 pt</b> each.",
   "fait match nul":"drew", "gagné son duel":"won their duel", "perdu son duel":"lost their duel",
@@ -1936,9 +1941,9 @@ const EN={
   "Sur la <b>dernière journée</b>, les points de <b>duel comptent double</b> : même en retard, on peut renverser la table sur le fil. <b>Rien n'est jamais joué</b> tant que le dernier match n'est pas tombé.":"On the <b>last matchday</b>, <b>duel points count double</b>: even when behind, you can flip everything at the wire. <b>It's never over</b> until the last match is in.",
   "positif":"positive", "négatif ou nul":"negative or zero",
   "<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.":"<b>Here:</b> {a} <b>{b}</b> with a net {c} ({d}) → <b>{e}</b>.",
-  "L'<b>effet</b> = le gain <b>avec</b> la carte moins le gain qu'il y aurait eu <b>sans</b> la carte.":"The <b>effect</b> = the gain <b>with</b> the card minus the gain there would have been <b>without</b> it.",
+  "L'<b>effet</b> = le gain <b>avec</b> le bonus moins le gain qu'il y aurait eu <b>sans</b> le bonus.":"The <b>effect</b> = the gain <b>with</b> the bonus minus the gain there would have been <b>without</b> it.",
   "Sur son gain du jour :":"On their gain for the day:", "Sur le gain de l'adversaire :":"On the opponent's gain:",
-  "• avec la carte :":"• with the card:", "• sans la carte :":"• without the card:", "• effet :":"• effect:",
+  "• avec le bonus :":"• with the bonus:", "• sans le bonus :":"• without the bonus:", "• effet :":"• effect:",
   "Aucun effet chiffré ce jour-là.":"No measurable effect that day.", "l'effet":"the effect",
   "remboursé":"refunded", "🃏 Bonus & ajustements":"🃏 Bonus & adjustments",
   "Pas de détail disponible pour ce joueur.":"No details available for this player.",
@@ -1954,7 +1959,7 @@ const EN={
   "🛡 {n} : mise remboursée → 0€":"🛡 {n}: stake refunded → 0€",
   "🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}€":"🤛 Opponent's In Your Face: gain <b>halved</b> → {a}€",
   "Gain réduit de moitié par « Dans ta face » adverse":"Gain halved by the opponent's In Your Face",
-  // — Phase 4c : noms & descriptions des cartes bonus —
+  // — Phase 4c : noms & descriptions des bonus —
   "Assurance":"Insurance", "Assurance tous risques":"Better Safe Than Sorry", "Un pari choisi : s'il perd, mise remboursée.":"A chosen bet: if it loses, stake refunded.",
   "Coup Double":"Double Strike", "Deux pour le prix d'un":"Two for One",
   "Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"No extra stake, no risk: pick 2 matches (your Captain is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
@@ -1970,19 +1975,19 @@ const EN={
   "Roi de la cote":"Odds King", "Un pari gagné à cote ≥ 2,00 → +10 % de ton capital en début de journée.":"A bet won at odds ≥ 2.00 → +10% of your capital at the start of the day.",
   // --- Rachat de bonus (point 4) ---
   "Rachat de bonus":"Bonus buyback",
-  "Propose une somme à un adversaire pour lui racheter une de ses cartes bonus encore en main. Il reste libre d'accepter ou de refuser. L'argent (virtuel) lui est transféré.":"Offer an opponent a sum to buy one of the bonus cards still in their hand. They stay free to accept or decline. The (virtual) money is transferred to them.",
+  "Propose une somme à un adversaire pour lui racheter une de ses bonus encore en main. Il reste libre d'accepter ou de refuser. L'argent (virtuel) lui est transféré.":"Offer an opponent a sum to buy one of the bonus bonuses still in their hand. They stay free to accept or decline. The (virtual) money is transferred to them.",
   "Offres reçues":"Offers received", "Offres envoyées":"Offers sent", "Proposer un rachat":"Propose a buyback",
   "Aucune offre en attente.":"No pending offer.",
-  "{a} te propose <b>{b} €</b> pour ta carte {c}.":"{a} offers you <b>€{b}</b> for your {c} card.",
-  "Tu proposes <b>{b} €</b> à {a} pour sa carte {c}.":"You are offering <b>€{b}</b> to {a} for their {c} card.",
+  "{a} te propose <b>{b} €</b> pour ton bonus {c}.":"{a} offers you <b>€{b}</b> for your {c} bonus.",
+  "Tu proposes <b>{b} €</b> à {a} pour son bonus {c}.":"You are offering <b>€{b}</b> to {a} for their {c} bonus.",
   "Accepter":"Accept", "Refuser":"Decline",
   "Le rachat n'est possible qu'en cours de championnat.":"Buybacks are only possible while the championship is running.",
   "Tu ne peux pas racheter tant que ton pari du jour est validé — attends la résolution de la journée.":"You can't buy while your bet for the day is locked in — wait for the day to be resolved.",
   "Ton capital est trop faible : il faut pouvoir garder au moins {a} € après le rachat.":"Your capital is too low: you must be able to keep at least €{a} after the buyback.",
-  "Aucune carte à racheter pour le moment.":"No card to buy back right now.",
+  "Aucun bonus à racheter pour le moment.":"No bonus to buy back right now.",
   "Aucun adversaire pour l'instant.":"No opponent yet.",
-  "Aucune carte à racheter pour le moment — les autres joueurs ont déjà joué leurs bonus (ou n'en ont pas en main).":"No card to buy back right now — the other players have already used their bonuses (or hold none).",
-  "aucune carte libre (toutes jouées ou aucune en main)":"no free card (all played, or none in hand)",
+  "Aucun bonus à racheter pour le moment — les autres joueurs ont déjà joué leurs bonus (ou n'en ont pas en main).":"No bonus to buy back right now — the other players have already used their bonuses (or hold none).",
+  "aucun bonus libre (toutes jouées ou aucune en main)":"no free bonus (all played, or none in hand)",
   "Ton capital : <b>{a} €</b> — tu peux dépenser jusqu'à <b>{b} €</b> (garder {c} € pour parier).":"Your capital: <b>€{a}</b> — you can spend up to <b>€{b}</b> (keep €{c} to bet).",
   "Ton capital est trop faible pour proposer un rachat.":"Your capital is too low to propose a buyback.",
   "Racheter {c}":"Buy back {c}", "à {a}":"from {a}", "ex : {a} €":"e.g. €{a}",
@@ -1990,34 +1995,34 @@ const EN={
   "Envoyer l'offre":"Send offer", "Annuler":"Cancel",
   "Entre un prix valide.":"Enter a valid price.",
   "Prix trop élevé : il te resterait moins de {a} €.":"Price too high: you'd be left with less than €{a}.",
-  "Cette carte n'est plus disponible.":"This card is no longer available.",
+  "Ce bonus n'est plus disponible.":"This bonus is no longer available.",
   "Offre envoyée.":"Offer sent.", "Offre introuvable.":"Offer not found.",
-  "Tu ne détiens plus cette carte.":"You no longer hold this card.",
+  "Tu ne détiens plus ce bonus.":"You no longer hold this bonus.",
   "L'acheteur n'a plus assez de capital — offre annulée.":"The buyer no longer has enough capital — offer cancelled.",
   "L'acheteur a déjà validé son pari du jour — rachat impossible pour l'instant.":"The buyer has already locked their bet for the day — buyback not possible right now.",
   "Vendu ! +{b} € reçus.":"Sold! +€{b} received.",
   "Offre refusée.":"Offer declined.", "Offre annulée.":"Offer cancelled.",
   "Réponses à tes offres":"Responses to your offers", "Rachat 🤝":"Buyback 🤝",
   // --- Rachat v2 (vente + messages + infos) ---
-  "Rachète une carte à un adversaire, ou vends une des tiennes pour te refaire du capital. L'autre reste libre d'accepter ou de refuser.":"Buy a card from an opponent, or sell one of yours to rebuild your capital. The other player stays free to accept or decline.",
-  "Journées restantes : {a}":"Days left: {a}", "touche une carte pour voir son effet.":"tap a card to see its effect.",
+  "Rachète un bonus à un adversaire, ou vends une des tiennes pour te refaire du capital. L'autre reste libre d'accepter ou de refuser.":"Buy a bonus from an opponent, or sell one of yours to rebuild your capital. The other player stays free to accept or decline.",
+  "Journées restantes : {a}":"Days left: {a}", "touche un bonus pour voir son effet.":"tap a bonus to see its effect.",
   "{a} a {s} ton offre ({c} · {b} €).":"{a} {s} your offer ({c} · €{b}).", "accepté":"accepted", "refusé":"declined",
-  "{a} te vend sa carte {c} pour <b>{b} €</b>.":"{a} is selling you their {c} card for <b>€{b}</b>.",
-  "{a} veut racheter ta carte {c} pour <b>{b} €</b>.":"{a} wants to buy your {c} card for <b>€{b}</b>.",
+  "{a} te vend son bonus {c} pour <b>{b} €</b>.":"{a} is selling you their {c} bonus for <b>€{b}</b>.",
+  "{a} veut racheter ton bonus {c} pour <b>{b} €</b>.":"{a} wants to buy your {c} bonus for <b>€{b}</b>.",
   "un petit mot (optionnel)":"a little note (optional)",
   "Tu vends {c} à {a} pour <b>{b} €</b>.":"You're selling {c} to {a} for <b>€{b}</b>.",
   "Tu proposes <b>{b} €</b> à {a} pour {c}.":"You're offering <b>€{b}</b> to {a} for {c}.",
-  "Racheter une carte":"Buy a card", "Vendre une de mes cartes":"Sell one of my cards",
+  "Racheter un bonus":"Buy a bonus", "Vendre une de mes bonus":"Sell one of my bonuses",
   "Ton capital : <b>{a} €</b> — jusqu'à <b>{b} €</b> dépensables (garder {c} €).":"Your capital: <b>€{a}</b> — up to <b>€{b}</b> spendable (keep €{c}).",
-  "Tu n'as aucune carte en main à vendre.":"You have no card in hand to sell.",
-  "Choisis une carte à proposer aux autres (leur cagnotte est indiquée).":"Pick a card to offer to the others (their balance is shown).",
+  "Tu n'as aucun bonus en main à vendre.":"You have no bonus in hand to sell.",
+  "Choisis un bonus à proposer aux autres (leur cagnotte est indiquée).":"Pick a bonus to offer to the others (their balance is shown).",
   "Vendre {c}":"Sell {c}", "À qui ?":"To whom?", "Prix (€) :":"Price (€):",
-  "Cette carte fait déjà l'objet d'une offre en attente.":"This card is already part of a pending offer.",
-  "Choisis un joueur.":"Pick a player.", "La carte n'est plus disponible.":"The card is no longer available.",
+  "Ce bonus fait déjà l'objet d'une offre en attente.":"This bonus is already part of a pending offer.",
+  "Choisis un joueur.":"Pick a player.", "Le bonus n'est plus disponible.":"The bonus is no longer available.",
   "Capital insuffisant pour cet achat — offre annulée.":"Not enough capital for this purchase — offer cancelled.",
   "Impossible : le pari du jour de l'acheteur est déjà validé — attends la résolution.":"Not possible: the buyer's bet for the day is already locked — wait for resolution.",
   "Tu ne peux pas vendre tant que ton pari du jour est validé — attends la résolution de la journée.":"You can't sell while your bet for the day is locked in — wait for the day to be resolved.",
-  "Le vendeur a un pari en cours ce jour-là (il pourrait jouer cette carte) — échange impossible pour l'instant.":"The seller has a bet in play that day (they might use this card) — trade not possible right now.",
+  "Le vendeur a un pari en cours ce jour-là (il pourrait jouer ce bonus) — échange impossible pour l'instant.":"The seller has a bet in play that day (they might use this bonus) — trade not possible right now.",
   "Acheté ! {c} est à toi (−{b} €).":"Bought! {c} is yours (−€{b}).",
   "{a} a accepté : {c} vendue (+{b} €).":"{a} accepted: {c} sold (+€{b}).",
   // --- Premium (badge + fiche stats + récap) ---
@@ -2053,11 +2058,11 @@ const EN={
   "Tu peux créer tes propres ligues en données réelles, ou basculer une ligue existante.":"You can create your own real-data leagues, or switch an existing one over.",
   "Sans cette option tu peux quand même <b>jouer</b> dans une ligue en données réelles créée par quelqu'un d'autre.":"Without this option you can still <b>play</b> in a real-data league created by someone else.",
   "Un bonus te fait de l'œil ? Rachète-le.":"Got your eye on a bonus? Buy it.",
-  "Repère une carte qu'un adversaire garde au chaud, propose ton prix. S'il dit oui, elle est à toi.":"Spot a card an opponent is sitting on, name your price. If they say yes, it's yours.",
+  "Repère un bonus qu'un adversaire garde au chaud, propose ton prix. S'il dit oui, elle est à toi.":"Spot a bonus an opponent is sitting on, name your price. If they say yes, it's yours.",
   "La seule option qui te laisse <b>agir en pleine partie</b> : le coup de pouce au bon moment.":"The only option that lets you <b>act mid-game</b>: the boost at just the right moment.",
   "Échange 100 % consenti : il accepte, il empoche. Disons… de la corruption parfaitement légale.":"A fully consensual trade: they accept, they cash in. Call it… perfectly legal bribery.",
-  "Les {n} cartes. Les vraies vacheries comprises.":"All {n} cards. The nasty ones included.",
-  "Débloque toutes les cartes d'interaction — 🩸 Sangsue, 🎁 Chérie c'est cadeau, ❄️ Effet Kiss Cool.":"Unlocks every interaction card — 🩸 Leech, 🎁 Honey It's a Gift, ❄️ Kiss Cool Effect.",
+  "Les {n} bonus. Les vraies vacheries comprises.":"All {n} bonuses. The nasty ones included.",
+  "Débloque tous les bonus d'interaction — 🩸 Sangsue, 🎁 Chérie c'est cadeau, ❄️ Effet Kiss Cool.":"Unlocks every interaction bonus — 🩸 Leech, 🎁 Honey It's a Gift, ❄️ Kiss Cool Effect.",
   "Payé une fois par l'organisateur → tout le monde y a droit, personne n'est lésé.":"Paid once by the organiser → everyone gets them, nobody's shortchanged.",
   "Sans elles, le jeu est bien élevé. Avec, c'est la guerre (amicale).":"Without them the game is well-behaved. With them, it's (friendly) war.",
   "Pas assez de potes ? L'IA ne juge pas.":"Not enough mates? The AI won't judge.",
@@ -2116,7 +2121,7 @@ const EN={
   // Bonus joué, rappelé sur l'écran Pronos après clôture (v6.93)
   "🃏 Ton bonus de la journée":"🃏 Your bonus this matchday",
   "🃏 Aucun bonus joué cette journée.":"🃏 No bonus played this matchday.",
-  "Touche la carte pour relire son effet. Ton adversaire ne la découvrira qu'aux résultats.":"Tap the card to re-read what it does. Your opponent won't see it until the results.",
+  "Touche le bonus pour relire son effet. Ton adversaire ne la découvrira qu'aux résultats.":"Tap the bonus to re-read what it does. Your opponent won't see it until the results.",
   "Résultats momentanément indisponibles":"Results temporarily unavailable",
   "La source des résultats ne répond pas pour l'instant — ce n'est pas lié à tes pronos. La journée se résoudra automatiquement dès qu'elle répondra à nouveau.":"The results source isn't responding right now — nothing to do with your picks. The matchday will settle automatically as soon as it's back.",
   // Argumentaire de l'option ⏱️ « Résultats en direct » (PITCHES.live) — option À PART ENTIÈRE
@@ -2152,7 +2157,7 @@ const EN={
   "Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).":"Biggest hit: {a} on {b} (<b class=\"green\">{c}€</b>).",
   // Faits marquants — bonus retournés (v7.15). L'ancienne clé « … <b class="green">{b}€</b> pour
   // {c} » est supprimée : elle ne disait que le gain de l'adversaire, jamais ce que ça avait
-  // coûté au joueur, et ne se déclenchait que sur les cartes visant l'adversaire.
+  // coûté au joueur, et ne se déclenchait que sur les bonus visant l'adversaire.
   "a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.":"played {a} — it backfired: <b class=\"red\">{b}€</b> for {d}, and <b class=\"green\">{b2}€</b> for {c}.",
   "a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.":"played {a} — it backfired on {d}: <b class=\"red\">{b}€</b>.",
   "Plus grosse mise : {a} — {b} € sur {c} ({d}).":"Biggest stake: {a} — €{b} on {c} ({d}).",
@@ -2188,7 +2193,7 @@ const EN={
   "ton capital en euros (virtuels) : la cagnotte avec laquelle tu mises.":"your capital in (virtual) euros: the pot you bet with.",
   // Info mise max + ROI (v6.13)
   "La mise max":"The max stake",
-  "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec la carte 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor card) — that's what fills the gauge. Each bet must be <b>at least €1</b>.",
+  "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor bonus) — that's what fills the gauge. Each bet must be <b>at least €1</b>.",
   "Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé. <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.":"<b>ROI</b> (return on investment) relates your net result to the total you staked. <b>+20%</b> = you won €20 for every €100 staked; a <b>negative</b> ROI = you lost money on your bets.",
   "Gage & récompense sur mesure":"Custom forfeit & reward",
   "Impose TON défi (ou ta récompense) au lieu de piocher dans la liste.":"Set YOUR own challenge (or reward) instead of picking from the list.",
@@ -2213,7 +2218,7 @@ const EN={
   "Tu prends <b>{b} pt</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>{b} pt</b> in the standings and lose <b>{a} %</b> of your balance.",
   "Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.":"Each day, the player with the <b>best net result in the whole league</b> earns a <b>+1 bonus point</b> (on top of the duel points). Ties are broken by the biggest winnings.",
   "<b>Départage au classement final</b> (à points égaux) : <b>cagnotte</b>, puis le <b>résultat des confrontations directes</b> entre les joueurs concernés, puis plus gros gain, puis plus grosse cote.":"<b>Final standings tie-break</b> (equal points): <b>balance</b>, then the <b>head-to-head record</b> between the players involved, then biggest win, then biggest odds.",
-  "La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend la carte 🧈 {c} jouable — une journée sans football est donc une journée où cette carte ne peut pas être jouée.":"The list offers <b>{a} fixtures</b> from <b>football, basketball and tennis</b> — the only sports in the game —, of which about <b>{b} % football</b>. If there isn't enough football available, the remainder comes from basketball and tennis. Football ⚽ being the only sport with <b>3 outcomes</b> (win, draw, loss), it is what makes the 🧈 {c} card playable — so a matchday without football is a matchday where that card cannot be played.",
+  "La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend le bonus 🧈 {c} jouable — une journée sans football est donc une journée où ce bonus ne peut pas être jouée.":"The list offers <b>{a} fixtures</b> from <b>football, basketball and tennis</b> — the only sports in the game —, of which about <b>{b} % football</b>. If there isn't enough football available, the remainder comes from basketball and tennis. Football ⚽ being the only sport with <b>3 outcomes</b> (win, draw, loss), it is what makes the 🧈 {c} bonus playable — so a matchday without football is a matchday where that bonus cannot be played.",
   // Fenêtre des matchs, propre à la formule (v7.29).
   "Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>48h</b> en ⚡ Fast, <b>96h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b> — on ne va jamais chercher des matchs plus lointains pour compléter.":"These fixtures kick off <b>shortly after betting closes</b>, never days later: at most <b>48h</b> in ⚡ Fast, <b>96h</b> in 🗓️ Classique — with a little slack on the final evening, until <b>{h}:00</b>, so European evening kick-offs aren't cut off. In a quiet period the matchday has <b>fewer than {a} fixtures</b> — we never reach for more distant matches to fill it up.",
   "Étape précédente d'abord":"Previous step first",
@@ -2224,10 +2229,10 @@ const EN={
   "Les pronos ne sont pas encore clôturés — clôture-les d'abord.":"Picks aren't closed yet — close them first.",
   "Échange impossible pour l'instant":"Exchange not possible right now",
   "<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas proposer un rachat maintenant.":"<b>Your bet for today is already confirmed.</b> So you can't offer a buyback right now.",
-  "<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas mettre une carte en vente maintenant.":"<b>Your bet for today is already confirmed.</b> So you can't put a card up for sale right now.",
-  "<b>Le détenteur de la carte a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.":"<b>The card's owner has already confirmed today's bet.</b> They could still play it today, so the exchange is blocked.",
+  "<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas mettre un bonus en vente maintenant.":"<b>Your bet for today is already confirmed.</b> So you can't put a bonus up for sale right now.",
+  "<b>Le détenteur du bonus a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.":"<b>The bonus's owner has already confirmed today's bet.</b> They could still play it today, so the exchange is blocked.",
   "<b>L'acheteur a déjà validé son pari du jour.</b> L'échange est donc bloqué jusqu'à la résolution.":"<b>The buyer has already confirmed today's bet.</b> The exchange is therefore blocked until the day is resolved.",
-  "Un échange n'est possible qu'<b>entre deux journées</b> : tant qu'un pari du jour est validé, la carte pourrait encore être jouée le même jour — elle serait alors utilisée deux fois.":"An exchange is only possible <b>between two matchdays</b>: while a bet for the day is confirmed, the card could still be played that same day — it would then be used twice.",
+  "Un échange n'est possible qu'<b>entre deux journées</b> : tant qu'un pari du jour est validé, le bonus pourrait encore être jouée le même jour — elle serait alors utilisée deux fois.":"An exchange is only possible <b>between two matchdays</b>: while a bet for the day is confirmed, the bonus could still be played that same day — it would then be used twice.",
   "➡️ Ce sera de nouveau possible dès que la <b>journée {j}</b> sera résolue.":"➡️ It will be possible again as soon as <b>matchday {j}</b> is resolved.",
   "Elle se résout une fois <b>tous les matchs réellement joués</b>.":"It resolves once <b>every match has actually been played</b>.",
   "Clôture des pronos : <b>{a}</b>.":"Picks close: <b>{a}</b>.",
@@ -2261,7 +2266,7 @@ const EN={
   "🔄 Nouvelle version disponible.":"🔄 A new version is available.", "Recharger":"Reload",
   "(option premium — à souscrire ; paiement désactivé pendant les tests)":"(premium option — subscription required; payment disabled during testing)",
   "(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)":"(the 🤖 AI player is a premium option — subscription required; payment disabled during testing)",
-  "<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) est une option premium — à souscrire ; paiement désactivé pendant les tests.</i>":"<i>The <b>full</b> card set (Full mode, with the interaction cards) is a premium option — subscription required; payment disabled during testing.</i>",
+  "<i>Le jeu <b>complet</b> des bonus (mode Complet, avec les bonus d'interaction) est une option premium — à souscrire ; paiement désactivé pendant les tests.</i>":"<i>The <b>full</b> bonus set (Full mode, with the interaction bonuses) is a premium option — subscription required; payment disabled during testing.</i>",
   "Toutes les options premium du jeu. <b>Souscris à celles qui t'intéressent</b> — paiement désactivé pendant la phase de test.":"All the game's premium options. <b>Subscribe to the ones you want</b> — payment disabled during the test phase.",
   // --- Stats perso cross-ligue ---
   "Ton dossier complet, toutes tes ligues.":"Your complete file, across all your leagues.",
@@ -2301,7 +2306,7 @@ const EN={
   "Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise.":"Your success rate by match type: <b>favourites</b> (odds under 1.80), <b>even</b>, <b>underdogs</b> (above 3.00). It necessarily drops towards underdogs — what matters is knowing where YOU are strongest.",
   "Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu.":"The same figures for the other players in your leagues (AI player excluded). The only real benchmark: a ROI is judged against your table, not in the abstract.",
   "Ce que le doublement t'a rapporté <b>en plus</b>, ou coûté. Un chiffre négatif ne condamne pas la mécanique : il dit que tu doubles trop souvent sur des paris incertains.":"What the doubling earned you <b>on top</b>, or cost you. A negative figure doesn't condemn the mechanic: it says you double too often on shaky picks.",
-  "Le gain réel de chaque bonus : ton résultat AVEC la carte moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable.":"Each bonus's real gain: your result WITH the card minus what it would have been WITHOUT it. ⚠️ Not to be confused with the most <b>played</b> bonus — the most played is rarely the most profitable.",
+  "Le gain réel de chaque bonus : ton résultat AVEC le bonus moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable.":"Each bonus's real gain: your result WITH the bonus minus what it would have been WITHOUT it. ⚠️ Not to be confused with the most <b>played</b> bonus — the most played is rarely the most profitable.",
   "Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats.":"How many matchdays you finish in the green, and your longest run of duels won. Two players on the same ROI don't have the same consistency — and consistency is what wins championships.",
   "Ta réussite sport par sport. N'a de sens qu'en <b>données réelles</b> : en matchs simulés, les rencontres sont tirées au hasard.":"Your success rate sport by sport. Only meaningful with <b>real data</b>: in simulated matches, fixtures are drawn at random.",
   "Chargement…":"Loading…", "Pas encore de partie jouée.":"No game played yet.",
@@ -2315,18 +2320,18 @@ const EN={
   "Journées jouées":"Days played", "Pronos gagnés":"Winning picks", "Total misé":"Total staked",
   "Résultat net cumulé":"Cumulative net result", "Rentabilité (ROI)":"Return (ROI)",
   "Meilleure journée":"Best day", "Pire journée":"Worst day",
-  "Plus grosse cote gagnée":"Biggest odds won", "Carte fétiche":"Favourite card", "Face-à-face":"Head-to-head",
+  "Plus grosse cote gagnée":"Biggest odds won", "Bonus fétiche":"Favourite bonus", "Face-à-face":"Head-to-head",
   "{w} V · {n} N · {l} D":"{w}W · {n}D · {l}L", "Partager ma saison":"Share my season",
   "Voici ce que tu vas partager :":"Here's what you'll share:", "Partager":"Share", "Copier":"Copy",
-  // Carte de saison partageable (v6.83). Les libellés en capitales de la carte restent courts :
+  // Bonus de saison partageable (v6.83). Les libellés en capitales du bonus restent courts :
   // ils sont dessinés dans des cases à largeur fixe (police réduite automatiquement si besoin).
-  // Niveau de risque des cartes (v6.84) — ton volontairement valorisant côté « double tranchant ».
+  // Niveau de risque des bonus (v6.84) — ton volontairement valorisant côté « double tranchant ».
   "Sans risque":"No downside", "Double tranchant":"Double-edged",
   "Au pire elle ne sert à rien : elle ne peut pas se retourner contre toi.":"At worst it does nothing — it can never backfire on you.",
   "au pire elle ne sert à rien. Elle ne peut jamais se retourner contre toi.":"at worst it does nothing. It can never backfire on you.",
   "Elle peut rapporter gros comme se retourner contre toi.":"It can pay off big — or backfire on you.",
   "elle peut rapporter gros… comme se retourner contre toi. Pour ceux qui sentent bien leur journée et assument leurs pronos.":"it can pay off big… or backfire on you. For those who trust their gut and stand by their picks.",
-  "Les cartes <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'une carte, c'est-à-dire ce qu'elle peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'elle peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire elle ne sert à rien, elle ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (elle peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les secondes ne sont pas à éviter — ce sont les cartes des joueurs qui assument leurs pronos.":"<b>🎯 Targeted</b> cards require picking a match when you bet. <b>💪 x/5</b> shows a card's <i>indicative</i> strength — what it can <b>bring you</b>. Next to it, a second badge shows what it can <b>cost you</b>: <b>🟢 No downside</b> (at worst it does nothing, it can never backfire) or <b>⚔️ Double-edged</b> (it can pay off big… or help your opponent, or amplify your losses). The latter aren't to be avoided — they're the cards for players who stand by their picks.",
+  "Les bonus <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'un bonus, c'est-à-dire ce qu'elle peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'elle peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire elle ne sert à rien, elle ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (elle peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les secondes ne sont pas à éviter — ce sont les bonus des joueurs qui assument leurs pronos.":"<b>🎯 Targeted</b> bonuses require picking a match when you bet. <b>💪 x/5</b> shows a bonus's <i>indicative</i> strength — what it can <b>bring you</b>. Next to it, a second badge shows what it can <b>cost you</b>: <b>🟢 No downside</b> (at worst it does nothing, it can never backfire) or <b>⚔️ Double-edged</b> (it can pay off big… or help your opponent, or amplify your losses). The latter aren't to be avoided — they're the bonuses for players who stand by their picks.",
   "MA SAISON":"MY SEASON", "CHAMPION":"CHAMPION", "{a}ᵉ sur {b}":"{a} of {b}",
   "POINTS":"POINTS", "PRONOS RÉUSSIS":"PICKS WON", "RENDEMENT":"RETURN",
   "{a} REMPORTE":"{a} WINS", "{a} DOIT":"{a} MUST",
@@ -2334,7 +2339,7 @@ const EN={
   "{a} sur {b} journées":"{a} of {b} matchdays",
   "Plus grosse cote décrochée":"Biggest odds landed",
   "Saison complète":"Full season", "{a} journées jouées jusqu'au bout":"{a} matchdays played to the end",
-  "Préparation de ta carte…":"Building your card…",
+  "Préparation de ton bonus…":"Building your bonus…",
   "Image indisponible sur cet appareil — le texte ci-dessous reste partageable.":"Image unavailable on this device — the text below can still be shared.",
   "Version texte":"Text version", "Copier le texte":"Copy the text",
   "Enregistrer":"Save", "Image enregistrée 📥":"Image saved 📥",
@@ -2342,16 +2347,16 @@ const EN={
   "Points : {a} · Capital : {b} €":"Points: {a} · Balance: €{b}",
   "Pronos gagnés : {a}/{b} ({c} %)":"Winning picks: {a}/{b} ({c}%)",
   "ROI : {a} % · Meilleure journée : {b} €":"ROI: {a}% · Best day: €{b}",
-  "Carte fétiche : {a}":"Favourite card: {a}",
+  "Bonus fétiche : {a}":"Favourite bonus: {a}",
   "Récap copié — colle-le où tu veux ! 📋":"Recap copied — paste it anywhere! 📋",
   "🤝 Racheter un bonus":"🤝 Buy back a bonus",
-  "En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.":"During the championship, you can offer an opponent a sum to <b>buy back a card</b> they still hold. They accept or decline; if they accept, the card is yours and the amount is paid to them. Possible as long as you haven't locked your bet for the day, keeping at least <b>€{a}</b> to keep betting.",
-  "En cours de championnat, tu peux <b>racheter une carte bonus</b> à un adversaire, contre une somme de ton capital (monnaie virtuelle).":"During the championship, you can <b>buy back a bonus card</b> from an opponent, for a sum of your (virtual) capital.",
-  "Tu proposes un prix ; l'autre est <b>libre d'accepter ou de refuser</b>. S'il accepte, la carte passe dans ta main et le montant lui est <b>transféré</b> — rien n'est créé, rien ne disparaît.":"You propose a price; the other player is <b>free to accept or decline</b>. If they accept, the card moves to your hand and the amount is <b>transferred</b> to them — nothing is created, nothing disappears.",
-  "On ne rachète que des cartes <b>encore en main</b> : jamais une carte déjà jouée, ni une carte engagée pour la journée en cours.":"Only cards <b>still in hand</b> can be bought back: never an already-played card, nor a card committed for the current day.",
-  "Tu peux aussi <b>vendre</b> une de tes cartes à un joueur (il paie, il la reçoit) — pratique pour te refaire du capital.":"You can also <b>sell</b> one of your cards to a player (they pay, they receive it) — handy to rebuild your capital.",
-  "⏳ <b>Quand ?</b> Un échange n'est possible <b>qu'entre deux journées</b> : tant que <b>ni le vendeur ni l'acheteur</b> n'a validé son pari du jour. Dès qu'un pari est verrouillé, les échanges le concernant sont gelés jusqu'à la résolution (ça protège la règle du capital jamais négatif et évite qu'une carte soit vendue et jouée en même temps).":"⏳ <b>When?</b> A trade is only possible <b>between days</b>: as long as <b>neither the seller nor the buyer</b> has locked their bet for the day. Once a bet is locked, trades involving that player are frozen until resolution (this protects the never-negative-capital rule and prevents a card being sold and played at the same time).",
-  "On n'échange que des cartes <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.":"Only cards <b>still in hand</b> can be traded, and the buyer must keep at least <b>€{a}</b> to be able to bet.",
+  "En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter un bonus</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, le bonus est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.":"During the championship, you can offer an opponent a sum to <b>buy back a bonus</b> they still hold. They accept or decline; if they accept, the bonus is yours and the amount is paid to them. Possible as long as you haven't locked your bet for the day, keeping at least <b>€{a}</b> to keep betting.",
+  "En cours de championnat, tu peux <b>racheter un bonus</b> à un adversaire, contre une somme de ton capital (monnaie virtuelle).":"During the championship, you can <b>buy back a bonus bonus</b> from an opponent, for a sum of your (virtual) capital.",
+  "Tu proposes un prix ; l'autre est <b>libre d'accepter ou de refuser</b>. S'il accepte, le bonus passe dans ta main et le montant lui est <b>transféré</b> — rien n'est créé, rien ne disparaît.":"You propose a price; the other player is <b>free to accept or decline</b>. If they accept, the bonus moves to your hand and the amount is <b>transferred</b> to them — nothing is created, nothing disappears.",
+  "On ne rachète que des bonus <b>encore en main</b> : jamais un bonus déjà jouée, ni un bonus engagé pour la journée en cours.":"Only bonuses <b>still in hand</b> can be bought back: never an already-played bonus, nor a bonus committed for the current day.",
+  "Tu peux aussi <b>vendre</b> une de tes bonus à un joueur (il paie, il la reçoit) — pratique pour te refaire du capital.":"You can also <b>sell</b> one of your bonuses to a player (they pay, they receive it) — handy to rebuild your capital.",
+  "⏳ <b>Quand ?</b> Un échange n'est possible <b>qu'entre deux journées</b> : tant que <b>ni le vendeur ni l'acheteur</b> n'a validé son pari du jour. Dès qu'un pari est verrouillé, les échanges le concernant sont gelés jusqu'à la résolution (ça protège la règle du capital jamais négatif et évite qu'un bonus soit vendue et jouée en même temps).":"⏳ <b>When?</b> A trade is only possible <b>between days</b>: as long as <b>neither the seller nor the buyer</b> has locked their bet for the day. Once a bet is locked, trades involving that player are frozen until resolution (this protects the never-negative-capital rule and prevents a bonus being sold and played at the same time).",
+  "On n'échange que des bonus <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.":"Only bonuses <b>still in hand</b> can be traded, and the buyer must keep at least <b>€{a}</b> to be able to bet.",
   "Tu ne peux pas racheter <b>tant que ton pari du jour est validé</b> (cela protège la règle du capital jamais négatif), et le prix doit te laisser au moins <b>{a} €</b> pour pouvoir encore miser.":"You can't buy back <b>while your bet for the day is locked</b> (this protects the never-negative-capital rule), and the price must leave you at least <b>€{a}</b> to keep betting.",
   "Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.":"You are <b>notified</b> when your offer is accepted or declined, and the 🤝 button flags the offers made to you.",
   "👉 Touche un joueur pour voir ses bonus (restants et utilisés).":"👉 Tap a player to see their bonuses (remaining and used).",
@@ -2363,15 +2368,15 @@ const EN={
   "Sangsue":"Leech", "Lâche ta gourmette Popeye":"Show Me the Money", "Si l'adversaire finit bénéficiaire, tu lui siphonnes 15 % de son bénéfice (il le perd, tu l'empoches).":"If the opponent ends in profit, you siphon 15% of their profit (they lose it, you pocket it).",
   "Parachute":"Parachute", "Filet de sécurité : si ta journée est négative, 30 % de ta perte est amortie.":"Safety net: if your day is negative, 30% of your loss is cushioned.",
   "Joker":"Joker", "Un 2ᵉ pari devient Capitaine (gains et pertes doublés) en plus du tien.":"A 2nd bet becomes Captain (gains and losses doubled) on top of yours.",
-  "Voleur":"Thief", "Tu prends le bonus que ton adversaire a joué ce jour-là : il ne s'applique pas, et la carte passe dans ta main pour une prochaine journée. ⚠️ Si ton adversaire ne joue aucun bonus ce jour-là, le Voleur ne sert à rien et est perdu. Sans intérêt non plus à la dernière journée : tu n'auras plus l'occasion de jouer ta prise.":"You take the bonus your opponent played that day: it doesn't apply, and the card moves into your hand for a future matchday. ⚠️ If your opponent plays no bonus that day, the Thief is wasted and lost. Pointless too on the last matchday: you'll never get to play what you took.",
+  "Voleur":"Thief", "Tu prends le bonus que ton adversaire a joué ce jour-là : il ne s'applique pas, et le bonus passe dans ta main pour une prochaine journée. ⚠️ Si ton adversaire ne joue aucun bonus ce jour-là, le Voleur ne sert à rien et est perdu. Sans intérêt non plus à la dernière journée : tu n'auras plus l'occasion de jouer ta prise.":"You take the bonus your opponent played that day: it doesn't apply, and the bonus moves into your hand for a future matchday. ⚠️ If your opponent plays no bonus that day, the Thief is wasted and lost. Pointless too on the last matchday: you'll never get to play what you took.",
   "Clone":"Clone", "Tu rejoues à l'identique le bonus que ton adversaire a joué ce jour-là — sur le même match s'il était ciblé. ⚠️ Si ton adversaire ne joue aucun bonus ce jour-là (ou joue le 🥷 Voleur, ou 📈 Investisseur), le Clone ne sert à rien et est perdu.":"You replay the exact bonus your opponent played that day — on the same match if it was targeted. ⚠️ If your opponent plays no bonus that day (or plays 🥷 Thief, or 📈 Investor), the Clone is wasted and lost.",
-  "🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et la carte est passée dans ta main.":"🥷 Bonus taken from {a}: their {b} was not applied, and the card moved into your hand.",
+  "🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et le bonus est passée dans ta main.":"🥷 Bonus taken from {a}: their {b} was not applied, and the bonus moved into your hand.",
   "🥷 Rien à prendre : ton adversaire n'a joué aucun bonus ce jour-là.":"🥷 Nothing to take: your opponent played no bonus that day.",
   "🧬 Bonus copié : tu as rejoué son {a} à l'identique.":"🧬 Bonus copied: you replayed their {a} exactly.",
   "🧬 Rien à copier : ton adversaire n'a joué aucun bonus clonable ce jour-là.":"🧬 Nothing to copy: your opponent played no clonable bonus that day.",
   "🥷 Ce bonus t'a été <b>pris</b> par {a} : il ne s'est pas appliqué.":"🥷 This bonus was <b>taken</b> from you by {a}: it did not apply.",
   "🥷 Ce bonus a été <b>pris</b> par {a} : il ne s'est pas appliqué.":"🥷 This bonus was <b>taken</b> by {a}: it did not apply.",
-  "🥷 Bonus pris à l'adversaire : sa carte n'a pas joué et t'est revenue en main.":"🥷 Bonus taken from the opponent: their card didn't play and came into your hand.",
+  "🥷 Bonus pris à l'adversaire : son bonus n'a pas joué et t'est revenue en main.":"🥷 Bonus taken from the opponent: their bonus didn't play and came into your hand.",
   "Double Chance":"Double Chance", "Le beurre et l'argent du beurre":"Have Your Cake", "Tu désignes un match à 3 issues (avec match nul) et couvres 2 résultats pour une seule mise : tu gagnes si l'un des deux sort, à la cote initiale du résultat qui tombe (aucune cote réduite).":"You pick a 3-outcome match (with a draw) and cover 2 results for a single stake: you win if either comes in, at the original odds of the result that lands (no reduced odds).",
   // — Phase 4c : gages (titre + description) —
   "Le plongeon givré 🥶":"The frosty plunge 🥶", "Se baigner en maillot dans une eau bien froide (mer, lac ou douche glacée), vidéo à l'appui.":"Take a dip in swimwear in really cold water (sea, lake or an icy shower), with video proof.",
@@ -2413,8 +2418,8 @@ const EN={
   "Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results: to prove who's the best forecaster for real. ⚠️ A matchday only resolves once the matches are actually played.",
   "⏳ Chargement des vrais matchs à venir…":"⏳ Loading upcoming real matches…", "🔄 Réessayer":"🔄 Retry",
   "Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.":"Not enough upcoming real matches right now (off-season?). Try again later, or the organizer can switch the league back to simulated.",
-  "Toutes les cartes bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus cards and a wide choice of forfeits — the full-featured game.",
-  "Moins de cartes bonus et de gages — parfait pour débuter ou jouer vite.":"Fewer bonus cards and forfeits — perfect to start or play fast.",
+  "Tous les bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus bonuses and a wide choice of forfeits — the full-featured game.",
+  "Moins de bonus et de gages — parfait pour débuter ou jouer vite.":"Fewer bonus bonuses and forfeits — perfect to start or play fast.",
   "🎯 Gage personnalisé (optionnel)":"🎯 Custom forfeit (optional)",
   "Ajoute ton propre gage — il sera proposé au vote. Ex. « tout le monde doit 5 € au vainqueur ». ⚠️ Réglé <b>entre vous</b> : l'application ne gère aucun argent.":"Add your own forfeit — it'll be offered in the vote. E.g. \"everyone owes 5 € to the winner\". ⚠️ Settled <b>between you</b>: the app handles no money.",
   "✏️ Modifier":"✏️ Edit", "➕ Ajouter un gage perso":"➕ Add a custom forfeit",
@@ -2519,7 +2524,7 @@ const EN={
   "<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.":"<b>Goal:</b> a prediction championship among friends, on real events and real odds. Everyone starts with <b>100 virtual €</b>; the winner is whoever has the most <b>championship points</b>.",
   "📚 Voir les règles détaillées →":"📚 See the detailed rules →", "📚 Règles détaillées":"📚 Detailed rules",
   "📚 Comment marche le jeu":"📚 How the game works",
-  "Le fonctionnement complet, dans le détail : calendrier, mises, Capitaine, points, cartes bonus, enjeu final.":"How it all works, in detail: schedule, stakes, Captain, points, bonus cards, final stake.",
+  "Le fonctionnement complet, dans le détail : calendrier, mises, Capitaine, points, bonus, enjeu final.":"How it all works, in detail: schedule, stakes, Captain, points, bonus bonuses, final stake.",
   "Le fonctionnement complet du jeu, dans le détail. Pour un aperçu rapide, vois plutôt <b>📖 Règles du jeu</b>.":"How the game works, in full detail. For a quick overview, see <b>📖 Game rules</b> instead.",
   "🎯 Le principe":"🎯 The principle",
   "Un championnat de pronostics entre amis. Chacun démarre avec <b>100 € virtuels</b> — les paris se jouent en <b>argent fictif</b>, l'application ne prélève rien sur les mises. Chaque journée t'oppose à un adversaire en <b>duel</b> ; le vainqueur du duel marque des <b>points de championnat</b>. À la fin, c'est le total de <b>points</b> qui désigne le champion — pas le capital.":"A prediction championship among friends. Everyone starts with <b>100 virtual €</b> — bets are played in <b>play money</b>, the app takes no cut of the stakes. Each matchday pits you against one opponent in a <b>duel</b>; the duel winner scores <b>championship points</b>. At the end, the <b>points</b> total crowns the champion — not the balance.",
@@ -2527,10 +2532,10 @@ const EN={
   "<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.":"<b>Full home-and-away</b>: everyone meets everyone <b>exactly twice</b>, once at home and once away. A league of <b>n</b> players therefore runs <b>2 × (n − 1) matchdays</b> (e.g. 6 players → 10 matchdays; 12 players → 22). If the number of humans is <b>odd</b>, a 🤖 <b>AI player</b> fills in to balance the draw: it plays normally but never takes a forfeit or a reward.",
   "⚽ Une journée, étape par étape":"⚽ A matchday, step by step",
   "Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça.":"The <b>home</b> player picks the duel's <b>5 fixtures</b>. They apply to both players. If they don't pick before the deadline, the fixtures are drawn automatically — <b>their opponent is never penalised</b> for it.",
-  "Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec la carte Investisseur).":"Each player places their <b>picks and stakes</b>, in secret. Total stakes can't exceed <b>{a}% of your balance</b> ({b}% with the Investor card).",
+  "Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur).":"Each player places their <b>picks and stakes</b>, in secret. Total stakes can't exceed <b>{a}% of your balance</b> ({b}% with the Investor bonus).",
   "Tu désignes un <b>👑 Capitaine</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>.":"You name a <b>👑 Captain</b>: on that bet, your <b>gain AND your loss are doubled</b>.",
-  "Tu peux jouer <b>une carte bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution.":"You may play <b>one bonus card</b> (only one per matchday). It stays <b>secret</b> until resolution.",
-  "À la <b>clôture</b>, les pronos de tout le monde peuvent être révélés — <b>uniquement en matchs réels</b> et si l'option premium <b>Voir l'adversaire</b> a été souscrite. En <b>matchs simulés</b>, la journée se résout aussitôt, sans phase de découverte. Les cartes, elles, restent cachées jusqu'aux résultats.":"At the <b>close</b>, everyone's picks may be revealed — <b>only in real-match mode</b> and if the premium <b>See the opponent</b> option was purchased. In <b>simulated matches</b>, the day resolves right away, with no reveal phase. The cards stay hidden until the results.",
+  "Tu peux jouer <b>un bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution.":"You may play <b>one bonus bonus</b> (only one per matchday). It stays <b>secret</b> until resolution.",
+  "À la <b>clôture</b>, les pronos de tout le monde peuvent être révélés — <b>uniquement en matchs réels</b> et si l'option premium <b>Voir l'adversaire</b> a été souscrite. En <b>matchs simulés</b>, la journée se résout aussitôt, sans phase de découverte. Les bonus, elles, restent cachées jusqu'aux résultats.":"At the <b>close</b>, everyone's picks may be revealed — <b>only in real-match mode</b> and if the premium <b>See the opponent</b> option was purchased. In <b>simulated matches</b>, the day resolves right away, with no reveal phase. The bonuses stay hidden until the results.",
   "Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement.":"Once the matches are over, the matchday is <b>resolved</b>: winnings, points, standings.",
   "💰 Gains et pertes":"💰 Winnings and losses",
   "<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.":"<b>Bet won</b>: you pocket <b>stake × (odds − 1)</b>. <b>Bet lost</b>: you lose your <b>stake</b>.",
@@ -2551,13 +2556,13 @@ const EN={
   "Si tu ne valides pas avant la clôture : <b>aucun pari</b> n'est pris en compte.":"If you don't submit before the close: <b>no bet</b> is counted.",
   "Tu prends <b>−2 pts</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>−2 pts</b> in the standings and lose <b>{a}%</b> of your balance.",
   "Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.":"Your opponent <b>wins the duel</b> — but only <b>3 pts</b> if their net is positive, <b>1 pt</b> otherwise. They cannot lose money because of your absence.",
-  "🃏 Les cartes bonus":"🃏 The bonus cards",
-  "Au démarrage, chacun <b>mise en aveugle</b> sur les cartes qu'il veut. Chaque carte revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>.":"At the start, everyone <b>bids blindly</b> on the cards they want. Each card goes to the <b>highest bidder</b> — on a tie, to the <b>first</b> to have bid that amount. <b>Losing bidders pay nothing</b>.",
-  "Total des mises ≤ <b>{a} €</b>, et pas plus de cartes que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.":"Total bids ≤ <b>€{a}</b>, and no more cards than there are matchdays. <b>What you win is deducted from your starting €100</b> — what you don't spend stays as your balance.",
-  "<b>Une carte = un seul propriétaire</b> dans la ligue, et <b>une seule carte jouée par journée</b>. Une carte jouée est consommée.":"<b>One card = one owner</b> in the league, and <b>only one card played per matchday</b>. A played card is consumed.",
-  "Les cartes <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'une carte, c'est-à-dire ce qu'elle peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'elle peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire elle ne sert à rien, elle ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (elle peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les secondes ne sont pas à éviter — ce sont les cartes des joueurs qui assument leurs pronos.":"<b>🎯 Targeted</b> cards require you to name a match when betting. <b>💪 x/5</b> shows a card's <i>indicative</i> strength.",
+  "🃏 Les bonus":"🃏 The bonus bonuses",
+  "Au démarrage, chacun <b>mise en aveugle</b> sur les bonus qu'il veut. Chaque bonus revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>.":"At the start, everyone <b>bids blindly</b> on the bonuses they want. Each bonus goes to the <b>highest bidder</b> — on a tie, to the <b>first</b> to have bid that amount. <b>Losing bidders pay nothing</b>.",
+  "Total des mises ≤ <b>{a} €</b>, et pas plus de bonus que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.":"Total bids ≤ <b>€{a}</b>, and no more bonuses than there are matchdays. <b>What you win is deducted from your starting €100</b> — what you don't spend stays as your balance.",
+  "<b>Un bonus = un seul propriétaire</b> dans la ligue, et <b>un seul bonus joué par journée</b>. Un bonus joué est consommée.":"<b>One bonus = one owner</b> in the league, and <b>only one bonus played per matchday</b>. A played bonus is consumed.",
+  "Les bonus <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'un bonus, c'est-à-dire ce qu'elle peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'elle peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire elle ne sert à rien, elle ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (elle peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les secondes ne sont pas à éviter — ce sont les bonus des joueurs qui assument leurs pronos.":"<b>🎯 Targeted</b> bonuses require you to name a match when betting. <b>💪 x/5</b> shows a bonus's <i>indicative</i> strength.",
   "⚠️ Le <b>👑 Capitaine</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 🏷️ Deux pour le prix d'un, 🎁 Chérie c'est cadeau et 🤛 Dans ta face.":"⚠️ The <b>👑 Captain</b> and a bonus must be on <b>different matches</b> — except 💥 Two for One, 🎁 Honey I Got You a Gift and 🤛 In Your Face.",
-  "Les {a} cartes":"The {a} cards", "🎯 à cible":"🎯 targeted",
+  "Les {a} bonus":"The {a} bonuses", "🎯 à cible":"🎯 targeted",
   "🎭 L'enjeu final":"🎭 The final stake",
   "À l'ouverture, l'organisateur choisit l'enjeu de la ligue : <b>gage</b> au dernier, <b>récompense</b> au champion, ou <b>les deux</b>.":"When opening the league, the organiser picks the stake: <b>forfeit</b> for the last-placed player, <b>reward</b> for the champion, or <b>both</b>.",
   "<b>La règle est unique : celui qui choisit n'est jamais le destinataire.</b>":"<b>One rule only: whoever chooses is never the one who receives.</b>",
@@ -2578,9 +2583,9 @@ const EN={
   "De <b>2 à {a} joueurs</b> — et la durée en découle : chacun affronte chacun aller-retour, soit <b>2 × (nombre de joueurs − 1) journées</b> (8 joueurs → 14 journées). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel.":"From <b>2 to {a} players</b> — and the length follows from it: everyone plays everyone home and away, i.e. <b>2 × (number of players − 1) matchdays</b> (8 players → 14 matchdays). If the number of humans is odd, a 🤖 AI player fills in (it isn't subject to the forfeit). Each day = one head-to-head duel.",
   "⚽ Une journée":"⚽ A matchday",
   "Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).":"The <b>home</b> player picks the <b>5 fixtures</b> (imposed on both).",
-  "Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>{a} %</b> du capital ({b} % avec la carte Investisseur).":"Each makes their <b>predictions + stakes</b>. Total stakes ≤ <b>{a}%</b> of capital ({b}% with the Investor card).",
+  "Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>{a} %</b> du capital ({b} % avec le bonus Investisseur).":"Each makes their <b>predictions + stakes</b>. Total stakes ≤ <b>{a}%</b> of capital ({b}% with the Investor bonus).",
   "<b>👑 Pari du Capitaine</b> : un pari désigné secrètement — gain <b>et</b> perte <b>doublés</b>.":"<b>👑 Captain bet</b>: a secretly chosen bet — gain <b>and</b> loss <b>doubled</b>.",
-  "Optionnel : <b>1 carte bonus</b> (voir plus bas), révélée à la résolution.":"Optional: <b>1 bonus card</b> (see below), revealed at settlement.",
+  "Optionnel : <b>1 bonus</b> (voir plus bas), révélée à la résolution.":"Optional: <b>1 bonus bonus</b> (see below), revealed at settlement.",
   "Gain d'un pari = mise × (cote − 1) ; pari perdu = − mise. Le capital ne descend jamais sous 0.":"Bet gain = stake × (odds − 1); lost bet = − stake. Capital never drops below 0.",
   "🏆 Points & classement":"🏆 Points & standings",
   "Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). À <b>net égal</b>, c'est un <b>match nul</b> — ni le gain ni la mise ne départagent.":"Each day, in your <b>duel</b>, the <b>winner</b> is whoever has the <b>best net result</b> (gains − stakes). At <b>equal net</b>, it's a <b>draw</b> — neither gain nor stake breaks the tie.",
@@ -2591,8 +2596,8 @@ const EN={
   "Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.":"Standings tiebreakers: capital, then duel wins, biggest gain, biggest odds.",
   "▲ Mouvement au classement":"▲ Standings movement",
   "À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.":"Next to each player in the standings, an arrow shows their <b>movement</b> since the previous matchday: <b>green ▲</b> (climbs), <b>=</b> (steady), <b>red ▼</b> (drops). It's <b>purely indicative</b>: no bonus or penalty attached.",
-  "🃏 Cartes bonus (enchères)":"🃏 Bonus cards (auction)",
-  "Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.":"At the start, a <b>preparation</b> phase: everyone votes for the forfeit <b>and</b> bids blind on the bonuses, without waiting for the others. Each bonus goes to the <b>highest bidder</b> (tie → first to bid); non-winners are <b>refunded</b>. Total bids ≤ <b>{a} €</b>, up to as many bonuses as there are matchdays. Winning bids are deducted from your <b>starting capital</b>. Max 1 card played per matchday. Some cards are <b>targeted</b> 🎯: you choose the match yourself when betting.",
+  "🃏 Bonus (enchères)":"🃏 Bonus bonuses (auction)",
+  "Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 bonus joué max par journée. Certaines bonus sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.":"At the start, a <b>preparation</b> phase: everyone votes for the forfeit <b>and</b> bids blind on the bonuses, without waiting for the others. Each bonus goes to the <b>highest bidder</b> (tie → first to bid); non-winners are <b>refunded</b>. Total bids ≤ <b>{a} €</b>, up to as many bonuses as there are matchdays. Winning bids are deducted from your <b>starting capital</b>. Max 1 bonus played per matchday. Some bonuses are <b>targeted</b> 🎯: you choose the match yourself when betting.",
   "Cotes relevées {a} — elles ne bougent plus une fois la journée lancée.":"Odds taken {a} — they no longer move once the matchday is under way.",
   "😴 Oubli":"😴 Forgetting",
   "💤 <b>Ligue abandonnée</b> : si <b>plus personne</b> ne joue pendant <b>{a} jours</b>, la ligue se ferme toute seule. Elle est alors considérée comme <b>fermée avant son terme</b> : <b>aucun vainqueur, aucun perdant</b>, et <b>ni gage ni récompense</b> ne s'appliquent. Elle ne compte pas non plus dans les statistiques.":"💤 <b>Abandoned league</b>: if <b>nobody at all</b> plays for <b>{a} days</b>, the league closes by itself. It then counts as <b>closed before its end</b>: <b>no winner, no loser</b>, and <b>neither forfeit nor reward</b> applies. It is left out of the statistics too.",
@@ -2610,8 +2615,8 @@ const EN={
   "🚀 <b>La remontée :</b> {name} est remonté de la <b>{worst}ᵉ</b> à la <b>{fin}ᵉ</b> place.":"🚀 <b>The comeback:</b> {name} climbed from <b>{worst}th</b> to <b>{fin}th</b> place.",
   "💥 <b>Le carton :</b> {name} — <b class=\"green\">{net}€</b> en une seule journée (J{d}).":"💥 <b>The blowout:</b> {name} — <b class=\"green\">{net}€</b> in a single day (D{d}).",
   "💀 <b>La dégringolade :</b> {name} — <b class=\"red\">{net}€</b> (J{d}). Aïe.":"💀 <b>The crash:</b> {name} — <b class=\"red\">{net}€</b> (D{d}). Ouch.",
-  "🃏 <b>Le roi des bonus :</b> {name} — ses cartes lui ont rapporté <b class=\"green\">+{tot}€</b> au total.":"🃏 <b>The bonus king:</b> {name} — their cards earned <b class=\"green\">+{tot}€</b> in total.",
-  "🎯 <b>Le coup de maître :</b> {name} a joué {card} (J{d}) pour <b class=\"green\">+{self}€</b>.":"🎯 <b>The masterstroke:</b> {name} played {card} (D{d}) for <b class=\"green\">+{self}€</b>.",
+  "🃏 <b>Le roi des bonus :</b> {name} — ses bonus lui ont rapporté <b class=\"green\">+{tot}€</b> au total.":"🃏 <b>The bonus king:</b> {name} — their bonuses earned <b class=\"green\">+{tot}€</b> in total.",
+  "🎯 <b>Le coup de maître :</b> {name} a joué {card} (J{d}) pour <b class=\"green\">+{self}€</b>.":"🎯 <b>The masterstroke:</b> {name} played {bonus} (D{d}) for <b class=\"green\">+{self}€</b>.",
   "📜 Le bilan de la saison":"📜 Season summary",
   ", Champion !":", Champion!", "🃏 Bonus de chaque joueur":"🃏 Each player's bonuses",
   ", Dernier":", Last place", "Classement final":"Final standings", "🏆 Voir le classement final →":"🏆 See final standings →",
@@ -2629,7 +2634,7 @@ const EN={
   "Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.":"It will be filed under <b>“Finished leagues”</b> on the home screen.",
   // — Phase 4d : palmarès —
   "Chargement du palmarès…":"Loading the hall of fame…", "4ᵉ":"4th", "5ᵉ":"5th", "Nul":"Draw",
-  "{lg} · J{d} · {np} joueurs · misé {st}€":"{lg} · D{d} · {np} players · staked {st}€", " · carte {c}":" · card {c}",
+  "{lg} · J{d} · {np} joueurs · misé {st}€":"{lg} · D{d} · {np} players · staked {st}€", " · bonus {c}":" · bonus {c}",
   "Bonus &amp; ajustements":"Bonuses &amp; adjustments", "({c}…)":"({c}…)", "(bonus…)":"(bonuses…)",
   "Total journée :":"Day total:", "{lg} · J{d}":"{lg} · D{d}", "Pas encore de données.":"No data yet.",
   "🏆 Palmarès général":"🏆 Hall of fame",
@@ -2706,8 +2711,8 @@ function showCardInfo(id){ const c=CARDS[id]; if(!c)return;
     : `<b class="green">🟢 ${t("Sans risque")}</b> — ${t("au pire elle ne sert à rien. Elle ne peut jamais se retourner contre toi.")}`;
   infoModal(c.e, t(c.n), `<div style="margin:4px 0 6px">${t("💪 Force {a}/5",{a:c.f||3})}</div><div class="mini muted">${esc(t(c.d))}</div>
     <div class="mini" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;text-align:left;line-height:1.6">${risque}</div>`); }
-function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas une carte bonus — tu en choisis un à chaque journée.")}</div>`); }
-function showStakeInfo(){ infoModal("💰",t("La mise max"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec la carte 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</div>`); }
+function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas un bonus — tu en choisis un à chaque journée.")}</div>`); }
+function showStakeInfo(){ infoModal("💰",t("La mise max"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</div>`); }
 function showRoiInfo(){ infoModal("📈",t("Rentabilité (ROI)"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé. <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.")}</div>`); }
 function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class="mini muted">${scoringShown()
     ? t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.")
@@ -2718,11 +2723,11 @@ function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class
 // ajouter le jour où ils obtiennent un point d'entrée (aujourd'hui non affichés → aucun impact).
 const PITCHES={
   rachat:{e:"🤝",t:"Rachat de bonus",hook:"Un bonus te fait de l'œil ? Rachète-le.",pts:[
-    "Repère une carte qu'un adversaire garde au chaud, propose ton prix. S'il dit oui, elle est à toi.",
+    "Repère un bonus qu'un adversaire garde au chaud, propose ton prix. S'il dit oui, elle est à toi.",
     "La seule option qui te laisse <b>agir en pleine partie</b> : le coup de pouce au bon moment.",
     "Échange 100 % consenti : il accepte, il empoche. Disons… de la corruption parfaitement légale."]},
-  bonuscomplets:{e:"🃏",t:"Bonus complets",hook:"Les {n} cartes. Les vraies vacheries comprises.",pts:[   // {n} = CARD_IDS.length → auto-à jour à chaque ajout/retrait de bonus
-    "Débloque toutes les cartes d'interaction — 🩸 Sangsue, 🎁 Chérie c'est cadeau, ❄️ Effet Kiss Cool.",
+  bonuscomplets:{e:"🃏",t:"Bonus complets",hook:"Les {n} bonus. Les vraies vacheries comprises.",pts:[   // {n} = CARD_IDS.length → auto-à jour à chaque ajout/retrait de bonus
+    "Débloque tous les bonus d'interaction — 🩸 Sangsue, 🎁 Chérie c'est cadeau, ❄️ Effet Kiss Cool.",
     "Payé une fois par l'organisateur → tout le monde y a droit, personne n'est lésé.",
     "Sans elles, le jeu est bien élevé. Avec, c'est la guerre (amicale)."]},
   ia:{e:"🤖",t:"Joueur IA",hook:"Pas assez de potes ? L'IA ne juge pas.",pts:[
@@ -2914,7 +2919,7 @@ function showDuelPtsInfo(pid){
   const lastNote=`<div class="mini gold" style="text-align:left;margin-top:8px">${t("🔥 <b>Dernière journée</b> : les points de duel comptent <b>double</b> — rien n'est jamais joué jusqu'au bout.")} <span class="muted">${t("(le +1 du ⭐ meilleur pronostiqueur de la journée n'est pas doublé)")}</span></div>`;
   infoModal("🥇",t("Points du duel"), bareme+lastNote+ctx);
 }
-// Détail de l'« effet » d'une carte bonus : gain avec la carte vs sans la carte (impact enregistré à la résolution)
+// Détail de l'« effet » d'un bonus : gain avec le bonus vs sans le bonus (impact enregistré à la résolution)
 // Données (paris/duels) de la journée D. Les globals `bets`/`duels` ne contiennent QUE la journée
 // `loadedDay` : dès que la résolution auto a rechargé la journée suivante, lire les globals pour une
 // journée déjà affichée renvoie du vide. On retombe alors sur l'historique (chartBets/standDuels) —
@@ -2933,20 +2938,20 @@ function showBonusImpact(pid,day){
   const oppB=oppId?bz.find(b=>b.player_id===oppId):null; const oppNet=(oppB&&oppB.net!=null)?oppB.net:0;
   const hasSelf=im.self!=null&&Math.abs(im.self)>=0.01, hasOpp=im.opp!=null&&Math.abs(im.opp)>=0.01;
   let body=`<div class="mini muted" style="text-align:left">${esc(t(C.d))}</div>
-    <div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("L'<b>effet</b> = le gain <b>avec</b> la carte moins le gain qu'il y aurait eu <b>sans</b> la carte.")}</div>`;
+    <div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("L'<b>effet</b> = le gain <b>avec</b> le bonus moins le gain qu'il y aurait eu <b>sans</b> le bonus.")}</div>`;
   // 🥷 / 🧬 : sans cette ligne, l'impact chiffré est incompréhensible — on ne sait ni ce qui a été
-  // pris, ni ce qui a été copié, ni pourquoi la carte n'a rien donné.
+  // pris, ni ce qui a été copié, ni pourquoi le bonus n'a rien donné.
   const nomC=id=>(CARDS[id]?CARDS[id].e+" "+t(CARDS[id].n):id);
   const nomJ=p=>{ const x=pById(p); return x?avatarHTML(x.emoji)+' '+esc(x.name||'?'):"?"; };
   let mot="";
-  if(c.stole) mot=t("🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et la carte est passée dans ta main.",{a:nomJ(oppId),b:nomC(c.stole)});
+  if(c.stole) mot=t("🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et le bonus est passée dans ta main.",{a:nomJ(oppId),b:nomC(c.stole)});
   else if(c.id==="voleur") mot=t("🥷 Rien à prendre : ton adversaire n'a joué aucun bonus ce jour-là.");
   else if(c.cloned) mot=t("🧬 Bonus copié : tu as rejoué son {a} à l'identique.",{a:nomC(c.cloned)});
   else if(c.id==="clone") mot=t("🧬 Rien à copier : ton adversaire n'a joué aucun bonus clonable ce jour-là.");
   if(c.stolenBy) mot=t("🥷 Ce bonus t'a été <b>pris</b> par {a} : il ne s'est pas appliqué.",{a:nomJ(c.stolenBy)});
   if(mot) body+=`<div class="mini" style="text-align:left;margin-top:8px">${mot}</div>`;
-  if(hasSelf){ const wo=r2(net-im.self); body+=`<div class="mini" style="text-align:left;margin-top:7px">🧑 <b>${t("Sur son gain du jour :")}</b><br>${t("• avec la carte :")} <b>${fmt(net)}€</b><br>${t("• sans la carte :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b></div>`; }
-  if(hasOpp){ const wo=r2(oppNet-im.opp); body+=`<div class="mini" style="text-align:left;margin-top:7px">🥊 <b>${t("Sur le gain de l'adversaire :")}</b><br>${t("• avec la carte :")} <b>${fmt(oppNet)}€</b><br>${t("• sans la carte :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b></div>`; }
+  if(hasSelf){ const wo=r2(net-im.self); body+=`<div class="mini" style="text-align:left;margin-top:7px">🧑 <b>${t("Sur son gain du jour :")}</b><br>${t("• avec le bonus :")} <b>${fmt(net)}€</b><br>${t("• sans le bonus :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b></div>`; }
+  if(hasOpp){ const wo=r2(oppNet-im.opp); body+=`<div class="mini" style="text-align:left;margin-top:7px">🥊 <b>${t("Sur le gain de l'adversaire :")}</b><br>${t("• avec le bonus :")} <b>${fmt(oppNet)}€</b><br>${t("• sans le bonus :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b></div>`; }
   if(!hasSelf&&!hasOpp) body+=`<div class="mini muted" style="text-align:left;margin-top:8px">${t("Aucun effet chiffré ce jour-là.")}</div>`;
   infoModal(C.e, esc(t(C.n))+" — "+t("l'effet"), body);
 }
@@ -3071,7 +3076,7 @@ function genFixture(maxKo,sportImpose,pris){ const s=sportImpose||pick(SPORTS);
 // fetchRealPool). Le mode simulé sert à répéter le vrai jeu — sans ce quota le sport était tiré
 // UNIFORMÉMENT entre les 3 (≈33 % de foot), d'où des journées à un seul match de foot (signalé par
 // Hervé sur XKWJ2). Effet de bord utile : le foot est le seul sport à 3 issues, donc c'est aussi lui
-// qui rend la carte 🎲 Double Chance jouable.
+// qui rend le bonus 🎲 Double Chance jouable.
 const SPORT_FOOT=SPORTS.find(s=>s.draw)||SPORTS[0]; // ⚽ = le seul sport à 3 issues (draw:true)
 function genPool(k,maxKo){
   const nFoot=Math.round(k*(POOL_FOOT/POOL_N));
@@ -3088,7 +3093,7 @@ function genPool(k,maxKo){
   return out; }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
 // Cote « double chance » : combinée de deux issues couvertes pour une seule mise.
-// ANCIENNE règle de 🧈 Le beurre et l'argent du beurre : la carte payait à cette cote combinée
+// ANCIENNE règle de 🧈 Le beurre et l'argent du beurre : le bonus payait à cette cote combinée
 // RÉDUITE. Depuis le 19/07/2026 elle paie à la cote PLEINE du résultat qui sort (`dcWinOdd`).
 // ⚠️ NE PAS SUPPRIMER bien qu'elle ne soit plus appelée : c'est la clé de lecture des parties
 // ANTÉRIEURES. Sans elle, les impacts négatifs stockés dans `bets.card.impact` de ces parties-là
@@ -3221,6 +3226,19 @@ async function refresh(){
     // v6.18 — L'onglet Pronos ne montre JAMAIS les résultats (choix Hervé) : ils vivent uniquement dans
     // l'onglet Résultats. On n'entre donc plus dans l'« état récap » (qui figeait le jeu sur la journée
     // résolue, dispDay = jour−1) : on acquitte automatiquement et on enchaîne sur la journée courante.
+    /* ---- RÉSULTATS NON ENCORE DÉCOUVERTS → on y emmène le joueur (v7.49, demandé par Hervé) ----
+       « Sur une ligue réelle dont les résultats viennent de se terminer, quand j'ouvre la ligue je
+       suis dirigé automatiquement vers la page prono. Il faudrait qu'il soit redirigé vers la page
+       résultat directement. » C'est le moment le plus attendu du jeu — arriver sur l'écran de
+       saisie de la journée suivante, c'est passer à côté sans le savoir.
+       ⚠️ SEULEMENT À LA PREMIÈRE OUVERTURE de la ligue (`prevLeagueStatus===null`). Sans cette
+       garde, chaque tour de polling ramènerait le joueur sur les résultats pendant qu'il essaie de
+       parier — le même piège que celui évité en v7.23 pour les ligues terminées.
+       ⚠️ `running` uniquement : une ligue TERMINÉE a sa propre destination, le bilan (v7.23).
+       ⚠️ `getSeen()` marquait déjà la dernière journée acquittée, mais la ligne acquittait dans la
+       foulée — l'information existait et n'était utilisée par personne. */
+    const jourNonVu = (L.status==="running" && prevLeagueStatus===null
+                       && L.current_day>getSeen() && L.current_day>=1) ? L.current_day-1 : null;
     if(L.status!=="lobby" && L.current_day>getSeen() && L.current_day>=1) setSeen(L.current_day);
     S.recap = false;
     const dispDay = Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
@@ -3264,6 +3282,11 @@ async function refresh(){
     prevLeagueStatus=L.status;
     if(L.status==="lobby") maybeAutoStartFull();   // ligue pleine → clôture auto + démarrage
     showErr(""); render(); maybeNotify(); notifyTrades(); maybeRecapModal(dispDay); maybePrepModal(); maybeFormulaModal();
+    /* ⚠️ APRÈS le render, et pas avant : `openResults` recharge `duels`/`bets` sur la journée
+       visée et rend à nouveau. L'appeler au milieu de `refresh()` écraserait `loadedDay` en pleine
+       course et l'onglet Pronos aurait affiché les données d'une autre journée (piège D5, déjà
+       rencontré). Ici la journée courante est chargée, tout est cohérent, on bascule ensuite. */
+    if(jourNonVu!=null && S.view==="game") openResults(jourNonVu);
   }catch(e){ showErr("Connexion : "+e.message); }
 }
 // Récapitalisation : une fenêtre fermable à l'ouverture du récap concerné (un bandeau seul passait
@@ -3465,7 +3488,7 @@ function howItWorksHTML(){
                    : t("• À la fin : le <b>dernier</b> du classement fait le <b>gage</b> voté par le <b>vainqueur</b> 😅. <span class=\"muted\">(Une <b>récompense</b> pour le champion est aussi possible selon les ligues 🏆.)</span>"));
    return `<div class="box" style="border-left:3px solid var(--blue)"><b class="mini">${t("💡 Comment ça marche ?")}</b>
    <div class="mini muted" style="margin-top:5px;line-height:1.7">${t("Championnat de pronos entre amis — tu démarres avec <b>100 € virtuels</b>.")}<br>
-   ${t("• <b>🃏 Bonus = le nerf de la stratégie</b> : bien joués, ils peuvent <b>renverser une journée</b> — tripler un gain, <b>siphonner</b> l'adversaire, lui <b>voler</b> une carte, amortir une perte… Tu les remportes aux <b>enchères</b> (mise en aveugle, jusqu'à <b>{a} €</b> ; ce que tu gagnes est retiré de tes 100 €).",{a:SHOP_CAP})}<br>
+   ${t("• <b>🃏 Bonus = le nerf de la stratégie</b> : bien joués, ils peuvent <b>renverser une journée</b> — tripler un gain, <b>siphonner</b> l'adversaire, lui <b>voler</b> un bonus, amortir une perte… Tu les remportes aux <b>enchères</b> (mise en aveugle, jusqu'à <b>{a} €</b> ; ce que tu gagnes est retiré de tes 100 €).",{a:SHOP_CAP})}<br>
    ${t("• <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>Capitaine</b> (gains/pertes ×2), et un 🃏 <b>bonus</b> si tu le souhaites (facultatif).")}<br>
    ${t("• Le <b>vainqueur du duel</b> du jour marque des points.")}<br>
    ${fin}</div></div>`; }
@@ -3776,13 +3799,13 @@ function viewEssai(){
       ${/* ⚠️ v7.13 (Hervé) : ce texte affirmait que « l'organisateur peut créer des bonus
             personnalisés ». C'est FAUX — seuls le GAGE et la RÉCOMPENSE sont personnalisables
             (option ✏️ Gage & récompense sur mesure). La liste des bonus est fixe.
-            Le nombre vient de CARD_IDS : il ne peut pas se démoder si on ajoute une carte. */
+            Le nombre vient de CARD_IDS : il ne peut pas se démoder si on ajoute un bonus. */
         ann(t("il existe <b>bien plus de bonus</b> : <b>{a}</b> dans une vraie ligue, contre 3 ici pour aller vite.",{a:CARD_IDS.length}))}</div>
-    <div class="mini muted" style="margin-bottom:6px">👉 ${t("Touche une carte pour lire sa fiche.")}</div>
+    <div class="mini muted" style="margin-bottom:6px">👉 ${t("Touche un bonus pour lire sa fiche.")}</div>
     ${/* Mise en page ALIGNÉE SUR LE VRAI JEU (v7.14, signalé par Hervé : « pas terrible » dans le
           tuto, « plus lisible » dans le jeu). Le défaut venait d'une SEULE ligne flex contenant
           emoji + nom + pastilles avec `flex-wrap` : `.row` étant en `space-between`, les éléments
-          s'écartaient et se repliaient différemment d'une carte à l'autre — d'où l'impression de
+          s'écartaient et se repliaient différemment d'un bonus à l'autre — d'où l'impression de
           désordre. Structure du jeu : emoji en colonne FIXE, puis un bloc où le nom et ses
           pastilles ont leur propre ligne calée à gauche. */
       ESSAI_CARDS.map(id=>`<div class="box row" style="align-items:center;gap:10px">
@@ -3961,7 +3984,7 @@ function openCreate(){ if(!AUTH) return; newLg=newLgDefaults(); navOpen("create"
 function cancelCreate(){ newLg=null; navBack(); }
 function setNew(k,v){ if(!newLg) newLg=newLgDefaults();
   if(k==='type' && v==='solo' && !requireOpt('ia')) return;          // jouer seul vs IA = option premium
-  if(k==='mode' && v==='complet' && !requireOpt('bonuscomplets')) return; // jeu complet des cartes = premium
+  if(k==='mode' && v==='complet' && !requireOpt('bonuscomplets')) return; // jeu complet des bonus = premium
   if(k==='data' && v==='real' && !requireOpt('direct')) return;      // choisir des données réelles = option 📡 (le suivi en direct, lui, dépend de ⏱️ `live`)
   newLg[k]=v; render(); }
 function viewCreate(){
@@ -4320,7 +4343,7 @@ function bugContext(kind){
     const d=(typeof myDuel==="function")?myDuel():null;
     if(d){ const o=pById(d.home_id===S.myId?d.away_id:d.home_id); l.push("Duel    : vs "+((o&&o.name)||"?")+"  · "+(d.home_id===S.myId?"à domicile":"à l'extérieur")+"  · "+((d.fixtures&&d.fixtures.length)?d.fixtures.length+" matchs choisis":"matchs pas encore choisis")); }
     const b=(typeof myBet==="function")?myBet():null;
-    if(b) l.push("Mon pari : "+((b.picks&&b.picks.length)?b.picks.length+" pronos":"aucun prono")+(b.card&&b.card.id?" · carte "+b.card.id:"")+(b.net!=null?" · net "+b.net+"€":" · non résolu"));
+    if(b) l.push("Mon pari : "+((b.picks&&b.picks.length)?b.picks.length+" pronos":"aucun prono")+(b.card&&b.card.id?" · bonus "+b.card.id:"")+(b.net!=null?" · net "+b.net+"€":" · non résolu"));
   }
   l.push("Appareil : "+(navigator.userAgent||"?"));
   l.push("Écran    : "+(window.innerWidth||"?")+"×"+(window.innerHeight||"?"));
@@ -4430,7 +4453,7 @@ async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&
   try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Formule : "+e.message+" (ajoute la colonne 'formula' — voir schema.sql)"); } busy=false; }
 async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
-  if(m==="complet" && !requireOpt('bonuscomplets')) return;   // jeu complet des cartes = option premium
+  if(m==="complet" && !requireOpt('bonuscomplets')) return;   // jeu complet des bonus = option premium
   busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode : "+e.message); } busy=false; }
@@ -5051,7 +5074,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
   const oppCard = myCard && CARDS[myCard.id] && CARDS[myCard.id].oppT; // vise le pari ADVERSE → aucun cumul avec ton Capitaine
   const needTarget = targetCard && (myCard.target==null || (twoCard && myCard.target2==null));
   const needSel2 = myCard && myCard.id==="chance" && myCard.target!=null && !myCard.sel2;
-  const conflict = targetCard && !twoCard && !oppCard && myCard.target!=null && myCard.target===bet.captain; // Coup Double / cartes anti-adversaire : Capitaine autorisé
+  const conflict = targetCard && !twoCard && !oppCard && myCard.target!=null && myCard.target===bet.captain; // Coup Double / bonus anti-adversaire : Capitaine autorisé
   const allMin = bet.picks.every(b=>(+b.stake||0)>=1);
   const risky = bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > cap+0.001; // règle A
   const ok = allMin && !over && !risky && bet.captain>=0 && !needTarget && !needSel2 && !conflict;
@@ -5078,10 +5101,10 @@ function viewBet(d,dayLbl,opp,iAmHome){
         ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">🏷️ ${t(CARDS.dbl.n)}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("cote combinée ≈ {a}",{a:'<b>'+cote(oddOf(fx[myCard.target],bet.picks[myCard.target].sel)*oddOf(fx[myCard.target2],bet.picks[myCard.target2].sel))+'</b>'}):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
         <div class="row" style="margin-top:9px"><span class="mini muted">${t("Mise (€)")}</span>
           <input type="number" inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="${t("min 1€")}" oninput="setStake(${i},this.value)"></div></div>`;}).join("")}
-    <div class="box"><div class="row"><b class="mini">${t("🃏 Carte bonus (1 max/jour)")}</b>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">${t("✕ retirer")}</span>`:`<span class="mini muted">${t("optionnel")}</span>`}</div>
+    <div class="box"><div class="row"><b class="mini">${t("🃏 Bonus (1 max/jour)")}</b>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">${t("✕ retirer")}</span>`:`<span class="mini muted">${t("optionnel")}</span>`}</div>
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" title="${esc(t(CARDS[id].d))}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>
-        ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire cette carte.")+'</b>':(needTarget?' <b class="blue">'+(twoCard?t("→ touche les {e} de tes 2 matchs.",{e:CARDS[myCard.id].e}):t("→ touche le {e} du pari ciblé.",{e:CARDS[myCard.id].e}))+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
-        :`<div class="mini muted" style="margin-top:6px">${t("Plus de cartes en main.")}</div>`}</div>
+        ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire ce bonus.")+'</b>':(needTarget?' <b class="blue">'+(twoCard?t("→ touche les {e} de tes 2 matchs.",{e:CARDS[myCard.id].e}):t("→ touche le {e} du pari ciblé.",{e:CARDS[myCard.id].e}))+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
+        :`<div class="mini muted" style="margin-top:6px">${t("Plus de bonus en main.")}</div>`}</div>
     <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>
     ${oppHandInfo}`;
 }
@@ -5111,7 +5134,7 @@ function setTarget(i){ if(!myCard) return;
     else if(myCard.target2==null){ myCard.target2=i; }
     else { myCard.target2=i; }
     render(); return; }
-  if(bet.captain===i && !(CARDS[myCard.id]&&CARDS[myCard.id].oppT)){ infoWin(t("👑 Le Capitaine et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager le match du Capitaine.",{a:CARDS.face.e+' '+t(CARDS.face.n),b:CARDS.cadeau.e+' '+t(CARDS.cadeau.n)}),"⚠️"); return; } // les cartes qui visent l'adversaire peuvent partager le match du Capitaine
+  if(bet.captain===i && !(CARDS[myCard.id]&&CARDS[myCard.id].oppT)){ infoWin(t("👑 Le Capitaine et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager le match du Capitaine.",{a:CARDS.face.e+' '+t(CARDS.face.n),b:CARDS.cadeau.e+' '+t(CARDS.cadeau.n)}),"⚠️"); return; } // les bonus qui visent l'adversaire peuvent partager le match du Capitaine
   if(myCard.id==="chance"){ const d=myDuel(); const f=d&&d.fixtures&&d.fixtures[i]; if(!f||!f.draw) return; } myCard.target=i; if(myCard.id==="chance") myCard.sel2=null; render(); }
 function setSel2(i,v){ if(!myCard||myCard.id!=="chance"||myCard.target!==i) return; if(bet.picks[i].sel===v) return; myCard.sel2=v; render(); }
 function selCard(id){ if(myCard&&myCard.id===id){ myCard=null; } else { myCard={id, target:null}; } render(); }
@@ -5222,7 +5245,7 @@ function afterCloseDuelHTML(){
     if(f.canceled) return ` <span class="chip" style="flex:0 0 auto">🚫</span>`;
     return ` <span class="mini muted" style="flex:0 0 auto">⏳</span>`; };
   // BONUS JOUÉ (v6.93, signalé par Hervé) : cet écran montrait le prono, la mise et le 👑 Capitaine,
-  // mais rien sur la carte jouée — le joueur ne pouvait plus vérifier ce qu'il avait engagé, ni
+  // mais rien sur le bonus joué — le joueur ne pouvait plus vérifier ce qu'il avait engagé, ni
   // relire son effet, entre la clôture et les résultats.
   // Uniquement MON bonus : celui de l'adversaire reste secret jusqu'à la résolution, même avec
   // l'option « Voir l'adversaire » (règle du jeu, rappelée dans l'encart ci-dessus).
@@ -5231,16 +5254,16 @@ function afterCloseDuelHTML(){
     ? `<div class="box" style="border-color:var(--blue);background:rgba(90,166,224,.07)">
         <div class="mini muted">${t("🃏 Ton bonus de la journée")}</div>
         <div class="cards" style="margin-top:5px"><div class="cardchip clik" onclick="showCardInfo('${mc.id}')"><span class="em">${CARDS[mc.id].e}</span>${esc(t(CARDS[mc.id].n))}</div></div>
-        <div class="mini muted" style="margin-top:5px">${t("Touche la carte pour relire son effet. Ton adversaire ne la découvrira qu'aux résultats.")}</div></div>`
+        <div class="mini muted" style="margin-top:5px">${t("Touche le bonus pour relire son effet. Ton adversaire ne la découvrira qu'aux résultats.")}</div></div>`
     : `<div class="box mini muted">${t("🃏 Aucun bonus joué cette journée.")}</div>`;
   const cards=md.fixtures.map((f,i)=>{ const mb=mine&&mine.picks&&mine.picks[i]; const ob=oppBet&&oppBet.picks&&oppBet.picks[i];
-      // Carte À CIBLE : on la marque aussi sur le match visé (cardOnMatch gère les cartes à 2 cibles).
+      // Bonus À CIBLE : on la marque aussi sur le match visé (cardOnMatch gère les bonus à 2 cibles).
       const marque=cardOnMatch(mc,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${mc.id}')">${CARDS[mc.id].e}</span>`:'';
       /* ⚠️ v7.41 — LA COTE MANQUAIT ICI (signalé par Hervé). On lisait « Cruzeiro · 12 € » sans
          savoir ce que ça pouvait rapporter, alors que la même information figure sur l'écran
          Résultats. La cote fait partie du pari autant que la mise : sans elle, impossible de
          juger si l'adversaire a pris un risque ou joué la sécurité.
-         ⚠️ Cote SIMPLE, sans tenir compte des bonus : la carte de l'adversaire reste secrète
+         ⚠️ Cote SIMPLE, sans tenir compte des bonus : le bonus de l'adversaire reste secrète
          jusqu'à la résolution, et afficher une cote modifiée par une 🎲 Double Chance la
          trahirait. C'est la cote du résultat choisi, rien de plus. */
       const cd=s=>{ const o=oddOf(f,s); return o?` @${cote(o)}`:''; };
@@ -5318,11 +5341,11 @@ function aiPlay(cap,fx,hand,day,numDays){
     // Souvent le favori (~70 %), mais pas toujours : sinon un OUTSIDER explicite (evite le « toujours favori »).
     const nonFav=outs.slice(1); const sel=(Math.random()<0.7||!nonFav.length)?outs[0][0]:pick(nonFav)[0]; return {sel,stake:Math.round(budget*ws[i]/sw)}; });
   const captain=Math.floor(Math.random()*fx.length);
-  // Rythme des bonus : proba de jouer une carte ce jour ≈ cartes en main / journées restantes.
-  // Une proba fixe (0,4) vidait la main dès le début (signalé par Hervé) : un lot de cartes partait
-  // sur les premières journées. Ici l'usage s'étale — 3 cartes sur 14 journées ≈ une toutes les ~5.
+  // Rythme des bonus : proba de jouer un bonus ce jour ≈ bonus en main / journées restantes.
+  // Une proba fixe (0,4) vidait la main dès le début (signalé par Hervé) : un lot de bonus partait
+  // sur les premières journées. Ici l'usage s'étale — 3 bonus sur 14 journées ≈ une toutes les ~5.
   // À la DERNIÈRE journée, 🥷 Voleur / 🧬 Clone sont inutiles (aucune journée suivante pour jouer la prise) :
-  // l'IA ne les joue pas — sinon elle « vole » une carte qu'elle ne pourra jamais utiliser (signalé par Hervé).
+  // l'IA ne les joue pas — sinon elle « vole » un bonus qu'elle ne pourra jamais utiliser (signalé par Hervé).
   const isLast=(day||0)>=((numDays||1)-1);
   const playable=isLast? (hand||[]).filter(id=>id!=="voleur"&&id!=="clone") : (hand||[]);
   const nCards=playable.length;
@@ -5336,14 +5359,14 @@ function aiPlay(cap,fx,hand,day,numDays){
 // Moteur pur : calcule les gains nets du jour à partir des plays (déterministe via pd.rnd).
 function runEngine(pdIn, capStart, dz, N){
   const PD=JSON.parse(JSON.stringify(pdIn));
-  // Phase 0 : 🥷 Voleur puis 🧬 Clone — les deux seules cartes qui agissent sur la CARTE adverse
-  // et non sur ses paris. L'ordre est imposé : le vol fait DISPARAÎTRE la carte, le clone ne lit
-  // ensuite que ce qui a survécu (il se retrouve donc face à rien si sa carte source a été volée).
+  // Phase 0 : 🥷 Voleur puis 🧬 Clone — les deux seules bonus qui agissent sur la CARTE adverse
+  // et non sur ses paris. L'ordre est imposé : le vol fait DISPARAÎTRE le bonus, le clone ne lit
+  // ensuite que ce qui a survécu (il se retrouve donc face à rien si son bonus source a été volée).
   const stolen={}, cloned={};
   for(const pid in PD){ const pd=PD[pid];
     if(!(pd.card&&pd.card.id==="voleur")) continue;
     const opp=PD[pd.oppId]; if(!(opp&&opp.card&&opp.card.id)) continue;
-    // Carte visant un match ANNULÉ : la règle existante la REND à son propriétaire (elle reste en
+    // Bonus visant un match ANNULÉ : la règle existante la REND à son propriétaire (elle reste en
     // main). On ne peut donc pas la voler, sinon elle existerait en double — dans sa main ET dans
     // celle du voleur — ce qui casserait l'unicité d'un bonus dans la ligue.
     const ofx=opp.fx||[]; const annule=i=>(i!=null&&ofx[i]&&ofx[i].canceled);
@@ -5352,10 +5375,10 @@ function runEngine(pdIn, capStart, dz, N){
   for(const pid in PD){ const pd=PD[pid];
     if(!(pd.card&&pd.card.id==="clone")) continue;
     const src=PD[pd.oppId]&&PD[pd.oppId].card;
-    // Un clone ne copie jamais un vol (règle : sinon aller-retour de cartes illisible au récap).
+    // Un clone ne copie jamais un vol (règle : sinon aller-retour de bonus illisible au récap).
     // Ni un clone — impossible de toute façon, chaque bonus étant UNIQUE dans une ligue : filet.
     if(src&&src.id&&src.id!=="voleur"&&src.id!=="clone"){ const {impact,flip,...c}=src; pd.card={...c}; cloned[pid]=src.id; }
-    // sinon : clone gâché, sa carte reste "clone" — aucune phase ne réagit à cet id.
+    // sinon : clone gâché, son bonus reste "clone" — aucune phase ne réagit à cet id.
   }
   // Phase 1 : Chérie c'est cadeau (inverse le pari adverse du match CIBLÉ)
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"&&pd.card.target!=null){ const opp=PD[pd.oppId]; const i=pd.card.target;
@@ -5364,7 +5387,7 @@ function runEngine(pdIn, capStart, dz, N){
   const G={};
   for(const pid in PD){ const pd=PD[pid]; const perBet=[]; let net=0,bestOdd=0;
     pd.picks.forEach((b,i)=>{ const f=pd.fx[i]; const cc=pd.card;
-      // Match ANNULÉ : mise rendue → gain 0, pas de perte, aucun effet de carte ni de Capitaine.
+      // Match ANNULÉ : mise rendue → gain 0, pas de perte, aucun effet de bonus ni de Capitaine.
       // On empile quand même une entrée pour garder l'alignement des index (Coup Double, Miroir…).
       if(f&&f.canceled){ perBet.push({gain:0,win:false,odd:1,canceled:true}); return; }
       const isDC=cc&&cc.id==="chance"&&cc.target===i&&cc.sel2;
@@ -5391,7 +5414,7 @@ function runEngine(pdIn, capStart, dz, N){
       // déposer le gain de l'autre : l'ancien code appliquait quand même le `-va` au joueur
       // et sautait le `+va` de l'adversaire (bi=-1) → le joueur perdait son meilleur pari et
       // l'argent s'ÉVAPORAIT au lieu d'être échangé. Mesuré : −24 € face à un absent.
-      // Désormais : carte gâchée mais inoffensive, comme les autres cartes anti-adversaire.
+      // Désormais : bonus gâchée mais inoffensive, comme les autres bonus anti-adversaire.
       // Le pari du joueur reste entier : « mon adversaire va-t-il gagner plus que moi ? »
       if(ba.bi>=0 && bb.bi>=0){ const va=ba.bv, vb=bb.bv;
         G[a].perBet[ba.bi].gain+=(vb-va); G[a].net+=(vb-va);
@@ -5452,7 +5475,7 @@ async function resolveDay(){
           }
         }
         PD[pid]={picks:bt.picks.map(x=>({...x})),captain:bt.captain,card:bt.card||null,duelId:d.id,oppId:(pid===d.home_id?d.away_id:d.home_id),fx,rnd:Math.random()}; } }
-    // résolution déterministe (moteur en phases), + impact réel de chaque carte
+    // résolution déterministe (moteur en phases), + impact réel de chaque bonus
     const {dayNet,dayBest,dayWins,stolen,cloned}=runEngine(PD,capStart,dz,N);
     // Pari non validé à temps : la sanction −25 % du capital EST la variation de capital du jour.
     // On l'inscrit donc dans `net` (au lieu de l'appliquer à part sur le capital) → elle apparaît dans
@@ -5460,11 +5483,11 @@ async function resolveDay(){
     // capStart + net = capStart − 25 % = capStart × 0,75.
     const penOubli = pid => -Math.round((capStart[pid]||0)*forgotPenOf()*100)/100;
     forgot.forEach(pid=>{ dayNet[pid] = penOubli(pid); });
-    // Impact réel de chaque carte = écart entre le net RÉEL et le net d'un monde SANS cette carte.
+    // Impact réel de chaque bonus = écart entre le net RÉEL et le net d'un monde SANS ce bonus.
     // Le contrefactuel `wo` sort brut de runEngine : il ignore la pénalité d'oubli, qui est injectée
     // après coup (juste au-dessus). Il faut donc l'y refléter à l'identique, sinon la soustraction
     // dayNet − wo impute la pénalité de l'adversaire à la CARTE (« impact adversaire −25 € » alors
-    // qu'elle n'y est pour rien). Les deux mondes doivent différer PAR LA SEULE carte.
+    // qu'elle n'y est pour rien). Les deux mondes doivent différer PAR LA SEULE bonus.
     const impacts={};
     for(const pid in PD){ if(PD[pid].card&&PD[pid].card.id){ const alt=JSON.parse(JSON.stringify(PD)); alt[pid].card=null;
       const wo=runEngine(alt,capStart,dz,N).dayNet; forgot.forEach(fp=>{ wo[fp]=penOubli(fp); });
@@ -5479,12 +5502,12 @@ async function resolveDay(){
         if(to!==from) cadeauFlips[pid]={victim:vId, match:i, from, to}; } } }
     // Table inverse du vol : victime → voleur, pour afficher « ton bonus t'a été pris » côté victime.
     const volePar={}; for(const pid in stolen){ const v=PD[pid].oppId; if(v!=null) volePar[v]=pid; }
-    // On CONSERVE la carte telle que le joueur l'a jouée (on ne la reconstruit surtout pas champ par
+    // On CONSERVE le bonus tel que le joueur l'a jouée (on ne la reconstruit surtout pas champ par
     // champ : `target2` du Coup Double avait été oublié → 2ᵉ match perdu à la résolution). On retire
     // juste les champs calculés d'une résolution précédente, puis on les recalcule.
     for(const pid in dayNet){ const c=PD[pid].card; const u2={net:dayNet[pid]};
       if(c&&c.id){ const {impact,flip,...joue}=c; u2.card={...joue, impact:impacts[pid]}; if(cadeauFlips[pid]) u2.card.flip=cadeauFlips[pid];
-        // 🥷 / 🧬 : on trace ce que la carte a réellement fait, sinon le joueur voit un impact chiffré
+        // 🥷 / 🧬 : on trace ce que le bonus a réellement fait, sinon le joueur voit un impact chiffré
         // sans savoir ce qui a été pris ou copié (« Clone : −12 € » n'explique rien tout seul).
         if(stolen[pid]) u2.card.stole=stolen[pid];
         if(cloned[pid]) u2.card.cloned=cloned[pid];
@@ -5521,15 +5544,15 @@ async function resolveDay(){
       if(r.win==='h'){ upd[d.home_id].duel_wins+=1; upd[d.home_id].streak_w+=1; upd[d.home_id].streak_l=0; upd[d.away_id].streak_l+=1; upd[d.away_id].streak_w=0; }
       else if(r.win==='a'){ upd[d.away_id].duel_wins+=1; upd[d.away_id].streak_w+=1; upd[d.away_id].streak_l=0; upd[d.home_id].streak_l+=1; upd[d.home_id].streak_w=0; }
       else { upd[d.home_id].streak_w=0; upd[d.home_id].streak_l=0; upd[d.away_id].streak_w=0; upd[d.away_id].streak_l=0; } }
-    // Consommation des cartes jouées — SAUF si la carte visait un match ANNULÉ : elle est alors RENDUE.
+    // Consommation des bonus joués — SAUF si le bonus visait un match ANNULÉ : elle est alors RENDUE.
     for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id){
-      // Carte RENDUE si l'un des matchs qu'elle visait est annulé. ⚠️ Coup Double vise DEUX matchs
-      // (target ET target2) : si l'un des deux saute, le combiné ne peut plus passer → carte rendue.
+      // Bonus RENDUE si l'un des matchs qu'elle visait est annulé. ⚠️ Coup Double vise DEUX matchs
+      // (target ET target2) : si l'un des deux saute, le combiné ne peut plus passer → bonus rendue.
       const fxx=pd.fx||[]; const vise=i=>(i!=null && fxx[i] && fxx[i].canceled);
-      if(vise(pd.card.target) || vise(pd.card.target2)) continue; // carte rendue (reste en main)
+      if(vise(pd.card.target) || vise(pd.card.target2)) continue; // bonus rendue (reste en main)
       const h=upd[pid].hand; const idx=h.indexOf(pd.card.id); if(idx>=0){ h.splice(idx,1); upd[pid].cards_used.push(pd.card.id); } } }
     // 🥷 Voleur : la prise entre dans la main du voleur, jouable dès la journée suivante. Placé APRÈS
-    // la boucle de consommation ci-dessus : sinon celle-ci pourrait retirer la carte tout juste volée.
+    // la boucle de consommation ci-dessus : sinon celle-ci pourrait retirer le bonus tout juste volée.
     // La victime, elle, a bien joué la sienne — elle est consommée normalement (barrée chez elle).
     for(const pid in stolen){ if(upd[pid]) upd[pid].hand.push(stolen[pid]); }
     // Recapitalisation : si un humain n'a plus assez pour miser (< seuil), son capital est REMONTÉ À
@@ -5605,7 +5628,7 @@ function recapBody(D){
   const line=(bt,f,i,oppCard)=>{
     if(bt && Array.isArray(bt.picks) && bt.picks.length===0) return `<span class="mini red">🚫 ${t("pas de prono")}</span>`;   // joueur qui n'a pas validé
     if(!bt||!bt.picks||!bt.picks[i]) return `<span class="muted">—</span>`;
-    // Carte VOLÉE (🥷) : elle n'a pas été appliquée. Sans ce neutralisant, le détail recalculait son
+    // Bonus VOLÉE (🥷) : elle n'a pas été appliquée. Sans ce neutralisant, le détail recalculait son
     // effet (ex. la cote combinée d'une Double Chance) alors que le net réel l'ignore → le détail
     // divergeait du total (signalé par Hervé : Double Chance volée). On la traite comme absente.
     const b=bt.picks[i]; const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
@@ -5617,7 +5640,7 @@ function recapBody(D){
     const selTxt = isDC ? `<b>${esc(selLabel(f,b.sel))}</b>/<b>${esc(selLabel(f,c.sel2))}</b>` : (b.orig!=null ? `<s class="red">${esc(selLabel(f,b.orig))}</s> → <b>${esc(selLabel(f,b.sel))}</b> <span class="bem clik" onclick="event.stopPropagation();showCardInfo('cadeau')">🎁</span>` : esc(selLabel(f,b.sel)));
     return `${selTxt} · ${b.stake}€ @${cote(odd)}${i===bt.captain?' <span class="bem clik" onclick="event.stopPropagation();showCaptainInfo()">👑</span>':''}${cardOnMatch(c,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.id}')">${CARDS[c.id].e}</span>`:''}${faceCut?` <span class="mini red" title="${t("Gain réduit de moitié par « Dans ta face » adverse")}">↓½ 🤛</span>`:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
   const explain=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return t("pari non enregistré pour ce match.");
-    const b=bt.picks[i]; const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;  // carte volée → neutralisée (cf. line())
+    const b=bt.picks[i]; const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;  // bonus volé → neutralisée (cf. line())
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
     const odd = isDC ? dcWinOdd(f,b.sel,c.sel2) : oddOf(f,b.sel);
     const base=win?(+b.stake)*(odd-1):-(+b.stake); let g=base; let txt;
@@ -5634,7 +5657,7 @@ function recapBody(D){
   const fxRecap = (myD && myD.fixtures) || [];
   const impactTxt=(who,bt,vb)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card; const C=CARDS[c.id]; const im=c.impact||{}; let detail='';
     if(c.stolenBy){ const th=pById(c.stolenBy); detail=t("🥷 Ce bonus a été <b>pris</b> par {a} : il ne s'est pas appliqué.",{a:th?avaName(th):'?'}); }
-    else if(c.stole){ detail=t("🥷 Bonus pris à l'adversaire : sa carte n'a pas joué et t'est revenue en main."); }
+    else if(c.stole){ detail=t("🥷 Bonus pris à l'adversaire : son bonus n'a pas joué et t'est revenue en main."); }
     else if(c.id==="cadeau"){
       if(c.flip && fxRecap[c.flip.match]){ const f=fxRecap[c.flip.match]; const won=(c.flip.to===f.res);
         detail=`Pari adverse sur <b>${esc(f.home)}–${esc(f.away)}</b> inversé : <s class="red">${esc(selLabel(f,c.flip.from))}</s> → <b>${esc(selLabel(f,c.flip.to))}</b> — ${won?'devenu <span class="green">gagnant</span>':'reste <span class="red">perdant</span>'}.`; }
@@ -5662,14 +5685,14 @@ function recapBody(D){
         else if(c.id==="sniper") detail=`Cible ${nm} : ${win?'gagné':'perdu'}.`;
       }
     }
-    // 😅 RETOUR DE BÂTON : une carte censée PÉNALISER l'adversaire (oppT) lui a en fait RAPPORTÉ de l'argent.
+    // 😅 RETOUR DE BÂTON : un bonus censé PÉNALISER l'adversaire (oppT) lui a en fait RAPPORTÉ de l'argent.
     if(C.oppT && (im.opp||0) >= 1){ detail += ` <span class="red">😅 <b>${t("Ça s'est retourné contre toi")}</b> — ${t("au lieu de le plomber, ton bonus a <b>rapporté {a}€</b> à ton adversaire. Aïe. 🙈",{a:fmt(im.opp)})}</span>`; }
     const bits=[];
     if(im.self!=null&&Math.abs(im.self)>=1) bits.push(`gain de ${esc(who)} : <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`);
     if(im.opp!=null&&Math.abs(im.opp)>=1) bits.push(`gain adverse : <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
     return `<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>🃏 ${esc(who)} a joué ${C.e} ${esc(C.n)}</b></div>
       <div class="mini muted" style="margin-top:3px">${esc(C.d)}</div>${detail?`<div class="mini" style="margin-top:4px">${detail}</div>`:''}
-      ${bits.length?`<div class="mini" style="margin-top:4px"><span class="muted">Effet de la carte (vs sans la carte)</span> — ${bits.join(' · ')}</div>`:''}</div>`; };
+      ${bits.length?`<div class="mini" style="margin-top:4px"><span class="muted">Effet du bonus (vs sans le bonus)</span> — ${bits.join(' · ')}</div>`:''}</div>`; };
   let detail="";
   if(myD&&myD.fixtures){
     const homeId=myD.home_id, awayId=myD.away_id;
@@ -5680,7 +5703,7 @@ function recapBody(D){
     const nameCell=(p,side)=>`<span class="mini muted">${side}</span> <b>${avaName(p)}</b>${p.id===S.myId?' <span class="tag">(toi)</span>':''}`;
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
-      return `<div class="mini blue clik" onclick="showBonusImpact('${bt.player_id}',${D})" style="margin-top:4px" title="${t("Toucher pour le détail : gain avec la carte vs sans la carte")}">🃏 ${C.e} ${esc(t(C.n))}${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</div>`; };
+      return `<div class="mini blue clik" onclick="showBonusImpact('${bt.player_id}',${D})" style="margin-top:4px" title="${t("Toucher pour le détail : gain avec le bonus vs sans le bonus")}">🃏 ${C.e} ${esc(t(C.n))}${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</div>`; };
     const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
       const impB=(bt)=> !!(bt&&bt.picks&&bt.picks[i]&&bt.picks[i].orig!=null) || cardOnMatch(bt.card,i); const imp=impB(hB)||impB(aB);
       return `<div class="clik" style="border-top:2px solid color-mix(in srgb,var(--ink) 22%,transparent);${imp?'border-left:3px solid var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent);border-radius:0 10px 10px 0;padding:10px 8px 10px 9px;':'padding:10px 2px;'}" onclick="toggleRecapMatch(${i})">
@@ -5728,10 +5751,10 @@ function recapBody(D){
        2. un bonus BIEN joué, qui lui a rapporté,
        3. les faits divers (plus gros gain, plus grosse mise, journée collective…).
      ⚠️ CORRECTION DU DÉFAUT DE FOND (signalé sur EUEYM J2, ❄️ Effet Kiss Cool à −5,39 €) :
-     le retournement était déduit du TYPE de carte (`C.oppT`, celles qui visent l'adversaire).
-     Une carte qui ne vise personne mais dont l'effet se retourne — Kiss Cool, Ça passe ou ça
+     le retournement était déduit du TYPE de bonus (`C.oppT`, celles qui visent l'adversaire).
+     Un bonus qui ne vise personne mais dont l'effet se retourne — Kiss Cool, Ça passe ou ça
      casse, Beurre… — n'était donc JAMAIS signalée. On se fonde désormais sur le FAIT CONSTATÉ :
-     `impact.self`, écrit à la résolution, qui vaut « mon net AVEC la carte moins SANS elle ». */
+     `impact.self`, écrit à la résolution, qui vaut « mon net AVEC le bonus moins SANS elle ». */
   const FAIT_MIN=1;   // en € — en deçà, ce n'est pas un fait marquant mais du bruit d'arrondi
   const retournes=[], reussis=[], divers=[];
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
@@ -5739,7 +5762,7 @@ function recapBody(D){
     const wp=pById(b.player_id)||{}; const whoNm=avatarHTML(wp.emoji)+' '+(b.player_id===S.myId?t("toi"):esc(wp.name||'?'));
     const dd=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const oid=dd?(dd.home_id===b.player_id?dd.away_id:dd.home_id):null; const op=oid!=null?(pById(oid)||{}):{}; const oppNm=avatarHTML(op.emoji)+' '+esc(op.name||'?');
     if(self<=-FAIT_MIN){
-      // Deux formulations : la carte a PROFITÉ à l'adversaire, ou elle a simplement coûté.
+      // Deux formulations : le bonus a PROFITÉ à l'adversaire, ou elle a simplement coûté.
       if(opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(self),b2:fmt(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
       else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
     }
@@ -5782,7 +5805,7 @@ function recapBody(D){
     ${detail?`<h2>${t("⚔️ Le duel en détail")}</h2>${detail}`:''}
     <h2>${t("Résultats de la journée")}</h2>
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un joueur pour son duel · touche un <b>gain</b> pour le calcul détaillé.")}</div>
-    <div class="box" style="padding:4px 12px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th>${t("Carte")}</th></tr>
+    <div class="box" style="padding:4px 12px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Gain")}</th><th style="text-align:right">${t("Duel")}</th>${starOn?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th>${t("Bonus")}</th></tr>
       ${ord.map((p,i)=>{const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); return `<tr class="clik" onclick="setRecapFocus('${p.id}')" style="${p.id===fp?'background:color-mix(in srgb,var(--blue) 12%,transparent)':''}"><td>${i+1}</td><td>${avaName(p)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${(p.id===fp&&!isMe)?' 👁️':''}${forgot(p.id)?' <span class="tag red" title="'+t("Pari non validé à temps : {b} pt au classement et −{a} % du capital",{b:forgotPtsShown(),a:pct(forgotPenShown())})+'">⏰ '+forgotPtsShown()+'</span>':''}</td>
         <td class="num"><b class="clik ${(netMap[p.id]||0)>=0?'green':'red'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(netMap[p.id]||0)}€</b></td>
         <td class="num"><b class="clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}')">${duelP}</b></td>
@@ -6022,7 +6045,7 @@ function computeStandHist(){
   // le TOTAL exact même si le point de départ sur la courbe est approximatif.
   const troc={}; // troc[jour][playerId] = variation de capital
   (standTrades||[]).forEach(tr=>{ const j=(tr.day!=null)?tr.day:0; const p=+tr.price||0; if(!p) return;
-    // `kind` décide qui reçoit : à l'achat, la carte vient du destinataire, donc l'argent va à LUI.
+    // `kind` décide qui reçoit : à l'achat, le bonus vient du destinataire, donc l'argent va à LUI.
     const recoit=(tr.kind==="sell")?tr.from_player:tr.to_player;
     const paye  =(tr.kind==="sell")?tr.to_player  :tr.from_player;
     troc[j]=troc[j]||{}; troc[j][recoit]=(troc[j][recoit]||0)+p; troc[j][paye]=(troc[j][paye]||0)-p; });
@@ -6135,7 +6158,7 @@ function viewLeagueStats(){
     ${line(t("Meilleure journée"), s.best.day>=0?`<span class="green">${fmt(s.best.net)} €</span> (J${s.best.day+1})`:'–')}
     ${line(t("Pire journée"), s.worst.day>=0?`<span class="red">${fmt(s.worst.net)} €</span> (J${s.worst.day+1})`:'–')}
     ${line(t("Plus grosse cote gagnée"), s.bestOdd?s.bestOdd.toFixed(2):'–')}
-    ${line(t("Carte fétiche"), s.favCard&&CARDS[s.favCard]?CARDS[s.favCard].e+' '+esc(t(CARDS[s.favCard].n)):'–')}
+    ${line(t("Bonus fétiche"), s.favCard&&CARDS[s.favCard]?CARDS[s.favCard].e+' '+esc(t(CARDS[s.favCard].n)):'–')}
   </div>`;
   const opps=Object.keys(s.h2h);
   if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face dans cette ligue")}</b>`;
@@ -6236,15 +6259,15 @@ async function loadMyStats(){
           }); }
         const mise=gainMise(b.picks,fx).mise; staked+=mise; const n=(b.net!=null)?b.net:0; net+=n;
         if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
-        if(b.card&&b.card.id) cc[b.card.id]=(cc[b.card.id]||0)+1;   // carte fétiche : par ligue, même abandonnée
+        if(b.card&&b.card.id) cc[b.card.id]=(cc[b.card.id]||0)+1;   // bonus fétiche : par ligue, même abandonnée
         if(compte){
           allDays++; if(n>0) posDays++;
           chrono.push({t:(lg.created_at||'')+"#"+String(1000+(b.day|0)), mise, net:n});
           if(n>gBest.net) gBest={net:n,lg:lg.name};
           if(b.card&&b.card.id){
             // Rendement réel d'un bonus : `impact.self` est écrit à la résolution et vaut
-            // « mon net AVEC la carte moins mon net SANS elle ». C'est la seule mesure juste —
-            // imputer le net de la journée entière à la carte serait faux.
+            // « mon net AVEC le bonus moins mon net SANS elle ». C'est la seule mesure juste —
+            // imputer le net de la journée entière au bonus serait faux.
             const K=byCard[b.card.id]=byCard[b.card.id]||{n:0,net:0};
             K.n++; K.net+=(b.card.impact&&+b.card.impact.self)||0; }
         }
@@ -6329,7 +6352,7 @@ const STAT_INFO={
   profil:{t:"Ton profil de pronostiqueur",d:"Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise."},
   others:{t:"Face aux autres",d:"Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu."},
   captain:{t:"Rendement du Capitaine",d:"Ce que le doublement t'a rapporté <b>en plus</b>, ou coûté. Un chiffre négatif ne condamne pas la mécanique : il dit que tu doubles trop souvent sur des paris incertains."},
-  cards:{t:"Bonus les plus rentables",d:"Le gain réel de chaque bonus : ton résultat AVEC la carte moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable."},
+  cards:{t:"Bonus les plus rentables",d:"Le gain réel de chaque bonus : ton résultat AVEC le bonus moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable."},
   regul:{t:"Régularité",d:"Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats."},
   sports:{t:"Par sport",d:"Ta réussite sport par sport. N'a de sens qu'en <b>données réelles</b> : en matchs simulés, les rencontres sont tirées au hasard."},
   perimetre:{t:"Ligues comptées",d:"Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>.<br><br>Enfin, <b>tout cet écran suit l'onglet choisi en haut</b> : 📡 ne retient que les ligues jouées sur de vrais matchs, 🎮 celles en matchs simulés, 🔀 les deux. Comparer les deux a du sens : en simulé les cotes sont tirées au sort, en réel elles viennent du marché."}
@@ -6468,12 +6491,12 @@ function showLeagueStat(lid){
     +line(t("Meilleure journée"), l.best.day>=0?`<span class="green">${fmt(l.best.net)} €</span> (J${l.best.day+1})`:'–')
     +line(t("Pire journée"), l.worst.day>=0?`<span class="red">${fmt(l.worst.net)} €</span> (J${l.worst.day+1})`:'–')
     +line(t("Plus grosse cote gagnée"), l.bestOdd?l.bestOdd.toFixed(2):'–')
-    +line(t("Carte fétiche"), l.favCard&&CARDS[l.favCard]?CARDS[l.favCard].e+' '+esc(t(CARDS[l.favCard].n)):'–');
+    +line(t("Bonus fétiche"), l.favCard&&CARDS[l.favCard]?CARDS[l.favCard].e+' '+esc(t(CARDS[l.favCard].n)):'–');
   infoModal("📋", l.name, body);
 }
 /* ===== CARTE DE SAISON — image partageable (v6.83) ==========================================
  * Le partage ne produisait qu'un bloc de TEXTE : illisible dans un fil WhatsApp et sans aucune
- * identité. On dessine désormais une carte au format story (1080×1920) reprenant la charte de
+ * identité. On dessine désormais un bonus au format story (1080×1920) reprenant la charte de
  * l'affiche (bleu nuit, or, ticket crème).
  * POURQUOI CANVAS et pas HTML→image : l'app tient en UN fichier ; une bibliothèque de conversion
  * (html2canvas & co) pèserait plus lourd que tout le reste et devrait être embarquée. Le canvas
@@ -6506,7 +6529,7 @@ function cdEll(c,txt,maxW){ if(c.measureText(txt).width<=maxW) return txt; let s
 // Avatar dessiné : data URI, donc même origine → le canvas reste exploitable.
 // PHOTO importée : sans `crossOrigin` le navigateur l'affiche mais VERROUILLE le canvas, et
 // `toBlob` échoue plus tard, au moment du partage. Supabase renvoie bien `Access-Control-Allow-Origin`
-// (vérifié) → avec crossOrigin la carte reste générable. Au moindre souci on renvoie null et
+// (vérifié) → avec crossOrigin le bonus reste générable. Au moindre souci on renvoie null et
 // l'appelant retombe sur l'avatar dessiné : le partage n'est jamais bloqué par une photo.
 function cdImg(src,cross){ return new Promise(res=>{ if(!src) return res(null);
   const img=new Image(); if(cross) img.crossOrigin="anonymous";
@@ -6530,9 +6553,9 @@ async function seasonCardData(){
         title:eo.perso?eo.title:t(eo.title)}); });
   }
   // Fait marquant, du plus flatteur au plus neutre. Le dernier maillon ne dépend que du nombre de
-  // journées : il est TOUJOURS disponible, même pour une saison ratée → jamais de trou dans la carte.
+  // journées : il est TOUJOURS disponible, même pour une saison ratée → jamais de trou dans le bonus.
   if(s.best && s.best.net>0) d.highlight={label:t("Meilleure journée"), value:fmt(s.best.net)+" € · "+t("journée {a}",{a:s.best.day+1})};
-  else if(s.favCard && CARDS[s.favCard]) d.highlight={label:t("Carte fétiche"), value:CARDS[s.favCard].e+" "+t(CARDS[s.favCard].n)};
+  else if(s.favCard && CARDS[s.favCard]) d.highlight={label:t("Bonus fétiche"), value:CARDS[s.favCard].e+" "+t(CARDS[s.favCard].n)};
   else if(d.duelWins>0) d.highlight={label:t("Duels gagnés"), value:t("{a} sur {b} journées",{a:d.duelWins,b:d.days})};
   else if(d.bestOdd>0)  d.highlight={label:t("Plus grosse cote décrochée"), value:cote(d.bestOdd)};
   else if(d.days>0)     d.highlight={label:t("Saison complète"), value:t("{a} journées jouées jusqu'au bout",{a:d.days})};
@@ -6664,7 +6687,7 @@ function seasonRecapText(){
   if(meP) l.push(t("Points : {a} · Capital : {b} €",{a:meP.points,b:eur(meP.capital)}));
   if(s.days){ l.push(t("Pronos gagnés : {a}/{b} ({c} %)",{a:s.won,b:s.picks,c:s.hit}));
     l.push(t("ROI : {a} % · Meilleure journée : {b} €",{a:s.roi,b:fmt(s.best.net)}));
-    if(s.favCard&&CARDS[s.favCard]) l.push(t("Carte fétiche : {a}",{a:CARDS[s.favCard].e+' '+t(CARDS[s.favCard].n)})); }
+    if(s.favCard&&CARDS[s.favCard]) l.push(t("Bonus fétiche : {a}",{a:CARDS[s.favCard].e+' '+t(CARDS[s.favCard].n)})); }
   l.push("— The Maestro League"); return l.join("\n"); }
 // Aperçu D'ABORD (on voit ce qu'on partage), puis Partager (natif mobile) / Enregistrer / Copier.
 // L'image est générée en tâche de fond : on ouvre tout de suite avec un texte d'attente, sinon
@@ -6673,7 +6696,7 @@ let seasonBlob=null, seasonBlobUrl=null;
 function shareSeason(){   // gratuit (v6.65) — plus d'option premium requise
   const txt=seasonRecapText();
   infoModal("📤", t("Partager ma saison"),
-    `<div id="cardWrap" class="mini muted" style="margin-bottom:10px">${t("Préparation de ta carte…")}</div>
+    `<div id="cardWrap" class="mini muted" style="margin-bottom:10px">${t("Préparation de ton bonus…")}</div>
      <div id="cardBtns"></div>
      <details style="margin-top:12px;text-align:left">
        <summary class="mini muted" style="cursor:pointer">${t("Version texte")}</summary>
@@ -6942,7 +6965,7 @@ function endRecapHTML(){
   if(e.comeback && e.comeback.g>=1) items.push(t("🚀 <b>La remontée :</b> {name} est remonté de la <b>{worst}ᵉ</b> à la <b>{fin}ᵉ</b> place.",{name:e.nm(e.comeback.pid),worst:e.comeback.worst,fin:e.comeback.fin}));
   if(e.bigDay) items.push(t("💥 <b>Le carton :</b> {name} — <b class=\"green\">{net}€</b> en une seule journée (J{d}).",{name:e.nm(e.bigDay.pid),net:fmt(e.bigDay.net),d:e.bigDay.day+1}));
   if(e.worstDay && e.worstDay.net<0) items.push(t("💀 <b>La dégringolade :</b> {name} — <b class=\"red\">{net}€</b> (J{d}). Aïe.",{name:e.nm(e.worstDay.pid),net:fmt(e.worstDay.net),d:e.worstDay.day+1}));
-  if(e.bestBonus) items.push(t("🃏 <b>Le roi des bonus :</b> {name} — ses cartes lui ont rapporté <b class=\"green\">+{tot}€</b> au total.",{name:e.nm(e.bestBonus.pid),tot:eur(e.bestBonus.tot)}));
+  if(e.bestBonus) items.push(t("🃏 <b>Le roi des bonus :</b> {name} — ses bonus lui ont rapporté <b class=\"green\">+{tot}€</b> au total.",{name:e.nm(e.bestBonus.pid),tot:eur(e.bestBonus.tot)}));
   if(e.master && CARDS[e.master.id]) items.push(t("🎯 <b>Le coup de maître :</b> {name} a joué {card} (J{d}) pour <b class=\"green\">+{self}€</b>.",{name:e.nm(e.master.pid),card:CARDS[e.master.id].e+' '+esc(t(CARDS[e.master.id].n)),d:e.master.day+1,self:eur(e.master.self)}));
   if(!items.length) return '';
   return `<h2>${t("📜 Le bilan de la saison")}</h2><div class="box"><div class="mini" style="line-height:1.95">${items.join('<br>')}</div></div>`;
@@ -7117,7 +7140,7 @@ async function adminSetAllOptions(uid, all){
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute OPTIONS-ADMIN.sql dans Supabase)")); } }
 // Libellés courts des options pour l'écran Admin (français ; l'écran Admin n'est pas traduit).
-const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Cartes complètes", ia:"🤖 Joueur IA", stats:"📊 Stats perso", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
+const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Bonus complètes", ia:"🤖 Joueur IA", stats:"📊 Stats perso", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
@@ -7199,8 +7222,13 @@ function setPalmTab(k){ if(!palmares||!palmares.jeux||!palmares.jeux[k]) return;
 function palmTabsHTML(){
   const P=palmares; if(!P||!P.jeux) return "";
   const on=P.onglet||"tous";
+  /* ⚠️ v7.49 — LE NOMBRE DE LIGUES A ÉTÉ RETIRÉ DES ONGLETS (demandé par Hervé). Le palmarès est
+     un classement PUBLIC : y afficher « 📡 Réelles 12 » revenait à publier combien de ligues ont
+     été jouées sur l'app — une donnée d'exploitation, qui n'a rien à faire sous les yeux des
+     joueurs et qui, en phase de test, dit surtout que le jeu est peu utilisé.
+     ⚠️ `nbLigues` reste CALCULÉ : il sert encore à griser un onglet vide. */
   const b=(k,lab)=>{ const n=P.jeux[k].nbLigues|0;
-    return `<button class="btn ghost sm" style="flex:1${on===k?';border-color:var(--accent);color:var(--accent)':(n?'':';opacity:.5')}" onclick="setPalmTab('${k}')">${lab}<span class="muted"> ${n}</span></button>`; };
+    return `<button class="btn ghost sm" style="flex:1${on===k?';border-color:var(--accent);color:var(--accent)':(n?'':';opacity:.5')}" onclick="setPalmTab('${k}')">${lab}</button>`; };
   return `<div class="row" style="gap:6px;margin-bottom:8px">${b("tous",t("🔀 Tout"))}${b("reel",t("📡 Réelles"))}${b("sim",t("🎮 Simulées"))}</div>
     <div class="mini muted">${on==="reel"?t("Classements établis sur les seules ligues jouées avec de vrais matchs.")
       :(on==="sim"?t("Classements établis sur les seules ligues en matchs simulés, où les cotes sont tirées au sort.")
@@ -7215,7 +7243,7 @@ function viewPalmares(){
   if(!P) return back+`<div class="box">${t("Chargement du palmarès…")}</div>`;
   const medal=i=>["🥇","🥈","🥉",t("4ᵉ"),t("5ᵉ")][i]||(i+1);
   const dayDetail=r=>{ const sumL=r.lines.reduce((a,l)=>a+l.g,0); const adj=+(r.net-sumL).toFixed(2);
-    return `<div class="mini muted">${t("{lg} · J{d} · {np} joueurs · misé {st}€",{lg:esc(r.lname||'?'),d:r.day+1,np:r.np||'?',st:Math.round(r.staked)})}${r.cardId&&CARDS[r.cardId]?t(" · carte {c}",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):''}</div>
+    return `<div class="mini muted">${t("{lg} · J{d} · {np} joueurs · misé {st}€",{lg:esc(r.lname||'?'),d:r.day+1,np:r.np||'?',st:Math.round(r.staked)})}${r.cardId&&CARDS[r.cardId]?t(" · bonus {c}",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):''}</div>
      ${r.lines.map(l=>`<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(t(l.sel))}${l.cap?' 👑':''} ${l.stake}€ @${cote(l.odd)} → <b class="${l.g>=0?'green':'red'}">${fmt(l.g)}€</b> ${l.win?'✓':'✗'}</div>`).join("")}
      ${Math.abs(adj)>=1?`<div class="mini" style="margin-top:4px">🃏 ${t("Bonus &amp; ajustements")} ${r.cardId&&CARDS[r.cardId]?t("({c}…)",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):t("(bonus…)")} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`:''}
      <div class="mini" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><b>${t("Total journée :")} <span class="${r.net>=0?'green':'red'}">${fmt(r.net)}€</span></b></div>`; };
@@ -7429,7 +7457,7 @@ function viewAdmin(){
     ${st("🎫 Participations (joueur × ligue)", a.participations)}
     ${st("🧾 Paris enregistrés — humains", a.totalBets)}
     ${st("🧮 Journées résolues — humains", a.resolvedBets)}
-    ${st("🃏 Cartes bonus jouées", a.cardsPlayed)}`;
+    ${st("🃏 Bonus jouées", a.cardsPlayed)}`;
   const cApi=`${(()=>{ const nb=(a.quota&&a.quota.remaining!=null)?a.quota.remaining:liveQuota;
       if(nb==null) return `<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API restants</span><span class="mini muted">jamais relevé — s'affichera au prochain appel réel</span></div>`;
       const qd=(a.quota&&a.quota.at)?a.quota.at:null;
@@ -7437,7 +7465,7 @@ function viewAdmin(){
       return `<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API restants <span class="mini">(${esc(age)})</span></span><b class="num ${nb<50?'red':(nb<150?'gold':'')}">${nb}</b></div>`
         + (nb<50?`<div class="box mini" style="border-color:var(--red);background:rgba(229,105,95,.10)"><b class="red">⚠️ Quota bientôt épuisé</b><div class="mini muted" style="margin-top:3px">Sans crédits, les vrais résultats ne remontent plus : les journées en données réelles restent bloquées et les joueurs ne voient que des horloges. Les ligues en matchs simulés ne sont pas concernées.</div></div>`:''); })()}`;
   const cJeu=`<div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués <span class="mini">(par des humains)</span></div>
-      ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b class="num">${n}×</b></div>`).join(""):`<div class="mini muted">Aucune carte jouée pour l'instant.</div>`}</div>
+      ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b class="num">${n}×</b></div>`).join(""):`<div class="mini muted">Aucun bonus joué pour l'instant.</div>`}</div>
     ${(()=>{ const bloc=(titre,liste,vide)=>`<div class="box"><div class="mini muted" style="margin-bottom:6px">${titre} <span class="mini">(cumul des votes sur toutes les ligues)</span></div>
       ${(liste&&liste.length)?liste.slice(0,10).map((g,i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${esc(g.t)}</span><b>${g.votes} vote${g.votes>1?'s':''}${g.wins?` · ${g.wins}× retenu`:''}</b></div>`).join(""):`<div class="mini muted">${vide}</div>`}</div>`;
       return bloc("🎭 Gages les plus choisis", a.topGages, "Aucun vote de gage enregistré pour l'instant.")
@@ -7541,7 +7569,7 @@ function viewAdmin(){
     ${sec("activite","📈 Activité", a.leagues+" ligues", cActivite)}
     ${sec("usage","🎮 Usage du jeu", a.totalBets+" paris", cUsage)}
     ${sec("api","📡 Crédits API", quotaTxt, cApi)}
-    ${sec("jeu","🃏 Bonus, gages & récompenses", a.cardsPlayed+" cartes", cJeu)}
+    ${sec("jeu","🃏 Bonus, gages & récompenses", a.cardsPlayed+" bonus", cJeu)}
     ${sec("remontees","✉️ Remontées des joueurs", (adminReports?(adminReports.length+" au total"+(nouv?" · "+nouv+" 🆕":"")):"non chargées"), cRemontees)}
     ${sec("comptes","👤 Gestion des comptes", (adminUsers?adminUsers.length+" comptes":"non chargés"), cComptes)}
     ${sec("moi","🔑 Mon compte admin", "", cMoi)}`;
@@ -7766,7 +7794,7 @@ function viewSettings(){
       <div class="mini muted" style="margin-top:14px">${t("Ton avatar et ton pseudo se règlent sur l'écran 👤 Profil.")}</div>
     </div>
     <div class="box"><b class="mini">${t("📚 Comment marche le jeu")}</b>
-      <div class="mini muted" style="margin-top:5px">${t("Le fonctionnement complet, dans le détail : calendrier, mises, Capitaine, points, cartes bonus, enjeu final.")}</div>
+      <div class="mini muted" style="margin-top:5px">${t("Le fonctionnement complet, dans le détail : calendrier, mises, Capitaine, points, bonus, enjeu final.")}</div>
       <div style="height:8px"></div><button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button></div>
     <button class="btn ghost" onclick="logout()">${t("Déconnexion")}</button>`;
 }
@@ -7776,19 +7804,19 @@ function closeRules(){ navBack(); }
 function openRulesFull(){ navOpen("rulesfull"); }
 function closeRulesFull(){ navBack(); }
 
-// === RACHAT DE BONUS (point 4) — échange de capital VIRTUEL contre une carte =============
-// Un ACHETEUR propose une somme à un VENDEUR pour lui racheter une carte encore EN MAIN ;
+// === RACHAT DE BONUS (point 4) — échange de capital VIRTUEL contre un bonus =============
+// Un ACHETEUR propose une somme à un VENDEUR pour lui racheter un bonus encore EN MAIN ;
 // le vendeur accepte ou refuse. Même modèle de confiance que tout le jeu : le client écrit
 // (resolveDay réécrit déjà le capital de tous) → sera porté en RPC serveur en Phase 2.
-// Règles (IDEES-V5 point 4) : seulement en cours de championnat · uniquement des cartes
+// Règles (IDEES-V5 point 4) : seulement en cours de championnat · uniquement des bonus
 // LIBRES (en main) · l'acheteur ne doit pas avoir de pari validé pour la journée en cours
 // (sinon on casse worstLoss ≤ capital) · après paiement l'acheteur garde ≥ TRADE_MIN_CAP.
 // L'option est PAYANTE par joueur (le proposeur) → péage branché en Phase 4 ; ouvert à tous
 // pour l'instant (tests). Le montant n'ajoute pas de capital : il est TRANSFÉRÉ au vendeur.
 // Plancher volontairement CALÉ sur le seuil de renflouement (30 € depuis v6.82) : sous ce niveau, le
 // jeu considère qu'on ne peut plus miser correctement. Garder le lien ferme aussi la porte à un abus :
-// sans lui, on pourrait s'acheter une carte hors de prix pour tomber sous le seuil et se faire remonter
-// à 40 € — soit une carte payée par le renflouement, pour 1 petit point.
+// sans lui, on pourrait s'acheter un bonus hors de prix pour tomber sous le seuil et se faire remonter
+// à 40 € — soit un bonus payé par le renflouement, pour 1 petit point.
 const TRADE_MIN_CAP = RECAP_THRESHOLD;
 function tr2(x){ return Math.round(x*100)/100; }
 function tradeRunning(){ return !!(L && L.status==="running"); }
@@ -7806,10 +7834,10 @@ function tradeBloque(raison){
   else if(dt.ok&&dt.bet) quand=t("Clôture des pronos : <b>{a}</b>.",{a:fmtWhen(dt.bet)});
   infoModal("⏳", t("Échange impossible pour l'instant"),
     `<div class="mini" style="text-align:left">${raison}</div>
-     <div class="mini muted" style="text-align:left;margin-top:10px">${t("Un échange n'est possible qu'<b>entre deux journées</b> : tant qu'un pari du jour est validé, la carte pourrait encore être jouée le même jour — elle serait alors utilisée deux fois.")}</div>
+     <div class="mini muted" style="text-align:left;margin-top:10px">${t("Un échange n'est possible qu'<b>entre deux journées</b> : tant qu'un pari du jour est validé, le bonus pourrait encore être jouée le même jour — elle serait alors utilisée deux fois.")}</div>
      <div class="mini" style="text-align:left;margin-top:10px">${t("➡️ Ce sera de nouveau possible dès que la <b>journée {j}</b> sera résolue.",{j:j})} ${quand}</div>`);
 }
-// Même garde que openShop : le rachat déplace du capital et des cartes. Le bouton est déjà masqué
+// Même garde que openShop : le rachat déplace du capital et des bonus. Le bouton est déjà masqué
 // hors ligue (canTrade), mais on ne s'appuie pas sur l'affichage pour protéger une transaction.
 // L'écran reste accessible à TOUS : sans l'option 'rachat', on peut accepter/refuser/annuler les offres
 // reçues, mais pas en INITIER (verrou sur les sections « Racheter » / « Vendre » de viewTrade + garde
@@ -7839,7 +7867,7 @@ async function markTrade(id,st,reply,jour){ const u={status:st,resolved_at:new D
   try{ const uu=(jour!=null)?Object.assign({day:jour},u):u; await q(db.from("trades").update(uu).eq("id",id)); }
   catch(e){ try{ await q(db.from("trades").update(u).eq("id",id)); }catch(e2){} } }
 function journeesRestantes(){ return Math.max(0,((L&&L.num_days)||0)-((L&&L.current_day)||0)); }
-function cardEngaged(cardId){ return trades.some(x=>x.status==="pending" && x.card_id===cardId); } // UI : carte déjà dans une offre en attente
+function cardEngaged(cardId){ return trades.some(x=>x.status==="pending" && x.card_id===cardId); } // UI : bonus déjà dans une offre en attente
 async function cardHasPendingTrade(cardId){ try{ const r=await q(db.from("trades").select("id").eq("league_id",L.id).eq("card_id",cardId).eq("status","pending").limit(1)); return !!(r&&r.length); }catch(e){ return false; } }
 
 function viewTrade(){
@@ -7848,9 +7876,9 @@ function viewTrade(){
   const clbl=id=>CARDS[id]?`<span class="clik" onclick="showCardInfo('${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`:esc(id);
   const meP=me(); const cap=meP?(meP.capital||0):0;
   let h=`<div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge('rachat')}</h2>
-      <div class="mini muted">${t("Rachète une carte à un adversaire, ou vends une des tiennes pour te refaire du capital. L'autre reste libre d'accepter ou de refuser.")}</div>
+      <div class="mini muted">${t("Rachète un bonus à un adversaire, ou vends une des tiennes pour te refaire du capital. L'autre reste libre d'accepter ou de refuser.")}</div>
       <div class="mini" style="margin-top:6px;color:var(--blue)">ℹ️ ${t("Le rachat/vente n'est possible qu'entre <b>joueurs réels</b> — pas avec le 🤖 joueur IA.")}</div>
-      <div class="mini muted" style="margin-top:6px">🗓️ ${t("Journées restantes : {a}",{a:journeesRestantes()})} · ${t("touche une carte pour voir son effet.")}</div></div>`;
+      <div class="mini muted" style="margin-top:6px">🗓️ ${t("Journées restantes : {a}",{a:journeesRestantes()})} · ${t("touche un bonus pour voir son effet.")}</div></div>`;
   // Réponses à MES offres
   if(myResolvedOut.length){ h+=`<div class="box"><b class="mini">📨 ${t("Réponses à tes offres")}</b>`;
     myResolvedOut.slice(0,6).forEach(o=>{ const other=pById(o.to_player); const acc=o.status==="accepted";
@@ -7860,8 +7888,8 @@ function viewTrade(){
   h+=`<div class="box"><b class="mini">📥 ${t("Offres reçues")}</b>`;
   if(!inOff.length) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucune offre en attente.")}</div>`;
   else inOff.forEach(o=>{ const other=pById(o.from_player); const sell=(o.kind==="sell");
-    const line=sell ? t("{a} te vend sa carte {c} pour <b>{b} €</b>.",{a:nm(other),c:clbl(o.card_id),b:Math.round(o.price)})
-                    : t("{a} veut racheter ta carte {c} pour <b>{b} €</b>.",{a:nm(other),c:clbl(o.card_id),b:Math.round(o.price)});
+    const line=sell ? t("{a} te vend son bonus {c} pour <b>{b} €</b>.",{a:nm(other),c:clbl(o.card_id),b:Math.round(o.price)})
+                    : t("{a} veut racheter ton bonus {c} pour <b>{b} €</b>.",{a:nm(other),c:clbl(o.card_id),b:Math.round(o.price)});
     h+=`<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:9px"><div class="mini">${line}</div>
       ${o.msg?`<div class="mini muted" style="margin-top:2px">💬 ${esc(o.msg)}</div>`:''}
       <input id="rp_${o.id}" maxlength="140" placeholder="${t("un petit mot (optionnel)")}" style="width:100%;box-sizing:border-box;padding:8px;margin-top:6px;border-radius:8px;border:1px solid var(--border);background:var(--panel2);color:inherit">
@@ -7882,25 +7910,25 @@ function viewTrade(){
     <div class="mini muted" style="margin-top:6px">${t("<b>Proposer</b> un rachat ou une vente est une option premium. Tu peux quand même <b>accepter ou refuser</b> les offres qu'on t'envoie.")}</div>
     <button class="btn" style="margin-top:10px" onclick="showPremiumInfo('rachat')">🔓 ${t("Découvrir / souscrire")}</button></div>`;
     return h; }
-  // --- RACHETER (j'achète la carte d'un autre) ---
-  h+=`<div class="box"><b class="mini">🛒 ${t("Racheter une carte")}</b>`;
+  // --- RACHETER (j'achète le bonus d'un autre) ---
+  h+=`<div class="box"><b class="mini">🛒 ${t("Racheter un bonus")}</b>`;
   if(!S.recap && myBet()) h+=`<div class="mini muted" style="margin-top:6px">${t("Tu ne peux pas racheter tant que ton pari du jour est validé — attends la résolution de la journée.")}</div>`;
   else if(cap < TRADE_MIN_CAP+1) h+=`<div class="mini muted" style="margin-top:6px">${t("Ton capital est trop faible : il faut pouvoir garder au moins {a} € après le rachat.",{a:TRADE_MIN_CAP})}</div>`;
   else { const opps=humanOpponents();
-    if(!opps.some(p=>(p.hand||[]).length)) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucune carte à racheter pour le moment — les autres joueurs ont déjà joué leurs bonus (ou n'en ont pas en main).")}</div>`;
+    if(!opps.some(p=>(p.hand||[]).length)) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucun bonus à racheter pour le moment — les autres joueurs ont déjà joué leurs bonus (ou n'en ont pas en main).")}</div>`;
     else { h+=`<div class="mini muted" style="margin-top:4px">${t("Ton capital : <b>{a} €</b> — jusqu'à <b>{b} €</b> dépensables (garder {c} €).",{a:Math.round(cap),b:Math.round(cap-TRADE_MIN_CAP),c:TRADE_MIN_CAP})}</div>`;
       opps.forEach(p=>{ const hand=(p.hand||[]); if(!hand.length) return;
         h+=`<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><div class="mini"><b>${nm(p)}</b> <span class="muted">· 💰 ${eur(p.capital||0)} €</span></div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${hand.map(id=>{ const eng=cardEngaged(id);
           return `<button class="btn ghost sm" ${eng?'disabled style="opacity:.5"':''} onclick="proposeBuy('${p.id}','${id}')">${CARDS[id]?CARDS[id].e:'?'} ${esc(t(CARDS[id]?CARDS[id].n:id))}${eng?' ⏳':''}</button>`; }).join("")}</div></div>`; }); } }
   h+=`</div>`;
-  // --- VENDRE (je propose une de MES cartes) ---
-  h+=`<div class="box"><b class="mini">💰 ${t("Vendre une de mes cartes")}</b>`;
+  // --- VENDRE (je propose une de MES bonus) ---
+  h+=`<div class="box"><b class="mini">💰 ${t("Vendre une de mes bonus")}</b>`;
   const myHand=(meP&&meP.hand)||[];
   if(!S.recap && myBet()) h+=`<div class="mini muted" style="margin-top:6px">${t("Tu ne peux pas vendre tant que ton pari du jour est validé — attends la résolution de la journée.")}</div>`;
   else if(!humanOpponents().length) h+=`<div class="mini muted" style="margin-top:6px">${t("Aucun adversaire pour l'instant.")}</div>`;
-  else if(!myHand.length) h+=`<div class="mini muted" style="margin-top:6px">${t("Tu n'as aucune carte en main à vendre.")}</div>`;
-  else { h+=`<div class="mini muted" style="margin-top:4px">${t("Choisis une carte à proposer aux autres (leur cagnotte est indiquée).")}</div>
+  else if(!myHand.length) h+=`<div class="mini muted" style="margin-top:6px">${t("Tu n'as aucun bonus en main à vendre.")}</div>`;
+  else { h+=`<div class="mini muted" style="margin-top:4px">${t("Choisis un bonus à proposer aux autres (leur cagnotte est indiquée).")}</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">${myHand.map(id=>{ const eng=cardEngaged(id);
       return `<button class="btn ghost sm" ${eng?'disabled style="opacity:.5"':''} onclick="proposeSell('${id}')">${CARDS[id]?CARDS[id].e:'?'} ${esc(t(CARDS[id]?CARDS[id].n:id))}${eng?' ⏳':''}</button>`; }).join("")}</div>`; }
   h+=`</div>`;
@@ -7920,7 +7948,7 @@ function tradeModal(emoji,titleHTML,subHTML,bodyHTML,onSend){
   document.body.appendChild(o);
 }
 function priceInput(mx){ return `<input id="tradePrice" type="number" inputmode="numeric" min="1" ${mx?`max="${mx}"`:''} placeholder="${t("ex : {a} €",{a:mx?Math.min(10,mx):5})}" style="width:100%;box-sizing:border-box;padding:10px;margin-top:6px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:inherit;font-size:16px">`; }
-// RACHETER : j'achète la carte d'un adversaire
+// RACHETER : j'achète le bonus d'un adversaire
 function proposeBuy(sellerId, cardId){
   if(!requireOpt('rachat')) return;   // initier un rachat = option premium
   const meP=me(); if(!meP) return; const seller=pById(sellerId); const C=CARDS[cardId];
@@ -7942,13 +7970,13 @@ async function submitBuy(sellerId, cardId, maxP){
     if((meP.capital||0)-price < TRADE_MIN_CAP){ toast(t("Prix trop élevé : il te resterait moins de {a} €.",{a:TRADE_MIN_CAP})); return; }
     if(await hasBetForDay(S.myId, L.current_day)){ tradeBloque(t("<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas proposer un rachat maintenant.")); return; }
     const seller=await q(db.from("players").select("hand").eq("id",sellerId).single());
-    if(!seller || !(seller.hand||[]).includes(cardId)){ toast(t("Cette carte n'est plus disponible.")); await refresh(); return; }
-    if(await cardHasPendingTrade(cardId)){ toast(t("Cette carte fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
+    if(!seller || !(seller.hand||[]).includes(cardId)){ toast(t("Ce bonus n'est plus disponible.")); await refresh(); return; }
+    if(await cardHasPendingTrade(cardId)){ toast(t("Ce bonus fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
     await q(db.from("trades").insert({league_id:L.id, kind:"buy", from_player:S.myId, to_player:sellerId, card_id:cardId, price:price, msg:msg||null}));
     infoWin(t("Offre envoyée.")); await refresh();
   }catch(e){ infoWin(t("⚠️ Une erreur est survenue")+" : "+esc(e.message),"⚠️"); }
 }
-// VENDRE : je propose une de MES cartes à un joueur (il paie, il la reçoit)
+// VENDRE : je propose une de MES bonus à un joueur (il paie, il la reçoit)
 function proposeSell(cardId){
   if(!requireOpt('rachat')) return;   // initier une vente = option premium
   const meP=me(); if(!meP) return; const C=CARDS[cardId]; const opps=humanOpponents();
@@ -7967,9 +7995,9 @@ async function submitSell(cardId){
   if(!(price>=1)){ toast(t("Entre un prix valide.")); return; }
   closeCardInfo();
   try{
-    const meP=me(); if(!meP || !((meP.hand||[]).includes(cardId))){ toast(t("Tu ne détiens plus cette carte.")); await refresh(); return; }
-    if(await hasBetForDay(S.myId, L.current_day)){ tradeBloque(t("<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas mettre une carte en vente maintenant.")); return; }
-    if(await cardHasPendingTrade(cardId)){ toast(t("Cette carte fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
+    const meP=me(); if(!meP || !((meP.hand||[]).includes(cardId))){ toast(t("Tu ne détiens plus ce bonus.")); await refresh(); return; }
+    if(await hasBetForDay(S.myId, L.current_day)){ tradeBloque(t("<b>Ton pari du jour est déjà validé.</b> Tu ne peux donc pas mettre un bonus en vente maintenant.")); return; }
+    if(await cardHasPendingTrade(cardId)){ toast(t("Ce bonus fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
     await q(db.from("trades").insert({league_id:L.id, kind:"sell", from_player:S.myId, to_player:target, card_id:cardId, price:price, msg:msg||null}));
     infoWin(t("Offre envoyée.")); await refresh();
   }catch(e){ infoWin(t("⚠️ Une erreur est survenue")+" : "+esc(e.message),"⚠️"); }
@@ -7978,16 +8006,16 @@ async function submitSell(cardId){
 function tradeReply(id){ return (((document.getElementById("rp_"+id)||{}).value||"").slice(0,140))||null; }
 async function acceptTrade(id){
   const o=trades.find(x=>x.id===id); if(!o){ await refresh(); return; } const price=Math.round(o.price); const reply=tradeReply(id);
-  // owner = celui qui DONNE la carte ; buyer = celui qui PAIE et la reçoit. Dépend du sens.
+  // owner = celui qui DONNE le bonus ; buyer = celui qui PAIE et la reçoit. Dépend du sens.
   const ownerId = o.kind==="sell" ? o.from_player : o.to_player;
   const buyerId = o.kind==="sell" ? o.to_player   : o.from_player;
   try{
     const owner=await q(db.from("players").select("id,capital,hand").eq("id",ownerId).single());
     const buyer=await q(db.from("players").select("id,capital,hand").eq("id",buyerId).single());
     if(!owner||!buyer){ toast(t("Offre introuvable.")); await refresh(); return; }
-    if(!(owner.hand||[]).includes(o.card_id)){ toast(t("La carte n'est plus disponible.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
+    if(!(owner.hand||[]).includes(o.card_id)){ toast(t("Le bonus n'est plus disponible.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
     if((buyer.capital||0)-price < TRADE_MIN_CAP){ toast(t("Capital insuffisant pour cet achat — offre annulée.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
-    if(await hasBetForDay(ownerId, L.current_day)){ tradeBloque(t("<b>Le détenteur de la carte a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.")); return; }
+    if(await hasBetForDay(ownerId, L.current_day)){ tradeBloque(t("<b>Le détenteur du bonus a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.")); return; }
     if(await hasBetForDay(buyerId, L.current_day)){ tradeBloque(t("<b>L'acheteur a déjà validé son pari du jour.</b> L'échange est donc bloqué jusqu'à la résolution.")); return; }
     const oHand=(owner.hand||[]).filter(x=>x!==o.card_id); const bHand=[...(buyer.hand||[]), o.card_id];
     await q(db.from("players").update({hand:oHand, capital:tr2((owner.capital||0)+price)}).eq("id",ownerId));
@@ -8009,10 +8037,10 @@ function viewRules(){
    <div class="box"><b>${t("⚽ Une journée")}</b>
      <ul class="mini muted" style="margin:6px 0 0;padding-left:18px">
        <li>${t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).")}</li>
-       <li>${t("Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>{a} %</b> du capital ({b} % avec la carte Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</li>
+       <li>${t("Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>{a} %</b> du capital ({b} % avec le bonus Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</li>
        <li>${t("<b>👑 Pari du Capitaine</b> : un pari désigné secrètement — gain <b>et</b> perte <b>doublés</b>.")}</li>
        <li>${t("🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).")}</li>
-       <li>${t("Optionnel : <b>1 carte bonus</b> (voir plus bas), révélée à la résolution.")}</li>
+       <li>${t("Optionnel : <b>1 bonus</b> (voir plus bas), révélée à la résolution.")}</li>
        <li>${t("Gain d'un pari = mise × (cote − 1) ; pari perdu = − mise. Le capital ne descend jamais sous 0.")}</li>
        <li>${t("🚫 Match non terminé <b>{a} h</b> après l'heure prévue (annulé, reporté, abandonné) : <b>mise rendue</b> et bonus rendu. Il ne compte pas, <b>même s'il est rejoué plus tard</b>.",{a:STALE_MATCH_H})}</li>
      </ul></div>
@@ -8026,11 +8054,11 @@ function viewRules(){
      <br>${t("Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.")}</div></div>
    <div class="box"><b>${t("▲ Mouvement au classement")}</b>
      <div class="mini muted" style="margin-top:6px">${t("À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.")}</div></div>
-   <div class="box"><b>${t("🃏 Cartes bonus (enchères)")}</b>
-     <div class="mini muted" style="margin:6px 0">${t("Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 carte jouée max par journée. Certaines cartes sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.",{a:SHOP_CAP})}</div>
+   <div class="box"><b>${t("🃏 Bonus (enchères)")}</b>
+     <div class="mini muted" style="margin:6px 0">${t("Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 bonus joué max par journée. Certaines bonus sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier.",{a:SHOP_CAP})}</div>
      ${cardsAZ().map(card).join("")}</div>
    <div class="box"><b>${t("🤝 Racheter un bonus")}</b> <span class="prem" onclick="showPremiumInfo('rachat')">${t("✨ Premium")}</span>
-     <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter une carte</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, la carte est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})} <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i></div></div>
+     <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter un bonus</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, le bonus est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})} <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i></div></div>
    <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b>, <b>{b} pt</b> au classement et <b>−{a} % du capital</b>.",{a:pct(forgotPenShown()),b:forgotPtsShown()})}
      <br><br>${t("💤 <b>Ligue abandonnée</b> : si <b>plus personne</b> ne joue pendant <b>{a} jours</b>, la ligue se ferme toute seule. Elle est alors considérée comme <b>fermée avant son terme</b> : <b>aucun vainqueur, aucun perdant</b>, et <b>ni gage ni récompense</b> ne s'appliquent. Elle ne compte pas non plus dans les statistiques.",{a:LIGUE_FERME_J})}</div></div>
    <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
@@ -8043,7 +8071,7 @@ function viewRules(){
  * (STAKE_CAP, STAKE_CAP_INVEST, FORGOT_PENALTY, SHOP_CAP, RECAP_THRESHOLD, RECAP_TARGET,
  * CUSTOM_MAX, DBL_FACTOR), les listes viennent des tables (CARDS, GAGES, REWARDS, MODES,
  * FORMULAS) et les passages qui dépendent du mode se calculent (isBoth/isReward). Changer une
- * constante ou ajouter une carte met donc ces règles à jour TOUT SEUL.
+ * constante ou ajouter un bonus met donc ces règles à jour TOUT SEUL.
  * ⚠️ CE QUI PEUT ENCORE MENTIR : la PROSE — « qui choisit quoi », le barème des duels, l'ordre
  * des phases. C'est exactement là qu'ont eu lieu toutes les dérives constatées le 2026-07-16
  * (« le gage voté au départ » = règle d'avant la v4.09 ; « le dernier fait le gage » affiché même
@@ -8064,15 +8092,15 @@ function viewRulesFull(){
    ${sec(t("🗓️ Le calendrier"), t("<b>Aller-retour intégral</b> : chacun rencontre chacun <b>exactement deux fois</b>, une fois à domicile et une fois à l'extérieur. Une ligue de <b>n</b> joueurs dure donc <b>2 × (n − 1) journées</b> (ex. 6 joueurs → 10 journées ; 12 joueurs → 22). Si le nombre d'humains est <b>impair</b>, un 🤖 <b>joueur IA</b> complète l'effectif pour équilibrer : il joue normalement mais ne subit ni gage ni récompense.")+' <i>'+t("(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)")+'</i>')}
 
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
-     ${li(t("La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend la carte 🧈 {c} jouable — une journée sans football est donc une journée où cette carte ne peut pas être jouée.",{a:POOL_N,b:75,c:t(CARDS.chance.n)}))}
+     ${li(t("La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend le bonus 🧈 {c} jouable — une journée sans football est donc une journée où ce bonus ne peut pas être jouée.",{a:POOL_N,b:75,c:t(CARDS.chance.n)}))}
      ${li(t("Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b>, ou s'ouvre d'un jour ou deux pour aller chercher une <b>plus belle affiche</b> plutôt qu'un match anonyme tout proche.",
        {a:POOL_N, h:FIN_SOIREE_H, f:FORMULAS.fast.bet+FORMULAS.fast.sel+FORMULAS.fast.bet, c:FORMULAS.classique.bet+FORMULAS.classique.sel+FORMULAS.classique.bet}))}
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
-     ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec la carte Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
+     ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
      ${li(t("En <b>📡 données réelles</b>, tu peux <b>modifier tes pronos jusqu'au coup d'envoi du premier de tes 5 matchs</b>. Un pari n'est montré aux autres que lorsqu'il ne peut <b>plus</b> changer — sinon voir le pari d'un adversaire encore modifiable donnerait un avantage, et pas une simple information. En 🎮 simulé, la clôture reste l'échéance de la formule."))}
      ${li(t("Tu désignes un <b>👑 Capitaine</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>."))}
-     ${li(t("Tu peux jouer <b>une carte bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution."))}
-     ${li(t("À la <b>clôture</b>, les pronos de tout le monde peuvent être révélés — <b>uniquement en matchs réels</b> et si l'option premium <b>Voir l'adversaire</b> a été souscrite. En <b>matchs simulés</b>, la journée se résout aussitôt, sans phase de découverte. Les cartes, elles, restent cachées jusqu'aux résultats."))}
+     ${li(t("Tu peux jouer <b>un bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution."))}
+     ${li(t("À la <b>clôture</b>, les pronos de tout le monde peuvent être révélés — <b>uniquement en matchs réels</b> et si l'option premium <b>Voir l'adversaire</b> a été souscrite. En <b>matchs simulés</b>, la journée se résout aussitôt, sans phase de découverte. Les bonus, elles, restent cachées jusqu'aux résultats."))}
      ${li(t("Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement."))}
    </ol>`)}
 
@@ -8099,20 +8127,20 @@ function viewRulesFull(){
        ? t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>2 pts</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")
        : t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")}`)}
 
-   ${sec(t("🃏 Les cartes bonus"), `${t("Au démarrage, chacun <b>mise en aveugle</b> sur les cartes qu'il veut. Chaque carte revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>.")}<br>
-     ${t("Total des mises ≤ <b>{a} €</b>, et pas plus de cartes que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.",{a:SHOP_CAP})}<br>
-     ${t("<b>Une carte = un seul propriétaire</b> dans la ligue, et <b>une seule carte jouée par journée</b>. Une carte jouée est consommée.")}<br>
-     ${t("Les cartes <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'une carte, c'est-à-dire ce qu'elle peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'elle peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire elle ne sert à rien, elle ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (elle peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les secondes ne sont pas à éviter — ce sont les cartes des joueurs qui assument leurs pronos.")}<br>
+   ${sec(t("🃏 Les bonus"), `${t("Au démarrage, chacun <b>mise en aveugle</b> sur les bonus qu'il veut. Chaque bonus revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>.")}<br>
+     ${t("Total des mises ≤ <b>{a} €</b>, et pas plus de bonus que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.",{a:SHOP_CAP})}<br>
+     ${t("<b>Un bonus = un seul propriétaire</b> dans la ligue, et <b>un seul bonus joué par journée</b>. Un bonus joué est consommée.")}<br>
+     ${t("Les bonus <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'un bonus, c'est-à-dire ce qu'elle peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'elle peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire elle ne sert à rien, elle ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (elle peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les secondes ne sont pas à éviter — ce sont les bonus des joueurs qui assument leurs pronos.")}<br>
      ${t("⚠️ Le <b>👑 Capitaine</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 🏷️ Deux pour le prix d'un, 🎁 Chérie c'est cadeau et 🤛 Dans ta face.")}
-     ${t("<i>Le jeu <b>complet</b> des cartes (mode Complet, avec les cartes d'interaction) est une option premium — à souscrire ; paiement désactivé pendant les tests.</i>")}
-     <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><b class="mini">${t("Les {a} cartes",{a:CARD_IDS.length})}</b></div>
+     ${t("<i>Le jeu <b>complet</b> des bonus (mode Complet, avec les bonus d'interaction) est une option premium — à souscrire ; paiement désactivé pendant les tests.</i>")}
+     <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px"><b class="mini">${t("Les {a} bonus",{a:CARD_IDS.length})}</b></div>
      ${cardsAZ().map(card).join("")}`)}
 
-   ${sec(t("🤝 Racheter un bonus"), `${t("En cours de championnat, tu peux <b>racheter une carte bonus</b> à un adversaire, contre une somme de ton capital (monnaie virtuelle).")}<br>
-     ${t("Tu proposes un prix ; l'autre est <b>libre d'accepter ou de refuser</b>. S'il accepte, la carte passe dans ta main et le montant lui est <b>transféré</b> — rien n'est créé, rien ne disparaît.")}<br>
-     ${t("Tu peux aussi <b>vendre</b> une de tes cartes à un joueur (il paie, il la reçoit) — pratique pour te refaire du capital.")}<br>
-     ${t("⏳ <b>Quand ?</b> Un échange n'est possible <b>qu'entre deux journées</b> : tant que <b>ni le vendeur ni l'acheteur</b> n'a validé son pari du jour. Dès qu'un pari est verrouillé, les échanges le concernant sont gelés jusqu'à la résolution (ça protège la règle du capital jamais négatif et évite qu'une carte soit vendue et jouée en même temps).")}<br>
-     ${t("On n'échange que des cartes <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.",{a:TRADE_MIN_CAP})}<br>
+   ${sec(t("🤝 Racheter un bonus"), `${t("En cours de championnat, tu peux <b>racheter un bonus</b> à un adversaire, contre une somme de ton capital (monnaie virtuelle).")}<br>
+     ${t("Tu proposes un prix ; l'autre est <b>libre d'accepter ou de refuser</b>. S'il accepte, le bonus passe dans ta main et le montant lui est <b>transféré</b> — rien n'est créé, rien ne disparaît.")}<br>
+     ${t("Tu peux aussi <b>vendre</b> une de tes bonus à un joueur (il paie, il la reçoit) — pratique pour te refaire du capital.")}<br>
+     ${t("⏳ <b>Quand ?</b> Un échange n'est possible <b>qu'entre deux journées</b> : tant que <b>ni le vendeur ni l'acheteur</b> n'a validé son pari du jour. Dès qu'un pari est verrouillé, les échanges le concernant sont gelés jusqu'à la résolution (ça protège la règle du capital jamais négatif et évite qu'un bonus soit vendue et jouée en même temps).")}<br>
+     ${t("On n'échange que des bonus <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.",{a:TRADE_MIN_CAP})}<br>
      ${t("Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.")}<br>
      <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i>`)}
 
