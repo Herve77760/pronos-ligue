@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.58";
+const APP_VERSION = "v7.60";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1636,6 +1636,14 @@ const EN={
   "• À la fin : le <b>champion</b> reçoit la <b>récompense</b> votée par le <b>dernier</b> 🏆.":"• At the end: the <b>champion</b> gets the <b>reward</b> voted by the <b>last-placed player</b> 🏆.",
   "• À la fin : le <b>dernier</b> fait le <b>gage</b> voté par le vainqueur 😅, et le <b>champion</b> reçoit la <b>récompense</b> votée par le dernier 🏆.":"• At the end: the <b>last-placed player</b> does the <b>forfeit</b> voted by the winner 😅, and the <b>champion</b> gets the <b>reward</b> voted by the last-placed player 🏆.",
   "CODE D'INVITATION":"INVITE CODE", "📋 Copier le code":"📋 Copy the code",
+  "CODE DE LA LIGUE":"LEAGUE CODE",
+  // — v7.60 : la fenêtre « détail des points », journée par journée —
+  "Détail des points":"Points breakdown", "Jour":"Day", "J{a}":"D{a}", "Pén.":"Pen.", "Cumul":"Total",
+  "Total":"Total", "Aucun point de pénalité.":"No penalty points.",
+  "Dernière journée : les points de duel comptent double.":"Final matchday: duel points count double.",
+  "⚠️ Le total enregistré ({a}) ne correspond pas au détail recalculé ({b}) — merci de le signaler.":"⚠️ The recorded total ({a}) does not match the recomputed breakdown ({b}) — please report this.",
+  "Partage-le pour inviter d'autres joueurs.":"Share it to invite more players.",
+  "La saison a démarré : on ne peut plus rejoindre cette ligue.":"The season has started: this league can no longer be joined.",
   "Joueurs inscrits · {a}/{b}":"Players signed up · {a}/{b}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
   "Joueur IA":"AI player", "ajouté au lancement (nombre impair)":"added at launch (odd number)", "équilibre":"balance",
   "⏱️ Formule de rythme":"⏱️ Pace format", "✓ choisie":"✓ chosen", "choisir":"choose",
@@ -4330,7 +4338,19 @@ function viewPrepSummary(){
    <button class="btn" onclick="ackPrep()">${t("C'est parti ! →")}</button>`;
 }
 function viewCoulisses(){
+  /* CODE DE LA LIGUE (v7.59, demandé par Hervé : « il est parfois difficile de retrouver le code
+     d'une ligue une fois créée, je dois ressortir sur la liste de toutes les ligues »). Le code
+     n'était visible QUE dans le salon d'attente et dans « Mes ligues » — donc plus du tout une
+     fois la saison lancée, alors que c'est là qu'on en a besoin (en parler, la retrouver, la
+     signaler). Les Coulisses sont l'endroit qu'il a proposé, et le bon : c'est la page d'identité
+     de la ligue, celle qu'on ouvre pour se rappeler comment elle a commencé.
+     ⚠️ Le libellé n'est PAS « code d'invitation » ici : une fois la ligue démarrée, on ne peut
+     plus la rejoindre (`joinLeague` refuse tout statut autre que le salon). Promettre une
+     invitation qui échouera serait pire que de ne rien afficher. */
   return `<div class="box"><h2 style="margin-top:0">${t("🎪 Les Coulisses de l'ouverture")}</h2><div class="mini muted">${t("Comment tout a commencé : le vote du gage et la grande vente aux enchères des bonus.")}</div></div>
+   <div class="box" style="text-align:center"><div class="mini muted">${t("CODE DE LA LIGUE")}</div><div class="code">${esc(L.code)}</div>
+     <div style="margin-top:8px"><button class="btn sm" onclick="copyCode()">${t("📋 Copier le code")}</button></div>
+     <div class="mini muted" style="margin-top:8px">${L.status==="prep"?t("Partage-le pour inviter d'autres joueurs."):t("La saison a démarré : on ne peut plus rejoindre cette ligue.")}</div></div>
    ${L.prep_summary?prepSummaryBody():`<div class="box mini muted">${t("La ligue n'a pas encore démarré : le tirage arrive bientôt !")}</div>`}
    ${(L.prep_summary && L.status==="running")?`<button class="btn" onclick="goGame()">⚽ ${t("Aller aux pronos →")}</button>`:''}`;
 }
@@ -5711,7 +5731,21 @@ function recapBody(D){
   if(loadedDay!==D && Array.isArray(chartBets) && Array.isArray(standDuels)){ bets=chartBets.filter(b=>b.day===D); duels=standDuels.filter(x=>x.day===D); _restore=true; }
   try{
   const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
-  const forgot=pid=>{ const b=bets.find(x=>x.player_id===pid); return !!(b&&Array.isArray(b.picks)&&b.picks.length===0); };
+  /* ⚠️ v7.60 — CE `forgot` DOIT ÊTRE LE MÊME QUE CELUI DU REJEU. Il ne testait que « pronos vides »
+     et ignorait `submitted:false`, la marque écrite par resolveDay au moment de la résolution. Un
+     joueur ayant saisi des pronos SANS LES VALIDER était donc considéré comme présent sur cet
+     écran (points de duel normaux, éligible à l'étoile) alors que le championnat le comptait
+     absent (0 pt de duel, pénalité). D'où des journées qui ne s'additionnaient pas jusqu'au total
+     du classement — c'est ce qu'Hervé a passé plusieurs échanges à traquer sur la ligue 4ZNZT.
+     Miroir EXACT de computeStandHist : présence ce jour-là d'abord, puis `submitted:false`, puis
+     le repli sur les pronos vides pour les journées antérieures à cette colonne.
+     ⚠️ Le nom `inDay` est DÉJÀ PRIS plus bas dans cette même fonction (par une liste de joueurs,
+     pas un test) — d'où `joueLeJour`. */
+  const joueLeJour=pid=>duels.some(d=>d.home_id===pid||d.away_id===pid);
+  const forgot=pid=>{ if(!joueLeJour(pid)) return false; const b=bets.find(x=>x.player_id===pid);
+    if(b && b.submitted===false) return true;
+    const pl=pById(pid); if(pl && pl.is_ai) return false;   // une IA jouée automatiquement n'oublie pas
+    return !b || !Array.isArray(b.picks) || b.picks.length===0; };
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
   const lastMult=lastDayMult(D);   // dernière journée : points de duel ×2 (cohérent avec resolveDay/computeStandHist)
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
@@ -5720,7 +5754,10 @@ function recapBody(D){
     const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id),isScoring2()); dpts[d.home_id]+=r.h*lastMult; dpts[d.away_id]+=r.a*lastMult; });
     // (v4.13 — le malus « −1 pt si tous les paris faux » qui s'appliquait ici est supprimé, cf. resolveDay.)
   const starOn=starMech(players.length);   // ⭐ désactivée à 2 joueurs (points + affichage)
-  const starId=starOn?dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }), isScoring2()):null;
+  // ⚠️ `.filter(r=>r.mise>0)` : MANQUAIT ICI (v7.60). Un joueur dont tous les paris ont été annulés
+  // a un net de 0 ARTIFICIEL — resolveDay et computeStandHist l'écartent de l'étoile, pas cet
+  // écran. Il pouvait donc afficher une ⭐ que le classement ne lui donnait pas.
+  const starId=starOn?dayStar(players.filter(p=>!forgot(p.id)).map(p=>{ const b=bets.find(x=>x.player_id===p.id); const d=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const gm=gainMise(b&&b.picks, d&&d.fixtures); return {id:p.id, net:netMap[p.id]||0, gain:gm.gain, mise:gm.mise, order:p.join_order||0}; }).filter(r=>r.mise>0), isScoring2()):null;
   if(starId!=null) dpts[starId]+=1;
   players.forEach(p=>{ if(forgot(p.id)) dpts[p.id]+=forgotPtsOf(); }); // pénalité d'oubli (alignée sur resolveDay/classement)
   // Classement de la journée : d'abord les POINTS du jour (duel + ⭐ − malus), puis le gain en cas d'égalité.
@@ -6228,7 +6265,10 @@ function computeStandHist(){
     // resolveDay ferait diverger le classement rejoué de celui écrit en base.
     const isLastDay=(d===((L.num_days||0)-1));
     const broke=isLastDay?[]:players.filter(p=>st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
-    if(broke.length){ broke.forEach(p=>{ if(st[p.id]){ st[p.id].capital=RECAP_TARGET; st[p.id].points-=1; st[p.id].penRecap++; st[p.id].recapJours.push(d+2); } }); }
+    // ⚠️ v7.60 : la journée notée est celle où LE POINT EST RETIRÉ (d+1), plus celle où l'argent
+    // arrive (d+2). Le détail des points est un compte de POINTS : y dater une pénalité à la
+    // journée suivante rendait la colonne impossible à rapprocher du cumul affiché juste à côté.
+    if(broke.length){ broke.forEach(p=>{ if(st[p.id]){ st[p.id].capital=RECAP_TARGET; st[p.id].points-=1; st[p.id].penRecap++; st[p.id].recapJours.push(d+1); } }); }
     snaps.push(players.map(p=>({ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
       points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star, penOubli:st[p.id].penOubli, penRecap:st[p.id].penRecap, penJours:st[p.id].penJours.slice(), recapJours:st[p.id].recapJours.slice() })));
   }
@@ -6907,10 +6947,14 @@ function starCumul(nbJours){
    Une pénalité de la journée 1 reste donc affichée à la journée 8 et sur le classement final.
    Chaque instantané porte le cumul À CETTE DATE : sur le classement d'une journée passée, on voit
    ce qui était retiré à ce moment-là, pas le total final — c'est bien l'historique, pas un report. */
+/* ⚠️ v7.60 — LE TOTAL EST CLIQUABLE POUR TOUT LE MONDE, pénalisé ou non. Hervé a passé plusieurs
+   échanges à essayer de rapprocher un total de ses journées, en additionnant à la main ce qu'il
+   lisait sur d'autres écrans (« il devrait avoir 9 points, le total indique 8 »). Un total qu'on
+   ne peut pas décomposer n'est pas vérifiable : il faut le croire. Il ouvre maintenant le
+   détail complet, journée par journée. Le rouge et le ⚠️ restent réservés aux pénalités. */
 function ptsAvecPen(p,idx){
   const nb=(p.penOubli||0)+(p.penRecap||0);
-  if(!nb) return `<b>${p.points}</b>`;
-  return `<b class="red clik" onclick="showPenInfo('${p.id}',${idx==null?-1:idx},${+p.points||0})" title="${t("Points de pénalité")}">${p.points} ⚠️</b>`;
+  return `<b class="${nb?'red ':''}clik" onclick="showPenInfo('${p.id}',${idx==null?-1:idx},${+p.points||0})" title="${nb?t("Points de pénalité"):t("Détail des points")}">${p.points}${nb?' ⚠️':''}</b>`;
 }
 /* `idx` = rang de l'instantané à lire (-1 = le dernier, donc le total de la saison). On relit le
    rejeu plutôt que de faire transiter des tableaux par un `onclick` — plus simple, et surtout une
@@ -6922,21 +6966,50 @@ function ptsAvecPen(p,idx){
    chiffre que celui affiché juste au-dessus (constaté sur 4ZNZT : 8 au tableau, « 9 » dans la
    fenêtre au lieu de 10). L'explication doit TOUJOURS repartir du nombre que le joueur a sous les
    yeux — sinon elle est fausse à ses yeux, même si le calcul est juste dans l'absolu. */
+/* ⚠️ v7.60 — LE DÉTAIL EST DÉDUIT DES INSTANTANÉS PAR SOUSTRACTION, jamais recalculé.
+   L'apport d'une journée = ce qui a changé entre son instantané et le précédent. Les points de
+   duel eux-mêmes ne sont pas recomptés : ils se DÉDUISENT (variation du total − étoile − pénalité).
+   C'est volontaire et c'est tout l'intérêt — un recomptage serait une Nième version de la règle,
+   et c'est exactement ce qui a produit les écarts des versions v7.58 et v7.59. Par construction,
+   la colonne « Cumul » se termine donc toujours sur le total affiché au classement. */
 function showPenInfo(pid,idx,shownPts){
   const snaps=computeStandHist(); if(!snaps.length) return;
-  const snap=snaps[(idx==null||idx<0||idx>=snaps.length)?snaps.length-1:idx];
-  const p=(snap||[]).find(x=>x.id===pid); if(!p) return;
+  const last=(idx==null||idx<0||idx>=snaps.length)?snaps.length-1:idx;
+  const at=(d,id)=>((snaps[d]||[]).find(x=>x.id===id))||null;
+  const p=at(last,pid); if(!p) return;
   const pts=(shownPts==null||isNaN(+shownPts))?p.points:+shownPts;
   const parOubli=forgotPtsOf(); const jours=a=>(a||[]).map(n=>"J"+n).join(", ");
+  const starOn=starMech(players.length); const nd=(L.num_days||0);
+  let sDuel=0, sStar=0, sPen=0; const tr=[];
+  for(let d=0; d<=last; d++){
+    const c=at(d,pid); if(!c) continue; const pr=(d>0)?at(d-1,pid):null;
+    const g=k=>(c[k]||0)-(pr?(pr[k]||0):0);
+    const dStar=g("star"), pen=g("penOubli")*parOubli - g("penRecap"), duel=g("points")-dStar-pen;
+    sDuel+=duel; sStar+=dStar; sPen+=pen;
+    tr.push(`<tr><td>${t("J{a}",{a:d+1})}${(d===nd-1)?` <span class="mini muted" title="${t("Dernière journée : les points de duel comptent double.")}">×2</span>`:''}</td>
+      <td class="num">${duel}</td>${starOn?`<td class="num">${dStar?'+'+dStar:'–'}</td>`:''}
+      <td class="num${pen?' red':''}">${pen?pen:'–'}</td><td class="num"><b>${c.points}</b></td></tr>`);
+  }
   const l=[];
   if(p.penOubli) l.push(`⏰ ${t("<b>{b} pt</b> — pronos non validés à temps : {c}",{b:p.penOubli*parOubli,c:jours(p.penJours)})}`);
   if(p.penRecap) l.push(`💸 ${t("<b>−{a} pt</b> — recapitalisation : {c}",{a:p.penRecap,c:jours(p.recapJours)})}`);
   const total=p.penOubli*parOubli - p.penRecap;
-  infoModal("⚠️", t("Points de pénalité"),
-    `<div class="mini" style="text-align:left;line-height:1.7"><b>${esc(p.name||"?")}</b><br>${l.join("<br>")}
-       <div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px">${
-         t("Total retiré : <b>{a} pt</b>. Sans ces pénalités, {b} en serait à <b>{c} pts</b>.",
-           {a:total, b:esc(p.name||"?"), c:(pts-total)})}</div></div>`);
+  infoModal(total?"⚠️":"📊", t("Détail des points"),
+    `<div class="mini" style="text-align:left;line-height:1.6"><b>${esc(p.name||"?")}</b>
+       <div style="overflow-x:auto;margin-top:6px"><table style="width:100%"><tr>
+         <th style="text-align:left">${t("Jour")}</th><th style="text-align:right">${t("Duel")}</th>
+         ${starOn?`<th style="text-align:right">⭐</th>`:''}
+         <th style="text-align:right">${t("Pén.")}</th><th style="text-align:right">${t("Cumul")}</th></tr>
+         ${tr.join("")}
+         <tr style="border-top:1px solid var(--border)"><td><b>${t("Total")}</b></td><td class="num"><b>${sDuel}</b></td>
+           ${starOn?`<td class="num"><b>${sStar||'–'}</b></td>`:''}
+           <td class="num${sPen?' red':''}"><b>${sPen||'–'}</b></td><td class="num"><b>${p.points}</b></td></tr></table></div>
+       ${l.length?`<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px">${l.join("<br>")}
+         <div style="margin-top:5px">${t("Total retiré : <b>{a} pt</b>. Sans ces pénalités, {b} en serait à <b>{c} pts</b>.",
+           {a:total, b:esc(p.name||"?"), c:(pts-total)})}</div></div>`
+        :`<div class="muted" style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px">${t("Aucun point de pénalité.")}</div>`}
+       ${(pts!==p.points)?`<div class="red" style="margin-top:7px">${t("⚠️ Le total enregistré ({a}) ne correspond pas au détail recalculé ({b}) — merci de le signaler.",{a:pts,b:p.points})}</div>`:''}
+       </div>`);
 }
 function viewStandings(){
   // Ligue terminée → l'onglet Classement EST l'écran de fin (vainqueur + classement final + bilan),
