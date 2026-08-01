@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.52";
+const APP_VERSION = "v7.53";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1829,6 +1829,20 @@ const EN={
   "📅 Journée 1 — tes pronos":"📅 Day 1 — your predictions", "📅 Journée 2 — tes pronos":"📅 Day 2 — your predictions",
   "Choisis un résultat par match et, si tu veux, un 👑 Capitaine (gain/perte ×2). Mise fixe {a} € par pari.":"Pick one result per match and, if you want, a 👑 Captain (gain/loss ×2). Fixed stake €{a} per bet.",
   "il y a <b>5 matchs</b> par journée (ici 3 pour aller vite), et tu peux jouer <b>1 bonus</b> par journée.":"there are <b>5 matches</b> per day (3 here to go fast), and you can play <b>1 bonus</b> per day.",
+  // Titres des fenêtres de confirmation (v7.53).
+  "Changer d'avatar":"Change avatar", "Clôturer la préparation":"Close the preparation",
+  "Clôturer les pronos":"Close the picks", "Fermer la ligue":"Close the league",
+  "Publier les résultats":"Publish the results", "Retirer un joueur":"Remove a player",
+  "Se déconnecter":"Log out", "Souscrire":"Subscribe", "Tirer les matchs manquants":"Draw the missing matches",
+  "Lancer le championnat":"Start the championship",
+  "Fermer":"Close",
+  // Fenêtres de confirmation à la charte du jeu (v7.53).
+  "Attention à ton capital":"Careful with your balance", "Valider quand même":"Confirm anyway",
+  "Annuler":"Cancel", "Confirmer":"Confirm",
+  "Si <b>tous</b> tes pronos sont faux, tu finirais la journée à <b>{a} €</b> — sous le seuil de <b>{b} €</b>.":"If <b>every</b> pick of yours is wrong, you'd end the day at <b>{a} €</b> — below the <b>{b} €</b> threshold.",
+  "Ton capital serait alors remonté à <b>{c} €</b>…":"Your balance would then be topped back up to <b>{c} €</b>…",
+  "…mais tu perdrais <b>1 point</b> au classement.":"…but you'd lose <b>1 point</b> in the standings.",
+  "C'est le pire cas : il ne se produira que si aucun de tes pronos ne passe.":"That's the worst case: it only happens if not a single pick of yours comes in.",
   // Approche du seuil de recapitalisation (v7.52) : repère sur l'écran de pari + garde à la validation.
   "Tu approches du seuil : sous <b>{a} €</b> en fin de journée, ton capital est remonté à <b>{b} €</b> mais tu perds <b>1 point</b>.":"You're nearing the threshold: below <b>{a} €</b> at the end of the day, your balance is topped back up to <b>{b} €</b> but you lose <b>1 point</b>.",
   "Tu es <b>sous {a} €</b> : si tu finis la journée ainsi, ton capital sera remonté à <b>{b} €</b> et tu perdras <b>1 point</b>.":"You're <b>below {a} €</b>: if you end the day like this, your balance will be topped back up to <b>{b} €</b> and you'll lose <b>1 point</b>.",
@@ -2848,7 +2862,7 @@ function showPremiumInfo(key){
 async function subscribeOpt(key){
   const p=PITCHES[key]; if(!p) return;
   if(ownsOpt(key)) return;                              // déjà active
-  if(!confirm(t("Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.",{a:t(p.t)}))) return;
+  if(!await confirmTxt("🛒",t("Souscrire à cette option"),t("Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.",{a:t(p.t)}),t("Souscrire"))) return;
   // ⚠️ v7.45 — on écrit la clé AVEC son échéance (un an). On RETIRE d'abord toute trace de la même
   // option : sans ça, réactiver une option périmée laisserait l'ancienne entrée à côté de la
   // nouvelle, et `optEntry` renverrait la périmée (première trouvée) — l'achat n'aurait aucun effet.
@@ -2959,7 +2973,36 @@ function showBonusImpact(pid,day){
   if(!hasSelf&&!hasOpp) body+=`<div class="mini muted" style="text-align:left;margin-top:8px">${t("Aucun effet chiffré ce jour-là.")}</div>`;
   infoModal(C.e, esc(t(C.n))+" — "+t("l'effet"), body);
 }
-function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.remove(); }
+/* ---- FENÊTRE DE CONFIRMATION À LA CHARTE DU JEU (v7.53, demandé par Hervé) -----------------
+   `confirm()` du navigateur ne peut pas être mis en forme : ni emoji mis en valeur, ni couleur,
+   ni texte en gras — sur iPhone il affiche même l'adresse du site en tête, ce qui fait « site web »
+   au milieu d'une app. On réutilise donc `infoModal` avec ses propres boutons (option `sansOk`,
+   déjà employée par le formulaire de remontée).
+   ⚠️ LE PIÈGE : une promesse qui ne se résout JAMAIS. Si le joueur ferme la fenêtre en touchant
+   à côté, `closeCardInfo()` retire la boîte mais personne ne répond à l'appelant, qui reste en
+   attente pour toujours — son pari ne serait ni enregistré ni annulé, sans le moindre message.
+   D'où la résolution FORCÉE à « non » dans `closeCardInfo` : toute fermeture vaut refus. */
+let _confirmResolve=null;
+function confirmModal(emoji,title,bodyHTML,okLabel){
+  return new Promise(res=>{ _confirmResolve=res;
+    infoModal(emoji,title,`${bodyHTML}
+      <div class="row" style="gap:8px;margin-top:16px">
+        <button class="btn ghost" style="flex:1" onclick="confirmModalEnd(false)">${t("Annuler")}</button>
+        <button class="btn" style="flex:1" onclick="confirmModalEnd(true)">${okLabel}</button>
+      </div>`, true); });
+}
+function confirmModalEnd(v){ const r=_confirmResolve; _confirmResolve=null; closeCardInfo(); if(r) r(v); }
+/* Raccourci pour les confirmations à texte simple — celles qui remplacent les `confirm()` d'origine.
+   ⚠️ Les anciens textes contenaient des sauts de ligne `\n\n`, invisibles en HTML : on les convertit
+   en <br>, sinon tout le message se retrouvait aggloméré en un seul pavé. */
+function confirmTxt(emoji,titre,txt,okLabel){
+  return confirmModal(emoji,titre,
+    `<div class="mini" style="text-align:left;line-height:1.7">${String(txt).replace(/\n/g,"<br>")}</div>`,
+    okLabel||t("Confirmer")); }
+function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.remove();
+  // Fermeture par le fond ou par un autre chemin : on répond « non » plutôt que de laisser
+  // l'appelant suspendu (voir l'avertissement ci-dessus).
+  if(_confirmResolve){ const r=_confirmResolve; _confirmResolve=null; r(false); } }
 /* ---- Notifications (onglet ouvert : système si en arrière-plan, sinon rappel dans l'app) ---- */
 let notifKey=null;
 function notifAvailable(){ return typeof window!=="undefined" && "Notification" in window; }
@@ -3475,7 +3518,7 @@ async function doSignup(){
   AUTH={ id:data.user.id, name:u, avatar:"", options:null };
   S.view="home"; busy=false; await loadMyLeagues();
 }
-async function logout(){ if(!confirm(t("Se déconnecter ?")))return; sortirConsultation(); if(poll)clearInterval(poll);
+async function logout(){ if(!await confirmTxt("👋",t("Se déconnecter"),t("Se déconnecter ?")))return; sortirConsultation(); if(poll)clearInterval(poll);
   try{ await db.auth.signOut(); }catch(e){} localStorage.removeItem("pl_last"); AUTH=null; myLeagues=[];
   S={view:"auth",leagueId:null,myId:null,code:null,recap:false,dispDay:0,nav:[]}; L=null; render(); }
 
@@ -3512,12 +3555,12 @@ function howItWorksHTML(){
 // vient déjà de choisir explicitement son image — lui redemander serait une confirmation de trop.
 // Le message est plus insistant quand on remplace une PHOTO CHARGÉE : c'est la perte réelle,
 // l'illustration se retrouve en un clic, l'image chargée demande de la retrouver et de la renvoyer.
-function choisirAvatar(v){
+async function choisirAvatar(v){
   if(AUTH && AUTH.avatar===v) return;                        // déjà le sien : rien à confirmer
   const photo=/^https?:\/\//.test(AUTH&&AUTH.avatar||"");
   const q1=photo ? t("Remplacer ton image personnelle par cet avatar ?\n\nTon image sera retirée — il faudra la recharger pour la remettre.")
                  : t("Choisir cet avatar ?");
-  if(!confirm(q1)) return;
+  if(!await confirmTxt("🖼️",t("Changer d'avatar"),q1)) return;
   setAvatar(v);
 }
 async function setAvatar(em){
@@ -4494,7 +4537,7 @@ async function setFormulaNext(){
   const planned = pend0? pend0.formula : nat;
   const next=(planned==='fast')?'classique':'fast';
   const revert=(next===nat);   // le toggle ramène au format actuel → on annule simplement le changement
-  if(!confirm(revert
+  if(!await confirmTxt("⏱️",t("Changement de format"), revert
       ? t("Annuler le changement et rester en {a} à la journée {b} ?",{a:FORMULAS[nat].n,b:day+1})
       : t("Passer la ligue en {a} à partir de la journée {b} ? Tous les joueurs en seront informés.",{a:FORMULAS[next].n,b:day+1}))) return;
   busy=true;
@@ -4514,7 +4557,7 @@ async function setEnjeu(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&m
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.enjeu=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Enjeu : "+e.message); } busy=false; }
 async function kickPlayer(pid){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
-  const p=players.find(x=>x.id===pid)||{}; if(!confirm(t("Retirer {a} du tournoi ?",{a:(p.name||"ce joueur")})))return;
+  const p=players.find(x=>x.id===pid)||{}; if(!await confirmTxt("🚪",t("Retirer un joueur"),t("Retirer {a} du tournoi ?",{a:(p.name||"ce joueur")})))return;
   busy=true; try{ await q(db.from("players").delete().eq("id",pid).eq("league_id",L.id)); await refresh(); }
   catch(e){ showErr("Retrait : "+e.message); } busy=false; }
 async function relaunchLeague(){
@@ -4545,7 +4588,7 @@ async function closeRegistration(){
   // Un 🤖 joueur IA est ajouté dès que le nombre d'HUMAINS est IMPAIR (solo compris) → il faut l'option
   // premium « joueur IA » (avant : seul le solo était bloqué → un impair passait sans l'option, bug Hervé).
   if(nH%2===1 && !requireOpt('ia')) return;
-  if(!confirm(soloNow
+  if(!await confirmTxt("🚀",t("Lancer le championnat"), soloNow
     ? t("Lancer la partie en SOLO contre le 🤖 joueur IA ? Personne d'autre ne pourra rejoindre. Pas de gage ni de récompense, et {a} journées à jouer.",{a:getSoloAR()*2})
     : (nH%2===1
       ? t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.")
@@ -4897,7 +4940,7 @@ async function savePrep(){ if(busy)return;
 // l'échéance stockée dans le JSON `gage` → refresh déclenche resolvePrep (allDone || dlPassed).
 // Les joueurs qui n'ont pas validé partent sans bonus et sans vote — utile pour tester ce cas.
 async function forcePrepEnd(){ if(!(me()&&me().is_organizer)||busy)return;
-  if(!confirm(t("Clôturer la préparation maintenant ? Les joueurs qui n'ont pas validé démarreront sans bonus, et leur vote ne sera pas pris en compte.")))return; busy=true;
+  if(!await confirmTxt("🏁",t("Clôturer la préparation"),t("Clôturer la préparation maintenant ? Les joueurs qui n'ont pas validé démarreront sans bonus, et leur vote ne sera pas pris en compte.")))return; busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;}
     if(!st||!Array.isArray(st.options)){ busy=false; return; }
     st.deadline=new Date(Date.now()-60000).toISOString();
@@ -5187,8 +5230,14 @@ async function submitBet(){
     const capNow=((me()||{}).capital||0);
     const pire=capNow-worstLoss(bet.picks,bet.captain,myCard);
     if(capNow>=RECAP_THRESHOLD && pire<RECAP_THRESHOLD){
-      if(!confirm(t("Si tous tes pronos sont faux, tu finirais à {a} € — sous le seuil de {b} €.\n\nTon capital serait alors remonté à {c} €, mais tu perdrais 1 point au classement.\n\nValider quand même ?",
-                    {a:eur(Math.max(0,pire)),b:RECAP_THRESHOLD,c:RECAP_TARGET}))) return;
+      const ok=await confirmModal("⚠️", t("Attention à ton capital"),
+        `<div class="mini" style="text-align:left;line-height:1.7">
+           ${t("Si <b>tous</b> tes pronos sont faux, tu finirais la journée à <b>{a} €</b> — sous le seuil de <b>{b} €</b>.",{a:eur(Math.max(0,pire)),b:RECAP_THRESHOLD})}
+           <div style="margin-top:8px">💸 ${t("Ton capital serait alors remonté à <b>{c} €</b>…",{c:RECAP_TARGET})}</div>
+           <div style="margin-top:4px">📉 ${t("…mais tu perdrais <b>1 point</b> au classement.")}</div>
+           <div class="muted" style="margin-top:10px">${t("C'est le pire cas : il ne se produira que si aucun de tes pronos ne passe.")}</div>
+         </div>`, t("Valider quand même"));
+      if(!ok) return;
     }
   }
   busy=true;
@@ -5222,7 +5271,7 @@ async function forceCloseBets(){ if(!(me()&&me().is_organizer)||busy)return;
   if(duels.some(d=>!d.fixtures)){ infoModal("⏳", t("Étape précédente d'abord"),
       `<div class="mini" style="text-align:left">${t("Un duel n'a pas encore ses 5 matchs. Clôturer maintenant empêcherait les joueurs concernés de parier, et la journée ne pourrait pas se résoudre.")}</div>
        <div class="mini muted" style="text-align:left;margin-top:8px">${t("➡️ Utilise d'abord « 🎲 Tirer les matchs manquants ».")}</div>`); return; }
-  if(!confirm(t("Clôturer les pronos maintenant ? Plus personne ne pourra modifier et les pronos de tout le monde seront révélés. Les résultats viendront ensuite (tu pourras les publier toi-même).")))return; busy=true;
+  if(!await confirmTxt("🔒",t("Clôturer les pronos"),t("Clôturer les pronos maintenant ? Plus personne ne pourra modifier et les pronos de tout le monde seront révélés. Les résultats viendront ensuite (tu pourras les publier toi-même).")))return; busy=true;
   const f=leagueFormula(); const past=new Date(Date.now()-f.bet*3600000-60000).toISOString();
   try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
   catch(e){ showErr("Clôture : "+e.message); } busy=false; }
@@ -5230,7 +5279,7 @@ async function forceCloseBets(){ if(!(me()&&me().is_organizer)||busy)return;
 // l'échéance de sélection → ensureFixtures remplit les duels en attente. La fenêtre de paris démarre
 // ensuite normalement (bet_started_at posé quand tous les matchs sont choisis) : personne n'est lésé.
 async function forceSelectEnd(){ if(!(me()&&me().is_organizer)||busy)return;
-  if(!confirm(t("Choisir les matchs à la place des retardataires ? Les duels sans matchs seront remplis automatiquement et les paris pourront commencer.")))return; busy=true;
+  if(!await confirmTxt("🎲",t("Tirer les matchs manquants"),t("Choisir les matchs à la place des retardataires ? Les duels sans matchs seront remplis automatiquement et les paris pourront commencer.")))return; busy=true;
   const f=leagueFormula(); const past=new Date(Date.now()-f.sel*3600000-60000).toISOString();
   try{ await q(db.from("leagues").update({day_started_at:past}).eq("id",L.id)); L.day_started_at=past; await refresh(); }
   catch(e){ showErr("Sélection : "+e.message); } busy=false; }
@@ -5245,7 +5294,7 @@ async function forcePublishResults(){ if(!(me()&&me().is_organizer)||busy)return
       `<div class="mini" style="text-align:left">${duels.some(d=>!d.fixtures)
         ? t("Un duel n'a pas encore ses 5 matchs — tire-les d'abord.")
         : t("Les pronos ne sont pas encore clôturés — clôture-les d'abord.")}</div>`); return; }
-  if(!confirm(t("Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.")))return; busy=true;
+  if(!await confirmTxt("📣",t("Publier les résultats"),t("Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.")))return; busy=true;
   const f=leagueFormula(); const back=(2*(f.bet||24)+3)*3600000;
   const past=new Date(Date.now()-back).toISOString();
   try{ await q(db.from("leagues").update({bet_started_at:past}).eq("id",L.id)); L.bet_started_at=past; await refresh(); }
@@ -7096,7 +7145,7 @@ function showLeagueInfo(lid){
 }
 async function closeLeagueFromHome(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m||!m.org)return;
-  if(!confirm(t("Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible.")))return;
+  if(!await confirmTxt("📦",t("Fermer la ligue"),t("Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible."),t("Fermer"))) return;
   try{ await q(db.from("leagues").update({status:"done"}).eq("id",lid)); try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",lid)); }catch(e){} closeCardInfo(); infoWin(t("Ligue fermée.")); await loadMyLeagues(); }
   catch(e){ showErr("Fermeture : "+e.message); } }
 
@@ -7125,7 +7174,7 @@ function toggleReport(n){ repOpen=(repOpen===String(n))?"":String(n); render(); 
 // Suppression d'une remontée. ⚠️ Irréversible côté base (ni corbeille ni archive, voir la
 // migration) : la confirmation n'est donc pas une politesse, c'est le seul filet.
 async function adminDeleteReport(id, num){
-  if(!confirm("Supprimer définitivement la remontée n° "+num+" ?\n\nAction irréversible.")) return;
+  if(!await confirmTxt("🗑️","Supprimer la remontée","Supprimer définitivement la remontée n° "+num+" ?\n\nAction irréversible.","Supprimer")) return;
   try{ await q(db.rpc("admin_delete_report",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_id:id}));
     if(repOpen===String(num)) repOpen="";
     adminReports=await q(db.rpc("admin_list_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
@@ -7136,7 +7185,7 @@ async function adminDeleteReport(id, num){
 async function adminPurgeReports(){
   const n=(adminReports||[]).filter(r=>r.status==="traite").length;
   if(!n){ showErr("Aucune remontée marquée « traité » à supprimer."); return; }
-  if(!confirm("Supprimer définitivement les "+n+" remontée(s) marquées « traité » ?\n\nAction irréversible.")) return;
+  if(!await confirmTxt("🧹","Vider les remontées traitées","Supprimer définitivement les "+n+" remontée(s) marquées « traité » ?\n\nAction irréversible.","Supprimer")) return;
   try{ await q(db.rpc("admin_purge_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd}));
     repOpen="";
     adminReports=await q(db.rpc("admin_list_reports",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); showErr(""); render(); }
@@ -7151,18 +7200,18 @@ async function adminLoadUsers(){ const el=$("adminPwd"); const pwd=el?el.value:"
 // Self-service : un utilisateur CONNECTÉ change SON mot de passe sans l'ancien (session active).
 async function changeMyPassword(){ if(!AUTH) return;
   const np=prompt("Nouveau mot de passe pour TON compte (8 caractères minimum) :"); if(np==null) return;
-  if((np||"").length<8){ alert("8 caractères minimum."); return; }
+  if((np||"").length<8){ infoWin("8 caractères minimum.","⚠️"); return; }
   try{ const { error }=await db.auth.updateUser({ password: np }); if(error) throw error; infoWin("✅ Ton mot de passe a bien été changé."); }
   catch(e){ showErr("Changement : "+e.message); } }
 async function adminResetPwd(uid){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
   const np=prompt("Nouveau mot de passe pour « "+(u.username||"?")+" » (6 caractères minimum) :"); if(np==null) return;
-  if((np||"").length<6){ alert("6 caractères minimum."); return; }
+  if((np||"").length<6){ infoWin("6 caractères minimum.","⚠️"); return; }
   try{ await q(db.rpc("admin_set_password",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_new_password:np})); infoWin("Mot de passe réinitialisé pour "+esc(u.username||"")); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Reset : "+e.message)); } }
 // Couper / réactiver l'accès d'un joueur (bannissement natif Supabase). L'admin ne peut pas se bloquer.
 async function adminSetBlocked(uid, block){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
-  if(uid===AUTH.id){ alert("Tu ne peux pas te bloquer toi-même."); return; }
-  if(!confirm((block?"Couper l'accès de « ":"Réactiver l'accès de « ")+(u.username||"?")+" » ?")) return;
+  if(uid===AUTH.id){ infoWin("Tu ne peux pas te bloquer toi-même.","⚠️"); return; }
+  if(!await confirmTxt(block?"🔒":"🔓","Accès du compte",(block?"Couper l'accès de « ":"Réactiver l'accès de « ")+(u.username||"?")+" » ?")) return;
   try{ await q(db.rpc("admin_set_blocked",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_blocked:block}));
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render();
     infoWin(block?("🔒 Accès coupé pour "+esc(u.username||"")):("🔓 Accès réactivé pour "+esc(u.username||""))); }
