@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.50";
+const APP_VERSION = "v7.52";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1829,6 +1829,10 @@ const EN={
   "📅 Journée 1 — tes pronos":"📅 Day 1 — your predictions", "📅 Journée 2 — tes pronos":"📅 Day 2 — your predictions",
   "Choisis un résultat par match et, si tu veux, un 👑 Capitaine (gain/perte ×2). Mise fixe {a} € par pari.":"Pick one result per match and, if you want, a 👑 Captain (gain/loss ×2). Fixed stake €{a} per bet.",
   "il y a <b>5 matchs</b> par journée (ici 3 pour aller vite), et tu peux jouer <b>1 bonus</b> par journée.":"there are <b>5 matches</b> per day (3 here to go fast), and you can play <b>1 bonus</b> per day.",
+  // Approche du seuil de recapitalisation (v7.52) : repère sur l'écran de pari + garde à la validation.
+  "Tu approches du seuil : sous <b>{a} €</b> en fin de journée, ton capital est remonté à <b>{b} €</b> mais tu perds <b>1 point</b>.":"You're nearing the threshold: below <b>{a} €</b> at the end of the day, your balance is topped back up to <b>{b} €</b> but you lose <b>1 point</b>.",
+  "Tu es <b>sous {a} €</b> : si tu finis la journée ainsi, ton capital sera remonté à <b>{b} €</b> et tu perdras <b>1 point</b>.":"You're <b>below {a} €</b>: if you end the day like this, your balance will be topped back up to <b>{b} €</b> and you'll lose <b>1 point</b>.",
+  "Si tous tes pronos sont faux, tu finirais à {a} € — sous le seuil de {b} €.\n\nTon capital serait alors remonté à {c} €, mais tu perdrais 1 point au classement.\n\nValider quand même ?":"If every pick of yours is wrong, you'd end at {a} € — below the {b} € threshold.\n\nYour balance would be topped back up to {c} €, but you'd lose 1 point in the standings.\n\nConfirm anyway?",
   // État des options en boutique (v7.47).
   "Active jusqu'au {a}":"Active until {a}", "Active sur ton compte":"Active on your account",
   "Expirée le {a} — à reprendre":"Expired on {a} — take it again",
@@ -2985,8 +2989,18 @@ function notifMsg(key){
 }
 function maybeNotify(){ const key=myActionKey(); if(key && key!==notifKey){ const m=notifMsg(key); if(m) notify(m[0],(L&&L.name?L.name+" — ":"")+m[1]); } notifKey=key; }
 function loadLast(){ try{return JSON.parse(localStorage.getItem("pl_last"));}catch(e){return null;} }
-function getSeen(){ return +(localStorage.getItem("pl_seen_"+S.leagueId)||0); }
-function setSeen(v){ localStorage.setItem("pl_seen_"+S.leagueId, v); }
+/* ⚠️ v7.51 — LE REPÈRE « DÉJÀ VU » EST DÉSORMAIS PAR JOUEUR, PAS PAR LIGUE (signalé par Hervé sur
+   la ligue 7SMXN). Il vivait sous `pl_seen_<ligue>` dans le stockage du NAVIGATEUR : deux comptes
+   utilisés sur le même appareil — exactement la situation d'un test — se partageaient donc le même
+   repère. Hervé avait ouvert la ligue avec son compte ; Testeur2, connecté ensuite dans le même
+   navigateur, héritait de « déjà vu » et n'était pas redirigé vers les résultats.
+   ⚠️ Le défaut est ANCIEN (le repère servait déjà à l'acquittement), mais il ne se voyait pas tant
+   que personne n'en dépendait. La redirection de la v7.49 l'a rendu visible.
+   ⚠️ Effet de bord assumé : les anciennes clés ne sont plus lues, donc chacun sera redirigé UNE
+   fois vers la dernière journée résolue. Sans conséquence, et plutôt conforme à l'intention. */
+function seenKey(){ return "pl_seen_"+S.leagueId+"_"+(S.myId||"?"); }
+function getSeen(){ return +(localStorage.getItem(seenKey())||0); }
+function setSeen(v){ localStorage.setItem(seenKey(), v); }
 /* ===== MODE CONSULTATION (v7.11, demandé par Hervé) =========================================
  * « Que je puisse cliquer sur la ligue, même fermée, et être redirigé vers cette ligue. Juste
  *   pour consultation […] mais pas de modif possible. »
@@ -3305,7 +3319,7 @@ function maybeRecapModal(dispDay){
   // arrive sur CETTE journée-là (au lancement des paris), après avoir vu les résultats de la précédente —
   // et non plus sur l'écran de résultats. On ne conditionne donc plus à `S.recap`.
   if(!L || !L.recap_note || L.recap_note.day!==dispDay) return;
-  const key="pl_recapseen_"+L.id+"_"+dispDay;
+  const key="pl_recapseen_"+L.id+"_"+dispDay+"_"+(S.myId||"?");
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
   infoModal("💸", t("💸 Recapitalisation solidaire — J{a}",{a:dispDay+1}),
     `<div class="mini" style="text-align:left">${recapNoteText(L.recap_note)}</div>
@@ -3317,7 +3331,7 @@ function maybeRecapModal(dispDay){
 function maybePrepModal(){
   if(!L || L.status!=="prep") return;
   const meP=me(); if(!meP || meP.is_ai || meP.shop_done) return;
-  const key="pl_prepseen_"+L.id;
+  const key="pl_prepseen_"+L.id+"_"+(S.myId||"?");
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
   const body = isSolo()
     ? t("La ligue démarre ! Place tes <b>enchères sur les bonus</b> pour préparer ta saison.")
@@ -3334,7 +3348,7 @@ function maybeFormulaModal(){
   const cd=(L.current_day||0);
   // 1) Changement ACTIF cette journée (from === journée courante) → « la ligue passe en X ».
   const act=sched.find(c=>c.from===cd);
-  if(act){ const key="pl_fmtseen_"+L.id+"_"+act.from;
+  if(act){ const key="pl_fmtseen_"+L.id+"_"+act.from+"_"+(S.myId||"?");
     let seen=true; try{ seen=!!localStorage.getItem(key); if(!seen) localStorage.setItem(key,"1"); }catch(e){}
     if(!seen){ const F=FORMULAS[act.formula];
       infoModal("⏱️", t("Changement de format"),
@@ -3344,7 +3358,7 @@ function maybeFormulaModal(){
       return; } }
   // 2) Changement À VENIR (from > journée courante) → prévenir TOUS les joueurs dès qu'il est planifié.
   const pend=sched.filter(c=>c.from>cd).sort((a,b)=>a.from-b.from)[0];
-  if(pend){ const key="pl_fmtpend_"+L.id+"_"+pend.from+"_"+pend.formula;
+  if(pend){ const key="pl_fmtpend_"+L.id+"_"+pend.from+"_"+pend.formula+"_"+(S.myId||"?");
     let seen=true; try{ seen=!!localStorage.getItem(key); if(!seen) localStorage.setItem(key,"1"); }catch(e){}
     if(!seen){ const F=FORMULAS[pend.formula];
       infoModal("⏱️", t("Changement de format à venir"),
@@ -3354,7 +3368,7 @@ function maybeFormulaModal(){
   // 3) Changement ANNULÉ (l'organisateur est revenu en arrière) → prévenir ceux qui avaient vu le « à venir ».
   let cx=null; try{ const o=JSON.parse(L.gage); if(o&&o.fmtCancel&&o.fmtCancel.from>cd) cx=o.fmtCancel; }catch(e){}
   if(cx && !sched.some(c=>c.from===cx.from)){   // plus aucun changement prévu pour cette journée
-    const key="pl_fmtcancel_"+L.id+"_"+cx.from+"_"+cx.at;
+    const key="pl_fmtcancel_"+L.id+"_"+cx.from+"_"+cx.at+"_"+(S.myId||"?");
     let seen=true; try{ seen=!!localStorage.getItem(key); if(!seen) localStorage.setItem(key,"1"); }catch(e){}
     if(!seen) infoModal("⏱️", t("Changement de format annulé"),
       `<div class="mini" style="text-align:left">${t("Le changement prévu à la <b>journée {b}</b> est annulé : elle reste en <b>{a}</b>.",{a:FORMULAS[formulaKey()].n,b:cx.from+1})}</div>
@@ -4120,8 +4134,8 @@ function viewGame(){
   // résultat ici. Le résumé d'ouverture (gage + enchères) vit dans l'onglet 🎬 Coulisses.
   return viewDay();
 }
-function prepSeen(){ return localStorage.getItem("pl_preps_"+S.leagueId)==="1"; }
-function ackPrep(){ localStorage.setItem("pl_preps_"+S.leagueId,"1"); render(); }
+function prepSeen(){ return localStorage.getItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"))==="1"; }
+function ackPrep(){ localStorage.setItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"),"1"); render(); }
 function prepSuperlatives(s){
   const auction=s.auction||[]; const ps=(s.players||[]);
   if(ps.length<2 || !auction.length) return '';
@@ -4924,7 +4938,7 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
     if(both){ summary.optionsR=optionsR.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})); summary.votesR=votesR; summary.customsR=customsR; }
     await q(db.from("leagues").update({status:"running",gage,current_day:0,prep_summary:summary}).eq("id",L.id));
     try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} // début J1 (défensif)
-    resolving=false; setSeen(0); localStorage.removeItem("pl_preps_"+L.id); await refresh(); infoWin(t("🚀 Le championnat est lancé ! Bonne chance."),"🚀");
+    resolving=false; setSeen(0); localStorage.removeItem("pl_preps_"+L.id+"_"+(S.myId||"?")); await refresh(); infoWin(t("🚀 Le championnat est lancé ! Bonne chance."),"🚀");
   }catch(e){ showErr("Démarrage : "+e.message); resolving=false; } }
 
 /* ============ DAY ============ */
@@ -5057,6 +5071,21 @@ let bet={picks:null,captain:-1}, myCard=null, betFor=null;
 function lossMult(i,captainIdx,card){ if(i===captainIdx) return 2;
   if(card&&card.target===i){ if(card.id==="assurance") return 0; if(card.id==="tout"||card.id==="joker") return 2; } return 1; }
 function worstLoss(picks,captainIdx,card){ return (picks||[]).reduce((s,b,i)=>s+(+b.stake||0)*lossMult(i,captainIdx,card),0); }
+/* ---- APPROCHE DU SEUIL DE RECAPITALISATION (v7.52, demandé par Hervé) ----------------------
+   Constat : rien n'avertissait le joueur qu'il approchait du seuil. À 35 €, il ignore qu'il est à
+   5 € de perdre un point — alors que c'est précisément l'information qui devrait peser sur ses
+   mises du jour. La règle existait, elle était juste invisible au moment de décider.
+   ⚠️ Le repère s'allume sous `RECAP_TARGET` (40 €) et non sous le seuil lui-même : prévenir à 30 €
+   serait prévenir quand c'est déjà fait. La zone d'alerte est l'écart entre les deux.
+   ⚠️ On AVERTIT, on n'interdit pas : miser gros quand on est bas peut être le bon calcul (il ne
+   reste que deux journées, il faut recoller). Le joueur décide, l'app l'informe. */
+function alerteRecapHTML(cap){
+  if(!(cap<RECAP_TARGET)) return '';
+  const sous=cap<RECAP_THRESHOLD;
+  return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;color:var(--gold)">⚠️ ${
+    sous ? t("Tu es <b>sous {a} €</b> : si tu finis la journée ainsi, ton capital sera remonté à <b>{b} €</b> et tu perdras <b>1 point</b>.",{a:RECAP_THRESHOLD,b:RECAP_TARGET})
+         : t("Tu approches du seuil : sous <b>{a} €</b> en fin de journée, ton capital est remonté à <b>{b} €</b> mais tu perds <b>1 point</b>.",{a:RECAP_THRESHOLD,b:RECAP_TARGET})}</div>`;
+}
 function viewBet(d,dayLbl,opp,iAmHome){
   const fx=d.fixtures;
   // `bet` est un global qui persistait d'une JOURNÉE (ou d'une LIGUE) à l'autre : à 5 matchs partout, la
@@ -5085,7 +5114,8 @@ function viewBet(d,dayLbl,opp,iAmHome){
   return `${quickBar('')}${lastDayBanner(L.current_day)}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
     <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Capitaine ×2")} ⓘ</span></div>
-    <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div></div>
+    <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div>
+    ${alerteRecapHTML(cap)}</div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${cote(oddOf(f,v))}</b></div>`;
       const canTgt = targetCard && (myCard.id!=="chance" || f.draw);
@@ -5143,6 +5173,24 @@ async function submitBet(){
   // Sécurité : si la clôture est tombée pendant la saisie, on refuse le pari (sinon on pourrait miser en retard).
   if(deadlinePassed()){ infoWin(t("⏰ Trop tard — les pronos sont clôturés."),"⏰"); S.editingBet=false; bet={picks:null,captain:-1}; myCard=null; await refresh(); return; }
   if(bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > ((me()||{}).capital||0)+0.001){ infoWin(t("⚠️ Trop risqué — baisse la mise du Capitaine"),"⚠️"); return; } // règle A (sécurité)
+  /* ---- AVERTISSEMENT AVANT VALIDATION (v7.52, demandé par Hervé) ---------------------------
+     « Un message à la validation si le montant total de ses mises le ferait potentiellement passer
+     sous les 30 € si ses pronos sont faux. »
+     ⚠️ On réutilise `worstLoss`, qui sait déjà calculer la perte MAXIMALE possible (Capitaine ×2,
+     Tout ou rien ×2, Assurance remboursée). Recalculer la perte ici en aurait fait une deuxième
+     version de la règle — le défaut qui nous a coûté quatre bugs cette semaine.
+     ⚠️ C'est un AVERTISSEMENT, jamais un blocage : miser gros quand on est bas peut être le bon
+     calcul en fin de championnat. Le joueur confirme et passe.
+     ⚠️ Silencieux si le pire cas laisse le joueur au-dessus du seuil — un message qui s'affiche
+     tout le temps n'est plus lu. */
+  {
+    const capNow=((me()||{}).capital||0);
+    const pire=capNow-worstLoss(bet.picks,bet.captain,myCard);
+    if(capNow>=RECAP_THRESHOLD && pire<RECAP_THRESHOLD){
+      if(!confirm(t("Si tous tes pronos sont faux, tu finirais à {a} € — sous le seuil de {b} €.\n\nTon capital serait alors remonté à {c} €, mais tu perdrais 1 point au classement.\n\nValider quand même ?",
+                    {a:eur(Math.max(0,pire)),b:RECAP_THRESHOLD,c:RECAP_TARGET}))) return;
+    }
+  }
   busy=true;
   try{ const d=myDuel(); const playedDay=L.current_day;   // la journée qu'on vient de jouer (avant la résolution auto qui fait avancer current_day)
     await q(db.from("bets").upsert({league_id:L.id,day:L.current_day,player_id:S.myId,duel_id:d.id,
