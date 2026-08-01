@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.60";
+const APP_VERSION = "v7.61";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5711,8 +5711,28 @@ async function resolveDay(){
     const broke = willBeDone ? [] : ps.filter(p=>upd[p.id].capital < RECAP_THRESHOLD);
     if(broke.length){ broke.forEach(p=>{ upd[p.id].capital = RECAP_TARGET; upd[p.id].points -= 1; });
       recapNote={day:D+1, target:RECAP_TARGET, seuil:RECAP_THRESHOLD, penalty:1, names:broke.map(p=>p.name)}; }
+    /* ⚠️ v7.61 — ON ENREGISTRE QUI A ÉTÉ RENFLOUÉ, ET QUAND. C'est la SEULE décision de l'histoire
+       du championnat que le rejeu du classement devait REPRENDRE au lieu de LIRE : il la refaisait
+       à partir d'un capital qu'il reconstruit lui-même, et cette reconstruction est approximative
+       (rachats de bonus antérieurs à MIGRATION-trades-day.sql rangés à la journée 0, arrondis).
+       Un capital rejoué à 29 € là où il valait 31 € en vrai suffit à inventer une recapitalisation,
+       donc à retirer un point qui n'a jamais été retiré. C'est exactement ce qui s'est produit sur
+       la ligue 4ZNZT (signalé par Hervé) : total enregistré 8, total rejoué 7 — une recapitalisation
+       de trop dans le rejeu. Le reste du rejeu part de données IMMUABLES (pronos, cotes, résultats)
+       et ne peut pas dériver ; celle-ci le pouvait.
+       ⚠️ On note la journée MÊME QUAND PERSONNE n'est renfloué (liste vide) : c'est ce qui rend le
+       journal affirmatif (« ce jour-là, personne ») et non pas simplement silencieux.
+       ⚠️ `from` = la 1re journée couverte. Une ligue commencée avant cette version a un journal
+       PARTIEL ; le rejeu ne s'y fie que pour les journées ≥ `from` et recalcule les précédentes. */
+    let recapLog=null;
+    try{ const anc=(fresh.recap_log && typeof fresh.recap_log==="object" && !Array.isArray(fresh.recap_log))?fresh.recap_log:null;
+      const jours=Object.assign({}, (anc&&anc.days)||null); jours[String(D)]=broke.map(p=>p.id);
+      recapLog={ from:(anc && typeof anc.from==="number")?anc.from:D, days:jours }; }catch(e){}
     for(const p of ps){ const u=upd[p.id]; await q(db.from("players").update({points:u.points,capital:u.capital,streak_w:u.streak_w,streak_l:u.streak_l,duel_wins:u.duel_wins,best_day:u.best_day,best_odd:u.best_odd,hand:u.hand,cards_used:u.cards_used}).eq("id",p.id)); }
     try{ await q(db.from("leagues").update({recap_note:recapNote}).eq("id",L.id)); }catch(e){} // message recapitalisation (défensif si colonne absente)
+    // ⚠️ Écriture SÉPARÉE : si la colonne `recap_log` n'existe pas encore (migration non passée),
+    // la joindre à la mise à jour ci-dessus ferait échouer AUSSI `recap_note`.
+    if(recapLog){ try{ await q(db.from("leagues").update({recap_log:recapLog}).eq("id",L.id)); }catch(e){} }
     const next=D+1; const done=next>=fresh.num_days;
     await q(db.from("leagues").update({current_day:next,status:done?"done":"running"}).eq("id",L.id));
     if(done){ try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} } // date de fin (défensif si colonne absente) — tri des ligues terminées
@@ -6204,6 +6224,10 @@ function computeStandHist(){
     const recoit=(tr.kind==="sell")?tr.from_player:tr.to_player;
     const paye  =(tr.kind==="sell")?tr.to_player  :tr.from_player;
     troc[j]=troc[j]||{}; troc[j][recoit]=(troc[j][recoit]||0)+p; troc[j][paye]=(troc[j][paye]||0)-p; });
+  // Journal des recapitalisations réellement appliquées (v7.61). `null` = ligue antérieure à la
+  // migration → on retombe sur l'ancien calcul, journée par journée.
+  const recLog=(L && L.recap_log && typeof L.recap_log==="object" && !Array.isArray(L.recap_log)
+                && L.recap_log.days && typeof L.recap_log.from==="number") ? L.recap_log : null;
   const snaps=[];
   for(let d=0; d<N; d++){
     // AVANT les gains du jour : l'échange a lieu entre deux journées, donc il fait partie du
@@ -6264,7 +6288,16 @@ function computeStandHist(){
     // ⚠️ Le joueur IA est concerné COMME LES AUTRES depuis la v7.16 : toute divergence avec
     // resolveDay ferait diverger le classement rejoué de celui écrit en base.
     const isLastDay=(d===((L.num_days||0)-1));
-    const broke=isLastDay?[]:players.filter(p=>st[p.id] && st[p.id].capital<RECAP_THRESHOLD);
+    /* ⚠️ v7.61 — ON LIT LE JOURNAL QUAND IL EXISTE, on ne redécide pas. Voir le commentaire de
+       resolveDay : le capital rejoué est une reconstruction, et une reconstruction à 29 € là où
+       la réalité valait 31 € invente une recapitalisation — donc un point retiré à tort (4ZNZT).
+       Repli sur le calcul pour les journées NON couvertes (ligues antérieures à la migration) :
+       mieux vaut l'ancienne approximation que rien du tout, et le classement le signale déjà en
+       rouge quand le total rejoué ne retombe pas sur le total enregistré. */
+    const enregistre = recLog && d>=recLog.from && (String(d) in recLog.days);
+    const broke = enregistre
+      ? players.filter(p=>(recLog.days[String(d)]||[]).indexOf(p.id)>=0)
+      : (isLastDay?[]:players.filter(p=>st[p.id] && st[p.id].capital<RECAP_THRESHOLD));
     // ⚠️ v7.60 : la journée notée est celle où LE POINT EST RETIRÉ (d+1), plus celle où l'argent
     // arrive (d+2). Le détail des points est un compte de POINTS : y dater une pénalité à la
     // journée suivante rendait la colonne impossible à rapprocher du cumul affiché juste à côté.
