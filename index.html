@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.84";
+const APP_VERSION = "v7.85";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2105,6 +2105,11 @@ const EN={
   "Prix trop élevé : il te resterait moins de {a} €.":"Price too high: you'd be left with less than €{a}.",
   "Ce bonus n'est plus disponible.":"This bonus is no longer available.",
   "Offre envoyée.":"Offer sent.", "Offre introuvable.":"Offer not found.",
+  // v7.85 — réponses de `accept_trade`. ⚠️ Elles passent par t(TRADE_CODES[code]) : `check-i18n`
+  // ne les voit pas (t(variable)). C'est `check-i18n-tables.ps1` qui les couvre.
+  "Cette offre a déjà été traitée.":"This offer has already been dealt with.",
+  "Tu ne fais pas partie de cette ligue.":"You're not part of this league.",
+  "Seul le destinataire de l'offre peut l'accepter.":"Only the person the offer was sent to can accept it.",
   "Tu ne détiens plus ce bonus.":"You no longer hold this bonus.",
   "L'acheteur n'a plus assez de capital — offre annulée.":"The buyer no longer has enough capital — offer cancelled.",
   "L'acheteur a déjà validé son pari du jour — rachat impossible pour l'instant.":"The buyer has already locked their bet for the day — buyback not possible right now.",
@@ -8961,11 +8966,52 @@ async function submitSell(cardId){
 }
 
 function tradeReply(id){ return (((document.getElementById("rp_"+id)||{}).value||"").slice(0,140))||null; }
+/* ⚠️ v7.85 — L'ÉCHANGE PASSE PAR LE SERVEUR, EN UNE SEULE TRANSACTION.
+   L'ancien chemin faisait DEUX écritures séparées depuis le navigateur : le vendeur d'abord
+   (payé, bonus retiré), l'acheteur ensuite (débité, bonus reçu). Si la seconde échouait — réseau
+   coupé, session expirée, onglet fermé, et ce jeu se joue au téléphone — il restait en base un
+   vendeur PAYÉ qui a perdu son bonus, et un acheteur qui n'a ni payé ni reçu. Le bonus détruit,
+   l'argent créé. Et RIEN ne l'aurait jamais signalé : les capitaux ont changé, ils ne sont pas
+   incohérents. Un contrôle d'intégrité n'a rien à quoi les comparer.
+   `accept_trade` fait le tout côté base : soit l'échange entier passe, soit rien ne bouge.
+   ⚠️ LE REPLI EST VOLONTAIRE : tant que MIGRATION-echange-atomique.sql n'a pas été lancé, la
+   fonction n'existe pas et on reprend l'ancien chemin. Un rachat qui ne marche plus du tout
+   serait pire que le défaut qu'on corrige. Le repli disparaîtra une fois la migration passée
+   partout — d'ici là, `tradeServeurAbsent` distingue « pas encore migré » d'une vraie panne :
+   confondre les deux ferait rejouer en deux écritures un échange que le serveur a REFUSÉ. */
+const TRADE_CODES={
+  deja_traitee:       "Cette offre a déjà été traitée.",
+  pas_membre:         "Tu ne fais pas partie de cette ligue.",
+  pas_destinataire:   "Seul le destinataire de l'offre peut l'accepter.",
+  joueur_introuvable: "Offre introuvable.",
+  bonus_parti:        "Le bonus n'est plus disponible.",
+  capital_insuffisant:"Capital insuffisant pour cet achat — offre annulée."
+};
+// « la fonction n'existe pas » se reconnaît au code PostgREST PGRST202 ou au message de Postgres.
+function tradeServeurAbsent(e){ const m=((e&&e.message)||String(e||"")); return /PGRST202|does not exist|Could not find the function/i.test(m); }
 async function acceptTrade(id){
   const o=trades.find(x=>x.id===id); if(!o){ await refresh(); return; } const price=Math.round(o.price); const reply=tradeReply(id);
   // owner = celui qui DONNE le bonus ; buyer = celui qui PAIE et la reçoit. Dépend du sens.
   const ownerId = o.kind==="sell" ? o.from_player : o.to_player;
   const buyerId = o.kind==="sell" ? o.to_player   : o.from_player;
+  let vieuxChemin=false;
+  try{
+    const code=await q(db.rpc("accept_trade",{ p_trade:id, p_reply:reply||null }));
+    if(code==="ok"){
+      infoWin(o.kind==="sell" ? t("Acheté ! {c} est à toi (−{b} €).",{c:t(CARDS[o.card_id]?CARDS[o.card_id].n:o.card_id),b:price}) : t("Vendu ! +{b} € reçus.",{b:price}), "🤝");
+    } else if(code==="pari_detenteur"){
+      tradeBloque(t("<b>Le détenteur du bonus a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.")); return;
+    } else if(code==="pari_acheteur"){
+      tradeBloque(t("<b>L'acheteur a déjà validé son pari du jour.</b> L'échange est donc bloqué jusqu'à la résolution.")); return;
+    } else {
+      toast(t(TRADE_CODES[code]||"⚠️ Une erreur est survenue"));
+    }
+    await refresh(); return;
+  }catch(e){
+    if(!tradeServeurAbsent(e)){ infoWin(t("⚠️ Une erreur est survenue")+" : "+esc(e.message||String(e)),"⚠️"); await refresh(); return; }
+    vieuxChemin=true;
+  }
+  if(!vieuxChemin) return;
   try{
     const owner=await q(db.from("players").select("id,capital,hand").eq("id",ownerId).single());
     const buyer=await q(db.from("players").select("id,capital,hand").eq("id",buyerId).single());
