@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.90";
+const APP_VERSION = "v7.91";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -258,6 +258,17 @@ function avatarHTML(val,px){ px=px||26; val=(val==null?"":(""+val)).trim();
 }
 // "avatar + nom" en ligne (remplace les esc((p.emoji||'')+' '+p.name)). Renvoie du HTML sûr.
 function avaName(p,px){ p=p||{}; return avatarHTML(p.emoji!=null?p.emoji:p.avatar, px||20)+' '+esc(p.name||'?'); }
+/* ⚠️ v7.91 (relevé par Hervé) — « TOI » NE PEUT PAS ÊTRE SUJET EN FRANÇAIS. Les faits marquants
+   sont écrits à la troisième personne (« {a} a gagné ses {b} pronos ») et deux fonctions y
+   glissaient « toi » à la place du nom : on lisait « toi a gagné ses 5 pronos », « toi a joué
+   ✂️ Demi-portion ». On garde donc le NOM en sujet, avec l'étiquette (toi) déjà employée au
+   classement et aux résultats — même repère visuel d'un écran à l'autre.
+   ⚠️ « toi » RESTE CORRECT en complément (« ça s'est retourné contre toi », « pour toi ») : ces
+   emplois-là ne sont PAS touchés. Le défaut tenait à la position dans la phrase, pas au mot.
+   ⚠️ UNE SEULE FONCTION pour les deux endroits, qui la réécrivaient chacun de leur côté : c'est
+   cette duplication qui a permis au défaut de vivre à deux exemplaires. */
+function nomSujet(pid){ const p=pById(pid)||{};
+  return avatarHTML(p.emoji)+' '+esc(p.name||'?')+(pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''); }
 // Avatar par défaut d'un nouveau joueur : une illustration intégrée (graine tournante), plus d'emoji imposé.
 function defaultAvatar(i){ return "av:"+(((i|0)%AV_COUNT)+AV_COUNT)%AV_COUNT; }
 // Les effectifs doivent permettre un tirage SANS répétition : POOL_FOOT matchs de foot consomment
@@ -6447,7 +6458,10 @@ function recapBody(D){
   const cardLbl=id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${t("Voir la description du bonus")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`;
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
     const self=+im.self||0, opp=+im.opp||0;
-    const wp=pById(b.player_id)||{}; const whoNm=avatarHTML(wp.emoji)+' '+(b.player_id===S.myId?t("toi"):esc(wp.name||'?'));
+    // ⚠️ `wp` SERT ENCORE PLUS BAS, en COMPLÉMENT (« contre toi », « pour toi ») — emplois
+    // parfaitement corrects que la v7.91 ne touche pas. Le retirer avec l'ancien `whoNm` a
+    // provoqué un `wp is not defined` que le test a rattrapé sur-le-champ.
+    const wp=pById(b.player_id)||{}; const whoNm=nomSujet(b.player_id);
     const dd=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const oid=dd?(dd.home_id===b.player_id?dd.away_id:dd.home_id):null; const op=oid!=null?(pById(oid)||{}):{}; const oppNm=avatarHTML(op.emoji)+' '+esc(op.name||'?');
     /* ⚠️ v7.62 — ON JUGE SUR L'EFFET DANS LE DUEL (`self − opp`), plus sur `self` seul.
        Signalé par Hervé sur HR98Z J3 : une ✂️ Demi-portion du joueur IA s'était retournée contre
@@ -6471,7 +6485,7 @@ function recapBody(D){
     else if(c.stole) reussis.push(`🥷 <b>${whoNm}</b> ${t("a volé le bonus de {c}.",{c:oppNm})}`);
   });
   // Faits DIVERS — pour qu'un résumé apparaisse même sans bonus marquant.
-  const nm2=pid=>{ const p=pById(pid)||{}; return avatarHTML(p.emoji)+' '+(pid===S.myId?t("toi"):esc(p.name||'?')); };
+  const nm2=nomSujet;
   /* 💸 LE RENFLOUEMENT EST UN FAIT MARQUANT (v7.77, demandé par Hervé : « quand une personne passe
      sous les 30 €, ça doit absolument être indiqué dans les faits marquants de la journée »).
      Il a raison : c'est le seul évènement de la journée qui change le CAPITAL sans venir d'un
