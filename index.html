@@ -163,7 +163,7 @@
     <div class="topbtns">
       <button class="btn ghost sm hide" id="homeBtn" onclick="goHome()" title="Accueil">🏠</button>
       <button class="btn ghost sm hide" id="leaguesBtn" onclick="backToLeagues()" title="Mes ligues">←</button>
-      <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🇬🇧</button>
+      <button class="btn ghost sm" id="langBtn" onclick="toggleLang()" title="Français / English">🌐 English</button>
       <button class="btn ghost sm" id="themeBtn" onclick="toggleTheme()" title="Basculer clair / sombre">☀️</button>
       <button class="btn ghost sm hide" id="rulesBtn" onclick="openRules()" title="Règles">📖</button>
       <button class="btn ghost sm hide" id="shopBtn" onclick="openShop()" title="Boutique (options premium)">🛒</button>
@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.94";
+const APP_VERSION = "v7.95";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1538,6 +1538,9 @@ const EN={
   "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "Retour à mes stats":"Back to my stats",
+  "Créer mon compte":"Create my account", "Mot de passe":"Password",
+  "Confirme ton mot de passe":"Confirm your password",
+  "Les deux mots de passe ne sont pas identiques.":"The two passwords don't match.",
   // — v7.94 : les trois règles ajoutées au tuto (l'oubli, le renflouement, les bonus invendus) —
   "<b>Valide avant l'heure limite.</b> Sans pronos validés, la journée est <b>perdue d'office</b> — quel que soit le résultat de l'adversaire — avec <b>{a} pt</b> au classement et <b>−{b} %</b> de capital.":"<b>Confirm before the deadline.</b> With no picks confirmed, the day is <b>lost outright</b> — whatever your opponent scores — with <b>{a} pt</b> in the standings and <b>−{b} %</b> of your balance.",
   "Si ta cagnotte tombe sous <b>{a} €</b>, elle est <b>remontée à {b} €</b> pour que tu puisses continuer à miser — au prix d'<b>un point</b> au classement.":"If your balance drops below <b>€{a}</b>, it is <b>topped up to €{b}</b> so you can keep betting — at the cost of <b>one point</b> in the standings.",
@@ -2830,7 +2833,21 @@ function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(co
   // devient visible qu'après substitution.
   if(out.indexOf("€")>=0 || out.indexOf("%")>=0) out=out.replace(/(\d)\s+([€%])/g,"$1 $2");
   return out; }
-function applyLangBtn(){ const b=$("langBtn"); if(b) b.textContent = lang==="en"?"🇫🇷":"🇬🇧"; }
+/* ⚠️ v7.95 (relevé par Hervé) — PLUS DE DRAPEAU : WINDOWS N'EN AFFICHE AUCUN. Sa police d'emojis
+   ne contient pas les drapeaux de pays : elle rend les deux lettres du code, donc « GB ». Mesuré
+   dans le navigateur avant de conclure — dessiné sur une toile, 🇬🇧 ne produit AUCUN pixel coloré
+   (0), là où ⚽ en produit 693. Ce n'est donc pas un défaut de l'app, mais un choix de Microsoft ;
+   sur iPhone, Android et Mac les mêmes caractères s'affichent bien en drapeaux.
+   Sur le TOUT PREMIER écran, avant même d'avoir un compte, deux lettres brutes ressemblent à un
+   bug d'affichage. Le globe 🌐 est rendu partout, et le nom de la langue ne s'écrit qu'en un seul
+   endroit du monde : dans sa propre langue. Aucun `t(...)` ici — « English » ne se traduit pas.
+   ⚠️ LES DEUX BOUTONS DISENT MAINTENANT LA MÊME CHOSE : LA LANGUE QU'ON OBTIENDRA EN CLIQUANT.
+   Avant, celui-ci annonçait la langue CIBLE et celui du Profil la langue COURANTE — deux boutons
+   du même geste, de sens opposés. Invisible tant qu'ils portaient des drapeaux différents, ça
+   sautait aux yeux dès qu'ils portaient le même globe.
+   ⚠️ Le bouton n'est affiché QUE sur la page de connexion (voir le `hide` piloté par S.view), où
+   il est seul dans la barre : le nom complet ne bouscule aucune mise en page, vérifié à 375 px. */
+function applyLangBtn(){ const b=$("langBtn"); if(b) b.textContent = lang==="en"?"🌐 Français":"🌐 English"; }
 function toggleLang(){ lang=lang==="en"?"fr":"en"; try{ localStorage.setItem("pl_lang",lang); }catch(e){} applyLangBtn(); render(); }
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
@@ -3928,10 +3945,31 @@ async function doLogin(){
   AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||u, avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null };
   S.view="home"; busy=false; await loadMyLeagues();
 }
+/* ⚠️ v7.95 (demandé par Hervé) — LE MOT DE PASSE EST CONFIRMÉ À LA CRÉATION DU COMPTE.
+   Le formulaire n'a qu'UN champ, partagé avec la connexion. À la création, une faute de frappe
+   produisait un compte dont personne ne connaissait le mot de passe — et il n'y a AUCUN recours :
+   les comptes n'ont pas d'adresse réelle (`@bbb.app` n'existe pas), donc pas de « mot de passe
+   oublié ». Seul l'admin peut réparer. Exactement le risque corrigé en v7.87 sur le changement de
+   mot de passe ; il était resté ouvert à l'endroit le PLUS exposé, puisqu'on n'a encore rien à
+   perdre mais tout à créer.
+   ⚠️ ON PRÉ-REMPLIT avec ce qui vient d'être tapé dans le formulaire : redemander deux fois un mot
+   de passe déjà saisi passerait pour une brimade. Seule la confirmation reste à fournir. */
 async function doSignup(){
-  if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
+  if(busy)return; const u=($("aUser").value||"").trim();
   if(!validUser(u)){showErr(t("Identifiant : 2 à 20 caractères — lettres, chiffres, . _ - (sans espace ni accent)."));return;}
-  if(p.length<8){showErr(t("Mot de passe : 8 caractères minimum."));return;} busy=true; showErr("");
+  let p="", err="", pre={np:($("aPass").value||""), np2:""};
+  for(;;){
+    const v=await askPasswords(t("Créer mon compte"), [
+      ["np",  t("Mot de passe"), t("8 caractères minimum")],
+      ["np2", t("Confirme ton mot de passe")]], t("Créer mon compte"), err, pre);
+    if(!v) return;                       // Annuler : on ne crée rien
+    p=v.np||""; const p2=v.np2||"";
+    pre={np:p,np2:p2}; err="";
+    if(p.length<8){ err=t("Mot de passe : 8 caractères minimum."); pre.np=""; pre.np2=""; continue; }
+    if(p!==p2){     err=t("Les deux mots de passe ne sont pas identiques."); pre.np2=""; continue; }
+    break;
+  }
+  busy=true; showErr("");
   const { data, error } = await db.auth.signUp({ email: emailFor(u), password: p, options:{ data:{ username: u } } });
   if(error){ showErr(/registered|exists|already/i.test(error.message)?t("Cet identifiant est déjà pris."):("Création : "+error.message)); busy=false; return; }
   if(!data.session){ // filet si la confirmation e-mail est restée activée côté Supabase
@@ -8721,7 +8759,7 @@ function render(){
   $("bugBtn").classList.toggle("hide", !AUTH);
   // Relocalisés en onglets du bas / Profil → masqués de la barre du haut (v6 navigation).
   ["shopBtn","settingsBtn","leaguesBtn","themeBtn"].forEach(id=>{ const e=$(id); if(e) e.classList.add("hide"); });
-  $("langBtn").classList.toggle("hide", S.view!=="auth");   // 🇬🇧 langue : dispo sur la page de connexion (avant d'avoir accès au Profil)
+  $("langBtn").classList.toggle("hide", S.view!=="auth");   // 🌐 langue : dispo sur la page de connexion (avant d'avoir accès au Profil)
   // 🤝 rachat de bonus : visible en cours de championnat ; pastille = nb d'offres reçues à traiter.
   // 🤝 masqué en consultation : l'écriture serait refusée par `q()`, autant ne pas le proposer.
   const canTrade = !!(L && L.status==="running" && inLeague) && !LECTURE_SEULE;
@@ -8883,7 +8921,7 @@ function viewProfil(){
       ${/* ✨ « Ou colle un emoji » RETIRÉ en v7.18 (Hervé) : l'avatar est soit une illustration
            intégrée, soit une image chargée. Un emoji ne se distinguait pas de ceux du jeu
            (bonus, Capitaine…) et donnait des profils illisibles à 26 px. */''}</div>
-    <div class="box"><div class="row" style="justify-content:space-between;align-items:center"><b class="mini">🌐 ${t("Langue")}</b><button class="btn ghost sm" onclick="toggleLang()">${lang==='en'?'🇬🇧 English':'🇫🇷 Français'}</button></div>
+    <div class="box"><div class="row" style="justify-content:space-between;align-items:center"><b class="mini">🌐 ${t("Langue")}</b><button class="btn ghost sm" onclick="toggleLang()">${lang==='en'?'🌐 Français':'🌐 English'}</button></div>
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><b class="mini">🌗 ${t("Thème")}</b><button class="btn ghost sm" onclick="toggleTheme()">${t("Clair / sombre")}</button></div></div>
     <div class="box"><b class="mini">🔑 ${t("Mot de passe")}</b><div style="height:6px"></div><button class="btn ghost" onclick="changeMyPassword()">${t("🔑 Changer mon mot de passe")}</button></div>
     <div class="box"><b class="mini">${t("📚 Comment marche le jeu")}</b><div style="height:6px"></div><button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button></div>
