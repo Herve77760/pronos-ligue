@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.62";
+const APP_VERSION = "v7.65";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -335,7 +335,7 @@ const CARDS={
  assurance:{e:"🛡",n:"Assurance tous risques",t:true, f:5, d:"Un pari choisi : s'il perd, mise remboursée."},
  double:   {e:"🐗",n:"Double ration Obélix",t:true, f:4, d:"Un pari choisi : s'il gagne, gain doublé."},
  dbl:      {e:"🏷️",n:"Deux pour le prix d'un",t:true, two:true, f:5, d:"Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien."},
- miroir:   {e:"❄️",n:"Effet Kiss Cool",t:false, f:3, risk:true, d:"Le meilleur pari gagnant des deux joueurs est échangé. La question à se poser : ton adversaire va-t-il gagner plus que toi ? ⚠️ Sans effet si l'un des deux n'a aucun pari gagnant."},
+ miroir:   {e:"❄️",n:"Effet Kiss Cool",t:false, f:3, risk:true, d:"Le meilleur résultat de pari des deux joueurs est échangé — gagnant ou perdant. La question à se poser : ton adversaire va-t-il faire mieux que toi ? ⚠️ Arme à double tranchant : si son meilleur pari vaut moins que le tien, c'est toi qui y perds. Sans effet si l'un des deux n'a pas parié du tout."},
  // Retiré du jeu (choix d'Hervé) : faisait double emploi avec 🩸 Sangsue. On le RETIRE au lieu de
  // le supprimer — sa définition doit survivre pour les ligues où un joueur le détient encore.
  gourmand: {e:"🍽️",n:"Gourmand",t:false, f:3, retired:true, d:"Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus)."},
@@ -1637,6 +1637,17 @@ const EN={
   "• À la fin : le <b>dernier</b> fait le <b>gage</b> voté par le vainqueur 😅, et le <b>champion</b> reçoit la <b>récompense</b> votée par le dernier 🏆.":"• At the end: the <b>last-placed player</b> does the <b>forfeit</b> voted by the winner 😅, and the <b>champion</b> gets the <b>reward</b> voted by the last-placed player 🏆.",
   "CODE D'INVITATION":"INVITE CODE", "📋 Copier le code":"📋 Copy the code",
   "CODE DE LA LIGUE":"LEAGUE CODE",
+  // — v7.65 : « terminé » ne veut pas dire « résultat connu » —
+  "score en attente":"score pending",
+  "<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.":"<b>finished · score pending</b>: the match has been played, but its score hasn't come through yet — until it does, there's no way to tell who won. The matchday resolves automatically as soon as every score is in.",
+  // — v7.64 : Kiss Cool échange le meilleur RÉSULTAT, faits marquants sans-faute / zéro pointé —
+  "❄️ Ton <b>meilleur résultat de pari</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.":"❄️ Your <b>best bet result</b> and your opponent's were <b>swapped</b> — {a} for you, {b} for them.",
+  "❄️ Échange <b>sans effet</b> : l'un des deux n'avait aucun pari, ou les deux meilleurs résultats étaient identiques.":"❄️ Swap with <b>no effect</b>: one of you had no bet at all, or both best results were identical.",
+  "Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.":"Bets closed — waiting for <b>all matches</b> of the day to finish.",
+  "Sans-faute : {a} a gagné <b>ses {b} pronos</b>.":"Perfect round: {a} won <b>all {b} picks</b>.",
+  "Zéro pointé : {a} n'a réussi <b>aucun</b> de ses {b} pronos.":"Blank round: {a} got <b>none</b> of their {b} picks right.",
+  "Voir la description du bonus":"See the bonus description",
+  "Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours.":"Couldn't find a free code for your league. Tap the button again: a fresh draw almost always works.",
   // — v7.62 : faits marquants d'un bonus dont tout l'effet est chez l'adversaire, et liens des stats —
   "a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}€</b> à {c}.":"played {a} — it backfired: the bonus earned <b class=\"green\">€{b}</b> for {c}.",
   "a réussi {a} : <b class=\"red\">{b}€</b> pour {c}.":"pulled off {a}: <b class=\"red\">€{b}</b> for {c}.",
@@ -2003,7 +2014,7 @@ const EN={
   "Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"No extra stake, no risk: pick 2 matches (your Captain is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
   "cote combinée ≈ {a}":"combined odds ≈ {a}", "touche un 2ᵉ match 💥":"tap a 2nd match 💥", "→ touche les 💥 de tes 2 matchs.":"→ tap the 💥 on your 2 matches.",
   "Double Mise":"Double Stake", "Double ration Obélix":"Double Down", "Un pari choisi : s'il gagne, gain doublé.":"A chosen bet: if it wins, gain doubled.",
-  "Effet Kiss Cool":"Kiss Cool Effect", "Le meilleur pari gagnant des deux joueurs est échangé. La question à se poser : ton adversaire va-t-il gagner plus que toi ? ⚠️ Sans effet si l'un des deux n'a aucun pari gagnant.":"The best winning bet of the two players is swapped. The question to ask yourself: will your opponent win more than you? ⚠️ No effect if either player has no winning bet.",
+  "Effet Kiss Cool":"Kiss Cool Effect", "Le meilleur résultat de pari des deux joueurs est échangé — gagnant ou perdant. La question à se poser : ton adversaire va-t-il faire mieux que toi ? ⚠️ Arme à double tranchant : si son meilleur pari vaut moins que le tien, c'est toi qui y perds. Sans effet si l'un des deux n'a pas parié du tout.":"The best bet result of the two players is swapped — winning or losing. The question to ask yourself: will your opponent do better than you? ⚠️ Double-edged: if their best bet is worth less than yours, you are the one who loses out. No effect if either player did not bet at all.",
   "Gourmand":"Freeloader", "Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus).":"If your opponent ends in profit, you pocket a bonus of 20% of their profit — without them losing anything (it's added on top).",
   "Dans ta face":"In Your Face", "Tu désignes un match : si l'adversaire y a un pari gagnant, son gain sur ce match est réduit de moitié.":"You pick a match: if the opponent has a winning bet there, their gain on that match is halved.",
   "Serge Benamou":"Serge Benamou", "(Bonus retiré du jeu.)":"(Bonus removed from the game.)",
@@ -3093,7 +3104,21 @@ let LECTURE_SEULE=false;
 async function q(p){
   if(LECTURE_SEULE && p && p.method && p.method!=="GET") throw new Error("lecture_seule");
   const {data,error}=await p; if(error) throw new Error(error.message); return data; }
-function genCode(){ let s=""; const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; for(let i=0;i<5;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; }
+/* LONGUEUR DU CODE DE LIGUE — un seul chiffre à changer (v7.63, question d'Hervé : « est-ce
+   qu'on pourra facilement passer à 6 caractères un jour ? »).
+   Alphabet de 32 signes (ni I, ni O, ni 0, ni 1 : indistinguables à l'oral et à la lecture).
+     • 5 signes → 32⁵ = 33,5 millions de codes ;
+     • 6 signes → 32⁶ = 1,07 MILLIARD (×32).
+   ⚠️ CE QUI COMPTE N'EST PAS L'ÉPUISEMENT mais le nombre de tirages perdus : `insertLeagueCodeUnique`
+   réessaie 6 fois, donc une création n'échoue que si les 6 codes tirés sont tous déjà pris. À
+   1 million de ligues en base, un tirage a 3 % de tomber sur un code occupé → 6 d'affilée : une
+   chance sur 1,4 milliard. À 10 millions de ligues, ~1 création sur 1 400 échouerait : c'est là
+   qu'il faudra passer à 6.
+   ⚠️ AUCUNE MIGRATION NÉCESSAIRE le jour venu : la colonne est `code text unique`, sans longueur
+   imposée, et la recherche se fait par égalité exacte. Les anciens codes à 5 signes continueront
+   donc de fonctionner à côté des nouveaux — les deux longueurs cohabitent sans rien casser. */
+const CODE_LEN=5;
+function genCode(){ let s=""; const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; for(let i=0;i<CODE_LEN;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; }
 // Crée une ligue en RÉESSAYANT tant que le code tiré est déjà pris (v6.95, demandé par Hervé).
 //
 // ⚠️ La garantie d'unicité vient de la BASE (`code text unique not null` dans schema.sql), jamais
@@ -3109,14 +3134,26 @@ function genCode(){ let s=""; const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; for(le
 // ⚠️ Un code n'est JAMAIS recyclé : fermer une ligue la passe en statut « done », la ligne reste en
 // base, donc son code reste à jamais pris. C'est voulu — un ancien code ne doit pas ramener des
 // joueurs vers une autre partie.
+/* NOMBRE DE TIRAGES avant d'abandonner (v7.63). Chaque tentative supplémentaire ne coûte QUE dans
+   le cas déjà perdu : tant qu'un code libre sort du premier coup — la situation normale — la
+   boucle s'arrête là. En passer de 6 à 10 rend donc l'échec ~1 000 fois plus rare sans ralentir
+   personne : à 10 millions de ligues en base (30 % de codes pris), l'échec tombe de 1 création
+   sur 1 400 à 1 sur 1,7 million. */
+const CODE_ESSAIS=10;
 async function insertLeagueCodeUnique(champs){
   let derniere=null;
-  for(let i=0;i<6;i++){
+  for(let i=0;i<CODE_ESSAIS;i++){
     const code=genCode();
     try{ return await q(db.from("leagues").insert(Object.assign({},champs,{code})).select().single()); }
     catch(e){ derniere=e; if(!/duplicate|unique|23505/i.test(e.message||"")) throw e; }
   }
-  throw derniere||new Error("code de ligue introuvable");
+  /* ⚠️ ON NE REMONTE PAS L'ERREUR POSTGRES BRUTE (v7.63, question d'Hervé : « il y aura un message
+     d'erreur, le joueur sera bloqué ? »). Le joueur voyait
+     « Création : duplicate key value violates unique constraint "leagues_code_key" » — un message
+     en anglais, incompréhensible, et qui ne dit surtout PAS la seule chose utile : il suffit de
+     réessayer. Le joueur n'était pas bloqué (il pouvait retoucher le bouton), mais rien ne le lui
+     disait. On marque donc ce cas précis pour lui parler normalement. */
+  const err=new Error("codes_satures"); err.codesSatures=true; err.cause=derniere; throw err;
 }
 
 /* ============ schedule ============ */
@@ -3338,9 +3375,15 @@ async function refresh(){
        ⚠️ `running` uniquement : une ligue TERMINÉE a sa propre destination, le bilan (v7.23).
        ⚠️ `getSeen()` marquait déjà la dernière journée acquittée, mais la ligne acquittait dans la
        foulée — l'information existait et n'était utilisée par personne. */
+    /* ⚠️ v7.65 — LE REPÈRE « DÉJÀ VU » NE SE POSE PLUS ICI (signalé par Hervé sur 7SMXN).
+       `setSeen(L.current_day)` s'exécutait à CHAQUE rafraîchissement, donc avant que le joueur ait
+       vu quoi que ce soit — il suffisait d'ouvrir la ligue. Hervé s'est connecté à 1 h du matin,
+       l'app a noté « résultats vus », et le lendemain matin — quand les résultats étaient enfin
+       connus — il n'a plus été renvoyé dessus : il est arrivé sur Pronos sans jamais avoir lu sa
+       journée. Le repère se pose désormais dans `openResults`, et UNIQUEMENT sur une journée
+       RÉSOLUE : il signifie « j'ai vu ces résultats-là », pas « j'ai ouvert la ligue ». */
     const jourNonVu = (L.status==="running" && prevLeagueStatus===null
                        && L.current_day>getSeen() && L.current_day>=1) ? L.current_day-1 : null;
-    if(L.status!=="lobby" && L.current_day>getSeen() && L.current_day>=1) setSeen(L.current_day);
     S.recap = false;
     const dispDay = Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
     S.dispDay = dispDay;
@@ -4178,7 +4221,7 @@ async function createLeague(){
     newLg=null;
     if(solo){ await startLeagueCore(lg); openLeague(lg.id, pl.id, true); }  // SOLO : démarre direct (pas de lobby)
     else { openLeague(lg.id, pl.id, true); leagueCreatedModal(lg.code); }
-  }catch(e){ showErr("Création : "+e.message); } busy=false;
+  }catch(e){ showErr((e&&e.codesSatures)?t("Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours."):"Création : "+e.message); } busy=false;
 }
 async function joinLeague(code){
   if(busy||!AUTH)return; busy=true; showErr("");
@@ -4633,7 +4676,7 @@ async function relaunchLeague(){
     const inserted=await q(db.from("players").insert(rows).select());
     const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
     openLeague(lg.id, mine.id, true); leagueCreatedModal(lg.code);
-  }catch(e){ showErr("Relance : "+e.message); } busy=false; }
+  }catch(e){ showErr((e&&e.codesSatures)?t("Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours."):"Relance : "+e.message); } busy=false; }
 // Confirmation de création — dans une fenêtre fermable (et non un toast fugace) pour laisser le
 // temps de lire et de noter le code à partager. Le modal survit au render() du lobby (appendChild body).
 function leagueCreatedModal(code){ infoModal("🎉", t("Ligue créée !"),
@@ -5181,7 +5224,15 @@ function worstLoss(picks,captainIdx,card){ return (picks||[]).reduce((s,b,i)=>s+
    serait prévenir quand c'est déjà fait. La zone d'alerte est l'écart entre les deux.
    ⚠️ On AVERTIT, on n'interdit pas : miser gros quand on est bas peut être le bon calcul (il ne
    reste que deux journées, il faut recoller). Le joueur décide, l'app l'informe. */
+/* ⚠️ v7.64 — AUCUN AVERTISSEMENT LA DERNIÈRE JOURNÉE (signalé par Hervé). Il n'y a pas de
+   recapitalisation sur la dernière journée — `resolveDay` et le rejeu l'excluent tous les deux,
+   puisqu'il n'y a plus rien à miser ensuite et que le point serait retiré pour rien. Annoncer
+   « tu perdras 1 point » ce jour-là, c'est promettre une sanction qui n'existe pas, et pousser à
+   miser petit au moment précis où il faut tout tenter. La même garde protège la fenêtre de
+   confirmation à la validation des pronos : une seule règle, deux écrans. */
+function derniereJournee(){ return !!(L && ((L.current_day|0) === ((L.num_days|0)-1))); }
 function alerteRecapHTML(cap){
+  if(derniereJournee()) return '';
   if(!(cap<RECAP_TARGET)) return '';
   const sous=cap<RECAP_THRESHOLD;
   return `<div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:7px;color:var(--gold)">⚠️ ${
@@ -5286,9 +5337,11 @@ async function submitBet(){
      ⚠️ Silencieux si le pire cas laisse le joueur au-dessus du seuil — un message qui s'affiche
      tout le temps n'est plus lu. */
   {
+    // ⚠️ v7.64 : muet la DERNIÈRE journée — il n'y a pas de recapitalisation ce jour-là (cf.
+    // `derniereJournee`). La fenêtre annonçait la perte d'un point qui ne serait jamais retiré.
     const capNow=((me()||{}).capital||0);
     const pire=capNow-worstLoss(bet.picks,bet.captain,myCard);
-    if(capNow>=RECAP_THRESHOLD && pire<RECAP_THRESHOLD){
+    if(!derniereJournee() && capNow>=RECAP_THRESHOLD && pire<RECAP_THRESHOLD){
       const ok=await confirmModal("⚠️", t("Attention à ton capital"),
         `<div class="mini" style="text-align:left;line-height:1.7">
            ${t("Si <b>tous</b> tes pronos sont faux, tu finirais la journée à <b>{a} €</b> — sous le seuil de <b>{b} €</b>.",{a:eur(Math.max(0,pire)),b:RECAP_THRESHOLD})}
@@ -5568,15 +5621,19 @@ function runEngine(pdIn, capStart, dz, N){
   for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="face"&&pd.card.target!=null){ const opp=G[pd.oppId];
     if(opp && opp.perBet[pd.card.target]){ const b=opp.perBet[pd.card.target]; if(b.win && b.gain>0){ const cut=b.gain/2; b.gain-=cut; opp.net-=cut; } } } }
   for(const d of dz){ const a=d.home_id,b=d.away_id; if(!PD[a]||!PD[b])continue; const useM=(PD[a].card&&PD[a].card.id==="miroir")||(PD[b].card&&PD[b].card.id==="miroir");
-    if(useM){ const best=g=>{let bi=-1,bv=0; g.perBet.forEach((x,i)=>{if(x.gain>bv){bv=x.gain;bi=i;}}); return {bi,bv};};
+    /* ⚠️ v7.64 — ON ÉCHANGE LE MEILLEUR RÉSULTAT DE PARI, GAGNANT OU PERDANT (demandé par Hervé).
+       Avant, `bv` partait de 0 : seul un pari GAGNANT pouvait être retenu, si bien que le bonus
+       n'avait aucun effet dès que l'un des deux ratait tous ses pronos — précisément le cas où il
+       serait le plus décisif. Désormais on prend le meilleur `gain` quel que soit son signe : le
+       joueur qui a tout raté échange sa moins mauvaise perte contre le meilleur coup de l'autre.
+       Le bonus devient une vraie prise de risque dans les deux sens, ce qu'annonce son `risk:true`.
+       ⚠️ Les matchs ANNULÉS sont écartés : mise rendue, ce n'est pas un résultat de pari.
+       ⚠️ LE GARDE-FOU RESTE : si l'un des deux n'a AUCUN pari (absent, oubli), il n'existe pas de
+       case où déposer le gain de l'autre. L'ancien code appliquait alors le `−va` sans le `+va`
+       correspondant : le joueur perdait son meilleur pari et l'argent s'ÉVAPORAIT (−24 € mesuré
+       face à un absent). Sans pari en face, le bonus est gâché mais inoffensif. */
+    if(useM){ const best=g=>{let bi=-1,bv=-Infinity; g.perBet.forEach((x,i)=>{if(x.canceled) return; if(x.gain>bv){bv=x.gain;bi=i;}}); return {bi,bv:(bi>=0?bv:0)};};
       const ba=best(G[a]), bb=best(G[b]);
-      // GARDE-FOU : l'échange n'a de sens que si les DEUX joueurs ont un pari gagnant.
-      // Sinon (adversaire absent, ou qui rate TOUS ses pronos) il n'existe aucune case où
-      // déposer le gain de l'autre : l'ancien code appliquait quand même le `-va` au joueur
-      // et sautait le `+va` de l'adversaire (bi=-1) → le joueur perdait son meilleur pari et
-      // l'argent s'ÉVAPORAIT au lieu d'être échangé. Mesuré : −24 € face à un absent.
-      // Désormais : bonus gâchée mais inoffensive, comme les autres bonus anti-adversaire.
-      // Le pari du joueur reste entier : « mon adversaire va-t-il gagner plus que moi ? »
       if(ba.bi>=0 && bb.bi>=0){ const va=ba.bv, vb=bb.bv;
         G[a].perBet[ba.bi].gain+=(vb-va); G[a].net+=(vb-va);
         G[b].perBet[bb.bi].gain+=(va-vb); G[b].net+=(va-vb); } } }
@@ -5868,9 +5925,11 @@ function recapBody(D){
       const ob=(vb&&vb.picks&&c.target!=null)?vb.picks[c.target]:null; const owin=(ob&&f)?(ob.sel===f.res):false;
       detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(selLabel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
     } else if(c.id==="miroir"){ const sv=im.self||0;
+      // ⚠️ v7.64 : « meilleur RÉSULTAT de pari », pas « meilleur pari gagnant » — l'échange a lieu
+      // même quand l'un des deux a tout raté (cf. la phase 3 du moteur).
       detail=(Math.abs(sv)>=0.5)
-        ? t("❄️ Ton <b>meilleur pari gagnant</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.",{a:'<b class="'+(sv>=0?'green':'red')+'">'+fmt(sv)+'€</b>',b:'<b class="'+((im.opp||0)>=0?'green':'red')+'">'+fmt(im.opp||0)+'€</b>'})
-        : t("❄️ Échange <b>sans effet</b> : l'un des deux n'avait aucun pari gagnant (ou les meilleurs gains étaient égaux).");
+        ? t("❄️ Ton <b>meilleur résultat de pari</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.",{a:'<b class="'+(sv>=0?'green':'red')+'">'+fmt(sv)+'€</b>',b:'<b class="'+((im.opp||0)>=0?'green':'red')+'">'+fmt(im.opp||0)+'€</b>'})
+        : t("❄️ Échange <b>sans effet</b> : l'un des deux n'avait aucun pari, ou les deux meilleurs résultats étaient identiques.");
     } else if(c.id==="sangsue"){ detail=(Math.abs(im.opp||0)>=1)?`Tu as siphonné une part du bénéfice de l'adversaire.`:`L'adversaire n'était pas bénéficiaire → rien à siphonner.`;
     } else if(c.id==="moitie"){ detail=(Math.abs(im.opp||0)>=1)?t("Le résultat total de l'adversaire a été divisé par 2."):t("L'adversaire a fini quasiment à zéro — diviser par 2 n'a rien changé.");
     } else if(c.id==="parachute"){ detail=((im.self||0)>=1)?`Filet de sécurité déclenché : une partie de ta perte a été amortie.`:`Filet non déclenché (journée non négative).`;
@@ -5959,6 +6018,11 @@ function recapBody(D){
      `impact.self`, écrit à la résolution, qui vaut « mon net AVEC le bonus moins SANS elle ». */
   const FAIT_MIN=1;   // en € — en deçà, ce n'est pas un fait marquant mais du bruit d'arrondi
   const retournes=[], reussis=[], divers=[];
+  /* 🃏 Le nom du bonus est CLIQUABLE (v7.64, demandé par Hervé : « pouvoir cliquer sur le bonus
+     pour avoir sa définition s'il figure dans les faits marquants »). Les faits marquants sont
+     souvent le premier endroit où l'on découvre un bonus qu'on ne possède pas — sans sa
+     description, la phrase raconte un effet dont on ignore la règle. */
+  const cardLbl=id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${t("Voir la description du bonus")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`;
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
     const self=+im.self||0, opp=+im.opp||0;
     const wp=pById(b.player_id)||{}; const whoNm=avatarHTML(wp.emoji)+' '+(b.player_id===S.myId?t("toi"):esc(wp.name||'?'));
@@ -5974,13 +6038,13 @@ function recapBody(D){
     const effet=self-opp;
     if(effet<=-FAIT_MIN){
       // Trois formulations selon OÙ l'effet s'est produit : sur lui, sur l'adversaire, ou les deux.
-      if(self<=-FAIT_MIN && opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(self),b2:fmt(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
-      else if(self<=-FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
-      else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}€</b> à {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(opp),c:oppNm})}`);
+      if(self<=-FAIT_MIN && opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.",{a:cardLbl(c.id),b:fmt(self),b2:fmt(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+      else if(self<=-FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.",{a:cardLbl(c.id),b:fmt(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+      else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}€</b> à {c}.",{a:cardLbl(c.id),b:fmt(opp),c:oppNm})}`);
     }
     else if(effet>=FAIT_MIN){
-      if(self>=FAIT_MIN) reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:C.e+' '+esc(t(C.n)),b:fmt(self)})}`);
-      else reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"red\">{b}€</b> pour {c}.",{a:C.e+' '+esc(t(C.n)),b:fmt(opp),c:oppNm})}`);
+      if(self>=FAIT_MIN) reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:cardLbl(c.id),b:fmt(self)})}`);
+      else reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"red\">{b}€</b> pour {c}.",{a:cardLbl(c.id),b:fmt(opp),c:oppNm})}`);
     }
     else if(c.stole) reussis.push(`🥷 <b>${whoNm}</b> ${t("a volé le bonus de {c}.",{c:oppNm})}`);
   });
@@ -5998,6 +6062,21 @@ function recapBody(D){
     b.picks.forEach((pk,i)=>{ const f=fx[i]; const st=+pk.stake||0; if(!f||f.canceled||st<=0) return;
       if(!bm||st>bm.st) bm={st,pid:b.player_id,f,gagne:(f.res===pk.sel)}; }); });
   if(bm) divers.push(`💰 ${t("Plus grosse mise : {a} — {b} € sur {c} ({d}).",{a:nm2(bm.pid),b:fmt(bm.st).replace('+',''),c:esc(bm.f.home+' – '+bm.f.away),d:bm.gagne?t("gagné"):t("perdu")})}`);
+  /* SANS-FAUTE et ZÉRO POINTÉ (v7.64, demandé par Hervé : « dire si un joueur a tous ses paris
+     faux ou tous bons »). C'est le fait le plus parlant d'une journée et il n'était nulle part :
+     le classement montre un net, jamais la régularité qui l'a produit.
+     ⚠️ Le résultat d'un prono se lit COMME DANS LE MOTEUR, Double Chance comprise (un pari couvert
+     par 🧈 gagne aussi sur sa seconde issue) — sinon on annoncerait un « zéro pointé » à quelqu'un
+     qui a gagné. ⚠️ Matchs ANNULÉS écartés (mise rendue, pas un prono), et il en faut au moins
+     DEUX : sur un seul match, « tous bons » ne veut rien dire. */
+  bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[];
+    if(!Array.isArray(b.picks)||!b.picks.length) return; const c=(b.card&&b.card.stolenBy)?null:b.card;
+    let n=0,w=0; b.picks.forEach((pk,i)=>{ const f=fx[i]; if(!f||f.canceled) return; n++;
+      const isDC=!!(c&&c.id==="chance"&&c.target===i&&c.sel2);
+      if(isDC?(f.res===pk.sel||f.res===c.sel2):(pk.sel===f.res)) w++; });
+    if(n<2) return;
+    if(w===n) divers.push(`🎯 ${t("Sans-faute : {a} a gagné <b>ses {b} pronos</b>.",{a:nm2(b.player_id),b:n})}`);
+    else if(w===0) divers.push(`💀 ${t("Zéro pointé : {a} n'a réussi <b>aucun</b> de ses {b} pronos.",{a:nm2(b.player_id),b:n})}`); });
   // Journée COLLECTIVE : tout le monde dans le vert, ou personne.
   // ⚠️ LE JOUEUR IA EST COMPTÉ (v7.17, signalé par Hervé). Il excluait la lecture du fait :
   // « tout le monde » affiché alors que l'IA était dans le rouge, c'est faux pour qui regarde le
@@ -6060,13 +6139,32 @@ function showGainDetail(pid){
   } finally { if(_r){ bets=_sb; duels=_sd; } }
 }
 function setRecapFocus(pid){ recapFocus=pid||null; recapOpen=-1; render(); }
-function recapNav(D){ const last=L.current_day-1;
+/* ⚠️ v7.64 — LA DERNIÈRE JOURNÉE CONSULTABLE N'EST PAS TOUJOURS LA DERNIÈRE RÉSOLUE.
+   Quand les paris de la journée en cours sont clôturés, l'onglet Résultats affiche déjà cette
+   journée-là (les affiches, en attendant les scores) : elle fait donc partie de la navigation.
+   Sans ça, on arrivait sur cet écran d'attente SANS aucun bouton pour revenir en arrière —
+   « je ne peux plus voir les résultats des journées passées » (signalé par Hervé). Une seule
+   définition de la borne, partagée par la barre de navigation, `navDay` et `resultsDefaultDay`. */
+function resultsMaxDay(){
+  if(!L) return 0;
+  if(L.status==="done") return Math.max(0,(L.num_days||1)-1);
+  return deadlinePassed() ? (L.current_day||0) : Math.max(0,(L.current_day||0)-1);
+}
+function recapNav(D){ const last=resultsMaxDay();
   return `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm" ${D>0?'':'disabled'} onclick="navDay(${D-1})">${t("◀ Préc.")}</button>
     <b class="mini" style="text-align:center;flex:1">${t("Journée {a} / {b}",{a:D+1,b:L.num_days})}</b>
     <button class="btn ghost sm" ${D<last?'':'disabled'} onclick="navDay(${D+1})">${t("Suiv. ▶")}</button></div>`; }
-function navDay(d){ const last=L.current_day-1; if(d<0||d>last) return; openResults(d); }
+function navDay(d){ const last=resultsMaxDay(); if(d<0||d>last) return; openResults(d); }
 async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recapFocus=null;
-  try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); loadedDay=d; render(); }
+  try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); loadedDay=d;
+    /* ⚠️ v7.65 — C'EST ICI qu'on note « résultats vus », et NULLE PART AILLEURS.
+       Condition : la journée doit être RÉSOLUE. Sur l'écran d'attente (paris clôturés, scores pas
+       encore tombés) il n'y a rien à voir — c'est exactement le piège rencontré par Hervé à 1 h du
+       matin. Le repère compte des JOURNÉES VUES : `d+1` parce que `d` est un indice à partir de 0,
+       ce qui garde la comparaison `L.current_day > getSeen()` du renvoi automatique. */
+    const resolues = (L && L.status==="done") ? (L.num_days||0) : ((L&&L.current_day)||0);
+    if(d>=0 && d<resolues && (d+1)>getSeen()) setSeen(d+1);
+    render(); }
   catch(e){ showErr("Résultats : "+e.message); } }
 function viewRecap(D){ const fin=(L&&L.status==="done"); return `${recapBody(D)}
     <button class="btn" onclick="ackRecap()">${fin?t("🏆 Voir le classement final →"):t("Continuer →")}</button>
@@ -6077,12 +6175,9 @@ function viewRecap(D){ const fin=(L&&L.status==="done"); return `${recapBody(D)}
 //  • paris encore OUVERTS → on reste sur la dernière journée RÉSOLUE (ou J1 s'il n'y en a aucune).
 // → pendant que les joueurs parient, Résultats garde la journée finie ; dès la clôture, il bascule sur
 //   les affiches de la nouvelle journée (demandé par Hervé).
-function resultsDefaultDay(){
-  if(!L) return 0;
-  if(L.status==="done") return Math.max(0,(L.num_days||1)-1);
-  if(deadlinePassed()) return (L.current_day||0);
-  return (L.current_day||0)>=1 ? (L.current_day-1) : 0;
-}
+// ⚠️ v7.64 : c'est EXACTEMENT la borne de `resultsMaxDay()` — la journée ouverte par défaut est la
+// dernière consultable. Les deux étaient écrites séparément (à l'identique) ; une seule subsiste.
+function resultsDefaultDay(){ return resultsMaxDay(); }
 function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:resultsDefaultDay());
   const back="";  // navigation via la barre d'onglets du bas (v6.15)
   // Journée résolue ? (d < journées résolues). Sinon → écran d'attente (pas de résultats à montrer).
@@ -6096,8 +6191,22 @@ function waitingResultsBody(d){
   const isCurrent=(L.status==="running" && d===(L.current_day||0));
   const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
   const liveShow = closed && L.data_mode==="real" && hasOpt('live');   // v6.99 : option `live`, distincte de `direct`
-  let h=`<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
-    <div class="mini" style="color:var(--accent)">⏳ ${closed?t("Paris clôturés — on attend la fin de <b>tous les matchs de la ligue</b>, pas seulement des tiens."):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}</div>${lastDayBanner(d)}`;
+  /* ⚠️ v7.64 — LA BARRE DE NAVIGATION MANQUAIT ICI. Cet écran d'attente est celui qu'on voit dès
+     que les paris sont clôturés, donc le plus souvent consulté — et c'était le seul de l'onglet
+     Résultats sans les boutons ◀ Préc. / Suiv. ▶ : on s'y retrouvait sans aucun moyen de revenir
+     sur une journée passée (signalé par Hervé). */
+  /* ⚠️ « pas seulement des tiens » n'a de sens qu'À PLUS DE DEUX JOUEURS : à deux, il n'y a qu'un
+     seul duel dans la ligue, donc les matchs de la ligue SONT les tiens (signalé par Hervé). On se
+     fonde sur l'effectif et non sur `duels`, qui peut ne pas être chargé pour cette journée. */
+  const plusieursDuels=(players||[]).length>2;
+  /* ⚠️ v7.65 — ON EXPLIQUE « terminé · score en attente » (question d'Hervé : « à quoi correspond
+     ce statut ? »). Le match a fini de se jouer — ou l'app le déduit du temps écoulé — mais le
+     score n'est pas encore remonté chez le fournisseur, donc l'app ne peut pas dire qui a gagné.
+     La note n'apparaît QUE si le cas se présente : un avertissement permanent n'est plus lu. */
+  const attenteScore = liveShow && (duels||[]).some(dz=>(dz.fixtures||[]).some(
+    f=>f && f.evId && !f.canceled && !liveVerdict(f,null) && matchEtat(f)==="fini"));
+  let h=`${recapNav(d)}<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?(plusieursDuels?t("Paris clôturés — on attend la fin de <b>tous les matchs de la ligue</b>, pas seulement des tiens."):t("Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.")):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>${lastDayBanner(d)}`;
   // Résultat en direct (option premium, données réelles) à droite d'une ligne d'affiche.
   // `sel` = mon prono (null sur les duels des AUTRES : on reste neutre, cf. liveVerdict).
   const resPart = (f,sel)=>{ if(!liveShow||!f.evId) return '';
@@ -6109,7 +6218,14 @@ function waitingResultsBody(d){
        texte NORMAL : le gris reste réservé à ce qui n'a pas encore eu lieu. */
     if(v) return v.ok==null ? `<span class="mini">${v.txt}</span>` : `<b class="${v.ok?'green':'red'}">${v.txt}</b>`;
     if(f.canceled) return `<span class="mini muted">🚫 ${t("annulé")}</span>`;
-    // Résultat pas encore remonté : heure du coup d'envoi, puis état du match (v7.05).
+    /* ⚠️ v7.65 — « 🏁 terminé » TOUT SEUL ÉTAIT TROMPEUR (signalé par Hervé sur 7SMXN, à 1 h du
+       matin : « ça me donnait le statut terminé sans me dire si mon pari était correct »).
+       Ce statut ne veut PAS dire « résultat connu ». `matchEtat` le renvoie dans deux cas : le
+       fournisseur annonce le match fini SANS score exploitable, ou — le plus fréquent la nuit —
+       l'app le DÉDUIT du temps écoulé depuis le coup d'envoi, sans avoir rien reçu. Dans les deux
+       cas le résultat est inconnu, et l'afficher comme les matchs dont on connaît l'issue mettait
+       sur le même plan « fini, tu as gagné » et « fini, on ne sait pas encore ». On le dit. */
+    if(matchEtat(f)==="fini") return `<span class="mini muted">🏁 ${t("terminé")} · ${t("score en attente")}</span>`;
     return koOuEtat(f)||`<span class="mini muted">⏳</span>`; };
   const myBetNow=myBet();   // pour savoir ce que J'AI parié, duel par duel
   const myDuelId=(myDuel()||{}).id;
