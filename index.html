@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.89";
+const APP_VERSION = "v7.90";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1516,7 +1516,7 @@ const EN={
   "Pour être prévenu quand c'est à toi de jouer (onglet ouvert).":"To be notified when it's your turn (tab open).",
   "Ouvrir →":"Open →", "Salon · inscriptions ouvertes":"Lobby · sign-ups open", "Vote du gage":"Forfeit vote", "En cours":"Ongoing",
   "Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.":"No ongoing league. Create one, or join a friend's with their code.",
-  "Entre un code valide.":"Enter a valid code.",
+  "Un code de ligue fait {a} caractères.":"A league code is {a} characters long.",
   "Code de ligue introuvable — vérifie le code saisi.":"League code not found — check the code you entered.",
   "aujourd'hui":"today", "demain":"tomorrow",
   "▲ masquer":"▲ hide", "▼ afficher":"▼ show",
@@ -1525,7 +1525,7 @@ const EN={
   "👑 Le Capitaine et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager le match du Capitaine.":"👑 The Captain and the 🃏 bonus must target different matches. Exception: bonuses that attack the opponent's bet ({a}, {b}) can share the Captain's match.",
   "⚠️ Trop risqué — baisse la mise du Capitaine":"⚠️ Too risky — lower the Captain stake",
   "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
-  "👋 Bonjour {a}":"👋 Hello {a}", "Ex : 7XK2P":"e.g. 7XK2P",
+  "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
   "Pseudo affiché":"Display name", "Modifier":"Edit", "Pseudo mis à jour ✓":"Display name updated ✓",
   "✨ Ou colle ton propre emoji":"✨ Or paste your own emoji", "✨ Ou colle un emoji":"✨ Or paste an emoji", "Utiliser":"Use", "Colle un emoji d'abord.":"Paste an emoji first.",
@@ -3402,7 +3402,20 @@ async function q(p){
    imposée, et la recherche se fait par égalité exacte. Les anciens codes à 5 signes continueront
    donc de fonctionner à côté des nouveaux — les deux longueurs cohabitent sans rien casser. */
 const CODE_LEN=5;
-function genCode(){ let s=""; const A="ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; for(let i=0;i<CODE_LEN;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; }
+const CODE_ALPHA="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";   // ni I, ni O, ni 0, ni 1 : indistinguables à l'oral
+function genCode(){ let s=""; for(let i=0;i<CODE_LEN;i++) s+=CODE_ALPHA[Math.floor(Math.random()*CODE_ALPHA.length)]; return s; }
+/* ⚠️ v7.90 (relevé par Hervé) — `CODE_LEN` NE SERVAIT QU'À FABRIQUER LES CODES, JAMAIS À LES
+   SAISIR. Le champ où on tape un code portait `maxlength="5"` en dur, l'exemple affiché
+   « Ex : 7XK2P » comptait cinq caractères écrits à la main, et `doJoin` se contentait de ≥ 3.
+   Passer la constante à 6 aurait donc généré des codes à six signes que PERSONNE n'aurait pu
+   saisir — le champ en refusant le sixième. Plus aucune ligue rejoignable, et pour seul indice
+   un code qui « ne marche pas ».
+   ⚠️ C'EST LE PIRE GENRE DE DÉFAUT : il ne se déclenche qu'AU MOMENT DU CHANGEMENT, c'est-à-dire
+   des mois après, quand plus personne ne fait le lien. La constante donnait l'illusion d'un
+   réglage central alors qu'elle ne pilotait qu'un tiers du chemin.
+   `codeExemple()` fabrique donc l'exemple à la bonne longueur, et il n'y a plus UN SEUL 5 écrit
+   en dur sur le trajet d'un code. */
+function codeExemple(){ let s=""; for(let i=0;i<CODE_LEN;i++) s+=CODE_ALPHA[(i*7+3)%CODE_ALPHA.length]; return s; }
 // Crée une ligue en RÉESSAYANT tant que le code tiré est déjà pris (v6.95, demandé par Hervé).
 //
 // ⚠️ La garantie d'unicité vient de la BASE (`code text unique not null` dans schema.sql), jamais
@@ -4011,7 +4024,7 @@ function viewHome(){
 function viewLeagues(){
   return `<div class="box"><button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
       <div style="height:12px"></div><label>${t("Rejoindre avec un code")}</label>
-      <input id="joinCode" maxlength="5" placeholder="${t("Ex : 7XK2P")}" style="text-transform:uppercase">
+      <input id="joinCode" maxlength="${CODE_LEN}" placeholder="${t("Ex : {a}",{a:codeExemple()})}" style="text-transform:uppercase">
       <div style="height:8px"></div><button class="btn ghost" onclick="doJoin()">${t("Rejoindre →")}</button></div>
     ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost" onclick="askNotif()">${t("🔔 Activer les notifications")}</button><div class="mini muted" style="text-align:center;margin-top:-4px">${t("Pour être prévenu quand c'est à toi de jouer (onglet ouvert).")}</div>`:''}
     ${(()=>{
@@ -4030,7 +4043,13 @@ function viewLeagues(){
       return h;
     })()}`;
 }
-function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim(); if(c.length<3){showErr(t("Entre un code valide."));return;} joinLeague(c); }
+// ⚠️ ON REFUSE UN CODE INCOMPLET ICI (v7.90, arbitrage d'Hervé), au lieu de laisser partir la
+// requête. Un code à 4 signes n'est PAS une « ligue introuvable » : c'est un code pas fini. Dire
+// « introuvable » envoyait chercher une faute de saisie dans le code d'un ami — ou dans son
+// existence — alors qu'il manquait simplement une lettre.
+function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim();
+  if(c.length!==CODE_LEN){ showErr(t("Un code de ligue fait {a} caractères.",{a:CODE_LEN})); return; }
+  joinLeague(c); }
 
 /* ============ PARTIE D'ESSAI — mini-saison LOCALE de 2 journées, résultats immédiats ============
    Ordre RÉEL du jeu : prépa (gage + enchères bonus) → paris J1 → résultats → sélection matchs J2 →
