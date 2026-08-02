@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.82";
+const APP_VERSION = "v7.83";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2412,6 +2412,7 @@ const EN={
   "Ta rentabilité cumulée, journée après journée, toutes ligues confondues. Une courbe qui monte = tu progresses ; en dents de scie = tu joues gros et irrégulier. Les paris n'ayant pas de date en base, l'axe suit <b>l'ordre des journées jouées</b>, pas le calendrier.":"Your cumulative return, matchday after matchday, across all leagues. A rising curve = you're improving; a jagged one = you play big and erratically. Bets carry no date in the database, so the axis follows <b>the order matchdays were played</b>, not the calendar.",
   "Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise.":"Your success rate by match type: <b>favourites</b> (odds under 1.80), <b>even</b>, <b>underdogs</b> (above 3.00). It necessarily drops towards underdogs — what matters is knowing where YOU are strongest.",
   "Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu.":"The same figures for the other players in your leagues (AI player excluded). The only real benchmark: a ROI is judged against your table, not in the abstract.",
+  "Ton bilan en <b>duels</b> contre chaque adversaire : victoires, nuls, défaites. Un même joueur retrouvé dans <b>plusieurs ligues</b> est cumulé sur une seule ligne ; le 🤖 joueur IA y figure aussi, placé en dernier. Le duel se joue au <b>résultat net</b> de la journée : à net égal, c'est un <b>nul</b>. Un prono <b>non validé à temps</b> est une défaite d'office — et si vous avez oublié <b>tous les deux</b>, la journée compte comme un nul. Les ligues fermées avant terme n'entrent pas dans le compte.":"Your <b>duel</b> record against each opponent: wins, draws, losses. The same player met across <b>several leagues</b> is merged into a single line; the 🤖 AI player is listed too, always last. A duel is decided on the day's <b>net result</b>: equal net means a <b>draw</b>. Picks <b>not submitted in time</b> are an automatic loss — and if you <b>both</b> forgot, the day counts as a draw. Leagues closed before the end aren't counted.",
   "Ce que le doublement t'a rapporté <b>en plus</b>, ou coûté. Un chiffre négatif ne condamne pas la mécanique : il dit que tu doubles trop souvent sur des paris incertains.":"What the doubling earned you <b>on top</b>, or cost you. A negative figure doesn't condemn the mechanic: it says you double too often on shaky picks.",
   "Le gain réel de chaque bonus : ton résultat AVEC le bonus moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable.":"Each bonus's real gain: your result WITH the bonus minus what it would have been WITHOUT it. ⚠️ Not to be confused with the most <b>played</b> bonus — the most played is rarely the most profitable.",
   "Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats.":"How many matchdays you finish in the green, and your longest run of duels won. Two players on the same ROI don't have the same consistency — and consistency is what wins championships.",
@@ -6852,8 +6853,13 @@ function viewLeagueStats(){
     ${line(t("Bonus fétiche"), s.favCard&&CARDS[s.favCard]?CARDS[s.favCard].e+' '+esc(t(CARDS[s.favCard].n)):'–')}
   </div>`;
   const opps=Object.keys(s.h2h);
-  if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face dans cette ligue")}</b>`;
-    opps.forEach(oid=>{ const p=pById(oid); const r=s.h2h[oid];
+  // ⚠️ MÊME FICHE que l'écran toutes ligues (v7.83) : les règles du duel sont les mêmes, une
+  // seconde description aurait fini par diverger de la première — c'est déjà ce qui était arrivé
+  // à la règle elle-même, l'IA étant comptée ici et exclue là-bas.
+  if(opps.length){ h+=`<div class="box"><b class="mini clik" onclick="showStatInfo('h2h')">🥊 ${t("Face-à-face dans cette ligue")} <span style="opacity:.55">ⓘ</span></b>`;
+    // Le 🤖 en dernier, comme sur l'écran toutes ligues : c'est un adversaire, pas un rival dont
+    // on se compare le palmarès. Ici l'ordre venait de la base — donc de rien de lisible.
+    opps.sort((a,b)=>((pById(a)||{}).is_ai?1:0)-((pById(b)||{}).is_ai?1:0)).forEach(oid=>{ const p=pById(oid); const r=s.h2h[oid];
       h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${avaName(p)}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
     h+=`</div>`; }
   if(L&&L.status==="done") h+=`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button>`;   // partage : seulement une fois la ligue terminée
@@ -6973,8 +6979,19 @@ async function loadMyStats(){
           const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2(lg));
           // Série : comptée sur TOUS les duels, adversaire IA compris — c'est ta série à toi.
           if(r.win==='h'){ run++; if(run>bestRun) bestRun=run; } else run=0;
-          if(opp&&!opp.is_ai){ const key=opp.user_id||opp.name;
-            h2h[key]=h2h[key]||{name:opp.name,emoji:opp.emoji,w:0,l:0,d:0};
+          /* ⚠️ v7.83 (relevé par Hervé) — LE JOUEUR IA ÉTAIT EXCLU ICI, ET COMPTÉ dans le
+             face-à-face de la ligue (`myStats`). Le même bloc, deux règles opposées, dans le même
+             fichier. Aucun commentaire ne justifiait l'exclusion : elle a suivi par réflexe celle
+             de « ⚖️ Face aux autres » juste à côté, où elle a du sens (se comparer au ROI d'un
+             robot ne mesure rien) alors qu'un bilan V/N/D contre lui se lit très bien.
+             CE QUE ÇA CASSAIT : en duo contre l'IA, on dispute un duel chaque journée et le bloc
+             disparaissait entièrement de l'écran toutes ligues. C'est la règle de `bestRun`, juste
+             au-dessus, qui avait raison depuis le début : « c'est ta série à toi ».
+             ⚠️ CLÉ FIXE `__ia__` : les IA n'ont pas de `user_id` et portent toutes le même nom.
+             Les cumuler volontairement sur UNE ligne évite autant une ligne par ligue qu'une
+             fusion accidentelle avec un humain qui s'appellerait « Joueur IA ». */
+          if(opp){ const key=opp.is_ai?"__ia__":(opp.user_id||opp.name);
+            h2h[key]=h2h[key]||{name:opp.name,emoji:opp.emoji,is_ai:!!opp.is_ai,w:0,l:0,d:0};
             if(r.win==='h') h2h[key].w++; else if(r.win==='a') h2h[key].l++; else h2h[key].d++; } } });
       const humans=classe((plsByLg[lid]||[]).filter(p=>!p.is_ai), lg);
       const rank=humans.findIndex(p=>p.id===mp)+1, total=humans.length; const me=plMap[mp]||{};
@@ -7047,6 +7064,13 @@ const STAT_INFO={
   curve:{t:"Évolution du ROI",d:"Ta rentabilité cumulée, journée après journée, toutes ligues confondues. Une courbe qui monte = tu progresses ; en dents de scie = tu joues gros et irrégulier. Les paris n'ayant pas de date en base, l'axe suit <b>l'ordre des journées jouées</b>, pas le calendrier."},
   profil:{t:"Ton profil de pronostiqueur",d:"Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise."},
   others:{t:"Face aux autres",d:"Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu."},
+  // ⚠️ FICHE PARTAGÉE par les DEUX écrans de stats (la ligue et la carrière) — v7.83. Les règles
+  // du duel sont les mêmes des deux côtés ; en écrire deux versions, c'est se condamner à les
+  // voir diverger, ce qui venait précisément d'arriver à la règle du joueur IA.
+  // ⚠️ Le joueur IA est EXCLU de `others` (juste au-dessus) et COMPTÉ ici : ce n'est pas une
+  // incohérence mais deux mesures différentes — comparer son ROI à celui d'un robot ne mesure
+  // rien, alors qu'un bilan victoires/nuls/défaites contre lui se lit parfaitement.
+  h2h:{t:"Face-à-face",d:"Ton bilan en <b>duels</b> contre chaque adversaire : victoires, nuls, défaites. Un même joueur retrouvé dans <b>plusieurs ligues</b> est cumulé sur une seule ligne ; le 🤖 joueur IA y figure aussi, placé en dernier. Le duel se joue au <b>résultat net</b> de la journée : à net égal, c'est un <b>nul</b>. Un prono <b>non validé à temps</b> est une défaite d'office — et si vous avez oublié <b>tous les deux</b>, la journée compte comme un nul. Les ligues fermées avant terme n'entrent pas dans le compte."},
   captain:{t:"Rendement du Capitaine",d:"Ce que le doublement t'a rapporté <b>en plus</b>, ou coûté. Un chiffre négatif ne condamne pas la mécanique : il dit que tu doubles trop souvent sur des paris incertains."},
   cards:{t:"Bonus les plus rentables",d:"Le gain réel de chaque bonus : ton résultat AVEC le bonus moins ce qu'il aurait été SANS elle. ⚠️ À ne pas confondre avec le bonus le plus <b>joué</b> — le plus joué est rarement le plus rentable."},
   regul:{t:"Régularité",d:"Le nombre de journées où tu finis dans le vert, et ta plus longue série de duels gagnés. Deux joueurs au même ROI n'ont pas la même régularité — et c'est elle qui gagne les championnats."},
@@ -7179,8 +7203,11 @@ function viewStats(){
       ${ks.map(k=>{ const v=a.bySport[k];
         return line(k+" <span class='muted'>"+v.p+"</span>", `${Math.round(v.w/v.p*100)} % <span class="muted">(${v.w}/${v.p})</span>`); }).join("")}</div>`; })()}`;
   const opps=Object.keys(d.h2h);
-  if(opps.length){ h+=`<div class="box"><b class="mini">🥊 ${t("Face-à-face")}</b>`;
-    opps.map(k=>d.h2h[k]).sort((x,y)=>(y.w+y.l+y.d)-(x.w+x.l+x.d)).forEach(r=>{
+  if(opps.length){ h+=`<div class="box"><b class="mini clik" onclick="showStatInfo('h2h')">🥊 ${t("Face-à-face")} <span style="opacity:.55">ⓘ</span></b>`;
+    // ⚠️ L'IA EN DERNIER, quel que soit le nombre de duels (v7.83). En duo contre elle, elle
+    // trusterait la 1re ligne d'un tableau qui sert à se situer face à des GENS. Elle y figure
+    // — c'est ton bilan — mais elle ne prend pas la place de tête.
+    opps.map(k=>d.h2h[k]).sort((x,y)=>((x.is_ai?1:0)-(y.is_ai?1:0))||((y.w+y.l+y.d)-(x.w+x.l+x.d))).forEach(r=>{
       h+=`<div class="row" style="justify-content:space-between;margin:7px 0"><span class="mini">${avaName(r)}</span><b class="mini">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</b></div>`; });
     h+=`</div>`; }
   h+=`<div class="box"><b class="mini">📋 ${t("Par ligue")}</b>
