@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.93";
+const APP_VERSION = "v7.94";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1538,6 +1538,10 @@ const EN={
   "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "Retour à mes stats":"Back to my stats",
+  // — v7.94 : les trois règles ajoutées au tuto (l'oubli, le renflouement, les bonus invendus) —
+  "<b>Valide avant l'heure limite.</b> Sans pronos validés, la journée est <b>perdue d'office</b> — quel que soit le résultat de l'adversaire — avec <b>{a} pt</b> au classement et <b>−{b} %</b> de capital.":"<b>Confirm before the deadline.</b> With no picks confirmed, the day is <b>lost outright</b> — whatever your opponent scores — with <b>{a} pt</b> in the standings and <b>−{b} %</b> of your balance.",
+  "Si ta cagnotte tombe sous <b>{a} €</b>, elle est <b>remontée à {b} €</b> pour que tu puisses continuer à miser — au prix d'<b>un point</b> au classement.":"If your balance drops below <b>€{a}</b>, it is <b>topped up to €{b}</b> so you can keep betting — at the cost of <b>one point</b> in the standings.",
+  "Aux enchères, un bonus que <b>personne</b> n'achète reste <b>hors jeu toute la saison</b> : réfléchis à ce que tu laisses passer.":"At the auction, a bonus <b>nobody</b> buys stays <b>out of play for the whole season</b> — think about what you let go.",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
   "Pseudo affiché":"Display name", "Modifier":"Edit", "Pseudo mis à jour ✓":"Display name updated ✓",
   "✨ Ou colle ton propre emoji":"✨ Or paste your own emoji", "✨ Ou colle un emoji":"✨ Or paste an emoji", "Utiliser":"Use", "Colle un emoji d'abord.":"Paste an emoji first.",
@@ -4208,7 +4212,16 @@ function viewEssai(){
       <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><div class="row"><span class="muted">${t("Ton capital")}</span><b>${cap} €</b></div>
         <div class="row" style="margin-top:4px"><span class="muted">${t("Misé")}</span><b class="${over?'red':''}"><span id="essaist">${tot}</span> € / ${max} € max</b></div>
         <div class="gauge ${over?'over':''}" id="essaigauge" style="margin-top:6px"><i style="width:${max>0?Math.min(100,Math.round(tot/max*100)):0}%"></i></div>
-        <div class="mini muted" style="margin-top:3px">${t("Total des mises ≤ <b>50 %</b> de ton capital.")}</div></div>
+        <div class="mini muted" style="margin-top:3px">${t("Total des mises ≤ <b>50 %</b> de ton capital.")}</div>
+        ${/* ⚠️ v7.94 (demandé par Hervé) — L'OUBLI N'ÉTAIT ENSEIGNÉ NULLE PART. C'est pourtant la
+             seule faute qu'un débutant peut subir DÈS SA PREMIÈRE VRAIE JOURNÉE sans rien avoir
+             fait de travers : il suffit de ne pas valider à temps. Et c'est la plus chère du jeu —
+             duel perdu quel que soit le score de l'adversaire. Les autres règles absentes du tuto
+             (renflouement, bonus invendus) se découvrent en jouant, sans dégât ; celle-ci coûte
+             avant d'avoir été comprise. Elle est donc ici, à l'endroit où l'on valide.
+             ⚠️ Le barème passe par forgotPtsShown()/forgotPenShown() : hors ligue, ces fonctions
+             renvoient le barème actuel — un chiffre en dur mentirait le jour où il changera. */''}
+        <div class="mini" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">⏰ ${t("<b>Valide avant l'heure limite.</b> Sans pronos validés, la journée est <b>perdue d'office</b> — quel que soit le résultat de l'adversaire — avec <b>{a} pt</b> au classement et <b>−{b} %</b> de capital.",{a:forgotPtsShown(),b:pct(forgotPenShown())})}</div></div>
       ${fx.map((f,i)=>betCard(d,f,i)).join("")}
       ${(avail.length||usedBefore.length)?`<div class="box"><div class="mini muted">${t("Enfin, un bonus si tu veux (facultatif) :")}</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
         ${avail.map(id=>`<span class="chip ${essaiCard[d]===id?'g':''} clik" onclick="essaiSetCard(${d},'${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}
@@ -4396,7 +4409,15 @@ function viewEssai(){
         <li>${t("Un <b>bonus</b> bien placé peut <b>tout renverser</b> à n'importe quelle journée — garde-en sous le coude.")}</li>
         <li>${t("Le <b>⭐ meilleur pronostiqueur</b> d'une journée marque un <b>point bonus</b> au classement.")}</li>
         <li>${t("Tu peux <b>racheter</b> ou <b>vendre</b> des bonus aux autres joueurs pour te refaire du capital.")}</li>
-        <li>${t("Chaque journée garde son <b>détail complet</b> et ses <b>statistiques</b> pour suivre ta forme.")}</li></ul></div>
+        <li>${t("Chaque journée garde son <b>détail complet</b> et ses <b>statistiques</b> pour suivre ta forme.")}</li>
+        ${/* ⚠️ v7.94 (arbitrage d'Hervé) — DEUX RÈGLES QUI EXISTENT MAIS QUE LE TUTO NE MONTRE PAS.
+             Elles n'ont pas leur place dans le déroulé : la partie d'essai dure deux journées, on
+             n'y tombe jamais sous 30 € et les trois bonus proposés trouvent tous preneur. Les taire
+             complètement serait pire — on les découvrirait en les subissant. Cette liste est
+             l'endroit juste : elle annonce ce que la partie d'essai n'a PAS pu montrer.
+             ⚠️ Chiffres SUBSTITUÉS depuis les constantes, jamais écrits en dur. */''}
+        <li>${t("Si ta cagnotte tombe sous <b>{a} €</b>, elle est <b>remontée à {b} €</b> pour que tu puisses continuer à miser — au prix d'<b>un point</b> au classement.",{a:RECAP_THRESHOLD,b:RECAP_TARGET})}</li>
+        <li>${t("Aux enchères, un bonus que <b>personne</b> n'achète reste <b>hors jeu toute la saison</b> : réfléchis à ce que tu laisses passer.")}</li></ul></div>
     <div class="box" style="border-color:var(--green);background:rgba(37,192,125,.10)"><div class="mini">${t("🎉 Voilà une saison complète ! Tu connais tout l'enchaînement. Prêt pour une vraie ligue entre amis ?")}</div></div>
     ${AUTH?`<button class="btn" onclick="openCreate()">🎉 ${t("Créer une ligue entre amis")}</button>`:`<button class="btn" onclick="S.view='auth';render()">🎉 ${t("S'inscrire pour jouer")}</button>`}
     <div style="height:8px"></div><button class="btn ghost" onclick="startEssai()">🔁 ${t("Refaire une partie d'essai")}</button>
