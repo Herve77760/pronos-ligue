@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.68";
+const APP_VERSION = "v7.69";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1647,7 +1647,13 @@ const EN={
   "<b>Double ration</b> et 🃏 <b>Joker</b> : gain doublé sur le match ciblé.":"<b>Double Rations</b> and 🃏 <b>Joker</b>: win doubled on the targeted match.",
   "<b>Ça passe ou ça casse</b> : gain triplé sur le match ciblé.":"<b>All or Nothing</b>: win tripled on the targeted match.",
   "<b>Deux pour le prix d'un</b> : un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent.":"<b>Two for the Price of One</b>: an extra win is added if both targeted matches land.",
-  "🛟 L'<b>Assurance</b> et 🪂 le <b>Parachute</b> n'apparaissent pas ici : ils n'agissent qu'en cas de perte.":"🛟 <b>Insurance</b> and 🪂 the <b>Parachute</b> don't show here: they only act on a loss.",
+  // — v7.69 : le rappel au point de décision, et la fiche réduite à MES bonus —
+  "Gain":"Win", "Risque":"Risk",
+  "N'apparaissent pas ici, ils n'agissent qu'en cas de perte :":"Not shown here, they only act on a loss:",
+  "gain doublé sur le match ciblé.":"win doubled on the targeted match.",
+  "gain triplé sur le match ciblé.":"win tripled on the targeted match.",
+  "un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent.":"an extra win is added if both targeted matches land.",
+  "le gain est chiffré à la cote de ton pari principal ; si c'est la 2ᵉ issue qui sort, il sera différent.":"the win is figured at your main pick's odds; if the second outcome comes up, it will differ.",
   // — v7.68 : la menace adverse, calculée sur sa main réelle —
   "ce bonus n'est pas compté dans ce total":"this bonus isn't counted in this total",
   "Ce que {a} peut encore te prendre":"What {a} can still take from you",
@@ -2809,7 +2815,20 @@ function bonusAdversesRisque(){
   return (op.hand||[]).filter(id=>CARDS[id] && !CARDS[id].retired
     && (["face","moitie","miroir","cadeau","sangsue"].indexOf(id)>=0 || (id==="voleur" && compte)));
 }
+/* ⚠️ v7.69 — MÊME RÈGLE POUR MES PROPRES BONUS QUE POUR CEUX DE L'ADVERSAIRE (demande d'Hervé :
+   « ne pas intégrer les infos sur des bonus dont je ne dispose pas, uniquement ceux que j'ai
+   encore d'actif »). La fiche listait les quatre multiplicateurs du jeu, qu'on les possède ou
+   non : quatre lignes dont trois inutiles, et le lecteur cherche laquelle le concerne.
+   ⚠️ Le 👑 Capitaine, lui, est TOUJOURS cité : ce n'est pas un bonus, il est obligatoire. */
+function maMain(){ const p=me()||{}; return (p.hand||[]).filter(id=>CARDS[id] && !CARDS[id].retired); }
+function mesBonusGain(){ return maMain().filter(id=>GAIN_MULTIPLIANTS.indexOf(id)>=0); }
+function mesBonusPerte(){ return maMain().filter(id=>id==="assurance"||id==="parachute"); }
 function showGainInfo(){
+  const MIEN={ double:t("gain doublé sur le match ciblé."),
+               joker:t("gain doublé sur le match ciblé."),
+               tout:t("gain triplé sur le match ciblé."),
+               dbl:t("un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent."),
+               chance:t("le gain est chiffré à la cote de ton pari principal ; si c'est la 2ᵉ issue qui sort, il sera différent.") };
   const d=myDuel(); const oid=d?((d.home_id===S.myId)?d.away_id:d.home_id):null;
   const oppNom=oid?esc((pById(oid)||{}).name||"?"):"";
   const menace=bonusAdversesRisque();
@@ -2825,11 +2844,11 @@ function showGainInfo(){
     t("C'est ce que tu gagnerais <b>si tous tes pronos passaient</b> — le meilleur cas, pas une prévision.")}
    <div style="margin-top:8px">${t("Pour chaque pari : <b>mise × (cote − 1)</b>. C'est un gain <b>net</b> : ta mise t'est rendue en plus.")}</div>
    <div style="margin-top:8px">${t("Ce qui l'augmente :")}<br>
-     👑 ${t("<b>Capitaine</b> : le gain de ce pari est doublé.")}<br>
-     🐗 ${t("<b>Double ration</b> et 🃏 <b>Joker</b> : gain doublé sur le match ciblé.")}<br>
-     🔥 ${t("<b>Ça passe ou ça casse</b> : gain triplé sur le match ciblé.")}<br>
-     🏷️ ${t("<b>Deux pour le prix d'un</b> : un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent.")}</div>
-   <div style="margin-top:8px">${t("🛟 L'<b>Assurance</b> et 🪂 le <b>Parachute</b> n'apparaissent pas ici : ils n'agissent qu'en cas de perte.")}</div>
+     👑 ${t("<b>Capitaine</b> : le gain de ce pari est doublé.")}
+     ${mesBonusGain().map(id=>`<br>${CARDS[id].e} <b>${esc(t(CARDS[id].n))}</b> : ${MIEN[id]}`).join("")}</div>
+   ${mesBonusPerte().length?`<div style="margin-top:8px">${
+       t("N'apparaissent pas ici, ils n'agissent qu'en cas de perte :")} ${
+       mesBonusPerte().map(id=>CARDS[id].e+" "+esc(t(CARDS[id].n))).join(" · ")}</div>`:''}
    ${menace.length
      ? `<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px"><b class="gold">${
           t("Ce que {a} peut encore te prendre",{a:oppNom})}</b><br>${
@@ -5395,6 +5414,13 @@ function viewBet(d,dayLbl,opp,iAmHome){
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" title="${esc(t(CARDS[id].d))}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>
         ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire ce bonus.")+'</b>':(needTarget?' <b class="blue">'+(twoCard?t("→ touche les {e} de tes 2 matchs.",{e:CARDS[myCard.id].e}):t("→ touche le {e} du pari ciblé.",{e:CARDS[myCard.id].e}))+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
         :`<div class="mini muted" style="margin-top:6px">${t("Plus de bonus en main.")}</div>`}</div>
+    ${/* ⚠️ v7.69 — LE TOTAL EST RÉPÉTÉ ICI, AU POINT DE DÉCISION (constat d'Hervé : il ne l'a pas
+         trouvé sur son propre écran). Celui du haut sert pendant la saisie ; mais quand on appuie
+         sur « Valider », il est hors écran depuis longtemps — on validait sans voir ce qu'on joue.
+         ⚠️ Le RISQUE apparaît pour la première fois : `worstLoss` était calculé depuis toujours,
+         mais uniquement pour BLOQUER une mise trop grosse. Il n'était jamais montré. Les deux
+         nombres côte à côte, c'est la décision entière en une ligne. */''}
+    <div class="row mini" style="margin:10px 2px 6px"><span>💰 ${t("Gain")} <b id="gainBas" class="green">${fmt(bestGain(bet.picks,fx,bet.captain,myCard))} €</b></span><span>⚠️ ${t("Risque")} <b id="risqueBas" class="red">-${eur(worstLoss(bet.picks,bet.captain,myCard))} €</b></span></div>
     <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>
     ${oppHandInfo}`;
 }
@@ -5403,8 +5429,12 @@ function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCar
    redessine PAS l'écran : un `render()` à chaque frappe ferait perdre le focus du champ en cours
    de saisie. Tout ce qui dépend de la mise doit donc être rafraîchi à la main, ici. */
 function refreshGains(){
-  const el=$("gainPot"); if(el) el.textContent=fmt(bestGain(bet.picks,(myDuel()||{}).fixtures,bet.captain,myCard))+" €";
   const fx=(myDuel()||{}).fixtures||[];
+  const tot=fmt(bestGain(bet.picks,fx,bet.captain,myCard))+" €";
+  const el=$("gainPot"); if(el) el.textContent=tot;
+  // ⚠️ Le rappel du bas porte les MÊMES valeurs : deux affichages, un seul calcul.
+  const bas=$("gainBas"); if(bas) bas.textContent=tot;
+  const rq=$("risqueBas"); if(rq) rq.textContent="-"+eur(worstLoss(bet.picks,bet.captain,myCard))+" €";
   (bet.picks||[]).forEach((b,i)=>{ const g=document.getElementById("gain"+i); const f=fx[i]; if(!g||!f) return;
     g.textContent=fmt((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard))+" €"; });
 }
