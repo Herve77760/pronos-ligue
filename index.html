@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.91";
+const APP_VERSION = "v7.92";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -8814,49 +8814,13 @@ function prepTabs(){ const solo=isSolo();
    + (solo?'':navPtab("gages","🎭",isReward()?t("Récomp."):t("Gages")))
    + navPtab("encheres","💰",t("Enchères"))
    + `</div>`; }
-// === Navigation par SWIPE horizontal entre onglets (v6.42, Hervé) =============================
-// Renvoie l'ordre des onglets ACTUELLEMENT affichés dans la barre du bas + comment les ouvrir.
-function currentSwipeTabs(){
-  // Prépa / lobby : onglets internes (S.ptab), même ordre que prepTabs().
-  if(S.leagueId && L && (L.status==="lobby"||L.status==="prep") && LEAGUE_TABVIEWS.includes(S.view)){
-    const items=["infos","joueurs"]; if(!isSolo()) items.push("gages"); items.push("encheres");
-    return { kind:"ptab", idx:items.indexOf(S.ptab), items };
-  }
-  if(HOME_VIEWS.includes(S.view)){
-    const items=["home","leagues","stats","palmares","shop"];   // ordre de homeTabs() (Profil exclu : bouton haut-droite)
-    const acts={home:goAccueil,leagues:backToLeagues,stats:openStats,palmares:openPalmares,shop:openShop};
-    return { kind:"nav", idx:items.indexOf(S.view), items, acts };
-  }
-  if(LEAGUE_TABVIEWS.includes(S.view) && L && (L.status==="running"||L.status==="done")){
-    const items=["coulisses","game","results","standings","leaguestats"];   // ordre de runningTabs()
-    const acts={coulisses:openCoulisses,game:goGame,results:()=>openResults(resultsDefaultDay()),standings:goStandings,leaguestats:openLeagueStats};
-    return { kind:"nav", idx:items.indexOf(S.view), items, acts };
-  }
-  return null;
-}
-// dir=+1 → onglet SUIVANT (doigt vers la gauche) ; dir=-1 → PRÉCÉDENT. Ne boucle pas aux extrémités.
-function swipeNav(dir){ const c=currentSwipeTabs(); if(!c||c.idx<0) return;
-  const ni=c.idx+dir; if(ni<0||ni>=c.items.length) return; const target=c.items[ni];
-  if(c.kind==="ptab"){ setPtab(target); return; }
-  const fn=c.acts[target]; if(fn) fn(); }
-// Un swipe ne doit PAS déclencher si le geste part d'un curseur (mise), d'un champ, ou d'une zone qui
-// défile elle-même horizontalement (tableaux récap, classement) — sinon on changerait d'onglet par erreur.
-function swipeBlocked(el){ for(let n=el; n && n!==document.body; n=n.parentElement){
-    if(n.matches && n.matches('input,textarea,select,button,[contenteditable="true"]')) return true;
-    try{ const st=getComputedStyle(n); const ox=st.overflowX;
-      if((ox==="auto"||ox==="scroll") && n.scrollWidth>n.clientWidth+4) return true; }catch(e){}
-  } return false; }
-function initSwipeNav(){ const root=$("root"); if(!root||root._swipe) return; root._swipe=true;
-  let x0=0,y0=0,t0=0,armed=false;
-  root.addEventListener("touchstart",e=>{ if(e.touches.length!==1){armed=false;return;}
-    const tch=e.touches[0]; x0=tch.clientX; y0=tch.clientY; t0=Date.now(); armed=!swipeBlocked(e.target); },{passive:true});
-  root.addEventListener("touchend",e=>{ if(!armed) return; armed=false;
-    const tch=(e.changedTouches&&e.changedTouches[0]); if(!tch) return;
-    const dx=tch.clientX-x0, dy=tch.clientY-y0, dt=Date.now()-t0;
-    // swipe net : horizontal franc (>60px), nettement plus horizontal que vertical, et assez rapide
-    if(dt<600 && Math.abs(dx)>60 && Math.abs(dx)>Math.abs(dy)*2){ swipeNav(dx<0?1:-1); }
-  },{passive:true});
-}
+/* Navigation par BALAYAGE horizontal — RETIREE en v7.92 (demande d'Herve : « ca ne marche pas
+   tres bien et pas tres utilise non plus »). Introduite en v6.42, elle changeait d'onglet sur un
+   glissement du doigt. Le signe qu'elle genait plus qu'elle ne servait etait dans son propre code :
+   une fonction entiere (swipeBlocked) existait pour l'EMPECHER de se declencher sur un curseur,
+   un champ ou un tableau qui defile — et il en restait des faux positifs.
+   Retire : currentSwipeTabs / swipeNav / swipeBlocked / initSwipeNav, et son appel au demarrage.
+   ⚠️ HOME_VIEWS et LEAGUE_TABVIEWS sont CONSERVES : ils servent aussi a la barre d'onglets. */
 function viewProfil(){
   const admin = AUTH && AUTH.id===ADMIN_ID;
   return `<div class="box"><h2 style="margin-top:0">👤 ${t("Profil")}</h2>
@@ -9339,7 +9303,7 @@ function showUpdateBanner(){
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkForUpdate(); });
 (async function boot(){
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
-  initSwipeNav();   // v6.42 : swipe horizontal pour changer d'onglet
+  // (v7.92 : `initSwipeNav()` retiré ici — voir la note à l'endroit de la définition supprimée.)
   checkForUpdate();
   try{ const { data:{ session } } = await db.auth.getSession();
     if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null }; }
