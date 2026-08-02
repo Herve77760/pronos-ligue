@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.71";
+const APP_VERSION = "v7.72";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1660,12 +1660,14 @@ const EN={
   "il amortit 30 % d'une journée négative — cet effet n'est dans aucun des deux montants.":"it cushions 30% of a losing day — that effect is in neither figure.",
   "Ce que {a} peut encore te prendre":"What {a} can still take from you",
   "✅ {a} n'a plus aucun bonus capable de réduire ce gain.":"✅ {a} has no bonus left that could cut this win.",
-  "ton gain sur un match est divisé par 2.":"your win on one match is halved.",
-  "tout ton résultat de la journée est divisé par 2.":"your whole result for the day is halved.",
-  "ton meilleur pari est échangé avec le sien.":"your best bet is swapped with theirs.",
-  "ton prono est inversé sur un match.":"your pick is flipped on one match.",
-  "15 % de ton bénéfice lui sont siphonnés.":"15% of your profit is siphoned off to them.",
-  "ton bonus est annulé — ce total retomberait à {a} €":"your bonus is cancelled — this total would drop to €{a}",
+  // ⚠️ v7.72 : tournures ACTIVES, l'adversaire en sujet — une voix passive oblige à reconstruire
+  // qui fait quoi, au moment précis où l'on décide de sa mise (signalé par Hervé sur 🩸 Sangsue).
+  "il divise par 2 ton gain sur un match.":"they halve your win on one match.",
+  "il divise par 2 tout ton résultat de la journée.":"they halve your whole result for the day.",
+  "il échange ton meilleur pari contre le sien.":"they swap your best bet for theirs.",
+  "il inverse ton prono sur un match.":"they flip your pick on one match.",
+  "il te siphonne 15 % de ton bénéfice.":"they siphon off 15% of your profit.",
+  "il t'annule ton bonus — ce total retomberait à {a} €.":"they cancel your bonus — this total would drop to €{a}.",
   "En face, la jauge et l'alerte de capital te disent ce que tu <b>risques</b>. Les deux se lisent ensemble.":"Opposite, the gauge and the capital warning tell you what you're <b>risking</b>. Read the two together.",
   // — v7.65 : « terminé » ne veut pas dire « résultat connu » —
   "score en attente":"score pending",
@@ -2851,12 +2853,17 @@ function showGainInfo(){
   const d=myDuel(); const oid=d?((d.home_id===S.myId)?d.away_id:d.home_id):null;
   const oppNom=oid?esc((pById(oid)||{}).name||"?"):"";
   const menace=bonusAdversesRisque();
-  const EFFET={ face:t("ton gain sur un match est divisé par 2."),
-                moitie:t("tout ton résultat de la journée est divisé par 2."),
-                miroir:t("ton meilleur pari est échangé avec le sien."),
-                cadeau:t("ton prono est inversé sur un match."),
-                sangsue:t("15 % de ton bénéfice lui sont siphonnés."),
-                voleur:t("ton bonus est annulé — ce total retomberait à {a} €",
+  /* ⚠️ v7.72 — TOURNURES ACTIVES, L'ADVERSAIRE EN SUJET (signalé par Hervé sur 🩸 Sangsue :
+     « 15 % de ton bénéfice lui sont siphonnés », ça ne veut pas dire grand-chose — il faut dire
+     que 15 % TE sont siphonnés). Le titre annonce « ce que X peut encore te prendre » : les
+     lignes doivent donc avoir X pour sujet et le joueur pour victime. Une voix passive oblige à
+     reconstruire qui fait quoi, au moment précis où l'on décide de sa mise. */
+  const EFFET={ face:t("il divise par 2 ton gain sur un match."),
+                moitie:t("il divise par 2 tout ton résultat de la journée."),
+                miroir:t("il échange ton meilleur pari contre le sien."),
+                cadeau:t("il inverse ton prono sur un match."),
+                sangsue:t("il te siphonne 15 % de ton bénéfice."),
+                voleur:t("il t'annule ton bonus — ce total retomberait à {a} €.",
                          {a:fmt(bestGain(bet.picks,(myDuel()||{}).fixtures,bet.captain,null))}) };
   infoModal("💰",t("Le gain potentiel"),
   `<div class="mini muted" style="text-align:left;line-height:1.6">${
