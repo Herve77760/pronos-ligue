@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.83";
+const APP_VERSION = "v7.84";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2557,6 +2557,9 @@ const EN={
   "✅ gagnée":"✅ won", " ⚡ le + rapide":" ⚡ fastest", "↩︎ remboursée":"↩︎ refunded",
   "🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.":"🏁 Tie at {a}€ → settled by speed: the first to bid that amount wins.",
   "Personne n'a misé sur les bonus — tout le monde démarre à 100 €.":"Nobody bid on the bonuses — everyone starts at 100 €.",
+  "😶 Sans acquéreur":"😶 No takers",
+  "Personne n'a misé dessus : ces <b>{a}</b> bonus restent <b>hors jeu toute la saison</b>. Aucun joueur ne peut en obtenir un — les échanges ne font que déplacer les bonus déjà attribués.":"Nobody bid on them: these <b>{a}</b> bonuses stay <b>out of play for the whole season</b>. No player can ever get one — trades only move bonuses that were already handed out.",
+  "Personne n'a misé dessus : ces bonus sont restés <b>hors jeu</b>. Cette ligue est antérieure à l'enregistrement des bonus proposés — la liste est reconstituée à partir du jeu actuel, elle peut donc être approximative.":"Nobody bid on them: these bonuses stayed <b>out of play</b>. This league predates the recording of which bonuses were offered — the list is rebuilt from the current set, so it may be approximate.",
   "💰 Capital de départ":"💰 Starting capital", "Dépensé":"Spent", "Capital":"Capital",
   // — v7.80 : le détail du capital (colonne « Cap. » du classement, rendue cliquable) —
   "Le capital":"The balance", "Résultat":"Result", "Détail du capital":"Balance breakdown",
@@ -4610,6 +4613,26 @@ function prepSummaryBody(){
         <div style="text-align:right;flex:0 0 auto"><div class="mini">→ <b>${pName(a.winner)}</b></div><div class="mini gold">${a.amount} €</div></div></div>
       <div class="mini muted" style="margin-top:7px;border-top:1px solid var(--border);padding-top:6px">${t("Enchères :")} ${a.bids.map(bd=>`${pName(bd.pid)} <b>${bd.amt}€</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}`).join(' &nbsp;·&nbsp; ')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold">${t("🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:a.amount})}</span>`:''}</div></div>`).join("")
      : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`}
+   ${(()=>{ /* ⚠️ v7.84 (demandé par Hervé) — LES BONUS INVENDUS DISPARAISSAIENT SANS UN MOT.
+        Ce bloc ne listait que les bonus ayant reçu une mise. Or un bonus que personne n'achète
+        n'est PAS remis en jeu plus tard : les mains sont figées à la fin des enchères (`hand:won`)
+        et les échanges ne font que déplacer des bonus existants. Il est hors de la partie pour
+        TOUTE la saison — et rien ne le disait. Un joueur qui se demande en janvier « est-ce que
+        quelqu'un a la 🩸 Sangsue ? » ne pouvait pas savoir qu'elle n'avait simplement jamais été
+        vendue. C'est une information de jeu, pas un détail d'affichage.
+        ⚠️ On lit `s.offered` (consigné depuis la v7.84) et on RETOMBE sur le catalogue du jour
+        pour les ligues plus anciennes. Cette solution de repli peut se tromper si le catalogue a
+        bougé depuis — d'où la formulation prudente dans ce cas-là, plutôt qu'une affirmation. */
+      const vendus=new Set((s.auction||[]).map(a=>a.card));
+      const propose=Array.isArray(s.offered)?s.offered:null;
+      const invendus=(propose||CARD_IDS).filter(id=>CARDS[id] && !vendus.has(id));
+      if(!invendus.length) return '';
+      return `<div class="box mini muted"><b>${t("😶 Sans acquéreur")}</b>
+        <div style="margin-top:4px">${invendus.map(id=>`<span class="clik" onclick="showCardInfo('${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join(' &nbsp;·&nbsp; ')}</div>
+        <div style="margin-top:6px">${propose
+          ? t("Personne n'a misé dessus : ces <b>{a}</b> bonus restent <b>hors jeu toute la saison</b>. Aucun joueur ne peut en obtenir un — les échanges ne font que déplacer les bonus déjà attribués.",{a:invendus.length})
+          : t("Personne n'a misé dessus : ces bonus sont restés <b>hors jeu</b>. Cette ligue est antérieure à l'enregistrement des bonus proposés — la liste est reconstituée à partir du jeu actuel, elle peut donc être approximative.")}</div></div>`;
+   })()}
    <h2>${t("💰 Capital de départ")}</h2>
    <div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>${t("Joueur")}</th><th style="text-align:right">${t("Dépensé")}</th><th style="text-align:right">${t("Capital")}</th><th>${t("Bonus")}</th></tr>
      ${(s.players||[]).map(p=>`<tr><td>${avaName(p)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</td>
@@ -5297,6 +5320,14 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
       options: options.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})), voteMap: votes, customs, // pour l'enjeu « façon championnat » (choix du pôle opposé appliqué à la fin) + textes perso de chacun
       gageVotes: options.map((o,i)=>({t:(o&&o.t)||o, d:(o&&o.d)||'', count:Object.values(votes).filter(v=>v===i).length, win:i===winIdx})),
       auction,
+      /* ⚠️ v7.84 — ON ENREGISTRE LES BONUS PROPOSÉS, pas seulement ceux qui ont trouvé preneur.
+         `auction` ne retient que les bonus ayant reçu au moins une mise : impossible d'en déduire
+         après coup ce qui était SUR LA TABLE ce jour-là. Or le catalogue bouge (5 bonus déjà
+         retirés du jeu à ce jour) — lire la liste d'aujourd'hui pour raconter une ligue d'hier
+         donnerait une réponse fausse, et fausse en silence. C'est le même principe que `recap_log`
+         (v7.61) : ce qui s'est passé se CONSIGNE, il ne se redéduit pas.
+         ⚠️ Les ligues antérieures n'ont pas ce champ — les Coulisses savent s'en passer. */
+      offered: CARD_IDS.slice(),
       players: ps.map(p=>({pid:p.id,name:p.name,emoji:p.emoji,is_ai:!!p.is_ai,spent:paid[p.id],capital:Math.max(0,100-paid[p.id]),hand:won[p.id]})) };
     // Bloc R : ajouté UNIQUEMENT en mode "both" → une ligue simple garde exactement l'ancienne forme.
     if(both){ summary.optionsR=optionsR.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})); summary.votesR=votesR; summary.customsR=customsR; }
