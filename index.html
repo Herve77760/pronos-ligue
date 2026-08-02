@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.72";
+const APP_VERSION = "v7.73";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2821,10 +2821,22 @@ const GAIN_MULTIPLIANTS=["double","joker","tout","dbl","chance"];
    d'un pari, et `worstLoss` ne le modélise pas (limitation connue, notée dans « à faire plus
    tard »). Le repère est donc justifié pour lui — il annonce une vraie absence, pas un oubli. */
 const RISQUE_MULTIPLIANTS=["assurance","tout","joker"];
+/* ⚠️ v7.73 — LE PARI ACTUELLEMENT AFFICHÉ, quel que soit l'état de l'écran. Pendant la saisie
+   c'est le brouillon (`bet` + `myCard`) ; une fois validé, `bet.picks` est remis à null et le pari
+   ne vit plus que sur le serveur (`myBet()`). Sans ce point d'entrée unique, la fiche ⓘ ouverte
+   depuis un pari VALIDÉ aurait calculé sur un brouillon vide : 0,00 € et aucun bonus cité. Une
+   fiche qui ment est pire que pas de fiche. */
+function pariAffiche(){
+  if(bet && Array.isArray(bet.picks) && bet.picks.length) return {picks:bet.picks, captain:bet.captain, card:myCard};
+  const m=myBet(); if(!m) return {picks:[], captain:-1, card:null};
+  // ⚠️ Un bonus VOLÉ n'a pas été appliqué : on ne le compte pas (même règle que le moteur).
+  return {picks:m.picks||[], captain:(m.captain!=null?m.captain:-1), card:(m.card&&m.card.stolenBy)?null:m.card};
+}
 function bonusAdversesRisque(){
   const d=myDuel(); if(!d) return [];
   const oid=(d.home_id===S.myId)?d.away_id:d.home_id; const op=pById(oid)||{};
-  const compte=!!(myCard && GAIN_MULTIPLIANTS.includes(myCard.id));
+  const mc=pariAffiche().card;
+  const compte=!!(mc && GAIN_MULTIPLIANTS.includes(mc.id));
   return (op.hand||[]).filter(id=>CARDS[id] && !CARDS[id].retired
     && (["face","moitie","miroir","cadeau","sangsue"].indexOf(id)>=0 || (id==="voleur" && compte)));
 }
@@ -2836,8 +2848,22 @@ function bonusAdversesRisque(){
    ⚠️ Le 👑 Capitaine reste TOUJOURS cité : ce n'est pas un bonus, il est obligatoire, donc
    toujours appliqué. ⚠️ Un seul bonus par journée : ces listes ont donc 0 ou 1 élément — elles
    restent des tableaux pour que l'affichage n'ait pas à distinguer les deux cas. */
-function mesBonusGain(){ return (myCard && GAIN_MULTIPLIANTS.indexOf(myCard.id)>=0) ? [myCard.id] : []; }
-function mesBonusPerte(){ return (myCard && (myCard.id==="assurance"||myCard.id==="parachute")) ? [myCard.id] : []; }
+function mesBonusGain(){ const c=pariAffiche().card; return (c && GAIN_MULTIPLIANTS.indexOf(c.id)>=0) ? [c.id] : []; }
+function mesBonusPerte(){ const c=pariAffiche().card; return (c && (c.id==="assurance"||c.id==="parachute")) ? [c.id] : []; }
+/* ⚠️ v7.73 — LE BILAN SURVIT À LA VALIDATION (constat d'Hervé). On avait rendu « ce que je risque
+   / ce que je gagne » visible au moment de décider… puis les deux chiffres disparaissaient dès le
+   pari validé. Or il s'écoule 12 à 72 h entre la validation et les résultats, et c'est justement
+   là qu'on rouvre l'app pour regarder son pari : il fallait alors additionner cinq lignes et
+   multiplier par les cotes — le calcul qu'on venait d'épargner à la saisie.
+   ⚠️ MÊME CALCUL, MÊME FICHE : `worstLoss` / `bestGain` / `showGainInfo`, rien de neuf à
+   maintenir. C'est ce qui garantit que le bilan d'un pari validé ne pourra jamais diverger de
+   celui affiché à la saisie. */
+function bilanPariHTML(bt){
+  if(!bt || !Array.isArray(bt.picks) || !bt.picks.length) return '';
+  const d=myDuel(); const fx=(d&&d.fixtures)||[]; if(!fx.length) return '';
+  const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const cap=(bt.captain!=null?bt.captain:-1);
+  return `<div class="row mini" style="margin:8px 2px 2px"><span>⚠️ ${t("Risque")} <b class="red">-${eur(worstLoss(bt.picks,cap,c))} €</b></span><span class="clik" onclick="showGainInfo()">💰 ${t("Gain")} <b class="green">${fmt(bestGain(bt.picks,fx,cap,c))} €</b> ⓘ</span></div>`;
+}
 function showGainInfo(){
   const MIEN={ double:t("gain doublé sur le match ciblé."),
                joker:t("gain doublé sur le match ciblé."),
@@ -2864,7 +2890,7 @@ function showGainInfo(){
                 cadeau:t("il inverse ton prono sur un match."),
                 sangsue:t("il te siphonne 15 % de ton bénéfice."),
                 voleur:t("il t'annule ton bonus — ce total retomberait à {a} €.",
-                         {a:fmt(bestGain(bet.picks,(myDuel()||{}).fixtures,bet.captain,null))}) };
+                         {a:fmt(bestGain(pariAffiche().picks,(myDuel()||{}).fixtures,pariAffiche().captain,null))}) };
   infoModal("💰",t("Le gain potentiel"),
   `<div class="mini muted" style="text-align:left;line-height:1.6">${
     t("C'est ce que tu gagnerais <b>si tous tes pronos passaient</b> — le meilleur cas, pas une prévision.")}
@@ -5702,7 +5728,7 @@ function viewWait(dayLbl){
         const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`:(noFx?`<span class="chip">${t("attend ses matchs")}</span>`:`<span class="chip">${t("⏳ pas encore")}</span>`);
         return `<div class="box row"><div class="row" style="gap:9px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${chip}</div>`; }).join('') : '';
     return `${head}${missingFx}
-      ${picks}${bonusLine}
+      ${picks}${bonusLine}${bilanPariHTML(mine)}
       <div style="height:6px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier (jusqu'à la clôture)")}</button>
       ${(org && L.data_mode!=="real")?`<div style="height:6px"></div><button class="btn ghost sm" ${tousMatchs?'':'disabled'} onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>${tousMatchs?'':`<div class="mini muted" style="text-align:center;margin-top:5px">${t("⏳ Étape précédente d'abord : tous les duels doivent avoir leurs 5 matchs.")}</div>`}`:''}
       ${pronosRoster}
@@ -5716,7 +5742,9 @@ function viewWait(dayLbl){
      <div style="font-size:16px;font-weight:800;margin-top:3px">👁️ ${t("Toi")} ${t("vs")} ${avaName(opp)}</div></div>`;
   const tooLate = (!mine) ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Trop tard — pronos non validés")}</b><div class="mini" style="margin-top:4px">${t("Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div></div>` : '';
   const goRes = `<button class="btn ghost sm" onclick="${resultsTabOnclick()}">${t("📋 Suivre sur l'onglet Résultats")}</button>`;
-  return `${headClose}${missingFx}${tooLate}${afterCloseDuelHTML()}${goRes}`;
+  // ⚠️ Le bilan reste utile APRÈS la clôture : c'est même là qu'on revient le plus, pour savoir
+  // ce qui se joue ce soir. Le pari n'est plus modifiable, mais les deux montants ne changent pas.
+  return `${headClose}${missingFx}${tooLate}${afterCloseDuelHTML()}${bilanPariHTML(mine)}${goRes}`;
 }
 // onclick pour aller sur l'onglet Résultats à la bonne journée (réutilisé par la barre + les renvois).
 function resultsTabOnclick(){ return "openResults("+resultsDefaultDay()+")"; }
