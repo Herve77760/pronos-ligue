@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.92";
+const APP_VERSION = "v7.93";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1537,6 +1537,7 @@ const EN={
   "⚠️ Trop risqué — baisse la mise du Capitaine":"⚠️ Too risky — lower the Captain stake",
   "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
+  "Retour à mes stats":"Back to my stats",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
   "Pseudo affiché":"Display name", "Modifier":"Edit", "Pseudo mis à jour ✓":"Display name updated ✓",
   "✨ Ou colle ton propre emoji":"✨ Or paste your own emoji", "✨ Ou colle un emoji":"✨ Or paste an emoji", "Utiliser":"Use", "Colle un emoji d'abord.":"Paste an emoji first.",
@@ -3622,12 +3623,32 @@ let prevLeagueStatus=null;   // suivi du statut pour détecter le lancement (pr�
    en place, au MÊME endroit que `jourNonVu` (voir l'avertissement qui y est écrit : le faire plus
    tôt écraserait `loadedDay` en pleine course). */
 let lienJournee=null;
+/* ⚠️ v7.93 (demandé par Hervé) — LE RETOUR VERS LES STATS. Les liens 🔗 de « Mes stats » ouvrent
+   une journée dans une AUTRE ligue, et il n'existait aucun chemin de retour : `openLeague` appelle
+   `navRoot()`, qui vide la pile de navigation — à raison, un « game » empilé après avoir quitté la
+   ligue afficherait une ligue nulle. La pile ne peut donc pas servir ici : on retient la provenance
+   à part. C'est aussi pour ça que le bouton n'apparaît QUE si l'on est arrivé par un lien. */
+let retourStats=null;
 function statsGoDay(lid,pid,day){
   if(!lid||!pid){ return; }
   lienJournee=(day!=null)?(day|0):null;
+  retourStats=true;   // ⚠️ AVANT openLeague : lui-même appelle navRoot(), qui vide la pile.
   // Même ligue déjà ouverte : inutile de tout recharger, on y va directement.
   if(L && L.id===lid && S.myId===pid){ const d=lienJournee; lienJournee=null; if(d!=null) openResults(d); return; }
   openLeague(lid,pid);
+}
+/* Retour vers « Mes stats » depuis la journée ouverte par un lien 🔗.
+   ⚠️ ON RÉUTILISE `backToLeagues()` au lieu de recopier sa sortie de ligue (arrêt du polling,
+   oubli de la dernière ligue, remise à zéro de L / S.leagueId / S.myId…). Une seconde version de
+   cette sortie aurait fini par diverger — c'est le travers qui a produit tous les écarts corrigés
+   ce mois-ci. On se contente ensuite de viser un autre écran.
+   ⚠️ `myStatsData` SURVIT à la sortie de ligue : l'écran se réaffiche instantanément, sans
+   relancer la lecture de toutes les ligues. On ne recharge que s'il a été vidé entre-temps. */
+function retourAuxStats(){
+  retourStats=null;
+  backToLeagues();
+  S.view="stats"; render();
+  if(!myStatsData) loadMyStats().then(render);
 }
 let loadedDay=null;          // journée chargée dans duels/bets (évite d'afficher une journée passée sur Pronos, D5)
 async function refresh(){
@@ -4429,6 +4450,7 @@ function bandeauConsultation(){ if(!LECTURE_SEULE) return "";
         <button class="btn ghost sm" style="flex:0 0 auto;width:auto" onclick="quitterConsultation()">Quitter</button>
       </div></div>`; }
 function backToLeagues(){ sortirConsultation(); if(poll)clearInterval(poll); localStorage.removeItem("pl_last");
+  retourStats=null;   // v7.93 : on quitte la ligue par la voie normale → le lien 🔗 d'origine est périmé
   showFinished=false;   // v6.42 : les ligues terminées sont toujours repliées quand on revient sur l'onglet Ligues
   navRoot(); S.leagueId=null; S.myId=null; L=null; S.view="leagues"; loadMyLeagues(); }
 
@@ -6632,7 +6654,13 @@ function viewRecap(D){ const fin=(L&&L.status==="done"); return `${recapBody(D)}
 // dernière consultable. Les deux étaient écrites séparément (à l'identique) ; une seule subsiste.
 function resultsDefaultDay(){ return resultsMaxDay(); }
 function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.resDay!=null?S.resDay:resultsDefaultDay());
-  const back="";  // navigation via la barre d'onglets du bas (v6.15)
+  // Pas de bouton « retour » en temps normal : on navigue par la barre d'onglets du bas (v6.15).
+  // ⚠️ SAUF si l'on est arrivé par un lien 🔗 depuis « Mes stats » (v7.93) : là, la barre du bas
+  // montre les onglets de LA LIGUE, et rien ne ramène à l'écran d'où l'on vient — il faudrait
+  // deviner qu'il faut d'abord quitter la ligue, puis retrouver ses stats.
+  const back = retourStats
+    ? `<button class="btn ghost sm" style="width:auto" onclick="retourAuxStats()">← ${t("Retour à mes stats")}</button><div style="height:8px"></div>`
+    : "";
   // Journée résolue ? (d < journées résolues). Sinon → écran d'attente (pas de résultats à montrer).
   const resolvedCount = (L.status==="done" ? (L.num_days||0) : (L.current_day||0));
   if(d<0 || d>=resolvedCount) return back + waitingResultsBody(Math.max(0,d));
