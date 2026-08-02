@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.95";
+const APP_VERSION = "v7.96";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1538,6 +1538,9 @@ const EN={
   "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "Retour à mes stats":"Back to my stats",
+  // — v7.96 : le temps réglementaire fait foi (prolongation / tirs au but ignorés) —
+  "⏱️ <b>Les tirs au but ne départagent pas un pari.</b> Un match à égalité à l'issue du temps de jeu reste un <b>match nul</b>, même si une équipe se qualifie ensuite aux tirs au but.":"⏱️ <b>A penalty shootout doesn't settle a bet.</b> A match level at the end of play stays a <b>draw</b>, even if one team then goes through on penalties.",
+  "Sur un match nul : s'il y a eu prolongation ou tirs au but, ils <b>ne comptent pas</b>. Seul le score à la fin du <b>temps réglementaire</b> décide du pari.":"On a drawn match: if there was extra time or a penalty shootout, it <b>doesn't count</b>. Only the score at the end of <b>regulation time</b> settles the bet.",
   "Créer mon compte":"Create my account", "Mot de passe":"Password",
   "Confirme ton mot de passe":"Confirm your password",
   "Les deux mots de passe ne sont pas identiques.":"The two passwords don't match.",
@@ -6666,6 +6669,25 @@ function showGainDetail(pid){
       sumG+=g; const selD=isDC?`${sel(f,b.sel)}/${sel(f,c.sel2)}`:sel(f,b.sel);
       return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b> <span class="muted">(${esc(sel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}</div>`;
     }).join('');
+    /* ⚠️ v7.96 (relevé par Hervé sur DRDJ3 — Tranmere 2-2 Rochdale, Coupe de la Ligue anglaise).
+       L'API des scores S'ARRÊTE AU TEMPS RÉGLEMENTAIRE : elle a rendu 2-2 sur un match à
+       élimination directe, donc forcément décidé aux tirs au but. Le pari se règle sur 90 minutes,
+       comme Hervé l'a tranché le 31/07 — mais rien ne le disait au joueur, qui lit « Rochdale
+       qualifié » dans la presse et voit son pari perdu.
+       ⚠️ AUCUNE DÉTECTION FIABLE N'EXISTE — deux pistes essayées, toutes deux écartées par Hervé :
+         • par la COMPÉTITION (clés `_cup`, `coupe`, `pokal`…) : un barrage, un match retour ou une
+           finale de play-off se prolongent sans appartenir à une « coupe », et l'API ne donne
+           aucune information de tour ;
+         • par le NUL : j'avais affirmé qu'un match qui se prolonge est forcément à égalité à la
+           90ᵉ. FAUX sur un aller-retour — aller 2-1, retour 2-1 pour l'adversaire : cumul 3-3,
+           prolongation, alors que ce match-là s'est terminé 2-1.
+       Cette mention est donc PARTIELLE et assumée comme telle : elle couvre le cas le plus
+       fréquent et le plus déroutant (un nul là où la presse annonce un qualifié), pas tous.
+       ⚠️ NE PAS la présenter comme exhaustive, et ne pas rebâtir une détection sur ces deux
+       fausses pistes. La règle générale, elle, vit dans les règles du jeu.
+       ⚠️ Formulation CONDITIONNELLE (« s'il y a eu ») : sur un nul de championnat ordinaire, la
+       phrase reste vraie au lieu d'évoquer une prolongation qui n'a pas eu lieu. */
+    if(d.fixtures.some(f=>f.res==="N")) rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">⏱️ ${t("Sur un match nul : s'il y a eu prolongation ou tirs au but, ils <b>ne comptent pas</b>. Seul le score à la fin du <b>temps réglementaire</b> décide du pari.")}</div>`;
     const adj=net-sumG;
     if(Math.abs(adj)>=1) rows+=`<div class="mini" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("🃏 Bonus & ajustements")}${c&&CARDS[c.id]?' ('+CARDS[c.id].e+' '+esc(t(CARDS[c.id].n))+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
   } else rows=`<div class="mini muted">${t("Pas de détail disponible pour ce joueur.")}</div>`;
@@ -9298,6 +9320,20 @@ function viewRulesFull(){
      ${li(t("Tu peux jouer <b>un bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution."))}
      ${li(t("À la <b>clôture</b>, les pronos de tout le monde peuvent être révélés — <b>uniquement en matchs réels</b> et si l'option premium <b>Voir l'adversaire</b> a été souscrite. En <b>matchs simulés</b>, la journée se résout aussitôt, sans phase de découverte. Les bonus, elles, restent cachées jusqu'aux résultats."))}
      ${li(t("Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement."))}
+     ${/* ⚠️ v7.96 (relevé par Hervé) — RÈGLE JAMAIS ÉCRITE, ET POURTANT APPLIQUÉE DEPUIS TOUJOURS.
+          Vérifié sur Tranmere 2-2 Rochdale (Coupe de la Ligue anglaise, 01/08) : l'API des scores
+          rend le score du TEMPS RÉGLEMENTAIRE, jamais celui d'après prolongation ou tirs au but —
+          sur un match à élimination directe, elle a bien rendu un nul. Le pari se règle donc à
+          sur un match à élimination directe, elle a bien rendu un nul. Sans cette ligne, un joueur
+          qui lit « qualifié aux tirs au but » dans la presse voit son pari perdu sans comprendre.
+          ⚠️ CE QUI EST PROUVÉ, ET CE QUI NE L'EST PAS (relevé par Hervé). Tranmere–Rochdale s'est
+          joué au premier tour de la Coupe de la Ligue, SANS prolongation (supprimée depuis 2018) :
+          il démontre que les TIRS AU BUT sont ignorés, rien d'autre. Le cas « 1-1 à la 90ᵉ, 2-1 à
+          la 120ᵉ » reste OUVERT — l'API rend-elle 1-1 ou 2-1 ? Non mesuré. La phrase ci-dessous
+          n'affirme donc QUE les tirs au but. ⚠️ NE PAS y ajouter la prolongation avant de l'avoir
+          vérifiée : `tools/verifie-coupes.ps1` sur les retours de qualification de Ligue des
+          champions (prolongation possible avec buts) tranchera. */''}
+     ${li(t("⏱️ <b>Les tirs au but ne départagent pas un pari.</b> Un match à égalité à l'issue du temps de jeu reste un <b>match nul</b>, même si une équipe se qualifie ensuite aux tirs au but."))}
    </ol>`)}
 
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
