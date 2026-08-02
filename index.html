@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.70";
+const APP_VERSION = "v7.71";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1655,7 +1655,9 @@ const EN={
   "un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent.":"an extra win is added if both targeted matches land.",
   "le gain est chiffré à la cote de ton pari principal ; si c'est la 2ᵉ issue qui sort, il sera différent.":"the win is figured at your main pick's odds; if the second outcome comes up, it will differ.",
   // — v7.68 : la menace adverse, calculée sur sa main réelle —
-  "ce bonus n'est pas compté dans ce total":"this bonus isn't counted in this total",
+  "ce bonus n'est compté dans aucun des deux montants":"this bonus is counted in neither figure",
+  "elle n'augmente pas le gain, mais elle réduit bien le risque affiché.":"it doesn't increase the win, but it does reduce the risk shown.",
+  "il amortit 30 % d'une journée négative — cet effet n'est dans aucun des deux montants.":"it cushions 30% of a losing day — that effect is in neither figure.",
   "Ce que {a} peut encore te prendre":"What {a} can still take from you",
   "✅ {a} n'a plus aucun bonus capable de réduire ce gain.":"✅ {a} has no bonus left that could cut this win.",
   "ton gain sur un match est divisé par 2.":"your win on one match is halved.",
@@ -2808,6 +2810,15 @@ function showStakeInfo(){ infoModal("💰",t("La mise max"),`<div class="mini mu
    ⚠️ 🥷 Voleur n'est cité QUE si un bonus compté est en jeu : sans bonus à voler, il ne change
    rien au total. Même principe — on ne menace pas de ce qui ne peut pas arriver. */
 const GAIN_MULTIPLIANTS=["double","joker","tout","dbl","chance"];
+/* ⚠️ v7.71 — CE QUI ENTRE DANS LE RISQUE, miroir de la branche `card` de `lossMult` : 🛟 Assurance
+   met la mise assurée à 0, 🔥 et 🃏 la doublent. Signalé par Hervé : le repère « ce bonus n'est
+   pas compté » s'affichait sur 🛟 alors qu'elle RÉDUIT bel et bien le risque affiché — le message
+   était faux. Il porte maintenant sur les DEUX montants, et ne s'affiche que si le bonus joué
+   n'entre ni dans l'un ni dans l'autre.
+   ⚠️ 🪂 Parachute n'y figure pas, et c'est exact : il amortit 30 % de la perte de la JOURNÉE, pas
+   d'un pari, et `worstLoss` ne le modélise pas (limitation connue, notée dans « à faire plus
+   tard »). Le repère est donc justifié pour lui — il annonce une vraie absence, pas un oubli. */
+const RISQUE_MULTIPLIANTS=["assurance","tout","joker"];
 function bonusAdversesRisque(){
   const d=myDuel(); if(!d) return [];
   const oid=(d.home_id===S.myId)?d.away_id:d.home_id; const op=pById(oid)||{};
@@ -2815,20 +2826,28 @@ function bonusAdversesRisque(){
   return (op.hand||[]).filter(id=>CARDS[id] && !CARDS[id].retired
     && (["face","moitie","miroir","cadeau","sangsue"].indexOf(id)>=0 || (id==="voleur" && compte)));
 }
-/* ⚠️ v7.69 — MÊME RÈGLE POUR MES PROPRES BONUS QUE POUR CEUX DE L'ADVERSAIRE (demande d'Hervé :
-   « ne pas intégrer les infos sur des bonus dont je ne dispose pas, uniquement ceux que j'ai
-   encore d'actif »). La fiche listait les quatre multiplicateurs du jeu, qu'on les possède ou
-   non : quatre lignes dont trois inutiles, et le lecteur cherche laquelle le concerne.
-   ⚠️ Le 👑 Capitaine, lui, est TOUJOURS cité : ce n'est pas un bonus, il est obligatoire. */
-function maMain(){ const p=me()||{}; return (p.hand||[]).filter(id=>CARDS[id] && !CARDS[id].retired); }
-function mesBonusGain(){ return maMain().filter(id=>GAIN_MULTIPLIANTS.indexOf(id)>=0); }
-function mesBonusPerte(){ return maMain().filter(id=>id==="assurance"||id==="parachute"); }
+/* ⚠️ v7.71 — LA FICHE NE CITE QUE LE BONUS RÉELLEMENT JOUÉ (précision d'Hervé, qui resserre
+   encore la v7.69 : « uniquement le bonus que l'on a joué, pas ceux qu'on dispose mais qu'on n'a
+   pas joué »). Il a raison, et c'est plus rigoureux que ce que j'avais fait : la fiche est
+   intitulée « ce qui l'augmente ». Y lister un bonus détenu mais NON joué décrivait un
+   multiplicateur qui n'est PAS dans le chiffre — l'inverse exact de ce que la fiche promet.
+   ⚠️ Le 👑 Capitaine reste TOUJOURS cité : ce n'est pas un bonus, il est obligatoire, donc
+   toujours appliqué. ⚠️ Un seul bonus par journée : ces listes ont donc 0 ou 1 élément — elles
+   restent des tableaux pour que l'affichage n'ait pas à distinguer les deux cas. */
+function mesBonusGain(){ return (myCard && GAIN_MULTIPLIANTS.indexOf(myCard.id)>=0) ? [myCard.id] : []; }
+function mesBonusPerte(){ return (myCard && (myCard.id==="assurance"||myCard.id==="parachute")) ? [myCard.id] : []; }
 function showGainInfo(){
   const MIEN={ double:t("gain doublé sur le match ciblé."),
                joker:t("gain doublé sur le match ciblé."),
                tout:t("gain triplé sur le match ciblé."),
                dbl:t("un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent."),
                chance:t("le gain est chiffré à la cote de ton pari principal ; si c'est la 2ᵉ issue qui sort, il sera différent.") };
+  /* ⚠️ Ces deux-là n'augmentent pas le gain, mais ils ne se valent pas pour autant — signalé par
+     Hervé : 🛟 réduit RÉELLEMENT le risque affiché (mise assurée mise à 0 dans `lossMult`),
+     tandis que 🪂 n'entre dans aucun des deux montants (`worstLoss` ne le modélise pas). Les
+     confondre sous « ils n'agissent qu'en cas de perte » était trompeur pour l'Assurance. */
+  const PERTE={ assurance:t("elle n'augmente pas le gain, mais elle réduit bien le risque affiché."),
+                parachute:t("il amortit 30 % d'une journée négative — cet effet n'est dans aucun des deux montants.") };
   const d=myDuel(); const oid=d?((d.home_id===S.myId)?d.away_id:d.home_id):null;
   const oppNom=oid?esc((pById(oid)||{}).name||"?"):"";
   const menace=bonusAdversesRisque();
@@ -2847,8 +2866,7 @@ function showGainInfo(){
      👑 ${t("<b>Capitaine</b> : le gain de ce pari est doublé.")}
      ${mesBonusGain().map(id=>`<br>${CARDS[id].e} <b>${esc(t(CARDS[id].n))}</b> : ${MIEN[id]}`).join("")}</div>
    ${mesBonusPerte().length?`<div style="margin-top:8px">${
-       t("N'apparaissent pas ici, ils n'agissent qu'en cas de perte :")} ${
-       mesBonusPerte().map(id=>CARDS[id].e+" "+esc(t(CARDS[id].n))).join(" · ")}</div>`:''}
+       mesBonusPerte().map(id=>`${CARDS[id].e} <b>${esc(t(CARDS[id].n))}</b> : ${PERTE[id]}`).join("<br>")}</div>`:''}
    ${menace.length
      ? `<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px"><b class="gold">${
           t("Ce que {a} peut encore te prendre",{a:oppNom})}</b><br>${
@@ -5427,7 +5445,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
          ce qu'on espère. Le ⓘ est porté par le GAIN, parce que c'est lui qui se calcule (Capitaine,
          bonus, Coup Double) — le risque, lui, est la somme de ce qu'on vient de saisir. */''}
     <div class="row mini" style="margin:10px 2px 4px"><span>⚠️ ${t("Risque")} <b id="risqueBas" class="red">-${eur(worstLoss(bet.picks,bet.captain,myCard))} €</b></span><span class="clik" onclick="showGainInfo()">💰 ${t("Gain")} <b id="gainBas" class="green">${fmt(bestGain(bet.picks,fx,bet.captain,myCard))} €</b> ⓘ</span></div>
-    ${(myCard && GAIN_MULTIPLIANTS.indexOf(myCard.id)<0)?`<div class="mini muted" style="margin:0 2px 6px;text-align:right">${CARDS[myCard.id].e} ${t("ce bonus n'est pas compté dans ce total")}</div>`:''}
+    ${(myCard && GAIN_MULTIPLIANTS.indexOf(myCard.id)<0 && RISQUE_MULTIPLIANTS.indexOf(myCard.id)<0)?`<div class="mini muted" style="margin:0 2px 6px;text-align:right">${CARDS[myCard.id].e} ${t("ce bonus n'est compté dans aucun des deux montants")}</div>`:''}
     <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>
     ${oppHandInfo}`;
 }
