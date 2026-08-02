@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.81";
+const APP_VERSION = "v7.82";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2467,6 +2467,7 @@ const EN={
   "Tu ne peux pas racheter <b>tant que ton pari du jour est validé</b> (cela protège la règle du capital jamais négatif), et le prix doit te laisser au moins <b>{a} €</b> pour pouvoir encore miser.":"You can't buy back <b>while your bet for the day is locked</b> (this protects the never-negative-capital rule), and the price must leave you at least <b>€{a}</b> to keep betting.",
   "Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.":"You are <b>notified</b> when your offer is accepted or declined, and the 🤝 button flags the offers made to you.",
   "👉 Touche un nom ou un chiffre pour savoir d'où il vient.":"👉 Tap a name or a figure to see where it comes from.",
+  "👉 Touche un chiffre pour savoir d'où il vient.":"👉 Tap a figure to see where it comes from.",
   "Aucun bonus.":"No bonus.",
   "Restants en couleur · barré = déjà utilisé. Touche un bonus pour sa description.":"Remaining in colour · struck through = already used. Tap a bonus for its description.",
   "{a} a accepté : {c} est à toi (−{b} €).":"{a} accepted: {c} is yours (−€{b}).",
@@ -7883,7 +7884,18 @@ function viewEnd(){
      const penF={}; finF.forEach(x=>{ penF[x.id]=x; });
        return `<div class="box" style="padding:4px 10px;overflow-x:auto"><table><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Duel")}</th>${starOnF?'<th style="text-align:right"><span class="clik" onclick="showStarInfo()">⭐</span></th>':''}<th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
      ${ord.map((p,i)=>{ const bp=scF[p.id]||0; const dp=p.points-bp;
-       return `<tr><td>${i+1}</td><td>${avaName(p)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}</td><td class="num">${dp}</td>${starOnF?`<td class="num">${bp||'–'}</td>`:''}<td class="num">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)}</td><td class="num muted">${eur(p.capital)}€</td></tr>`;}).join("")}</table></div>`; })()}
+       return `<tr><td>${i+1}</td><td>${avaName(p)}${p.id===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t(isReward()?"hors récompense":"hors gage")+'</span>':''}${/* ⚠️ v7.82 (relevé par Hervé) — LE BILAN FINAL SUIVAIT UNE VERSION EN RETARD. Duel, ⭐ et le
+      capital y restaient muets alors qu'ils s'expliquaient déjà sur le classement de saison :
+      l'écran qu'on relit le PLUS LONGTEMPS après une ligue était le moins bavard. C'est la
+      troisième fois que ce tableau doit rattraper l'autre (pénalités en v7.56, colonnes Duel/⭐
+      en v7.18, les fiches ici) — le vrai remède serait une ligne de tableau COMMUNE aux deux
+      écrans. ⚠️ `-1` = dernier instantané, donc le total de la saison. */''}
+</td><td class="num clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})">${dp}</td>${starOnF?`<td class="num clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})">${bp||'–'}</td>`:''}<td class="num">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)}</td><td class="num muted"><span class="clik" onclick="showCapInfo('${p.id}',-1)" title="${t("Détail du capital")}">${eur(p.capital)}€</span></td></tr>`;}).join("")}</table></div>
+     ${/* ⚠️ « un chiffre », PAS « un nom » : ici les noms ne s'ouvrent pas, les bonus de chacun
+          étant déjà listés en toutes lettres plus bas. Promettre un clic qui ne répond pas est
+          exactement le défaut qu'on vient de corriger — une phrase générale doit rester VRAIE
+          sur SON écran, pas être recopiée d'un écran à l'autre. */''}
+     <div class="mini muted" style="margin:-2px 2px 8px">${t("👉 Touche un chiffre pour savoir d'où il vient.")}</div>`; })()}
    <div class="row" style="margin:6px 0 10px"><button class="btn ghost sm" style="width:auto" onclick="setStandHist(true)">📊 ${t("Voir le classement journée par journée")}</button></div>
    ${endRecapHTML()}
    ${ptsChart()}
