@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.69";
+const APP_VERSION = "v7.70";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5391,8 +5391,11 @@ function viewBet(d,dayLbl,opp,iAmHome){
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
     <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Capitaine ×2")} ⓘ</span></div>
     <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div>
-    <div class="row mini" style="margin-top:7px"><span class="muted clik" onclick="showGainInfo()">💰 ${t("Gain potentiel si tout passe")} ⓘ</span><b id="gainPot" class="green">${fmt(bestGain(bet.picks,fx,bet.captain,myCard))} €</b></div>
-    ${(myCard && GAIN_MULTIPLIANTS.indexOf(myCard.id)<0)?`<div class="mini muted" style="margin-top:3px;text-align:right">${CARDS[myCard.id].e} ${t("ce bonus n'est pas compté dans ce total")}</div>`:''}
+    ${/* ⚠️ v7.70 — PLUS DE GAIN POTENTIEL EN HAUT (demande d'Hervé). En arrivant sur l'écran, aucune
+         mise n'est saisie : le chiffre valait 0,00 € et n'apprenait rien. Le haut ne porte donc que
+         ce dont on a besoin AVANT de miser — le plafond de mise et le Capitaine. Le gain, lui, ne
+         devient une information qu'une fois les mises posées : il vit désormais en bas, au moment
+         de décider. */''}
     ${alerteRecapHTML(cap)}</div>
     ${fx.map((f,i)=>{const b=bet.picks[i];
       const o=(v,l)=>`<div class="odd ${b.sel===v?'sel':''}" onclick="setSel(${i},'${v}')">${esc(l)}<b>${cote(oddOf(f,v))}</b></div>`;
@@ -5420,7 +5423,11 @@ function viewBet(d,dayLbl,opp,iAmHome){
          ⚠️ Le RISQUE apparaît pour la première fois : `worstLoss` était calculé depuis toujours,
          mais uniquement pour BLOQUER une mise trop grosse. Il n'était jamais montré. Les deux
          nombres côte à côte, c'est la décision entière en une ligne. */''}
-    <div class="row mini" style="margin:10px 2px 6px"><span>💰 ${t("Gain")} <b id="gainBas" class="green">${fmt(bestGain(bet.picks,fx,bet.captain,myCard))} €</b></span><span>⚠️ ${t("Risque")} <b id="risqueBas" class="red">-${eur(worstLoss(bet.picks,bet.captain,myCard))} €</b></span></div>
+    ${/* ⚠️ RISQUE À GAUCHE, GAIN À DROITE (ordre demandé par Hervé) : on lit ce qu'on engage avant
+         ce qu'on espère. Le ⓘ est porté par le GAIN, parce que c'est lui qui se calcule (Capitaine,
+         bonus, Coup Double) — le risque, lui, est la somme de ce qu'on vient de saisir. */''}
+    <div class="row mini" style="margin:10px 2px 4px"><span>⚠️ ${t("Risque")} <b id="risqueBas" class="red">-${eur(worstLoss(bet.picks,bet.captain,myCard))} €</b></span><span class="clik" onclick="showGainInfo()">💰 ${t("Gain")} <b id="gainBas" class="green">${fmt(bestGain(bet.picks,fx,bet.captain,myCard))} €</b> ⓘ</span></div>
+    ${(myCard && GAIN_MULTIPLIANTS.indexOf(myCard.id)<0)?`<div class="mini muted" style="margin:0 2px 6px;text-align:right">${CARDS[myCard.id].e} ${t("ce bonus n'est pas compté dans ce total")}</div>`:''}
     <button class="btn" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Choisis ton Capitaine 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise du Capitaine"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Capitaine et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>
     ${oppHandInfo}`;
 }
@@ -5430,10 +5437,9 @@ function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCar
    de saisie. Tout ce qui dépend de la mise doit donc être rafraîchi à la main, ici. */
 function refreshGains(){
   const fx=(myDuel()||{}).fixtures||[];
-  const tot=fmt(bestGain(bet.picks,fx,bet.captain,myCard))+" €";
-  const el=$("gainPot"); if(el) el.textContent=tot;
-  // ⚠️ Le rappel du bas porte les MÊMES valeurs : deux affichages, un seul calcul.
-  const bas=$("gainBas"); if(bas) bas.textContent=tot;
+  // ⚠️ v7.70 : un seul affichage du gain, en bas — celui du haut a été retiré (il valait 0,00 €
+  // à l'arrivée sur l'écran, avant toute mise).
+  const bas=$("gainBas"); if(bas) bas.textContent=fmt(bestGain(bet.picks,fx,bet.captain,myCard))+" €";
   const rq=$("risqueBas"); if(rq) rq.textContent="-"+eur(worstLoss(bet.picks,bet.captain,myCard))+" €";
   (bet.picks||[]).forEach((b,i)=>{ const g=document.getElementById("gain"+i); const f=fx[i]; if(!g||!f) return;
     g.textContent=fmt((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard))+" €"; });
@@ -8282,9 +8288,22 @@ function isComposing(){
   if(L.status!=="running"||S.recap) return false;
   const d=myDuel(); if(!d) return false;
   if(!d.fixtures) return d.home_id===S.myId; // à domicile : en train de choisir les 5 matchs
-  return !myBet();                            // en train de faire ses pronos/mises
+  /* ⚠️ v7.70 — `S.editingBet` MANQUAIT (bug signalé par Hervé : « quand je sélectionne une case
+     pour mettre un montant, elle s'autovalide au bout de quelques secondes »). Ce n'était pas une
+     validation : le sondage redessinait l'écran toutes les 4 s, le champ était recréé, le clavier
+     se fermait et la saisie en cours était figée. La garde ne couvrait que le PREMIER pari
+     (`!myBet()`) — elle date d'avant la v7.32, qui autorise la modification jusqu'au coup
+     d'envoi. Corriger un pari validé est devenu le cas courant, et c'était précisément le seul
+     non protégé. */
+  return !myBet() || S.editingBet;            // en train de faire — ou de corriger — ses pronos
 }
-function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings")&&!isComposing()) refresh(); },4000); }
+/* ⚠️ FILET GÉNÉRAL, indépendant de l'écran : on ne redessine JAMAIS pendant qu'un champ est
+   actif. `isComposing` raisonne par situation de jeu et devra être maintenu à chaque nouvelle
+   fonctionnalité ; ceci vaut partout, tout de suite, et pour les écrans qu'on n'a pas encore
+   écrits. Perdre ce qu'on est en train de taper est le défaut le moins pardonnable. */
+function saisieEnCours(){ const a=document.activeElement;
+  return !!(a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA" || a.isContentEditable)); }
+function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings")&&!isComposing()&&!saisieEnCours()) refresh(); },4000); }
 // === NAVIGATION — une pile, PAS une case unique =======================================
 // v4.19. Avant : S.prevView, UNE seule case partagée par rules/rulesfull/settings/coulisses.
 // accueil → règles → paramètres écrasait "leagues" par "rules" → le retour des paramètres
