@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.74";
+const APP_VERSION = "v7.75";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1648,7 +1648,8 @@ const EN={
   "<b>Ça passe ou ça casse</b> : gain triplé sur le match ciblé.":"<b>All or Nothing</b>: win tripled on the targeted match.",
   "<b>Deux pour le prix d'un</b> : un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent.":"<b>Two for the Price of One</b>: an extra win is added if both targeted matches land.",
   // — v7.69 : le rappel au point de décision, et la fiche réduite à MES bonus —
-  "Gain":"Win", "Risque":"Risk",
+  "Gain":"Win", "Risque":"Risk", "capital":"capital",
+  "renfloué à {a} € · −1 pt":"topped up to €{a} · −1 pt",
   // — v7.74 : la fiche du risque —
   "Le risque":"The risk",
   "C'est ce que tu perdrais <b>si tous tes pronos tombaient</b> — le pire cas.":"This is what you'd lose <b>if every pick failed</b> — the worst case.",
@@ -6073,7 +6074,33 @@ function recapBody(D){
   const _sb=bets,_sd=duels; let _restore=false;
   if(loadedDay!==D && Array.isArray(chartBets) && Array.isArray(standDuels)){ bets=chartBets.filter(b=>b.day===D); duels=standDuels.filter(x=>x.day===D); _restore=true; }
   try{
-  const netMap={},cardMap={},capMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
+  // ⚠️ v7.75 : `capMap` a été SUPPRIMÉ — déclaré ici, jamais rempli, jamais lu. C'était la trace
+  // d'une intention laissée en chemin : montrer le capital sur cet écran. Elle est menée au bout
+  // ci-dessous (`capApres`), en lisant l'instantané du rejeu plutôt qu'en recomptant.
+  const netMap={},cardMap={}; bets.forEach(b=>{netMap[b.player_id]=b.net||0; cardMap[b.player_id]=b.card;});
+  /* ⚠️ v7.75 — LE CAPITAL APRÈS LA JOURNÉE (demandé par Hervé). L'écran annonçait le gain du jour
+     et jamais ce qu'il en reste — alors que c'est le capital qui commande tout le lendemain : le
+     plafond de mise en dépend, et le seuil de recapitalisation à 30 € aussi. Après une mauvaise
+     journée, la première question est « il me reste combien ? », et il fallait quitter l'écran.
+     ⚠️ ON LIT L'INSTANTANÉ DU REJEU, la source exacte de la colonne « Cap. » du classement. Un
+     recomptage maison aurait été une Nième version du calcul de capital — et deux écrans auraient
+     fini par afficher deux capitaux différents pour la même journée.
+     ⚠️ Replis silencieux : si le rejeu n'est pas encore chargé (`chartBets` null au premier
+     affichage), on n'affiche rien plutôt qu'un chiffre faux. */
+  /* ⚠️ v7.75 — ON ANNONCE LE RENFLOUEMENT DÉJÀ FAIT, PAS UN RENFLOUEMENT À VENIR (demande d'Hervé :
+     « indiquer si capital en dessous de 30 € que la cagnotte sera remise à 40 € »). L'intention
+     est la bonne, le moment non : la recapitalisation est appliquée À LA RÉSOLUTION de la journée,
+     avant l'instantané. Un capital affiché ici ne peut donc JAMAIS être sous 30 € — il vaut déjà
+     40 €. Annoncer « ce sera remis à 40 » ne se déclencherait jamais.
+     Le vrai risque est inverse : finir la journée à 22 € et lire « capital 40,00 € » sans
+     explication. On signale donc le renflouement, avec son coût.
+     ⚠️ On le détecte par la VARIATION de `penRecap` entre les deux instantanés, pas par
+     `L.recap_note` : cette note ne garde que le DERNIER renflouement de la ligue, elle est donc
+     muette sur les journées passées et ne dit pas QUI a été renfloué. */
+  const infoCap=(pid)=>{ try{ const sn=computeStandHist(); const s=sn&&sn[D]; if(!s) return null;
+    const x=s.find(y=>y.id===pid); if(!x) return null;
+    const av=(D>0&&sn[D-1])?sn[D-1].find(y=>y.id===pid):null;
+    return {cap:x.capital, renfloue:((x.penRecap||0)-((av&&av.penRecap)||0))>0}; }catch(e){ return null; } };
   /* ⚠️ v7.60 — CE `forgot` DOIT ÊTRE LE MÊME QUE CELUI DU REJEU. Il ne testait que « pronos vides »
      et ignorait `submitted:false`, la marque écrite par resolveDay au moment de la résolution. Un
      joueur ayant saisi des pronos SANS LES VALIDER était donc considéré comme présent sur cet
@@ -6335,7 +6362,9 @@ function recapBody(D){
   return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}<div class="recaphero ${oppId!=null?(won?'win':(tie?'':'loss')):''}">
       <div class="row">
       <div>${oppId!=null?`<div class="mini muted">${t("DUEL vs {a}",{a:avatarHTML(pById(oppId).emoji)+' '+esc(oppName)})}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:22px">${won?t("Gagné"):(tie?t("Match nul"):t("Perdu"))} (${fpDuelPts} pt${fpDuelPts>1?'s':''})</div>`:''}</div>
-      <div style="text-align:right"><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:avatarHTML(fpP.emoji)+' '+esc(fpName)})}</div><div class="big num ${myNet>=0?'green':'red'}" style="font-size:22px">${fmt(myNet)} €</div></div></div></div>
+      <div style="text-align:right"><div class="mini muted">${t("JOURNÉE {a} —",{a:D+1})} ${isMe?t("TON GAIN"):t("GAIN DE {a}",{a:avatarHTML(fpP.emoji)+' '+esc(fpName)})}</div><div class="big num ${myNet>=0?'green':'red'}" style="font-size:22px">${fmt(myNet)} €</div>${(()=>{ const c=infoCap(fp); if(c==null) return '';
+        return `<div class="mini muted" style="margin-top:2px">${t("capital")} <b>${eur(c.cap)} €</b></div>`
+             + (c.renfloue?`<div class="mini gold" style="margin-top:2px">💸 ${t("renfloué à {a} € · −1 pt",{a:RECAP_TARGET})}</div>`:''); })()}</div></div></div>
     ${forgot(fp)?`<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">${t("⏰ Pari non validé à temps")}</b><div class="mini" style="margin-top:4px">${t("Aucun pari pris en compte ce jour-là → <b>{a} pt{s}</b> au classement et <b>−{b} %</b> {c}capital.",{a:forgotPtsOf(),s:Math.abs(forgotPtsOf())>1?'s':'',b:Math.round(forgotPenOf()*100),c:isMe?t("de ton "):t("du ")})}</div></div>`:''}
     ${!isMe?`<button class="btn ghost sm" onclick="setRecapFocus('')">${t("← Revenir à mes résultats")}</button>`:''}
     ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">${t("💸 Recapitalisation solidaire")}</b><div class="mini" style="margin-top:4px">${recapNoteText(L.recap_note)}</div></div>`:''}
