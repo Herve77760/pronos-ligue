@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.87";
+const APP_VERSION = "v7.88";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3294,15 +3294,24 @@ function confirmModalEnd(v){ const r=_confirmResolve; _confirmResolve=null; clos
  * ⚠️ Le tampon est vidé À CHAQUE OUVERTURE ET À CHAQUE SORTIE : un mot de passe ne doit pas
  * survivre en mémoire à la fenêtre qui l'a demandé. */
 let _pwdBuf={};
-function pwdField(k,label,hint){
+function pwdField(k,label,hint,val){
   return `<label class="mini muted" style="display:block;text-align:left;margin-top:10px">${label}</label>
-    <input type="password" autocomplete="new-password" oninput="_pwdBuf['${k}']=this.value"
+    <input type="password" autocomplete="new-password" value="${esc(val||"")}" oninput="_pwdBuf['${k}']=this.value"
        style="width:100%;box-sizing:border-box;padding:9px;margin-top:4px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:inherit">
     ${hint?`<div class="mini muted" style="text-align:left;margin-top:3px">${hint}</div>`:''}`;
 }
-async function askPasswords(titre, champs, okLabel){
-  _pwdBuf={};
-  const ok=await confirmModal("🔑", titre, champs.map(c=>pwdField(c[0],c[1],c[2]||"")).join(""), okLabel||t("Changer"));
+/* ⚠️ v7.88 (signalé par Hervé) — LA FENÊTRE SE FERMAIT SUR CHAQUE ERREUR. Mot de passe actuel
+   faux, saisies différentes, trop court : le message s'affichait APRÈS la fermeture, et il fallait
+   rouvrir puis TOUT retaper. Sur trois champs masqués, c'est décourageant au point qu'on renonce —
+   et un joueur qui renonce à changer son mot de passe garde celui qu'il voulait changer.
+   L'erreur s'affiche donc DANS la fenêtre, qui se rouvre avec ce qui avait déjà été tapé.
+   ⚠️ `valeurs` DOIT PRÉ-REMPLIR `_pwdBuf` : `oninput` ne se déclenche qu'à la frappe, donc un
+   champ pré-rempli et NON retouché reviendrait vide. C'est le piège de ce montage. */
+async function askPasswords(titre, champs, okLabel, erreur, valeurs){
+  _pwdBuf=Object.assign({},valeurs||{});
+  const tete=erreur?`<div class="mini red" style="text-align:left;margin-bottom:4px">⚠️ ${erreur}</div>`:'';
+  const ok=await confirmModal("🔑", titre,
+    tete+champs.map(c=>pwdField(c[0],c[1],c[2]||"",(valeurs||{})[c[0]])).join(""), okLabel||t("Changer"));
   const vals=Object.assign({},_pwdBuf); _pwdBuf={};
   return ok?vals:null;
 }
@@ -8109,37 +8118,48 @@ async function adminLoadUsers(){ const el=$("adminPwd"); const pwd=el?el.value:"
    ⚠️ Une réauthentification RATÉE ne déconnecte pas (supabase-js garde la session en place) :
    on peut donc se tromper sans risque, et surtout on ne modifie rien tant qu'elle n'a pas réussi. */
 async function changeMyPassword(){ if(!AUTH) return;
-  const v=await askPasswords(t("Changer mon mot de passe"), [
-    ["cur", t("Mot de passe actuel")],
-    ["np",  t("Nouveau mot de passe"), t("8 caractères minimum")],
-    ["np2", t("Confirmer le nouveau")]]);
-  if(!v) return;
-  const cur=v.cur||"", np=v.np||"", np2=v.np2||"";
-  if(!cur){                 infoWin(t("Entre ton mot de passe actuel."),"⚠️"); return; }
-  if(np.length<8){          infoWin(t("8 caractères minimum."),"⚠️"); return; }
-  if(np!==np2){             infoWin(t("Les deux nouveaux mots de passe ne sont pas identiques."),"⚠️"); return; }
-  if(np===cur){             infoWin(t("Le nouveau mot de passe est identique à l'ancien."),"⚠️"); return; }
-  try{
-    const g=await db.auth.getUser(); const mail=g&&g.data&&g.data.user&&g.data.user.email;
-    if(!mail) throw new Error(t("Session expirée — reconnecte-toi."));
-    const re=await db.auth.signInWithPassword({ email:mail, password:cur });
-    if(re&&re.error){ infoWin(t("Ce n'est pas ton mot de passe actuel."),"⚠️"); return; }
-    const { error }=await db.auth.updateUser({ password: np }); if(error) throw error;
-    infoWin(t("Ton mot de passe a bien été changé."),"✅"); }
-  catch(e){ showErr(t("Changement")+" : "+e.message); } }
+  // ⚠️ BOUCLE, PAS UNE PASSE UNIQUE (v7.88) : chaque refus rouvre la fenêtre avec l'erreur et ce
+  // qui avait déjà été tapé. On ne vide QUE le champ à corriger — retaper les trois à cause d'une
+  // confirmation mal frappée était la raison d'abandonner. « Annuler » reste la seule sortie.
+  let err="", pre={};
+  for(;;){
+    const v=await askPasswords(t("Changer mon mot de passe"), [
+      ["cur", t("Mot de passe actuel")],
+      ["np",  t("Nouveau mot de passe"), t("8 caractères minimum")],
+      ["np2", t("Confirmer le nouveau")]], t("Changer"), err, pre);
+    if(!v) return;
+    const cur=v.cur||"", np=v.np||"", np2=v.np2||"";
+    pre={cur:cur,np:np,np2:np2}; err="";
+    if(!cur){        err=t("Entre ton mot de passe actuel."); continue; }
+    if(np.length<8){ err=t("8 caractères minimum."); pre.np=""; pre.np2=""; continue; }
+    if(np!==np2){    err=t("Les deux nouveaux mots de passe ne sont pas identiques."); pre.np2=""; continue; }
+    if(np===cur){    err=t("Le nouveau mot de passe est identique à l'ancien."); pre.np=""; pre.np2=""; continue; }
+    try{
+      const g=await db.auth.getUser(); const mail=g&&g.data&&g.data.user&&g.data.user.email;
+      if(!mail) throw new Error(t("Session expirée — reconnecte-toi."));
+      const re=await db.auth.signInWithPassword({ email:mail, password:cur });
+      // ⚠️ `continue`, et donc AUCUN passage à `updateUser` : c'est ici que se joue tout le
+      // contrôle. Le nouveau mot de passe saisi est conservé, seul l'ancien est vidé.
+      if(re&&re.error){ err=t("Ce n'est pas ton mot de passe actuel."); pre.cur=""; continue; }
+      const { error }=await db.auth.updateUser({ password: np }); if(error) throw error;
+      infoWin(t("Ton mot de passe a bien été changé."),"✅"); return; }
+    catch(e){ showErr(t("Changement")+" : "+e.message); return; } } }
 async function adminResetPwd(uid){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
   // Même fenêtre masquée que pour son propre compte (v7.87). Ici l'identité de l'admin est déjà
   // prouvée par `adminPwd`, revérifié EN BASE par `admin_set_password` : on ne redemande donc pas
   // le mot de passe admin, seulement la double saisie qui protège de la faute de frappe.
-  const v=await askPasswords(t("Réinitialiser le mot de passe de {a}",{a:(u.username||"?")}), [
-    ["np",  t("Nouveau mot de passe"), t("6 caractères minimum")],
-    ["np2", t("Confirmer le nouveau")]], t("Réinitialiser"));
-  if(!v) return;
-  const np=v.np||"";
-  if(np.length<6){   infoWin(t("6 caractères minimum."),"⚠️"); return; }
-  if(np!==(v.np2||"")){ infoWin(t("Les deux nouveaux mots de passe ne sont pas identiques."),"⚠️"); return; }
-  try{ await q(db.rpc("admin_set_password",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_new_password:np})); infoWin(t("Mot de passe réinitialisé pour {a}",{a:esc(u.username||"")})); }
-  catch(e){ showErr(/not_admin/.test(e.message)?t("Ré-affiche les comptes (mot de passe admin requis)."):(t("Réinitialisation")+" : "+e.message)); } }
+  let err="", pre={};   // même boucle que sur son propre compte (v7.88)
+  for(;;){
+    const v=await askPasswords(t("Réinitialiser le mot de passe de {a}",{a:(u.username||"?")}), [
+      ["np",  t("Nouveau mot de passe"), t("6 caractères minimum")],
+      ["np2", t("Confirmer le nouveau")]], t("Réinitialiser"), err, pre);
+    if(!v) return;
+    const np=v.np||"", np2=v.np2||"";
+    pre={np:np,np2:np2}; err="";
+    if(np.length<6){ err=t("6 caractères minimum."); pre.np=""; pre.np2=""; continue; }
+    if(np!==np2){    err=t("Les deux nouveaux mots de passe ne sont pas identiques."); pre.np2=""; continue; }
+    try{ await q(db.rpc("admin_set_password",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_new_password:np})); infoWin(t("Mot de passe réinitialisé pour {a}",{a:esc(u.username||"")})); return; }
+    catch(e){ showErr(/not_admin/.test(e.message)?t("Ré-affiche les comptes (mot de passe admin requis)."):(t("Réinitialisation")+" : "+e.message)); return; } } }
 // Couper / réactiver l'accès d'un joueur (bannissement natif Supabase). L'admin ne peut pas se bloquer.
 async function adminSetBlocked(uid, block){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
   if(uid===AUTH.id){ infoWin("Tu ne peux pas te bloquer toi-même.","⚠️"); return; }
