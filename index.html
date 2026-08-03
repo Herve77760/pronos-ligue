@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v7.99";
+const APP_VERSION = "v8.00";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1538,7 +1538,10 @@ const EN={
   "🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton Capitaine).":"🛟 <b>Safety net</b>: the <b>maximum possible loss</b> in a day can never exceed your balance — you'll <b>never end up negative</b> (if needed, lower your Captain stake).",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "Retour à mes stats":"Back to my stats",
-  "Pari par pari":"Bet by bet",
+  "Pari par pari":"Bet by bet", "Somme des paris :":"Bets total:",
+  "2 matchs ciblés — le gain supplémentaire est dans le <b>total</b>.":"2 matches targeted — the extra gain is in the <b>total</b>.",
+  "cote combinée {a}":"combined odds {a}", "mise moyenne":"average stake",
+  "Versé une seule fois, si les <b>deux</b> pronos ciblés passent.":"Paid once, if <b>both</b> targeted picks come in.",
   "couvre aussi <b>{a}</b> @{b} → <b>{c} €</b> si c'est cette issue qui sort.":"also covers <b>{a}</b> @{b} → <b>€{c}</b> if that's the result.",
   // — v7.96 : le temps réglementaire fait foi (prolongation / tirs au but ignorés) —
   "⏱️ <b>Les tirs au but ne départagent pas un pari.</b> Un match à égalité à l'issue du temps de jeu reste un <b>match nul</b>, même si une équipe se qualifie ensuite aux tirs au but.":"⏱️ <b>A penalty shootout doesn't settle a bet.</b> A match level at the end of play stays a <b>draw</b>, even if one team then goes through on penalties.",
@@ -2096,7 +2099,7 @@ const EN={
   "Assurance":"Insurance", "Assurance tous risques":"Better Safe Than Sorry", "Un pari choisi : s'il perd, mise remboursée.":"A chosen bet: if it loses, stake refunded.",
   "Coup Double":"Double Strike", "Deux pour le prix d'un":"Two for One",
   "Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (le Capitaine est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"No extra stake, no risk: pick 2 matches (your Captain is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
-  "cote combinée ≈ {a}":"combined odds ≈ {a}", "touche un 2ᵉ match 💥":"tap a 2nd match 💥", "→ touche les 💥 de tes 2 matchs.":"→ tap the 💥 on your 2 matches.",
+  "touche un 2ᵉ match 💥":"tap a 2nd match 💥", "→ touche les 💥 de tes 2 matchs.":"→ tap the 💥 on your 2 matches.",
   "Double Mise":"Double Stake", "Double ration Obélix":"Double Down", "Un pari choisi : s'il gagne, gain doublé.":"A chosen bet: if it wins, gain doubled.",
   "Effet Kiss Cool":"Kiss Cool Effect", "Le meilleur résultat de pari des deux joueurs est échangé — gagnant ou perdant. La question à se poser : ton adversaire va-t-il faire mieux que toi ? ⚠️ Arme à double tranchant : si son meilleur pari vaut moins que le tien, c'est toi qui y perds. Sans effet si l'un des deux n'a pas parié du tout.":"The best bet result of the two players is swapped — winning or losing. The question to ask yourself: will your opponent do better than you? ⚠️ Double-edged: if their best bet is worth less than yours, you are the one who loses out. No effect if either player did not bet at all.",
   "Gourmand":"Freeloader", "Si ton adversaire finit dans le vert, tu empoches en bonus 20 % de son bénéfice — sans que lui perde quoi que ce soit (c'est offert en plus).":"If your opponent ends in profit, you pocket a bonus of 20% of their profit — without them losing anything (it's added on top).",
@@ -3056,7 +3059,22 @@ function showGainInfo(){
       return `<div style="margin:5px 0"><span class="mini">${esc(f.home)}–${esc(f.away)} · <b>${esc(labelSel(f,b.sel))}</b> · ${st}€ @${cote(od)}${
         tags.length?' · '+tags.join(' · '):''}</span> <b class="mini green">${fmt(g)} €</b>${note}</div>`;
     }).join("");
-    return `<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px"><b>${t("Pari par pari")}</b>${lignes}</div>`;
+    /* ⚠️ v8.00 — 🏷️ Deux pour le prix d'un A SA PROPRE LIGNE, et c'est indispensable : son gain
+       est ADDITIF (versé une fois si les deux pronos passent), il n'appartient à aucun des deux
+       matchs. Sans cette ligne, le détail que je venais d'écrire n'aurait PAS fait le total dès
+       qu'on joue ce bonus — le défaut même que cette fiche est censée corriger.
+       ⚠️ Formule recopiée de `bestGain`… non : REPRISE À L'IDENTIQUE et signalée comme telle. Si
+       elle change là-bas, elle doit changer ici — `test-gain-potentiel.ps1` compare les deux. */
+    let supp='';
+    if(c && c.id==="dbl" && c.target!=null && c.target2!=null && c.target!==c.target2){
+      const fi=fxs[c.target], fj=fxs[c.target2];
+      if(fi&&fj){ const sI=+((bt.picks[c.target]||{}).stake)||0, sJ=+((bt.picks[c.target2]||{}).stake)||0;
+        const O=oddOf(fi,bt.picks[c.target].sel)*oddOf(fj,bt.picks[c.target2].sel);
+        supp=`<div style="margin:5px 0"><span class="mini">${CARDS.dbl.e} <b>${esc(t(CARDS.dbl.n))}</b> · ${
+          t("cote combinée {a}",{a:cote(O)})} · ${t("mise moyenne")} ${fmt((sI+sJ)/2).replace('+','')}€</span> <b class="mini green">${
+          fmt(((sI+sJ)/2*DBL_FACTOR)*(O-1))} €</b><div class="mini muted" style="margin-left:2px">${
+          t("Versé une seule fois, si les <b>deux</b> pronos ciblés passent.")}</div></div>`; } }
+    return `<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px"><b>${t("Pari par pari")}</b>${lignes}${supp}</div>`;
   })();
   infoModal("💰",t("Le gain potentiel"),
   `<div class="mini muted" style="text-align:left;line-height:1.6">${
@@ -3579,12 +3597,12 @@ function genPool(k,maxKo){
   for(let i=out.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const tmp=out[i]; out[i]=out[j]; out[j]=tmp; }
   return out; }
 /* Libellé d'un résultat : « domicile », « extérieur » ou « Nul ».
-   ⚠️ CETTE FONCTION EXISTAIT DÉJÀ EN QUATRE EXEMPLAIRES LOCAUX (`selLbl` dans le tuto, `lab` deux
-   fois sur l'écran des pronos, `sel` dans le détail des résultats) — toutes identiques, aucune
-   accessible depuis ailleurs. En voulant m'en servir dans la fiche du gain potentiel (v7.99), je
-   suis tombé sur un `selLbl is not defined` : la cinquième copie était la voie facile. On pose
-   donc la version partagée ici. ⚠️ Les quatre locales subsistent pour l'instant : les remplacer
-   touche trois écrans et mérite son propre passage — mais ne pas en créer de nouvelle. */
+   ⚠️ CETTE FONCTION EXISTAIT DÉJÀ EN CINQ EXEMPLAIRES LOCAUX, tous identiques et aucun accessible
+   d'ailleurs : `selLbl` (tuto), `lab` deux fois (écran des pronos), `sel` (détail d'un joueur),
+   `selLabel` (récap de journée, 10 appels). En voulant m'en servir dans la fiche du gain potentiel
+   (v7.99), je suis tombé sur `selLbl is not defined` — la sixième copie était la voie facile.
+   ⚠️ Les cinq locales subsistent : les remplacer touche quatre écrans et mérite son propre
+   passage, pas une fin de session. Mais NE PAS EN CRÉER UNE DE PLUS — celle-ci est la bonne. */
 function labelSel(f,s){ return s==="1"?f.home : s==="2"?f.away : t("Nul"); }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
 // Cote « double chance » : combinée de deux issues couvertes pour une seule mise.
@@ -5811,7 +5829,15 @@ function viewBet(d,dayLbl,opp,iAmHome){
         ${(compBadge(f)||koLabel(f))?`<div style="margin-top:3px">${compBadge(f)}${compBadge(f)&&koLabel(f)?' · ':''}${koLabel(f)}</div>`:''}
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
         ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${cote(oddOf(f,v))}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
-        ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">🏷️ ${t(CARDS.dbl.n)}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("cote combinée ≈ {a}",{a:'<b>'+cote(oddOf(fx[myCard.target],bet.picks[myCard.target].sel)*oddOf(fx[myCard.target2],bet.picks[myCard.target2].sel))+'</b>'}):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
+        ${/* ⚠️ v8.00 (relevé par Hervé) — LA COTE COMBINÉE A QUITTÉ LA LIGNE DU MATCH. Elle
+             s'affichait sur CHACUNE des deux cartes ciblées, ce qui laissait croire que le gain de
+             ce match l'incluait. Il ne l'inclut pas : 🏷️ est un bonus purement ADDITIF, versé une
+             seule fois si les deux pronos passent — `gainMult` rend d'ailleurs 1 pour lui. Le
+             chiffre appartient à la PAIRE, pas à l'un des deux matchs ; il vit donc dans la fiche
+             du gain total, où il a une ligne à lui.
+             ⚠️ L'invite « touche un 2ᵉ match » RESTE ici : elle, elle concerne bien cette carte —
+             c'est en la touchant qu'on désigne la seconde cible. */''}
+        ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">🏷️ ${t(CARDS.dbl.n)}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("2 matchs ciblés — le gain supplémentaire est dans le <b>total</b>."):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
         <div class="row" style="margin-top:9px"><span class="mini muted">${t("Mise (€)")}</span>
           <input type="number" inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="${t("min 1€")}" oninput="setStake(${i},this.value)"></div>
         <div class="mini" style="text-align:right;margin-top:4px"><span class="muted">${t("si ce prono passe")}</span> <b id="gain${i}" class="green">${fmt((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard))} €</b></div></div>`;}).join("")}
@@ -6778,8 +6804,20 @@ function showGainDetail(pid){
        ⚠️ Formulation CONDITIONNELLE (« s'il y a eu ») : sur un nul de championnat ordinaire, la
        phrase reste vraie au lieu d'évoquer une prolongation qui n'a pas eu lieu. */
     if(d.fixtures.some(f=>f.res==="N")) rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">⏱️ ${t("Sur un match nul : s'il y a eu prolongation ou tirs au but, ils <b>ne comptent pas</b>. Seul le score à la fin du <b>temps réglementaire</b> décide du pari.")}</div>`;
+    /* ⚠️ v8.00 (demandé par Hervé) — LE DÉTAIL DOIT S'ADDITIONNER, TOUJOURS.
+       Le montant net était déjà cliquable, mais la ligne d'ajustement n'apparaissait qu'AU-DESSUS
+       DE 1 € : en dessous, les lignes affichées ne faisaient plus le total, sans un mot. Le
+       lecteur qui additionne — celui, précisément, qui a ouvert cette fenêtre pour comprendre —
+       tombait sur un écart inexpliqué et pouvait croire à une erreur de calcul.
+       ⚠️ SEUIL À 0,005 €, pas 1 € : tout est affiché à deux décimales, donc un écart devient
+       VISIBLE dès le centime. Le seuil doit suivre la précision de l'affichage, pas une idée de
+       ce qui est « négligeable ». Un centime inexpliqué décrédibilise autant qu'un euro.
+       ⚠️ On ajoute aussi la SOMME DES PARIS : sans elle, l'ajustement est un nombre qui tombe du
+       ciel. Avec les trois lignes — somme, ajustement, total — le joueur peut vérifier lui-même,
+       ce qui est tout l'objet de cette fenêtre. */
     const adj=net-sumG;
-    if(Math.abs(adj)>=1) rows+=`<div class="mini" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("🃏 Bonus & ajustements")}${c&&CARDS[c.id]?' ('+CARDS[c.id].e+' '+esc(t(CARDS[c.id].n))+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
+    rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("Somme des paris :")} <b>${fmt(sumG)} €</b></div>`;
+    if(Math.abs(adj)>=0.005) rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${c&&CARDS[c.id]?' ('+CARDS[c.id].e+' '+esc(t(CARDS[c.id].n))+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
   } else rows=`<div class="mini muted">${t("Pas de détail disponible pour ce joueur.")}</div>`;
   infoModal("🧮", t("Détail — {a}",{a:(p.name||'?')}), `<div style="text-align:left">${rows}<div class="mini" style="margin-top:8px;border-top:2px solid var(--border);padding-top:6px"><b>${t("Total net :")} <span class="${net>=0?'green':'red'}">${fmt(net)}€</span></b></div></div>`);
   } finally { if(_r){ bets=_sb; duels=_sd; } }
