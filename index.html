@@ -90,7 +90,17 @@
   .gauge{height:8px;border-radius:6px;background:var(--panel2);overflow:hidden;margin-top:8px;}
   .gauge>i{display:block;height:100%;background:var(--green);}
   .gauge.over>i{background:var(--red);}
-  .tog{font-size:11px;border:1px solid var(--border);border-radius:9px;padding:6px 9px;cursor:pointer;color:var(--muted);}
+  /* ⚠️ v8.12 — LA CIBLE TACTILE, PAS LA LOGIQUE. Hervé : « on doit pouvoir cliquer sur le logo
+     capitaine pour le désactiver d'un match ». On peut, et depuis toujours : `setCap` bascule
+     (`bet.captain===i ? -1 : i`), vérifié en exécutant la vraie fonction dans tous ses états, y
+     compris l'état interdit. Ce qui manquait, c'est que le toucher ARRIVE : la couronne mesurait
+     35 × 29 px, là où un doigt demande 44 × 44 (repère iOS). Une part des touchers tombait à
+     côté — et un contrôle qui ne réagit pas se lit comme cassé, pas comme raté.
+     Le `::after` agrandit la ZONE SENSIBLE sans changer la taille visible ni la mise en page : les
+     deux pastilles d'une même ligne (👑 et 🎯) sont séparées de 6px et grandissent de 3px chacune,
+     elles se touchent sans se recouvrir. Ne pas augmenter au-delà sans revoir ce `gap`. */
+  .tog{font-size:11px;border:1px solid var(--border);border-radius:9px;padding:8px 11px;cursor:pointer;color:var(--muted);position:relative;}
+  .tog::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:100%;height:44px;min-width:40px;}
   .tog.cap.on{background:color-mix(in srgb,var(--gold) 16%,transparent);border-color:var(--gold);color:var(--gold);}
   .tog.tgt.on{background:color-mix(in srgb,var(--blue) 16%,transparent);border-color:var(--blue);color:var(--blue);}
   .cards{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
@@ -195,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.11";
+const APP_VERSION = "v8.14";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2425,15 +2435,29 @@ const EN={
   "Les pronos ne sont pas encore clôturés — clôture-les d'abord.":"Picks aren't closed yet — close them first.",
   "Échange impossible pour l'instant":"Exchange not possible right now",
   "Échange impossible":"Trade not possible",
+  "rachat de bonus":"bonus buyback",
+  "Des pronos sont déjà validés pour la <b>dernière journée</b> : l'échange ne pourrait se conclure qu'après la résolution, donc une fois le championnat terminé.":"Picks are already locked in for the <b>final matchday</b>: the trade could only go through after it is resolved, i.e. once the championship is over.",
+  "➡️ Le bonus ne serait jamais joué, et le capital transféré ne ferait que fausser le classement final. Ton offre n'a pas été envoyée.":"➡️ The bonus would never be played, and the transferred capital would only distort the final standings. Your offer was not sent.",
+  "Tes pronos de la dernière journée sont validés : un rachat ne pourrait se conclure qu'<b>après la résolution</b>, c'est-à-dire une fois le championnat terminé. Le bonus ne serait jamais joué et le capital transféré ne ferait que fausser le classement final.":"Your picks for the final matchday are locked in: a buyback could only go through <b>after the day is resolved</b>, that is, once the championship is over. The bonus would never be played and the transferred capital would only distort the final standings.",
+  "Tu peux toujours <b>refuser</b> les offres reçues ci-dessus — les accepter est bloqué pour la même raison.":"You can still <b>decline</b> the offers above — accepting them is blocked for the same reason.",
+  "🏁 <b>Dernière journée :</b> tant que personne n'a validé ses pronos, l'échange reste possible et le bonus peut être joué le jour même. Dès que des pronos sont posés, plus aucune offre : elle ne pourrait se conclure qu'une fois le championnat terminé. Les offres <b>déjà en attente</b> entre les joueurs concernés sont alors <b>annulées</b>, avec leur motif — elles n'auraient plus jamais pu aboutir.":"🏁 <b>Final matchday:</b> as long as nobody has locked their picks, trading stays possible and the bonus can be played that very day. Once picks are in, no more offers: one could only go through after the championship is over. Offers <b>already pending</b> between the players concerned are then <b>cancelled</b>, with their reason — they could never have gone through.",
+  "Retirer le Capitaine de ce match":"Remove the Captain from this match",
+  "Mettre le Capitaine sur ce match":"Put the Captain on this match",
+  "👑 Touche la couronne d'un match pour l'y poser, et <b>touche-la à nouveau pour l'enlever</b>. La poser sur un autre match la déplace.":"👑 Tap a match's crown to put the Captain there, and <b>tap it again to remove it</b>. Putting it on another match moves it.",
+  "Le Capitaine est <b>obligatoire</b> : tant qu'aucun match ne le porte, le bouton de validation reste éteint.":"The Captain is <b>compulsory</b>: while no match carries it, the confirm button stays disabled.",
   "🚫 Si, au moment d'accepter, l'acheteur n'a plus assez de capital ou si le bonus a quitté la main du vendeur, l'offre est <b>annulée</b> — et <b>les deux joueurs sont prévenus du motif</b>. Personne n'a refusé : c'est la situation qui a changé.":"🚫 If, at the moment of accepting, the buyer no longer has enough capital or the bonus has left the seller's hand, the offer is <b>cancelled</b> — and <b>both players are told why</b>. Nobody refused: the situation changed.",
   "Ce rachat coûte <b>{p} €</b>. Tu as <b>{c} €</b>, et il faut en garder au moins <b>{m} €</b> pour pouvoir continuer à miser — il te manque <b>{d} €</b>.":"This buyback costs <b>€{p}</b>. You have <b>€{c}</b>, and you must keep at least <b>€{m}</b> to go on betting — you are <b>€{d}</b> short.",
   "{a} n'a plus assez de capital : l'offre est à <b>{p} €</b>, il lui reste <b>{c} €</b>, et chacun doit garder au moins <b>{m} €</b> pour pouvoir miser.":"{a} no longer has enough capital: the offer is <b>€{p}</b>, they have <b>€{c}</b> left, and everyone must keep at least <b>€{m}</b> to go on betting.",
   "Le bonus <b>{c}</b> n'est plus dans la main du vendeur : il l'a joué ou cédé entre-temps.":"The <b>{c}</b> bonus is no longer in the seller's hand: they played it or passed it on in the meantime.",
   "➡️ L'offre a été <b>annulée</b> : elle n'est plus en attente. L'autre joueur en est informé lui aussi. Tu peux en proposer une nouvelle quand tu veux.":"➡️ The offer has been <b>cancelled</b>: it is no longer pending. The other player is told as well. You can make a new one whenever you like.",
-  "Échange annulé : {a} n'avait plus assez de capital pour {c} ({b} €).":"Trade cancelled: {a} no longer had enough capital for {c} (€{b}).",
-  "Échange annulé : {c} n'était plus disponible.":"Trade cancelled: {c} was no longer available.",
-  "Annulé : {a} n'avait plus assez de capital pour ton offre ({c} · {b} €).":"Cancelled: {a} no longer had enough capital for your offer ({c} · €{b}).",
-  "Annulé : {c} n'était plus disponible ({b} €).":"Cancelled: {c} was no longer available (€{b}).",
+  "Échange annulé ({c}) : {r}":"Trade cancelled ({c}): {r}",
+  "Annulé ({c} · {b} €) : {r}":"Cancelled ({c} · €{b}): {r}",
+  "{a} n'avait plus assez de capital ({b} €).":"{a} no longer had enough capital (€{b}).",
+  "dernière journée déjà engagée, des pronos étaient validés.":"the final matchday had already started with picks locked in.",
+  "le championnat s'est terminé avant l'échange.":"the championship ended before the trade went through.",
+  "{c} n'était plus disponible.":"{c} was no longer available.",
+  "Dernière journée déjà engagée avec des pronos validés : l'échange ne peut plus aboutir.":"The final matchday has already started with picks locked in: the trade can no longer go through.",
+  "Le championnat est terminé : plus aucun échange n'est possible.":"The championship is over: no more trades are possible.",
   "Tes pronos du jour sont validés : tu peux négocier dès maintenant, mais l'échange ne se <b>conclura qu'après la résolution</b> de la journée.":"Your picks for the day are locked in: you can negotiate right now, but the trade will only <b>go through after the day is resolved</b>.",
   "Ton pari du jour est validé : l'échange ne pourra se conclure qu'<b>après la résolution</b>. Les offres restent en attente d'ici là.":"Your bet for the day is locked in: the trade can only go through <b>after the day is resolved</b>. Offers stay pending until then.",
   "<b>Le détenteur du bonus a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.":"<b>The bonus's owner has already confirmed today's bet.</b> They could still play it today, so the exchange is blocked.",
@@ -2943,7 +2967,15 @@ function showCardInfo(id){ const c=CARDS[id]; if(!c)return;
     : `<b class="green">🟢 ${t("Sans risque")}</b> — ${t("au pire elle ne sert à rien. Elle ne peut jamais se retourner contre toi.")}`;
   infoModal(c.e, t(c.n), `<div style="margin:4px 0 6px">${t("💪 Force {a}/5",{a:c.f||3})}</div><div class="mini muted">${esc(t(c.d))}</div>
     <div class="mini" style="margin-top:10px;border-top:1px solid var(--border);padding-top:8px;text-align:left;line-height:1.6">${risque}</div>`); }
-function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),`<div class="mini muted">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas un bonus — tu en choisis un à chaque journée.")}</div>`); }
+/* ⚠️ v8.12 — LA BASCULE EST DITE ICI, et pas dans une ligne « 👉 Touche… » sous les matchs :
+   Hervé a fait retirer ces amorces en v7.9x parce qu'elles décrivaient un geste sans dire la
+   règle. La fiche est le bon endroit — elle est atteignable depuis « 👑 Capitaine ×2 ⓘ », en
+   haut de l'écran de pronos, juste au-dessus des couronnes. On y ajoute aussi le caractère
+   OBLIGATOIRE : sans Capitaine le bouton de validation reste éteint, et rien ne le disait. */
+function showCaptainInfo(){ infoModal("👑",t("Capitaine (pari doublé)"),
+  `<div class="mini muted" style="text-align:left;line-height:1.6">${t("Chaque journée tu désignes secrètement <b>un</b> de tes paris comme Capitaine : son <b>gain ET sa perte sont doublés</b> (×2). Ce n'est pas un bonus — tu en choisis un à chaque journée.")}
+   <div style="margin-top:10px">${t("👑 Touche la couronne d'un match pour l'y poser, et <b>touche-la à nouveau pour l'enlever</b>. La poser sur un autre match la déplace.")}</div>
+   <div style="margin-top:10px">${t("Le Capitaine est <b>obligatoire</b> : tant qu'aucun match ne le porte, le bouton de validation reste éteint.")}</div></div>`); }
 function showStakeInfo(){ infoModal("💰",t("La mise max"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</div>`); }
 /* ⚠️ v7.67 — LA FICHE DU GAIN POTENTIEL. Elle existe pour la même raison que le chiffre : un
    nombre affiché doit pouvoir dire d'où il vient, sur place. Ici c'est d'autant plus nécessaire
@@ -3846,6 +3878,8 @@ async function refresh(){
     players = await q(db.from("players").select("*").eq("league_id",lid).order("join_order"));
     if(stale()) return;
     try{ trades = await q(db.from("trades").select("*").eq("league_id",lid).eq("status","pending")); }catch(e){ trades=[]; } // rachats en attente (badge 🤝 + écran)
+    if(stale()) return;
+    await balayeOffresSansIssue(lid);
     /* Réponses à MES offres. ⚠️ v8.10 — `cancelled` AJOUTÉ (signalé par Hervé). Sans lui, une offre
        annulée par le SERVEUR (l'autre n'avait plus le capital, ou le bonus avait quitté sa main)
        disparaissait de « Offres envoyées » sans un mot : le proposeur ne pouvait pas savoir si on
@@ -3930,7 +3964,18 @@ async function refresh(){
       await resolveRealIfReady(); // données réelles : résout quand les vrais matchs sont terminés
     }
     if(stale()) return;
-    if(chartDay!==L.current_day){ chartDay=L.current_day; chartBets=null; standDuels=null; standTrades=null; }
+    /* ⚠️ v8.13 (relevé par Hervé) — LA CLÉ DE CACHE INCLUT LES CAPITAUX, plus seulement la journée.
+       Elle ne regardait que `L.current_day` : un rachat de bonus ne change pas la journée, donc
+       `standTrades` n'était JAMAIS relu et la courbe ignorait l'échange jusqu'à la résolution
+       suivante. Le classement, lui, affichait déjà le nouveau capital — les deux écrans se
+       contredisaient, et c'est la courbe qui avait tort.
+       ⚠️ POURQUOI LES CAPITAUX ET PAS « la liste des offres » : `trades` ne contient que les
+       offres EN ATTENTE ; une offre créée puis acceptée entre deux sondages laisserait la liste
+       identique. Le capital, lui, a forcément bougé — c'est la seule trace qui ne peut pas manquer.
+       Trié par id : deux lectures peuvent renvoyer les joueurs dans un ordre différent, et la
+       signature changerait à chaque sondage pour rien. */
+    const chartSig=L.current_day+"|"+players.map(p=>p.id+":"+(p.capital||0)).sort().join(",");
+    if(chartDay!==chartSig){ chartDay=chartSig; chartBets=null; standDuels=null; standTrades=null; }
     if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){
       chartBets = await q(db.from("bets").select("player_id,day,net,picks,card,captain,duel_id,submitted").eq("league_id",lid).not("net","is",null));
       standDuels = await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",lid));
@@ -5960,7 +6005,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
       const tgtIcon = (myCard&&CARDS[myCard.id]) ? CARDS[myCard.id].e : "🎯";
       const tgt = canTgt ? `<span class="tog tgt ${isTgt?'on':''}" onclick="setTarget(${i})">${tgtIcon}</span>` : ((targetCard&&myCard.id==="chance") ? `<span class="tog" style="opacity:.35" title="${t("{n} : uniquement sur un match avec match nul (3 issues)",{n:t(CARDS.chance.n)})}">${tgtIcon}</span>` : '');
       return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
-        <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
+        <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" title="${bet.captain===i?t("Retirer le Capitaine de ce match"):t("Mettre le Capitaine sur ce match")}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
         ${(compBadge(f)||koLabel(f))?`<div style="margin-top:3px">${compBadge(f)}${compBadge(f)&&koLabel(f)?' · ':''}${koLabel(f)}</div>`:''}
         <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
         ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${cote(oddOf(f,v))}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
@@ -8324,16 +8369,37 @@ function capChart(){
     const recoit=(tr.kind==="sell")?tr.from_player:tr.to_player;
     const paye  =(tr.kind==="sell")?tr.to_player  :tr.from_player;
     trocC[j]=trocC[j]||{}; trocC[j][recoit]=(trocC[j][recoit]||0)+pr; trocC[j][paye]=(trocC[j][paye]||0)-pr; });
+  /* ⚠️ v8.13 (demande d'Hervé : « éventuellement en faisant sur l'axe horizontal la donnée rachat
+     de bonus ») — LE RACHAT DEVIENT UNE ÉTAPE À PART SUR L'AXE, au lieu d'être fondu dans le point
+     de la journée. Deux raisons, et la seconde est un vrai défaut :
+
+     1. Fondu dans la journée, le transfert était INEXPLICABLE : la courbe faisait un bond que le
+        résultat du jour ne justifiait pas. Un chiffre affiché doit pouvoir dire d'où il vient.
+     2. ⚠️ UN RACHAT CONCLU APRÈS LA DERNIÈRE JOURNÉE RÉSOLUE ÉTAIT PUREMENT INVISIBLE. Il est
+        rangé à l'indice `current_day` (= N), et l'ancienne boucle s'arrêtait à `d < N` : l'indice
+        N n'était jamais lu. Le capital réel avait bougé, la courbe non — jusqu'à la résolution
+        suivante, qui le faisait enfin apparaître. Or c'est justement le moment où l'on échange
+        (depuis v8.09 on négocie pronos validés), donc le cas le plus fréquent, pas un cas limite.
+
+     `etapes` remplace la boucle : chaque journée est précédée de son 🤝 s'il y a eu échange, et
+     un 🤝 final porte les rachats postérieurs à la dernière journée. */
+  const etapes=[];
+  for(let d=0;d<N;d++){ if(trocC[d]) etapes.push({t:"troc",d:d}); etapes.push({t:"jour",d:d}); }
+  if(trocC[N]) etapes.push({t:"troc",d:N});   // conclus depuis la dernière résolution
   const series=players.map(p=>{ let v=capAfter[p.id]; const pts=[100,v];
-    for(let d=0;d<N;d++){
-      if(trocC[d]&&trocC[d][p.id]) v=Math.max(0,Math.round((v+trocC[d][p.id])*100)/100); // avant les gains du jour
-      v=Math.max(0,v+(netByDay[p.id][d]||0));
-      if(legacyPen[p.id][d]) v=Math.max(0,Math.round(v*(1-FORGOT_PENALTY)*100)/100);
-      pts.push(v); } return {p,pts}; });
+    etapes.forEach(e=>{
+      if(e.t==="troc"){ if(trocC[e.d]&&trocC[e.d][p.id]) v=Math.max(0,Math.round((v+trocC[e.d][p.id])*100)/100); }
+      else { v=Math.max(0,v+(netByDay[p.id][e.d]||0));
+             if(legacyPen[p.id][e.d]) v=Math.max(0,Math.round(v*(1-FORGOT_PENALTY)*100)/100); }
+      pts.push(v); });
+    return {p,pts}; });
   const allv=series.flatMap(s=>s.pts); let mn=Math.min(...allv), mx=Math.max(...allv); if(!isFinite(mn)){mn=0;mx=100;}
   const pad=Math.max(5,(mx-mn)*0.12); const lo=Math.max(0,Math.floor((mn-pad)/10)*10), hi=Math.max(lo+10,Math.ceil((mx+pad)/10)*10);
-  const labels=["100€",t("Bonus")]; for(let d=0;d<N;d++) labels.push("J"+(d+1));
-  return lineChart(series, labels, t("📈 Évolution du capital (départ → bonus → chaque journée)"), lo, hi);
+  const labels=["100€",t("Bonus")].concat(etapes.map(e=> e.t==="troc" ? "🤝" : "J"+(e.d+1)));
+  const troc=etapes.some(e=>e.t==="troc");
+  return lineChart(series, labels,
+    t("📈 Évolution du capital (départ → bonus → chaque journée)")
+    + (troc?` <span style="opacity:.8">· 🤝 ${t("rachat de bonus")}</span>`:''), lo, hi);
 }
 // Évolution des POINTS (le classement) — les points font le championnat, le capital n'est qu'un moyen.
 // S'appuie sur les snapshots par journée de computeStandHist (mêmes règles que le classement : duel, ⭐, malus, oubli).
@@ -8356,7 +8422,13 @@ function lineChart(series, labels, title, lo, hi){
   const Y=v=> PT + (H-PT-PB)*(1-(v-lo)/((hi-lo)||1));
   const cols=["#4ade80","#60a5fa","#fbbf24","#f87171","#a78bfa","#f472b6","#22d3ee","#fb923c","#84cc16","#e879f9"];
   let grid=""; for(let k=0;k<=3;k++){ const gv=lo+(hi-lo)*k/3; const y=Y(gv); grid+=`<line x1="${PL}" y1="${y.toFixed(1)}" x2="${W-PR}" y2="${y.toFixed(1)}" stroke="#242b38"/><text x="${PL-5}" y="${(y+3).toFixed(1)}" text-anchor="end" font-size="9" fill="#8b93a3">${Math.round(gv)}</text>`; }
-  let xlab=""; labels.forEach((l,i)=>{ if(npts>9 && i>1 && i%2===0 && i!==npts-1) return; xlab+=`<text x="${X(i).toFixed(1)}" y="${H-PB+14}" text-anchor="middle" font-size="8.5" fill="#8b93a3">${esc(l)}</text>`; });
+  /* ⚠️ v8.13 — L'ÉCLAIRCISSAGE NE DOIT PAS MANGER LES ÉTAPES REMARQUABLES. Quand l'axe est chargé
+     on n'affiche qu'une étiquette sur deux ; depuis que les rachats 🤝 ont leur propre point, la
+     règle pouvait masquer précisément l'étiquette qui EXPLIQUE un décrochage de la courbe — on
+     aurait montré la marche sans son motif. On ne sacrifie que les journées « J<n> », dont le
+     rythme régulier se devine ; tout le reste est conservé. */
+  const jourReg=/^J\d+$/;
+  let xlab=""; labels.forEach((l,i)=>{ if(npts>9 && i>1 && i%2===0 && i!==npts-1 && jourReg.test(l)) return; xlab+=`<text x="${X(i).toFixed(1)}" y="${H-PB+14}" text-anchor="middle" font-size="8.5" fill="#8b93a3">${esc(l)}</text>`; });
   const lines=series.map((s,si)=>{ const c=cols[si%cols.length]; const dpath=s.pts.map((v,i)=>(i?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)).join(' ');
     const dots=s.pts.map((v,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(v).toFixed(1)}" r="2" fill="${c}"/>`).join('');
     return `<path d="${dpath}" fill="none" stroke="${c}" stroke-width="2"/>${dots}`; }).join('');
@@ -9351,9 +9423,7 @@ function notifyTrades(){ const nm=p=>((p&&p.name)||'?');
        annulées par le serveur ; sans ce cas, elles seraient tombées dans le `else` et auraient
        annoncé « {a} a refusé ton offre » — un mensonge, et le pire possible : le joueur en aurait
        voulu à un adversaire qui n'a rien refusé du tout. */
-    else if(o.status==="cancelled") body = (o.reason==="capital_insuffisant")
-      ? t("Échange annulé : {a} n'avait plus assez de capital pour {c} ({b} €).",{a:nm(other),b:Math.round(o.price),c:cn})
-      : t("Échange annulé : {c} n'était plus disponible.",{c:cn});
+    else if(o.status==="cancelled") body = t("Échange annulé ({c}) : {r}",{c:cn,r:motifAnnule(o,nm(other),cn)});
     else body = t("{a} a refusé ton offre pour {c}.",{a:nm(other),c:cn});
     if(o.reply) body += " 💬 "+o.reply;
     notify(t("Rachat 🤝"), body); }); }
@@ -9373,6 +9443,59 @@ async function markTrade(id,st,reply,jour,motif){ const u={status:st,resolved_at
   try{ const uu=Object.assign({},u); if(jour!=null) uu.day=jour; if(motif) uu.reason=motif; await q(db.from("trades").update(uu).eq("id",id)); }
   catch(e){ try{ await q(db.from("trades").update(u).eq("id",id)); }catch(e2){} } }
 function journeesRestantes(){ return Math.max(0,((L&&L.num_days)||0)-((L&&L.current_day)||0)); }
+/* ⚠️ v8.13 (Hervé) — DERNIÈRE JOURNÉE + PRONOS POSÉS = RACHAT SANS OBJET, on ferme.
+   C'est l'EXCEPTION à la règle ouverte en v8.09. Le raisonnement de v8.09 était : « négocier
+   pendant que les pronos sont validés a du sens, l'offre se conclura après la résolution ». Il
+   tient tant qu'il RESTE une journée à jouer. Sur la dernière, la résolution ne mène nulle part :
+   la ligue passe en `done`, le bonus acheté ne sera jamais joué et le capital transféré ne sert
+   plus qu'à fausser le classement final. On ne laisse pas proposer un marché sans issue.
+   ⚠️ LA CONDITION EST BIEN « ET », PAS « OU » : si personne n'a encore validé, l'échange peut
+   se conclure TOUT DE SUITE et le bonus être joué le jour même — c'est le classique coup de
+   dernière minute. Bloquer toute la dernière journée supprimerait un vrai coup de jeu. */
+function derniereJournee(){ return tradeRunning() && journeesRestantes()<=1; }
+/* Contrôle à l'ENVOI, en plus de celui de l'écran. L'écran ne suffit pas : la fenêtre de saisie
+   du prix peut rester ouverte pendant qu'une journée se résout ou qu'un adversaire valide ses
+   pronos — l'affichage ne se redessine pas sous les doigts du joueur. On teste LES DEUX camps :
+   il suffit qu'un seul ait validé pour que l'offre ne puisse plus se conclure avant la fin. */
+async function rachatSansIssue(autreId){
+  if(!derniereJournee()) return false;
+  if(await hasBetForDay(S.myId, L.current_day)) return true;
+  return await hasBetForDay(autreId, L.current_day);
+}
+/* ⚠️ v8.14 (Hervé) — ON ANNULE LES OFFRES DEVENUES SANS ISSUE, SANS ATTENDRE UN CLIC.
+   Le serveur refuse déjà de les conclure (`derniere_journee`), mais ce refus n'arrive qu'au
+   moment où quelqu'un appuie sur « Accepter ». Personne n'appuie sur une offre qu'il sait morte :
+   elle resterait affichée « en attente » jusqu'à la fin du championnat, et les deux joueurs
+   attendraient un évènement qui n'arrivera pas. Une offre sans issue doit MOURIR, pas pourrir.
+
+   ⚠️ ON NE BALAIE QUE LES OFFRES OÙ L'ON EST PARTIE PRENANTE. Deux raisons : on n'a pas à
+   trancher le sort de l'échange de deux autres joueurs, et surtout chaque joueur ouvrant l'app
+   nettoie les siennes — la couverture est complète sans que personne n'agisse hors de son
+   périmètre.
+   ⚠️ LE MOTIF EST ÉCRIT ICI AUSSI (`derniere_journee`) : c'est lui qui déclenche la notification
+   et la trace durable côté proposeur. Sans motif, l'offre disparaîtrait en silence — le défaut
+   corrigé en v8.10, qu'on reproduirait à l'identique. */
+async function balayeOffresSansIssue(lid){
+  try{
+    if(!derniereJournee() || !trades.length) return;
+    const concernees=trades.filter(o=>o.from_player===S.myId||o.to_player===S.myId);
+    if(!concernees.length) return;
+    // Lecture FRAÎCHE des paris du jour : `bets` peut porter une autre journée si le joueur
+    // consulte un historique, et se tromper de journée ici annulerait des offres bien vivantes.
+    const jour=L.current_day;
+    const bz=await q(db.from("bets").select("player_id").eq("league_id",lid).eq("day",jour));
+    const aParie=new Set((bz||[]).map(b=>b.player_id));
+    const mortes=concernees.filter(o=>aParie.has(o.from_player)||aParie.has(o.to_player));
+    if(!mortes.length) return;
+    for(const o of mortes) await markTrade(o.id,"cancelled",null,null,"derniere_journee");
+    trades=trades.filter(o=>mortes.indexOf(o)<0);
+  }catch(e){ /* un balayage raté ne doit jamais empêcher la ligue de s'afficher */ }
+}
+function refusDerniereJournee(){
+  infoModal("🏁", t("Dernière journée"),
+    `<div class="mini" style="text-align:left">${t("Des pronos sont déjà validés pour la <b>dernière journée</b> : l'échange ne pourrait se conclure qu'après la résolution, donc une fois le championnat terminé.")}</div>
+     <div class="mini muted" style="text-align:left;margin-top:10px">${t("➡️ Le bonus ne serait jamais joué, et le capital transféré ne ferait que fausser le classement final. Ton offre n'a pas été envoyée.")}</div>`);
+}
 function cardEngaged(cardId){ return trades.some(x=>x.status==="pending" && x.card_id===cardId); } // UI : bonus déjà dans une offre en attente
 async function cardHasPendingTrade(cardId){ try{ const r=await q(db.from("trades").select("id").eq("league_id",L.id).eq("card_id",cardId).eq("status","pending").limit(1)); return !!(r&&r.length); }catch(e){ return false; } }
 
@@ -9397,9 +9520,7 @@ function viewTrade(){
       // rien décidé. C'est la trace durable de l'événement — la notification, elle, passe.
       const ann=(o.status==="cancelled");
       const ligne = ann
-        ? ((o.reason==="capital_insuffisant")
-            ? t("Annulé : {a} n'avait plus assez de capital pour ton offre ({c} · {b} €).",{a:nm(other),c:clbl(o.card_id),b:Math.round(o.price)})
-            : t("Annulé : {c} n'était plus disponible ({b} €).",{c:clbl(o.card_id),b:Math.round(o.price)}))
+        ? t("Annulé ({c} · {b} €) : {r}",{c:clbl(o.card_id),b:Math.round(o.price),r:motifAnnule(o,nm(other),clbl(o.card_id))})
         : t("{a} a {s} ton offre ({c} · {b} €).",{a:nm(other),s:acc?t("accepté"):t("refusé"),c:clbl(o.card_id),b:Math.round(o.price)});
       h+=`<div class="mini${acc?'':' muted'}" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${acc?'✅':(ann?'🚫':'✖️')} ${ligne}${o.reply?`<div class="mini muted" style="margin-top:2px">💬 ${esc(o.reply)}</div>`:''}</div>`; });
     h+=`</div>`; }
@@ -9432,6 +9553,14 @@ function viewTrade(){
   if(!hasOpt('rachat')){ h+=`<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:8px"><b class="mini">🛒 ${t("Proposer un rachat ou une vente")}</b>${premBadge('rachat')}</div>
     <div class="mini muted" style="margin-top:6px">${t("<b>Proposer</b> un rachat ou une vente est une option premium. Tu peux quand même <b>accepter ou refuser</b> les offres qu'on t'envoie.")}</div>
     <button class="btn" style="margin-top:10px" onclick="showPremiumInfo('rachat')">🔓 ${t("Découvrir / souscrire")}</button></div>`;
+    return h; }
+  // ⚠️ v8.13 — Le seul cas où l'on referme l'écran ouvert en v8.09 : dernière journée ET pronos
+  // posés. Ici la fermeture est la bonne réponse — laisser proposer donnerait un marché dont
+  // aucune issue n'existe. On dit POURQUOI, sinon c'est un écran qui disparaît sans raison.
+  if(derniereJournee() && pariPose){
+    h+=`<div class="box"><b class="mini">🏁 ${t("Dernière journée")}</b>
+      <div class="mini muted" style="margin-top:6px">${t("Tes pronos de la dernière journée sont validés : un rachat ne pourrait se conclure qu'<b>après la résolution</b>, c'est-à-dire une fois le championnat terminé. Le bonus ne serait jamais joué et le capital transféré ne ferait que fausser le classement final.")}</div>
+      <div class="mini muted" style="margin-top:8px">${t("Tu peux toujours <b>refuser</b> les offres reçues ci-dessus — les accepter est bloqué pour la même raison.")}</div></div>`;
     return h; }
   // --- RACHETER (j'achète le bonus d'un autre) ---
   h+=`<div class="box"><b class="mini">🛒 ${t("Racheter un bonus")}</b>`;
@@ -9504,6 +9633,7 @@ async function submitBuy(sellerId, cardId, maxP){
        servir. Une fois ses pronos validés, on attend 12 à 72 h — c'est LE moment où l'on regarde
        les bonus des autres et où l'on négocie. Le jeu interdisait de parler pendant l'entracte.
        L'offre part, dort, et devient acceptable dès que la journée est résolue. */
+    if(await rachatSansIssue(sellerId)){ closeCardInfo(); refusDerniereJournee(); return; }
     const seller=await q(db.from("players").select("hand").eq("id",sellerId).single());
     if(!seller || !(seller.hand||[]).includes(cardId)){ toast(t("Ce bonus n'est plus disponible.")); await refresh(); return; }
     if(await cardHasPendingTrade(cardId)){ toast(t("Ce bonus fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
@@ -9565,6 +9695,7 @@ async function submitSell(cardId){
        été calculé à l'ouverture de la fenêtre, avec les données en mémoire ; entre-temps une
        journée a pu se résoudre. Se fier à cet affichage laisserait passer l'offre impossible que
        tout ce garde-fou cherche à éviter. On relit, comme le fait déjà `submitBuy` pour le bonus. */
+    if(await rachatSansIssue(target)){ closeCardInfo(); refusDerniereJournee(); return; }
     const cible=await q(db.from("players").select("id,name,capital").eq("id",target).single());
     if(!cible){ toast(t("Ce joueur n'est plus dans la ligue.")); await refresh(); return; }
     const mxC=venteMax(cible);
@@ -9602,10 +9733,28 @@ const TRADE_CODES={
   // ⚠️ v8.10 — `introuvable` MANQUAIT alors que la fonction le renvoie (offre supprimée entre
   // l'affichage et le clic). Il retombait sur « Une erreur est survenue », qui laisse croire à
   // une panne au lieu d'une course banale.
-  introuvable:        "Cette offre n'existe plus."
+  introuvable:        "Cette offre n'existe plus.",
+  // ⚠️ v8.14 — deux refus de FIN DE SAISON. Ils annulent, là où `pari_detenteur` / `pari_acheteur`
+  // laissent l'offre en attente : même situation apparente (un pari est validé), issue opposée,
+  // parce qu'ici il n'y a plus de journée derrière pour la débloquer.
+  derniere_journee:   "Dernière journée déjà engagée avec des pronos validés : l'échange ne peut plus aboutir.",
+  ligue_terminee:     "Le championnat est terminé : plus aucun échange n'est possible."
 };
-// Les deux seuls motifs qui ANNULENT l'offre côté serveur — définitif, il n'y a rien à réessayer.
-const TRADE_ANNULE=["capital_insuffisant","bonus_parti"];
+// Les motifs qui ANNULENT l'offre côté serveur — définitif, il n'y a rien à réessayer.
+const TRADE_ANNULE=["capital_insuffisant","bonus_parti","derniere_journee","ligue_terminee"];
+/* ⚠️ v8.14 — UN SEUL ENDROIT POUR LE MOTIF D'ANNULATION. Il s'affiche à DEUX endroits (la
+   notification et la trace durable de l'écran 🤝) et il vient de passer à quatre cas. Deux
+   cascades de ternaires à tenir d'accord, c'est exactement la mécanique qui a produit le « a
+   refusé » mensonger de v8.10 : on avait élargi la lecture d'un côté sans élargir l'affichage de
+   l'autre. Un `switch` unique, deux préfixes différents à l'appel. */
+function motifAnnule(o,nomAutre,cn){
+  switch(o&&o.reason){
+    case "capital_insuffisant": return t("{a} n'avait plus assez de capital ({b} €).",{a:nomAutre,b:Math.round((o&&o.price)||0)});
+    case "derniere_journee":    return t("dernière journée déjà engagée, des pronos étaient validés.");
+    case "ligue_terminee":      return t("le championnat s'est terminé avant l'échange.");
+    default:                    return t("{c} n'était plus disponible.",{c:cn});
+  }
+}
 /* Refus d'un échange : fenêtre à FERMETURE MANUELLE, jamais un toast (signalé par Hervé).
    ⚠️ Le toast était le mauvais support ici pour une raison précise : `capital_insuffisant` et
    `bonus_parti` ne signalent pas un incident, ils annoncent que L'OFFRE VIENT D'ÊTRE ANNULÉE.
@@ -9816,6 +9965,7 @@ function viewRulesFull(){
      ${t("⏳ <b>Quand ?</b> Tu peux <b>regarder les bonus des autres, proposer et mettre en vente à tout moment</b> — y compris une fois tes pronos validés, c'est même là qu'on a le temps de négocier. En revanche l'échange ne se <b>conclut</b> qu'entre deux journées : tant que le vendeur ou l'acheteur a un pari validé, l'offre reste <b>en attente</b> et devient acceptable dès la résolution (ça protège la règle du capital jamais négatif et évite qu'un bonus soit vendu et joué en même temps).")}<br>
      ${t("On n'échange que des bonus <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.",{a:TRADE_MIN_CAP})}<br>
      ${t("🚫 Si, au moment d'accepter, l'acheteur n'a plus assez de capital ou si le bonus a quitté la main du vendeur, l'offre est <b>annulée</b> — et <b>les deux joueurs sont prévenus du motif</b>. Personne n'a refusé : c'est la situation qui a changé.")}<br>
+     ${t("🏁 <b>Dernière journée :</b> tant que personne n'a validé ses pronos, l'échange reste possible et le bonus peut être joué le jour même. Dès que des pronos sont posés, plus aucune offre : elle ne pourrait se conclure qu'une fois le championnat terminé. Les offres <b>déjà en attente</b> entre les joueurs concernés sont alors <b>annulées</b>, avec leur motif — elles n'auraient plus jamais pu aboutir.")}<br>
      ${t("Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.")}<br>
      <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i>`)}
 
