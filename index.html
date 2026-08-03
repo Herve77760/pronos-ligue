@@ -205,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.14";
+const APP_VERSION = "v8.15";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1393,6 +1393,10 @@ let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0
 let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[], trades=[], myResolvedOut=[], tradeToasted=new Set();
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null, standTrades=null;
+// ⚠️ v8.15 — « ai-je validé mes pronos de la JOURNÉE EN COURS ? ». Figé par refresh(), jamais
+// dérivé de `bets` au moment de l'affichage : `bets` change de journée quand on consulte les
+// résultats. Voir la note en tête de myBet().
+let myBetToday=false;
 let standHist=false;   // ligue terminée : afficher le classement journée par journée au lieu du bilan (v7.18)
 // Confrontations directes de la ligue COURANTE, alimentées par computeStandHist :
 // STAND_H2H["idA|idB"] = points de duel gagnés par A contre B sur toute la saison.
@@ -3544,7 +3548,7 @@ function myActionKey(){
     if(S.recap) return "recap:"+L.id+":"+S.dispDay;
     const d=myDuel(); if(!d) return null;
     if(!d.fixtures) return (d.home_id===S.myId)?("sel:"+L.id+":"+L.current_day):null;
-    if(!myBet()) return "bet:"+L.id+":"+L.current_day;
+    if(!aParieAujourdhui()) return "bet:"+L.id+":"+L.current_day;   // v8.15 : « aujourd'hui », pas la journée affichée
   }
   return null;
 }
@@ -3949,6 +3953,11 @@ async function refresh(){
     duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay));
     bets  = await q(db.from("bets").select("*").eq("league_id",lid).eq("day",dispDay));
     loadedDay = dispDay;   // journée effectivement chargée dans `duels`/`bets` (cf. flash Pronos, D5)
+    /* ⚠️ v8.15 — ON FIGE ICI, et seulement ici : c'est le seul instant où `bets` porte à coup sûr
+       la journée en cours. `dispDay` peut être INFÉRIEUR à `current_day` quand la ligue est finie
+       (dernière journée jouée vs journée courante) — dans ce cas on ne sait rien de « aujourd'hui »
+       et la bonne réponse est `false` : il n'y a plus de journée à parier. */
+    myBetToday = (dispDay===L.current_day) && bets.some(b=>b.player_id===S.myId);
     if(stale()) return;
     // sélection auto (IA à domicile, ou échéance de sélection dépassée) + résolution auto
     // ⚠️ `!LECTURE_SEULE` : en consultation, la visite de l'admin ne doit RIEN faire avancer —
@@ -4131,7 +4140,19 @@ function allHumansSubmitted(){
 }
 function me(){ return players.find(p=>p.id===S.myId); }
 function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId); }
+/* ⚠️ `myBet()` REND MON PARI DE LA JOURNÉE AFFICHÉE, pas de la journée en cours. C'est voulu —
+   l'écran des résultats s'en sert pour montrer ce que j'avais joué ce jour-là — mais `bets` est
+   une variable GLOBALE que `openResults(d)` réécrit avec la journée consultée. Après un passage
+   par les résultats, `myBet()` parle donc d'une journée passée.
+   ⚠️ NE PAS UTILISER `myBet()` POUR RÉPONDRE À « ai-je parié AUJOURD'HUI ? » — utiliser
+   `aParieAujourdhui()`. Défaut relevé par Hervé le 2026-08-03 : le rachat de bonus se croyait
+   bloqué « dernière journée, pronos validés » alors que personne n'avait parié — l'écran ouvert
+   depuis les Pronos marchait, le même ouvert depuis les Résultats refusait. Deux comportements
+   pour un même état, selon le chemin emprunté. */
 function myBet(){ return bets.find(b=>b.player_id===S.myId); }
+/* Réponse fiable, indépendante de la page consultée : elle est figée par `refresh()` au moment où
+   `bets` porte encore la journée EN COURS, et plus rien ne la modifie ensuite. */
+function aParieAujourdhui(){ return !!myBetToday; }
 function pById(id){ return players.find(p=>p.id===id); }
 
 /* ============ AUTH ============ */
@@ -5790,7 +5811,9 @@ function viewDay(){
       <div class="mini muted" style="margin-top:8px">${t("💡 Pas d'inquiétude : s'il ne choisit pas à temps, les matchs seront tirés automatiquement — et ta fenêtre de paris démarrera seulement à ce moment-là.")}</div>
       ${(me()&&me().is_organizer)?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button>`:''}</div>`; }
   // Après la clôture, plus AUCUN accès à la saisie — même pour qui n'a jamais parié (sinon il pourrait miser en retard).
-  if(!deadlinePassed() && (!myBet() || S.editingBet)) return viewBet(d,dayLbl,opp,iAmHome);
+  // v8.15 : l'onglet Pronos ne montre QUE la journée en cours — la question est donc « ai-je
+  // parié aujourd'hui », et `myBet()` y répondait avec la journée qu'on venait de consulter.
+  if(!deadlinePassed() && (!aParieAujourdhui() || S.editingBet)) return viewBet(d,dayLbl,opp,iAmHome);
   return viewWait(dayLbl);
 }
 // recapFocus=null : en quittant un récap vers le classement, on oublie le joueur consulté, pour
@@ -7125,7 +7148,7 @@ function waitingResultsBody(d){
          que le compte à rebours tournait.
          ⚠️ Les chiffres viennent de `forgotPtsShown`/`forgotPenShown` : le barème diffère selon la
          date de création de la ligue, un chiffre écrit en dur mentirait à la moitié des parties. */''}
-    ${(!closed && L.status==="running" && d===(L.current_day||0) && !myBet() && myDuel() && (myDuel()||{}).fixtures)?
+    ${(!closed && L.status==="running" && d===(L.current_day||0) && !aParieAujourdhui() && myDuel() && (myDuel()||{}).fixtures)?
       `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)"><b class="red">⚠️ ${t("Tu n'as pas encore validé tes pronos")}</b>
         <div class="mini" style="margin-top:4px">${t("Sans pari validé à la clôture : <b>duel perdu d'office</b>, <b>{a} pt</b> au classement et <b>−{b} %</b> de ton capital.",{a:forgotPtsShown(),b:pct(forgotPenShown())})}</div>
         <button class="btn sm" style="margin-top:8px" onclick="goGame()">⚽ ${t("Aller faire mes pronos")}</button></div>`:''}
@@ -9249,7 +9272,7 @@ function isComposing(){
      (`!myBet()`) — elle date d'avant la v7.32, qui autorise la modification jusqu'au coup
      d'envoi. Corriger un pari validé est devenu le cas courant, et c'était précisément le seul
      non protégé. */
-  return !myBet() || S.editingBet;            // en train de faire — ou de corriger — ses pronos
+  return !aParieAujourdhui() || S.editingBet;  // en train de faire — ou de corriger — ses pronos (v8.15)
 }
 /* ⚠️ FILET GÉNÉRAL, indépendant de l'écran : on ne redessine JAMAIS pendant qu'un champ est
    actif. `isComposing` raisonne par situation de jeu et devra être maintenu à chaque nouvelle
@@ -9507,7 +9530,9 @@ function viewTrade(){
   // ⚠️ v8.09 — `pariPose` ne FERME plus rien : il ne sert qu'à avertir. Le verrou réel est côté
   // serveur (accept_trade → `pari_detenteur` / `pari_acheteur`), parce que c'est le paiement qui
   // peut casser `worstLoss ≤ capital`, pas la négociation. Voir la note en tête de proposeBuy.
-  const pariPose = (!S.recap && !!myBet());
+  // ⚠️ v8.15 — `aParieAujourdhui()` et NON `myBet()` : ce dernier suit la journée AFFICHÉE. Ouvert
+  // depuis les Résultats, l'écran croyait les pronos du jour validés et refusait tout échange.
+  const pariPose = (!S.recap && aParieAujourdhui());
   let h=`<div class="box"><h2 style="margin-top:0">🤝 ${t("Rachat de bonus")} ${premBadge('rachat')}</h2>
       <div class="mini muted">${t("Rachète un bonus à un adversaire, ou vends une des tiennes pour te refaire du capital. L'autre reste libre d'accepter ou de refuser.")}</div>
       <div class="mini" style="margin-top:6px;color:var(--blue)">ℹ️ ${t("Le rachat/vente n'est possible qu'entre <b>joueurs réels</b> — pas avec le 🤖 joueur IA.")}</div>
