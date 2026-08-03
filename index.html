@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.05";
+const APP_VERSION = "v8.07";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3654,12 +3654,14 @@ function genPool(k,maxKo){
   for(let i=out.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const tmp=out[i]; out[i]=out[j]; out[j]=tmp; }
   return out; }
 /* Libellé d'un résultat : « domicile », « extérieur » ou « Nul ».
-   ⚠️ CETTE FONCTION EXISTAIT DÉJÀ EN CINQ EXEMPLAIRES LOCAUX, tous identiques et aucun accessible
-   d'ailleurs : `selLbl` (tuto), `lab` deux fois (écran des pronos), `sel` (détail d'un joueur),
-   `selLabel` (récap de journée, 10 appels). En voulant m'en servir dans la fiche du gain potentiel
-   (v7.99), je suis tombé sur `selLbl is not defined` — la sixième copie était la voie facile.
-   ⚠️ Les cinq locales subsistent : les remplacer touche quatre écrans et mérite son propre
-   passage, pas une fin de session. Mais NE PAS EN CRÉER UNE DE PLUS — celle-ci est la bonne. */
+   ⚠️ ELLE A REMPLACÉ CINQ COPIES LOCALES (v8.06), toutes identiques et aucune accessible ailleurs :
+   `selLbl` (tuto), `lab` deux fois (écran des pronos), `selLabel` (récap de journée, 18 appels),
+   `sel` (détail d'un joueur). C'est en voulant m'en servir dans la fiche du gain potentiel (v7.99)
+   que je suis tombé sur `selLbl is not defined` — la sixième copie était la voie facile.
+   ⚠️ LE PIÈGE DU REGROUPEMENT ÉTAIT LE NOM `sel` : c'est aussi un nom de PARAMÈTRE ici
+   (`oddOf(f,sel)`) et une propriété de pari (`picks[i].sel`). Le remplacement a donc visé la forme
+   d'APPEL `sel(f,` et jamais `sel` seul — un remplacement global aurait cassé le calcul des cotes.
+   ⚠️ NE PAS EN RECRÉER UNE : toute nouvelle copie ramènerait le problème. Celle-ci est la bonne. */
 function labelSel(f,s){ return s==="1"?f.home : s==="2"?f.away : t("Nul"); }
 function oddOf(f,sel){ return sel==="1"?f.oh:sel==="2"?f.oa:f.od; }
 // Cote « double chance » : combinée de deux issues couvertes pour une seule mise.
@@ -4372,7 +4374,6 @@ function viewEssai(){
       <span class="mini muted"><b>${t("étape {a}/{b}",{a:step+1,b:N})}</b></span></div>
     <div class="gauge" style="margin-bottom:12px"><i style="width:${Math.round((step+1)/N*100)}%"></i></div>`;
   const ann=txt=>`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">ℹ️ <b>${t("Dans le vrai jeu")}</b> : ${txt}</div>`;
-  const selLbl=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
   const betCard=(d,f,i)=>{ const showTgt=(essaiCard[d]==="tout"), isTgt=essaiCardTgt[d]===i;
     return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
       <div class="row" style="gap:6px;flex:0 0 auto"><span class="tog cap ${essaiCap[d]===i?'on':''} clik" onclick="essaiSetCap(${d},${i})" title="${t("Capitaine")}">👑</span>${showTgt?`<span class="tog tgt ${isTgt?'on':''} clik" onclick="essaiSetTgt(${d},${i})" title="${t("Cible du bonus")}">${(essaiCard[d]&&CARDS[essaiCard[d]])?CARDS[essaiCard[d]].e:'🎯'}</span>`:''}</div></div>
@@ -4414,7 +4415,7 @@ function viewEssai(){
     const f=fx[c]; if(!f) return ''; const sel=forBot?f.botSel:essaiPicks[d][c]; if(sel==null) return '';
     if(!forBot&&essaiCard[d]==="tout"&&essaiCardTgt[d]===c) return '';   // exclusivité 🎯/👑
     const st=forBot?essaiBotStk(c):(+essaiStakes[d][c]||0), win=sel===f.res, add=win?st*(oddOf(f,sel)-1):-st; if(!add) return '';
-    return ligne(`👑 ${t("Capitaine")} ×2 · ${esc(selLbl(f,sel))}`,add)+sousLigne(win?t("gain doublé"):t("perte doublée"));
+    return ligne(`👑 ${t("Capitaine")} ×2 · ${esc(labelSel(f,sel))}`,add)+sousLigne(win?t("gain doublé"):t("perte doublée"));
   };
   // Ligne « Bonus » : effet MARGINAL (capitaine déjà compté à part), montant aligné + explication dessous.
   const impactLine=(d,fx)=>{ const card=essaiCard[d]; if(!card) return '';
@@ -4422,7 +4423,7 @@ function viewEssai(){
     const net=essaiMeNet(d,fx); const diff=Math.round((net-raw)*100)/100; const nm=CARDS[card].e+' '+t(CARDS[card].n); let sub, lab='🃏 '+esc(nm);
     // On affiche TOUJOURS la ligne du bonus joué — même sans effet — pour qu'on voie qu'il a été utilisé.
     if(card==="tout"){ const i=essaiCardTgt[d]; if(i<0){ sub=t("aucune cible choisie — sans effet aujourd'hui."); } else { const f=fx[i]; const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; lab+=' ×'+(win?'3':'2');
-        sub= win? t("×3 sur {m} : {st} × ({o} − 1) × 2 (le gain simple est déjà au-dessus).",{m:esc(selLbl(f,p)),st:st,o:cote(oddOf(f,p))}) : t("×2 sur {m} : une mise de plus perdue.",{m:esc(selLbl(f,p))}); } }
+        sub= win? t("×3 sur {m} : {st} × ({o} − 1) × 2 (le gain simple est déjà au-dessus).",{m:esc(labelSel(f,p)),st:st,o:cote(oddOf(f,p))}) : t("×2 sur {m} : une mise de plus perdue.",{m:esc(labelSel(f,p))}); } }
     else if(card==="parachute"){ sub= raw<0? t("perte amortie de 30 %.") : t("filet non déclenché (journée non négative) — sans effet aujourd'hui."); }
     else if(card==="sangsue"){ sub= diff>0? t("+15 % du gain de ton adversaire.") : t("l'adversaire n'était pas bénéficiaire — sans effet aujourd'hui."); }
     else sub='';
@@ -4433,9 +4434,9 @@ function viewEssai(){
     // Ligne de pari = GAIN SIMPLE (mise × (cote−1)), sans capitaine ni bonus → détaillés en dessous.
     const lignesMe=()=>fx.map((f,i)=>{ const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; const base=win?st*(oddOf(f,p)-1):-st;
       let tag=''; if(i===essaiCap[d]) tag+=' 👑'; if(card==="tout"&&i===tgt) tag+=' 🔥';
-      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,p))}${tag} · ${st}€ @${cote(oddOf(f,p))}</span><b class="mini ${base>=0?'green':'red'}">${fmt(base)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
+      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(labelSel(f,p))}${tag} · ${st}€ @${cote(oddOf(f,p))}</span><b class="mini ${base>=0?'green':'red'}">${fmt(base)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
     const lignesBot=()=>fx.map((f,i)=>{ const st=essaiBotStk(i); const win=f.botSel===f.res; const g=win?st*(oddOf(f,f.botSel)-1):-st;
-      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(selLbl(f,f.botSel))}${i===bcap?' 👑':''} · ${st}€ @${cote(oddOf(f,f.botSel))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
+      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(labelSel(f,f.botSel))}${i===bcap?' 👑':''} · ${st}€ @${cote(oddOf(f,f.botSel))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
     const bd=[t("duel {a}",{a:duelB})].concat(netB?['+1 '+t("net positif")]:[]).concat(starB?['+1 ⭐']:[]).join(' · ');
     return {won,tie,myPts,html:`<div class="recaphero ${won?'win':(tie?'':'loss')}"><div class="row">
         <div><div class="mini muted">${t("DUEL vs")} ${opp.e} ${esc(opp.n)}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:20px">${tie?t("Match nul"):(won?t("Duel gagné"):t("Duel perdu"))} · +${myPts} pt${myPts>1?'s':''}</div></div>
@@ -6117,7 +6118,7 @@ function afterCloseDuelHTML(){
   const md=myDuel(); if(!md||!md.fixtures) return '';
   const iAmHome=md.home_id===S.myId; const opp=pById(iAmHome?md.away_id:md.home_id)||{};
   const mine=myBet(); const oppBet=bets.find(b=>b.player_id===(iAmHome?md.away_id:md.home_id));
-  const seeOpp=hasOpt('voiradv'); const lab=(f,s)=> s==="1"?f.home:(s==="2"?f.away:t("Nul"));
+  const seeOpp=hasOpt('voiradv');
   // v6.99 : le suivi en direct dépend de l'option `live`, PAS de `direct`. `direct` ouvre le type
   // de ligue (jouer sur de vrais matchs), `live` ouvre le suivi PENDANT la journée. Les deux
   // conditions restent nécessaires : en ligue simulée il n'y a rien à suivre au fil de l'eau.
@@ -6157,8 +6158,8 @@ function afterCloseDuelHTML(){
       // ⚠️ MÊME ORDRE QUE L'ÉCRAN RÉSULTATS : « choix · mise @cote ». Hervé a montré la capture de
       // l'écran de résolution comme modèle — deux écrans qui affichent la même chose doivent
       // l'écrire pareil, sinon on relit deux fois pour comparer.
-      const myTxt=mb?`${esc(lab(f,mb.sel))} · ${mb.stake}€${cd(mb.sel)}${(mine.captain===i)?' 👑':''}${marque}`:'—';
-      const opTxt=ob?(seeOpp?`${esc(lab(f,ob.sel))} · ${ob.stake}€${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—';
+      const myTxt=mb?`${esc(labelSel(f,mb.sel))} · ${mb.stake}€${cd(mb.sel)}${(mine.captain===i)?' 👑':''}${marque}`:'—';
+      const opTxt=ob?(seeOpp?`${esc(labelSel(f,ob.sel))} · ${ob.stake}€${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—';
       return `<div class="box"><div class="row" style="margin-bottom:6px"><span style="font-weight:800;font-size:13px">${esc(f.home)} – ${esc(f.away)}</span>${liveTag(f, mb?mb.sel:null)}</div>
         ${compBadge(f)?`<div style="margin-bottom:6px">${compBadge(f)}</div>`:''}
         <div style="${GH}"><div><div class="mini muted" style="text-align:center;margin-bottom:2px">👤 ${t("Toi")}</div>${cell(true,myTxt)}</div><div><div class="mini muted" style="text-align:center;margin-bottom:2px">${avaName(opp)}</div>${cell(false,opTxt)}</div></div></div>`; }).join("");
@@ -6174,7 +6175,6 @@ function viewWait(dayLbl){
   const iAmHome = md && md.home_id===S.myId;
   const opp = md ? (pById(iAmHome?md.away_id:md.home_id)||{}) : {};
   const oppBet = md ? bets.find(b=>b.player_id===(iAmHome?md.away_id:md.home_id)) : null;
-  const lab=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
   const dt=dayTimes();
   const head = `<div class="box"><div class="row"><b>${dayLbl}</b>${md?`<span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span>`:''}</div>
      ${md?`<div class="mini muted" style="margin-top:4px">${t("Duel vs {a}",{a:'<b>'+avaName(opp)+'</b>'})}</div>`:''}
@@ -6185,7 +6185,7 @@ function viewWait(dayLbl){
   if(editable){
     const picks = (mine&&mine.picks&&md&&md.fixtures) ? md.fixtures.map((f,i)=>{ const b=mine.picks[i]; if(!b) return '';
       const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2;
-      const selD=dc?`${esc(lab(f,b.sel))} / ${esc(lab(f,mine.card.sel2))}`:esc(lab(f,b.sel));
+      const selD=dc?`${esc(labelSel(f,b.sel))} / ${esc(labelSel(f,mine.card.sel2))}`:esc(labelSel(f,b.sel));
       const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel);
       const mk=`${i===mine.captain?' <span class="chip gold clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''}`;
       /* ⚠️ v7.56 — L'HEURE DU MATCH MANQUAIT UNE FOIS LES PRONOS VALIDÉS (signalé par Hervé). Elle
@@ -6203,9 +6203,15 @@ function viewWait(dayLbl){
          Sur cinq matchs, c'est un demi-écran de plus. Placé DEVANT, le marqueur ne peut plus se
          retrouver seul (il ouvre la ligne) et la hauteur reste à 90 px. On garde donc l'intention
          — que le logo cesse d'être orphelin — avec la disposition qui ne coûte rien. */
-      // ⚠️ `mk` commence par une ESPACE (il était conçu pour SUIVRE le nom) : on la retire, sinon
-      // la ligne s'ouvrirait sur un blanc.
-      return `<div class="box row"><span class="mini">${mk?mk.trim()+' ':''}<b>${esc(f.home)} – ${esc(f.away)}</b>${info?'<br>'+info:''}</span><span class="chip" style="flex:0 0 auto">${selD} @${cote(oddD)} · ${b.stake}€</span></div>`;
+      /* ⚠️ v8.07 (2ᵉ correction, capture d'Hervé) — LES MARQUEURS DESCENDENT SUR LA LIGNE DE LA
+         COMPÉTITION. La v8.01 les avait mis DEVANT le nom pour qu'ils cessent d'être orphelins ;
+         ça résolvait le symptôme mais déséquilibrait la carte : la pastille pousse le nom, qui
+         s'enroule autour d'elle. La ligne du dessous — « 🏆 Qualif. C1 · 🕐 demain 20:00 » — est
+         courte et porte déjà les informations de contexte : les marqueurs y tiennent sans rien
+         déplacer, et le nom du match retrouve toute la largeur.
+         ⚠️ Même disposition que sur l'écran d'attente (v8.07) : deux écrans qui montrent la même
+         chose doivent la montrer pareil, sinon on relit deux fois pour comparer. */
+      return `<div class="box row"><span class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b>${(info||mk)?`<br>${info}${mk}`:''}</span><span class="chip" style="flex:0 0 auto">${selD} @${cote(oddD)} · ${b.stake}€</span></div>`;
     }).join("") : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
     const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
     const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
@@ -6622,7 +6628,6 @@ function recapBody(D){
   const cardDef=(who,c)=> (c&&c.id)?`<div class="mini muted" style="margin-top:4px">🃏 ${esc(who)} : <b>${esc(CARDS[c.id].n)}</b> — ${esc(CARDS[c.id].d)}</div>`:'';
   const oppB = oppId!=null? bets.find(b=>b.player_id===oppId) : null;
   const oppName = oppId!=null? pById(oppId).name : "";
-  const selLabel=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
   const line=(bt,f,i,oppCard)=>{
     if(bt && Array.isArray(bt.picks) && bt.picks.length===0) return `<span class="mini red">🚫 ${t("pas de prono")}</span>`;   // joueur qui n'a pas validé
     if(!bt||!bt.picks||!bt.picks[i]) return `<span class="muted">—</span>`;
@@ -6635,7 +6640,7 @@ function recapBody(D){
     let g=win?(+b.stake)*(odd-1):-(+b.stake); if(i===bt.captain)g*=2;
     if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g=0; if(c.id==="joker")g*=2; }
     let faceCut=false; if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; faceCut=true; }
-    const selTxt = isDC ? `<b>${esc(selLabel(f,b.sel))}</b>/<b>${esc(selLabel(f,c.sel2))}</b>` : (b.orig!=null ? `<s class="red">${esc(selLabel(f,b.orig))}</s> → <b>${esc(selLabel(f,b.sel))}</b> <span class="bem clik" onclick="event.stopPropagation();showCardInfo('cadeau')">🎁</span>` : esc(selLabel(f,b.sel)));
+    const selTxt = isDC ? `<b>${esc(labelSel(f,b.sel))}</b>/<b>${esc(labelSel(f,c.sel2))}</b>` : (b.orig!=null ? `<s class="red">${esc(labelSel(f,b.orig))}</s> → <b>${esc(labelSel(f,b.sel))}</b> <span class="bem clik" onclick="event.stopPropagation();showCardInfo('cadeau')">🎁</span>` : esc(labelSel(f,b.sel)));
     return `${selTxt} · ${b.stake}€ @${cote(odd)}${i===bt.captain?' <span class="bem clik" onclick="event.stopPropagation();showCaptainInfo()">👑</span>':''}${cardOnMatch(c,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.id}')">${CARDS[c.id].e}</span>`:''}${faceCut?` <span class="mini red" title="${t("Gain réduit de moitié par « Dans ta face » adverse")}">↓½ 🤛</span>`:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
   const explain=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return t("pari non enregistré pour ce match.");
     const b=bt.picks[i]; const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;  // bonus volé → neutralisée (cf. line())
@@ -6647,10 +6652,10 @@ function recapBody(D){
          l'ANCIENNE règle du bonus, qui payait à une cote combinée pondérée. Depuis, 🧈 paie à la
          cote PLEINE du résultat qui sort (`dcWinOdd`) — c'est-à-dire la cote du match, rien de
          combiné. Le mot annonçait un calcul que le jeu ne fait plus. */
-      txt=t("🧈 <b>{n}</b> : couvre <b>{a}</b> ou <b>{b}</b> pour {c}€ (cote @{d}) → {e}",{n:t(CARDS.chance.n),a:esc(selLabel(f,b.sel)),b:esc(selLabel(f,c.sel2)),c:b.stake,d:odd,e:out}); }
-    else { const flip = b.orig!=null ? t("🎁 <b>Chérie c'est cadeau</b> : choix initial <s class=\"red\">{a}</s> inversé en <b>{b}</b>.",{a:esc(selLabel(f,b.orig)),b:esc(selLabel(f,b.sel))})+'<br>' : '';
-      txt= flip + (win?t("a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}€",{a:esc(selLabel(f,b.sel)),b:b.stake,c:odd,d:fmt(base)})
-             :t("a parié <b>{a}</b> ({b}€) → perdu : −{b}€",{a:esc(selLabel(f,b.sel)),b:b.stake})); }
+      txt=t("🧈 <b>{n}</b> : couvre <b>{a}</b> ou <b>{b}</b> pour {c}€ (cote @{d}) → {e}",{n:t(CARDS.chance.n),a:esc(labelSel(f,b.sel)),b:esc(labelSel(f,c.sel2)),c:b.stake,d:odd,e:out}); }
+    else { const flip = b.orig!=null ? t("🎁 <b>Chérie c'est cadeau</b> : choix initial <s class=\"red\">{a}</s> inversé en <b>{b}</b>.",{a:esc(labelSel(f,b.orig)),b:esc(labelSel(f,b.sel))})+'<br>' : '';
+      txt= flip + (win?t("a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}€",{a:esc(labelSel(f,b.sel)),b:b.stake,c:odd,d:fmt(base)})
+             :t("a parié <b>{a}</b> ({b}€) → perdu : −{b}€",{a:esc(labelSel(f,b.sel)),b:b.stake})); }
     if(i===bt.captain){ g=base*2; txt+=' · '+t("👑 Capitaine ×2 → {a}€",{a:fmt(g)}); }
     if(c&&c.target===i&&!isDC){ if(c.id==="double"&&win){g*=2;txt+=' · '+t("🐗 {n} ×2 → {a}€",{n:t(CARDS.double.n),a:fmt(g)});} else if(c.id==="tout"){g*=(win?3:2);txt+=' · '+t("🔥 {n} {m} → {a}€",{n:t(CARDS.tout.n),m:win?'×3':'×2',a:fmt(g)});} else if(c.id==="joker"){g*=2;txt+=' · '+t("🃏 Joker ×2 → {a}€",{a:fmt(g)});} else if(c.id==="assurance"&&!win){g=0;txt+=' · '+t("🛡 {n} : mise remboursée → 0€",{n:t(CARDS.assurance.n)});} }
     if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; txt+=' · '+t("🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}€",{a:fmt(g)}); }
@@ -6662,11 +6667,11 @@ function recapBody(D){
     else if(c.stole){ detail=t("🥷 Bonus pris à l'adversaire : son bonus n'a pas joué et t'est revenue en main."); }
     else if(c.id==="cadeau"){
       if(c.flip && fxRecap[c.flip.match]){ const f=fxRecap[c.flip.match]; const won=(c.flip.to===f.res);
-        detail=`Pari adverse sur <b>${esc(f.home)}–${esc(f.away)}</b> inversé : <s class="red">${esc(selLabel(f,c.flip.from))}</s> → <b>${esc(selLabel(f,c.flip.to))}</b> — ${won?'devenu <span class="green">gagnant</span>':'reste <span class="red">perdant</span>'}.`; }
+        detail=`Pari adverse sur <b>${esc(f.home)}–${esc(f.away)}</b> inversé : <s class="red">${esc(labelSel(f,c.flip.from))}</s> → <b>${esc(labelSel(f,c.flip.to))}</b> — ${won?'devenu <span class="green">gagnant</span>':'reste <span class="red">perdant</span>'}.`; }
       else detail=`Le pari adverse du match ciblé n'était ni 1 ni 2 → pas d'inversion.`;
     } else if(c.id==="face"){ const f=fxRecap[c.target]; const nm=f?`<b>${esc(f.home)}–${esc(f.away)}</b>`:'le match ciblé';
       const ob=(vb&&vb.picks&&c.target!=null)?vb.picks[c.target]:null; const owin=(ob&&f)?(ob.sel===f.res):false;
-      detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(selLabel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
+      detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(labelSel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
     } else if(c.id==="miroir"){ const sv=im.self||0;
       // ⚠️ v7.64 : « meilleur RÉSULTAT de pari », pas « meilleur pari gagnant » — l'échange a lieu
       // même quand l'un des deux a tout raté (cf. la phase 3 du moteur).
@@ -6677,12 +6682,12 @@ function recapBody(D){
     } else if(c.id==="moitie"){ detail=(Math.abs(im.opp||0)>=1)?t("Le résultat total de l'adversaire a été divisé par 2."):t("L'adversaire a fini quasiment à zéro — diviser par 2 n'a rien changé.");
     } else if(c.id==="parachute"){ detail=((im.self||0)>=1)?`Filet de sécurité déclenché : une partie de ta perte a été amortie.`:`Filet non déclenché (journée non négative).`;
     } else if(c.id==="chance" && c.sel2 && fxRecap[c.target] && bt.picks && bt.picks[c.target]){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const w=(f.res===b.sel||f.res===c.sel2); const od=dcWinOdd(f,b.sel,c.sel2);
-      detail=`Sur <b>${esc(f.home)}–${esc(f.away)}</b> : couvre <b>${esc(selLabel(f,b.sel))}</b> ou <b>${esc(selLabel(f,c.sel2))}</b> — ${w?'<span class="green">gagné</span> à la cote du résultat sorti @'+od:'<span class="red">perdu</span>'}.`;
+      detail=`Sur <b>${esc(f.home)}–${esc(f.away)}</b> : couvre <b>${esc(labelSel(f,b.sel))}</b> ou <b>${esc(labelSel(f,c.sel2))}</b> — ${w?'<span class="green">gagné</span> à la cote du résultat sorti @'+od:'<span class="red">perdu</span>'}.`;
     } else if(c.target!=null && fxRecap[c.target] && bt.picks){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const win=b.sel===f.res; const nm=`<b>${esc(f.home)}–${esc(f.away)}</b>`;
       // garde-fou : sur d'anciennes parties l'inversion « cadeau » n'était pas enregistrée sur le pari visible → on n'affiche pas une mécanique contradictoire
       const inconsistent = (c.id==="tout"||c.id==="double") && ((win && (im.self||0)<0) || (!win && (im.self||0)>0));
       if(!inconsistent){
-        if(c.id==="tout") detail=`Sur ${nm} (${esc(selLabel(f,b.sel))}, ${b.stake}€) : ${win?'pari <span class="green">gagné</span> → gain <b>×3</b>':'pari <span class="red">perdu</span> → perte <b>×2</b>'}.`;
+        if(c.id==="tout") detail=`Sur ${nm} (${esc(labelSel(f,b.sel))}, ${b.stake}€) : ${win?'pari <span class="green">gagné</span> → gain <b>×3</b>':'pari <span class="red">perdu</span> → perte <b>×2</b>'}.`;
         else if(c.id==="double") detail=`Sur ${nm} : ${win?'pari <span class="green">gagné</span> → gain <b>×2</b>':'perdu → aucun effet'}.`;
         else if(c.id==="assurance") detail=`Sur ${nm} : ${win?'gagné → aucun effet':'perdu → <b>mise remboursée</b>'}.`;
         else if(c.id==="joker") detail=`Sur ${nm} : 2ᵉ Capitaine → ${win?'gain <b>×2</b>':'perte <b>×2</b>'}.`;
@@ -6711,7 +6716,7 @@ function recapBody(D){
     const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
       const impB=(bt)=> !!(bt&&bt.picks&&bt.picks[i]&&bt.picks[i].orig!=null) || cardOnMatch(bt.card,i); const imp=impB(hB)||impB(aB);
       return `<div class="clik" style="border-top:2px solid color-mix(in srgb,var(--ink) 22%,transparent);${imp?'border-left:3px solid var(--gold);background:color-mix(in srgb,var(--gold) 9%,transparent);border-radius:0 10px 10px 0;padding:10px 8px 10px 9px;':'padding:10px 2px;'}" onclick="toggleRecapMatch(${i})">
-        <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(selLabel(f,f.res))} ${open?'▲':'▼'}</span></div>
+        <div class="row" style="gap:6px"><span class="sport">${f.sport}</span><b class="mini">${esc(f.home)} – ${esc(f.away)}</b><span class="mini muted" style="margin-left:auto">→ ${esc(labelSel(f,f.res))} ${open?'▲':'▼'}</span></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">
           <div class="mini" style="background:var(--card2);border:1px solid ${hP.id===S.myId?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:5px 7px"><div class="mini muted" style="margin-bottom:2px">${avaName(hP)}${hP.id===S.myId?' '+t("(toi)"):''}</div>${line(hB,f,i,aB&&aB.card)}</div>
           <div class="mini" style="background:var(--card2);border:1px solid ${aP.id===S.myId?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:5px 7px"><div class="mini muted" style="margin-bottom:2px">${avaName(aP)}${aP.id===S.myId?' '+t("(toi)"):''}</div>${line(aB,f,i,hB&&hB.card)}</div>
@@ -6894,7 +6899,7 @@ function showGainDetail(pid){
   if(loadedDay!==_day && Array.isArray(chartBets) && Array.isArray(standDuels)){ bets=chartBets.filter(b=>b.day===_day); duels=standDuels.filter(x=>x.day===_day); _r=true; }
   try{
   const p=pById(pid)||{}; const bt=bets.find(b=>b.player_id===pid); const d=duels.find(x=>x.home_id===pid||x.away_id===pid);
-  const net=(bt&&bt.net)||0; const sel=(f,s)=> s==="1"?f.home:s==="2"?f.away:t("Nul");
+  const net=(bt&&bt.net)||0;
   let rows='', sumG=0;
   const isForgot = bt && Array.isArray(bt.picks) && bt.picks.length===0;
   if(isForgot){ rows=`<div class="mini">${t("⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>{b} pt</b> au classement et <b>−{a} %</b> du capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div>${net<0?`<div class="mini" style="margin-top:6px">${t("Perte de capital ce jour-là : <b>{a}€</b>.",{a:fmt(net)})}</div>`:''}`; }
@@ -6908,8 +6913,8 @@ function showGainDetail(pid){
       if(i===bt.captain){ g*=2; parts.push('👑 ×2'); }
       if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;parts.push('🐗 ×2');} else if(c.id==="tout"){g*=(win?3:2);parts.push('🔥 '+(win?'×3':'×2'));} else if(c.id==="joker"){g*=2;parts.push('🃏 ×2');} else if(c.id==="assurance"&&!win){g=0;parts.push('🛡 '+t("remboursé"));} }
       if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; parts.push('🤛 ÷2'); }
-      sumG+=g; const selD=isDC?`${sel(f,b.sel)}/${sel(f,c.sel2)}`:sel(f,b.sel);
-      return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b> <span class="muted">(${esc(sel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}</div>`;
+      sumG+=g; const selD=isDC?`${labelSel(f,b.sel)}/${labelSel(f,c.sel2)}`:labelSel(f,b.sel);
+      return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b> <span class="muted">(${esc(labelSel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}</div>`;
     }).join('');
     /* ⚠️ v7.96 (relevé par Hervé sur DRDJ3 — Tranmere 2-2 Rochdale, Coupe de la Ligue anglaise).
        L'API des scores S'ARRÊTE AU TEMPS RÉGLEMENTAIRE : elle a rendu 2-2 sur un match à
@@ -7088,10 +7093,25 @@ function waitingResultsBody(d){
        CONDITIONS. Avant de dupliquer un affichage, vérifier ce qui le protégeait. */
     const voirAdv=hasOpt('voiradv');
     const paris=(mine && closed);
-    const lab2=(f,s)=> s==="1"?f.home : s==="2"?f.away : t("Nul");
+    /* ⚠️ v8.07 — `lab2` ÉTAIT UNE SIXIÈME COPIE, et le regroupement de la v8.06 l'a manquée : le
+       motif de remplacement cherchait `lab(f,`, pas `lab2(f,`. Un chiffre dans un nom a suffi.
+       C'est la démonstration que ces duplications ne se voient pas — il a fallu revenir sur cet
+       écran pour une autre raison pour tomber dessus. */
     const ligne=(b,capIdx,f,i)=>{ if(!b||!Array.isArray(b.picks)||!b.picks[i]) return '<span class="mini muted">—</span>';
       const p=b.picks[i]; const o=oddOf(f,p.sel);
-      return `<span class="mini">${esc(lab2(f,p.sel))} · ${p.stake}€${o?' @'+cote(o):''}${capIdx===i?' 👑':''}</span>`; };
+      return `<span class="mini">${esc(labelSel(f,p.sel))} · ${p.stake}€${o?' @'+cote(o):''}${capIdx===i?' 👑':''}</span>`; };
+    /* ⚠️ v8.07 (demandé par Hervé) — MES MARQUEURS 👑 / 🃏 SUR L'ÉCRAN D'ATTENTE. La liste des
+       affiches ne disait pas où j'avais posé mon Capitaine ni mon bonus : entre la validation et
+       les résultats il peut s'écouler 12 à 72 h, et c'est précisément là qu'on rouvre l'app pour
+       se rappeler ce qu'on a joué. L'information existait déjà sur l'onglet Pronos ; elle manquait
+       ici, sur l'écran où l'on attend.
+       ⚠️ UNIQUEMENT LES MIENS, et uniquement sur MON duel (`mine`) : les choix des autres restent
+       secrets jusqu'à la résolution — c'est la règle du jeu, et la v7.43 a déjà connu une fuite
+       exactement à cet endroit en recopiant une mise en page sans ses conditions. */
+    const mesMarques=(i)=>{ if(!mine || !myBetNow) return '';
+      const cap=(myBetNow.captain===i)?'<span class="chip gold clik" onclick="showCaptainInfo()">👑</span>':'';
+      const c=myBetNow.card; const bon=(c&&c.id&&cardOnMatch(c,i))?`<span class="chip b clik" onclick="showCardInfo('${c.id}')">${CARDS[c.id].e}</span>`:'';
+      return (cap||bon)?` ${cap}${bon}`:''; };
     return `<div style="margin-top:22px;border-top:3px solid var(--border);padding-top:14px">
       <div class="mini" style="margin-bottom:6px"><b>${mine?'⚔️ ':''}${avaName(hn)} ${t("vs")} ${avaName(an)}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
       ${fx.map((f,i)=>{ /* mon prono UNIQUEMENT sur mon duel : ailleurs on n'a pas à trancher */
@@ -7115,7 +7135,9 @@ function waitingResultsBody(d){
            match et sa compétition occupent maintenant la ligne, le résultat est calé à droite. */
         return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border);gap:10px;align-items:flex-start">
           <div style="min-width:0"><div class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b></div>
-            ${compBadge(f)?`<div style="margin-top:1px">${compBadge(f)}</div>`:''}</div>
+            ${/* ⚠️ Les marqueurs vont sur la LIGNE DE LA COMPÉTITION, pas contre le nom du match :
+                 elle est courte, alors que le nom remplit souvent toute la largeur sur téléphone. */''}
+            <div style="margin-top:1px">${compBadge(f)||''}${mesMarques(i)}</div></div>
           <span class="mini" style="flex:0 0 auto;text-align:right">${rp||koOuEtat(f)||'<span class="mini muted">⏳</span>'}</span></div>`; }).join('')}
     </div>`; };
   const anyfx=(duels||[]).some(x=>Array.isArray(x.fixtures)&&x.fixtures.length);
