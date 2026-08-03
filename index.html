@@ -122,7 +122,16 @@
   .err{background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 40%,transparent);
     color:var(--red);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;}
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--panel2);
-    border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:50;box-shadow:var(--shadow);color:var(--ink);}
+    border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:200;box-shadow:var(--shadow);color:var(--ink);}
+  /* ⚠️ v8.11 — z-index 200, AU-DESSUS DE `.modal` (100). Il valait 50 : tout toast déclenché
+     depuis une fenêtre modale s'affichait DERRIÈRE le voile sombre, donc nulle part. Signalé par
+     Hervé sur le rachat (« je ne peux pas valider mais je n'ai pas de message qui m'informe
+     pourquoi ça bloque ») — le contrôle marchait très bien, il parlait dans le vide.
+     ⚠️ CE N'ÉTAIT PAS UN DÉFAUT DU RACHAT. C'est toute l'app : chaque formulaire en modale
+     (rachat, vente, mot de passe, code de ligue…) refusait en silence. Un écran qui ne réagit pas
+     se lit comme un bouton cassé, pas comme un refus — c'est le pire des deux.
+     La valeur doit rester > 100 tant que `.modal` vaut 100 ; `tools/test-rachat-bonus.ps1` compare
+     les deux nombres pour que personne ne les fasse se croiser à nouveau. */
   @keyframes tradepulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.35);opacity:.5}}
   .tradebadge{display:inline-block;margin-left:1px;padding:0 5px;border-radius:9px;background:#e5484d;color:#fff;font-size:11px;font-weight:800;line-height:16px;vertical-align:super;animation:tradepulse 1s ease-in-out infinite;}
   @media (prefers-reduced-motion:reduce){.tradebadge{animation:none}}
@@ -186,7 +195,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.10";
+const APP_VERSION = "v8.11";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2149,7 +2158,16 @@ const EN={
   "Prix proposé (€) — entre 1 et {a} :":"Offered price (€) — between 1 and {a}:",
   "Envoyer l'offre":"Send offer", "Annuler":"Cancel",
   "Entre un prix valide.":"Enter a valid price.",
-  "Prix trop élevé : il te resterait moins de {a} €.":"Price too high: you'd be left with less than €{a}.",
+  "Prix trop élevé : tu peux proposer jusqu'à {b} € (il faut garder {a} € pour miser).":"Price too high: you can offer up to €{b} (you must keep €{a} to go on betting).",
+  "Prix trop élevé pour cet acheteur":"Price too high for this buyer",
+  "{a} ne peut pas mettre plus de <b>{b} €</b> : il lui reste <b>{c} €</b> et il doit en garder <b>{m} €</b> pour continuer à miser.":"{a} can't spend more than <b>€{b}</b>: they have <b>€{c}</b> left and must keep <b>€{m}</b> to go on betting.",
+  "➡️ Ton offre n'a pas été envoyée. Propose un prix plus bas, ou attends que son capital remonte.":"➡️ Your offer was not sent. Offer a lower price, or wait for their capital to go back up.",
+  "Personne ne peut acheter":"Nobody can buy",
+  "Aucun adversaire n'a de quoi racheter un bonus pour l'instant : il faudrait pouvoir payer au moins <b>1 €</b> tout en gardant <b>{a} €</b> pour continuer à miser. Réessaie après la prochaine journée.":"No opponent can afford a bonus right now: they would need to pay at least <b>€1</b> while keeping <b>€{a}</b> to go on betting. Try again after the next matchday.",
+  "jusqu'à {a} €":"up to €{a}",
+  "Prix (€) —":"Price (€) —",
+  "Au-delà, l'acheteur passerait sous les {a} € qu'il doit garder pour miser — l'offre serait annulée à l'acceptation.":"Above that, the buyer would drop below the €{a} they must keep to go on betting — the offer would be cancelled on acceptance.",
+  "Ce joueur n'est plus dans la ligue.":"This player is no longer in the league.",
   "Ce bonus n'est plus disponible.":"This bonus is no longer available.",
   "Offre envoyée.":"Offer sent.", "Offre introuvable.":"Offer not found.",
   // — v7.87 : la fenêtre de mot de passe (elle remplace les `prompt()` en clair) —
@@ -9472,11 +9490,11 @@ async function submitBuy(sellerId, cardId, maxP){
   const price=Math.round(+((document.getElementById("tradePrice")||{}).value||0));
   const msg=((document.getElementById("tradeMsg")||{}).value||"").slice(0,140);
   if(!(price>=1)){ toast(t("Entre un prix valide.")); return; }
-  if(price>maxP){ toast(t("Prix trop élevé : il te resterait moins de {a} €.",{a:TRADE_MIN_CAP})); return; }
+  if(price>maxP){ toast(t("Prix trop élevé : tu peux proposer jusqu'à {b} € (il faut garder {a} € pour miser).",{a:TRADE_MIN_CAP,b:Math.max(0,maxP)})); return; }
   closeCardInfo();
   try{
     const meP=me(); if(!meP) return;
-    if((meP.capital||0)-price < TRADE_MIN_CAP){ toast(t("Prix trop élevé : il te resterait moins de {a} €.",{a:TRADE_MIN_CAP})); return; }
+    if((meP.capital||0)-price < TRADE_MIN_CAP){ toast(t("Prix trop élevé : tu peux proposer jusqu'à {b} € (il faut garder {a} € pour miser).",{a:TRADE_MIN_CAP,b:Math.max(0,maxP)})); return; }
     /* ⚠️ v8.09 (relevé par Hervé) — PROPOSER N'EST PLUS BLOQUÉ PAR SES PROPRES PRONOS VALIDÉS.
        Le garde-fou d'origine visait `worstLoss ≤ capital` : payer un bonus après avoir engagé ses
        mises pourrait faire passer la perte maximale au-dessus du capital restant. Mais ce risque
@@ -9494,14 +9512,41 @@ async function submitBuy(sellerId, cardId, maxP){
   }catch(e){ infoWin(t("⚠️ Une erreur est survenue")+" : "+esc(e.message),"⚠️"); }
 }
 // VENDRE : je propose une de MES bonus à un joueur (il paie, il la reçoit)
+/* ⚠️ v8.11 (relevé par Hervé) — LE PRIX DE VENTE EST PLAFONNÉ PAR LE CAPITAL DE L'ACHETEUR.
+   L'asymétrie était là depuis l'origine : à l'ACHAT le prix a toujours été borné par mon propre
+   capital (`maxP = capital − TRADE_MIN_CAP`) ; à la VENTE, rien ne regardait ce que l'autre peut
+   payer. On envoyait donc des offres arithmétiquement impossibles, que le serveur annulait à
+   l'acceptation — deux joueurs dérangés pour rien, et une offre perdue. Le refus le plus utile
+   est celui qui arrive AVANT l'envoi.
+   ⚠️ CE N'EST PAS UNE GARANTIE et il ne faut pas la présenter comme telle : le capital de
+   l'acheteur peut baisser entre la proposition et l'acceptation (une journée se résout, il perd).
+   C'est un filtre de bon sens à l'envoi. Le contrôle QUI FAIT FOI reste celui d'`accept_trade` —
+   c'est le seul qui lit le capital à l'instant du paiement, sous verrou. */
+function venteMax(p){ return Math.round(((p&&p.capital)||0)-TRADE_MIN_CAP); }
+// Le plafond change avec le destinataire : la liste et le champ de prix doivent rester d'accord.
+function sellMaj(){
+  const sel=document.getElementById("sellTarget"), inp=document.getElementById("tradePrice"),
+        ind=document.getElementById("sellMaxTxt"); if(!sel) return;
+  const opt=sel.options[sel.selectedIndex]; const mx=opt?(+opt.getAttribute("data-max")||0):0;
+  if(inp){ inp.max=mx; if((+inp.value||0)>mx) inp.value=mx; }
+  if(ind) ind.textContent=t("jusqu'à {a} €",{a:mx});
+}
 function proposeSell(cardId){
   if(!requireOpt('rachat')) return;   // initier une vente = option premium
   const meP=me(); if(!meP) return; const C=CARDS[cardId]; const opps=humanOpponents();
   if(!opps.length){ toast(t("Aucun adversaire pour l'instant.")); return; }
+  // Un adversaire qui ne peut pas payer 1 € en gardant son minimum n'est pas « un choix à
+  // décourager » : c'est un choix qui n'existe pas. On le sort de la liste plutôt que de le
+  // laisser sélectionner pour refuser ensuite.
+  const solv=opps.filter(p=>venteMax(p)>=1);
+  if(!solv.length){ closeCardInfo(); infoModal("💸", t("Personne ne peut acheter"),
+    `<div class="mini" style="text-align:left">${t("Aucun adversaire n'a de quoi racheter un bonus pour l'instant : il faudrait pouvoir payer au moins <b>1 €</b> tout en gardant <b>{a} €</b> pour continuer à miser. Réessaie après la prochaine journée.",{a:TRADE_MIN_CAP})}</div>`); return; }
+  const mx0=venteMax(solv[0]);
   tradeModal(C?C.e:'💰', t("Vendre {c}",{c:esc(t(C?C.n:cardId))}),
     `${C?`<div class="mini muted" style="margin:8px 0;text-align:left">${esc(t(C.d))}</div>`:''}<div class="mini" style="text-align:left">${t("À qui ?")}</div>
-     <select id="sellTarget" style="width:100%;box-sizing:border-box;padding:10px;margin-top:6px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:inherit;font-size:16px">${opps.map(p=>`<option value="${p.id}">${avaName(p)} · 💰 ${eur(p.capital||0)} €</option>`).join("")}</select>`,
-    `<div class="mini" style="margin-top:10px;text-align:left">${t("Prix (€) :")}</div>${priceInput(0)}`,
+     <select id="sellTarget" onchange="sellMaj()" style="width:100%;box-sizing:border-box;padding:10px;margin-top:6px;border-radius:10px;border:1px solid var(--border);background:var(--panel2);color:inherit;font-size:16px">${solv.map(p=>`<option value="${p.id}" data-max="${venteMax(p)}">${avaName(p)} · 💰 ${eur(p.capital||0)} € · ${t("jusqu'à {a} €",{a:venteMax(p)})}</option>`).join("")}</select>`,
+    `<div class="mini" style="margin-top:10px;text-align:left">${t("Prix (€) —")} <b id="sellMaxTxt">${t("jusqu'à {a} €",{a:mx0})}</b> :</div>${priceInput(mx0)}
+     <div class="mini muted" style="margin-top:4px;text-align:left">${t("Au-delà, l'acheteur passerait sous les {a} € qu'il doit garder pour miser — l'offre serait annulée à l'acceptation.",{a:TRADE_MIN_CAP})}</div>`,
     `submitSell('${cardId}')`);
 }
 async function submitSell(cardId){
@@ -9516,6 +9561,17 @@ async function submitSell(cardId){
     // ⚠️ v8.09 — même raison que pour le rachat : METTRE EN VENTE ne déplace rien. Le vendeur ne
     // reçoit son argent qu'à l'acceptation, et le bonus ne quitte sa main qu'à ce moment-là — il
     // peut donc encore le jouer aujourd'hui si l'offre n'est pas conclue. Rien à protéger ici.
+    /* ⚠️ v8.11 — RELECTURE FRAÎCHE DU CAPITAL DE L'ACHETEUR. Le plafond de la liste déroulante a
+       été calculé à l'ouverture de la fenêtre, avec les données en mémoire ; entre-temps une
+       journée a pu se résoudre. Se fier à cet affichage laisserait passer l'offre impossible que
+       tout ce garde-fou cherche à éviter. On relit, comme le fait déjà `submitBuy` pour le bonus. */
+    const cible=await q(db.from("players").select("id,name,capital").eq("id",target).single());
+    if(!cible){ toast(t("Ce joueur n'est plus dans la ligue.")); await refresh(); return; }
+    const mxC=venteMax(cible);
+    if(price>mxC){ closeCardInfo(); infoModal("💸", t("Prix trop élevé pour cet acheteur"),
+      `<div class="mini" style="text-align:left">${t("{a} ne peut pas mettre plus de <b>{b} €</b> : il lui reste <b>{c} €</b> et il doit en garder <b>{m} €</b> pour continuer à miser.",{a:esc(cible.name||"?"),b:Math.max(0,mxC),c:Math.round(cible.capital||0),m:TRADE_MIN_CAP})}</div>
+       <div class="mini muted" style="text-align:left;margin-top:10px">${t("➡️ Ton offre n'a pas été envoyée. Propose un prix plus bas, ou attends que son capital remonte.")}</div>`);
+      await refresh(); return; }
     if(await cardHasPendingTrade(cardId)){ toast(t("Ce bonus fait déjà l'objet d'une offre en attente.")); await refresh(); return; }
     await q(db.from("trades").insert({league_id:L.id, kind:"sell", from_player:S.myId, to_player:target, card_id:cardId, price:price, msg:msg||null}));
     infoWin(t("Offre envoyée.")); await refresh();
