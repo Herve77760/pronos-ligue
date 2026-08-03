@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.07";
+const APP_VERSION = "v8.08";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6186,7 +6186,14 @@ function viewWait(dayLbl){
     const picks = (mine&&mine.picks&&md&&md.fixtures) ? md.fixtures.map((f,i)=>{ const b=mine.picks[i]; if(!b) return '';
       const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2;
       const selD=dc?`${esc(labelSel(f,b.sel))} / ${esc(labelSel(f,mine.card.sel2))}`:esc(labelSel(f,b.sel));
-      const oddD=dc?(oddOf(f,b.sel)+' / '+oddOf(f,mine.card.sel2)):oddOf(f,b.sel);
+      /* ⚠️ v8.08 (relevé par Hervé sur capture) — LA COTE S'AFFICHAIT « @0.00 » AVEC 🧈.
+         `oddD` assemblait les DEUX cotes en une CHAÎNE (« 2.00 / 3.40 »), puis l'affichage la
+         repassait dans `cote()`, qui fait `(+o||0).toFixed(2)` : `+"2.00 / 3.40"` vaut `NaN`,
+         `NaN||0` vaut `0`. La valeur n'était pas perdue, elle était DÉTRUITE au dernier moment.
+         ⚠️ On formate donc CHAQUE cote avant de les joindre, et `oddD` est désormais du texte
+         PRÊT À AFFICHER — d'où le `@${oddD}` sans `cote()` plus bas. Repasser un texte déjà
+         formaté dans un convertisseur numérique est exactement ce qui a produit le 0,00. */
+      const oddD=dc?(cote(oddOf(f,b.sel))+' / '+cote(oddOf(f,mine.card.sel2))):cote(oddOf(f,b.sel));
       const mk=`${i===mine.captain?' <span class="chip gold clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''}`;
       /* ⚠️ v7.56 — L'HEURE DU MATCH MANQUAIT UNE FOIS LES PRONOS VALIDÉS (signalé par Hervé). Elle
          est affichée pendant la saisie, puis disparaissait de la liste des pronos verrouillés —
@@ -6211,7 +6218,7 @@ function viewWait(dayLbl){
          déplacer, et le nom du match retrouve toute la largeur.
          ⚠️ Même disposition que sur l'écran d'attente (v8.07) : deux écrans qui montrent la même
          chose doivent la montrer pareil, sinon on relit deux fois pour comparer. */
-      return `<div class="box row"><span class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b>${(info||mk)?`<br>${info}${mk}`:''}</span><span class="chip" style="flex:0 0 auto">${selD} @${cote(oddD)} · ${b.stake}€</span></div>`;
+      return `<div class="box row"><span class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b>${(info||mk)?`<br>${info}${mk}`:''}</span><span class="chip" style="flex:0 0 auto">${selD} @${oddD} · ${b.stake}€</span></div>`;
     }).join("") : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
     const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
     const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
