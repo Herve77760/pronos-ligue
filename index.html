@@ -186,7 +186,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.09";
+const APP_VERSION = "v8.10";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2195,7 +2195,8 @@ const EN={
   "Vendre {c}":"Sell {c}", "À qui ?":"To whom?", "Prix (€) :":"Price (€):",
   "Ce bonus fait déjà l'objet d'une offre en attente.":"This bonus is already part of a pending offer.",
   "Choisis un joueur.":"Pick a player.", "Le bonus n'est plus disponible.":"The bonus is no longer available.",
-  "Capital insuffisant pour cet achat — offre annulée.":"Not enough capital for this purchase — offer cancelled.",
+  "Capital insuffisant pour cet achat.":"Not enough capital for this purchase.",
+  "Cette offre n'existe plus.":"This offer no longer exists.",
   "Impossible : le pari du jour de l'acheteur est déjà validé — attends la résolution.":"Not possible: the buyer's bet for the day is already locked — wait for resolution.",
   "Le vendeur a un pari en cours ce jour-là (il pourrait jouer ce bonus) — échange impossible pour l'instant.":"The seller has a bet in play that day (they might use this bonus) — trade not possible right now.",
   "Acheté ! {c} est à toi (−{b} €).":"Bought! {c} is yours (−€{b}).",
@@ -2405,6 +2406,16 @@ const EN={
   "Un duel n'a pas encore ses 5 matchs — tire-les d'abord.":"One duel doesn't have its 5 matches yet — draw them first.",
   "Les pronos ne sont pas encore clôturés — clôture-les d'abord.":"Picks aren't closed yet — close them first.",
   "Échange impossible pour l'instant":"Exchange not possible right now",
+  "Échange impossible":"Trade not possible",
+  "🚫 Si, au moment d'accepter, l'acheteur n'a plus assez de capital ou si le bonus a quitté la main du vendeur, l'offre est <b>annulée</b> — et <b>les deux joueurs sont prévenus du motif</b>. Personne n'a refusé : c'est la situation qui a changé.":"🚫 If, at the moment of accepting, the buyer no longer has enough capital or the bonus has left the seller's hand, the offer is <b>cancelled</b> — and <b>both players are told why</b>. Nobody refused: the situation changed.",
+  "Ce rachat coûte <b>{p} €</b>. Tu as <b>{c} €</b>, et il faut en garder au moins <b>{m} €</b> pour pouvoir continuer à miser — il te manque <b>{d} €</b>.":"This buyback costs <b>€{p}</b>. You have <b>€{c}</b>, and you must keep at least <b>€{m}</b> to go on betting — you are <b>€{d}</b> short.",
+  "{a} n'a plus assez de capital : l'offre est à <b>{p} €</b>, il lui reste <b>{c} €</b>, et chacun doit garder au moins <b>{m} €</b> pour pouvoir miser.":"{a} no longer has enough capital: the offer is <b>€{p}</b>, they have <b>€{c}</b> left, and everyone must keep at least <b>€{m}</b> to go on betting.",
+  "Le bonus <b>{c}</b> n'est plus dans la main du vendeur : il l'a joué ou cédé entre-temps.":"The <b>{c}</b> bonus is no longer in the seller's hand: they played it or passed it on in the meantime.",
+  "➡️ L'offre a été <b>annulée</b> : elle n'est plus en attente. L'autre joueur en est informé lui aussi. Tu peux en proposer une nouvelle quand tu veux.":"➡️ The offer has been <b>cancelled</b>: it is no longer pending. The other player is told as well. You can make a new one whenever you like.",
+  "Échange annulé : {a} n'avait plus assez de capital pour {c} ({b} €).":"Trade cancelled: {a} no longer had enough capital for {c} (€{b}).",
+  "Échange annulé : {c} n'était plus disponible.":"Trade cancelled: {c} was no longer available.",
+  "Annulé : {a} n'avait plus assez de capital pour ton offre ({c} · {b} €).":"Cancelled: {a} no longer had enough capital for your offer ({c} · €{b}).",
+  "Annulé : {c} n'était plus disponible ({b} €).":"Cancelled: {c} was no longer available (€{b}).",
   "Tes pronos du jour sont validés : tu peux négocier dès maintenant, mais l'échange ne se <b>conclura qu'après la résolution</b> de la journée.":"Your picks for the day are locked in: you can negotiate right now, but the trade will only <b>go through after the day is resolved</b>.",
   "Ton pari du jour est validé : l'échange ne pourra se conclure qu'<b>après la résolution</b>. Les offres restent en attente d'ici là.":"Your bet for the day is locked in: the trade can only go through <b>after the day is resolved</b>. Offers stay pending until then.",
   "<b>Le détenteur du bonus a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.":"<b>The bonus's owner has already confirmed today's bet.</b> They could still play it today, so the exchange is blocked.",
@@ -3817,7 +3828,16 @@ async function refresh(){
     players = await q(db.from("players").select("*").eq("league_id",lid).order("join_order"));
     if(stale()) return;
     try{ trades = await q(db.from("trades").select("*").eq("league_id",lid).eq("status","pending")); }catch(e){ trades=[]; } // rachats en attente (badge 🤝 + écran)
-    try{ myResolvedOut = await q(db.from("trades").select("*").eq("league_id",lid).eq("from_player",S.myId).in("status",["accepted","refused"]).order("resolved_at",{ascending:false}).limit(20)); }catch(e){ myResolvedOut=[]; } // réponses à MES offres (acheteur prévenu)
+    /* Réponses à MES offres. ⚠️ v8.10 — `cancelled` AJOUTÉ (signalé par Hervé). Sans lui, une offre
+       annulée par le SERVEUR (l'autre n'avait plus le capital, ou le bonus avait quitté sa main)
+       disparaissait de « Offres envoyées » sans un mot : le proposeur ne pouvait pas savoir si on
+       l'avait refusé, si le jeu avait bugué, ou s'il avait rêvé. Une annulation irréversible,
+       décidée par le serveur, annoncée à personne.
+       ⚠️ On filtre ensuite sur `reason` : une offre que J'AI retirée moi-même est `cancelled` sans
+       motif, et se remettre en scène « ton offre a été annulée » serait du bruit. Le motif est
+       précisément ce qui distingue subi de voulu (cf. MIGRATION-echange-refus.sql). */
+    try{ myResolvedOut = await q(db.from("trades").select("*").eq("league_id",lid).eq("from_player",S.myId).in("status",["accepted","refused","cancelled"]).order("resolved_at",{ascending:false}).limit(20)); }catch(e){ myResolvedOut=[]; }
+    myResolvedOut = (myResolvedOut||[]).filter(o=> o.status!=="cancelled" || !!o.reason);
     if(stale()) return;
     // Ligue amis en LOBBY sans options de gage (créée avant v6.21 ou via un onglet resté en cache) :
     // l'organisateur les tire dès qu'il y a ≥2 joueurs → le vote du gage devient dispo aux inscriptions.
@@ -9309,6 +9329,13 @@ function notifyTrades(){ const nm=p=>((p&&p.name)||'?');
     const cn=CARDS[o.card_id]?t(CARDS[o.card_id].n):o.card_id; const other=pById(o.to_player); let body;
     if(o.status==="accepted") body = o.kind==="sell" ? t("{a} a accepté : {c} vendue (+{b} €).",{a:nm(other),b:Math.round(o.price),c:cn})
                                                       : t("{a} a accepté : {c} est à toi (−{b} €).",{a:nm(other),b:Math.round(o.price),c:cn});
+    /* ⚠️ v8.10 — LA BRANCHE `cancelled` DOIT EXISTER. `myResolvedOut` inclut désormais les offres
+       annulées par le serveur ; sans ce cas, elles seraient tombées dans le `else` et auraient
+       annoncé « {a} a refusé ton offre » — un mensonge, et le pire possible : le joueur en aurait
+       voulu à un adversaire qui n'a rien refusé du tout. */
+    else if(o.status==="cancelled") body = (o.reason==="capital_insuffisant")
+      ? t("Échange annulé : {a} n'avait plus assez de capital pour {c} ({b} €).",{a:nm(other),b:Math.round(o.price),c:cn})
+      : t("Échange annulé : {c} n'était plus disponible.",{c:cn});
     else body = t("{a} a refusé ton offre pour {c}.",{a:nm(other),c:cn});
     if(o.reply) body += " 💬 "+o.reply;
     notify(t("Rachat 🤝"), body); }); }
@@ -9319,8 +9346,13 @@ async function hasBetForDay(pid, day){
 // c'est ce qui permet de replacer le transfert au bon point du classement historique et de la
 // courbe (cf. MIGRATION-trades-day.sql). Si la colonne n'existe pas encore en base, l'update
 // échouerait en bloc → on retente sans, pour ne pas perdre le changement de statut.
-async function markTrade(id,st,reply,jour){ const u={status:st,resolved_at:new Date().toISOString()}; if(reply) u.reply=reply;
-  try{ const uu=(jour!=null)?Object.assign({day:jour},u):u; await q(db.from("trades").update(uu).eq("id",id)); }
+// ⚠️ v8.10 — `motif` (5e argument) suit la même logique de repli que `jour` : la colonne
+// `trades.reason` n'existe qu'après MIGRATION-echange-refus.sql, et un update qui la nomme
+// échouerait EN BLOC sur une base non migrée — on perdrait le changement de statut, c'est-à-dire
+// l'essentiel. Second essai sans les colonnes optionnelles. N'est renseigné que par le chemin de
+// repli : sur une base migrée c'est le SERVEUR qui écrit le motif, et lui seul fait foi.
+async function markTrade(id,st,reply,jour,motif){ const u={status:st,resolved_at:new Date().toISOString()}; if(reply) u.reply=reply;
+  try{ const uu=Object.assign({},u); if(jour!=null) uu.day=jour; if(motif) uu.reason=motif; await q(db.from("trades").update(uu).eq("id",id)); }
   catch(e){ try{ await q(db.from("trades").update(u).eq("id",id)); }catch(e2){} } }
 function journeesRestantes(){ return Math.max(0,((L&&L.num_days)||0)-((L&&L.current_day)||0)); }
 function cardEngaged(cardId){ return trades.some(x=>x.status==="pending" && x.card_id===cardId); } // UI : bonus déjà dans une offre en attente
@@ -9342,7 +9374,16 @@ function viewTrade(){
   // Réponses à MES offres
   if(myResolvedOut.length){ h+=`<div class="box"><b class="mini">📨 ${t("Réponses à tes offres")}</b>`;
     myResolvedOut.slice(0,6).forEach(o=>{ const other=pById(o.to_player); const acc=o.status==="accepted";
-      h+=`<div class="mini${acc?'':' muted'}" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${acc?'✅':'✖️'} ${t("{a} a {s} ton offre ({c} · {b} €).",{a:nm(other),s:acc?t("accepté"):t("refusé"),c:clbl(o.card_id),b:Math.round(o.price)})}${o.reply?`<div class="mini muted" style="margin-top:2px">💬 ${esc(o.reply)}</div>`:''}</div>`; });
+      // ⚠️ v8.10 — TROIS ISSUES, PAS DEUX. Un `accepté / refusé` binaire faisait passer une offre
+      // ANNULÉE PAR LE SERVEUR pour un refus de l'adversaire : on accusait quelqu'un qui n'avait
+      // rien décidé. C'est la trace durable de l'événement — la notification, elle, passe.
+      const ann=(o.status==="cancelled");
+      const ligne = ann
+        ? ((o.reason==="capital_insuffisant")
+            ? t("Annulé : {a} n'avait plus assez de capital pour ton offre ({c} · {b} €).",{a:nm(other),c:clbl(o.card_id),b:Math.round(o.price)})
+            : t("Annulé : {c} n'était plus disponible ({b} €).",{c:clbl(o.card_id),b:Math.round(o.price)}))
+        : t("{a} a {s} ton offre ({c} · {b} €).",{a:nm(other),s:acc?t("accepté"):t("refusé"),c:clbl(o.card_id),b:Math.round(o.price)});
+      h+=`<div class="mini${acc?'':' muted'}" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${acc?'✅':(ann?'🚫':'✖️')} ${ligne}${o.reply?`<div class="mini muted" style="margin-top:2px">💬 ${esc(o.reply)}</div>`:''}</div>`; });
     h+=`</div>`; }
   // Offres reçues — j'accepte ou refuse (avec un petit mot)
   h+=`<div class="box"><b class="mini">📥 ${t("Offres reçues")}</b>`;
@@ -9501,8 +9542,40 @@ const TRADE_CODES={
   pas_destinataire:   "Seul le destinataire de l'offre peut l'accepter.",
   joueur_introuvable: "Offre introuvable.",
   bonus_parti:        "Le bonus n'est plus disponible.",
-  capital_insuffisant:"Capital insuffisant pour cet achat — offre annulée."
+  capital_insuffisant:"Capital insuffisant pour cet achat.",
+  // ⚠️ v8.10 — `introuvable` MANQUAIT alors que la fonction le renvoie (offre supprimée entre
+  // l'affichage et le clic). Il retombait sur « Une erreur est survenue », qui laisse croire à
+  // une panne au lieu d'une course banale.
+  introuvable:        "Cette offre n'existe plus."
 };
+// Les deux seuls motifs qui ANNULENT l'offre côté serveur — définitif, il n'y a rien à réessayer.
+const TRADE_ANNULE=["capital_insuffisant","bonus_parti"];
+/* Refus d'un échange : fenêtre à FERMETURE MANUELLE, jamais un toast (signalé par Hervé).
+   ⚠️ Le toast était le mauvais support ici pour une raison précise : `capital_insuffisant` et
+   `bonus_parti` ne signalent pas un incident, ils annoncent que L'OFFRE VIENT D'ÊTRE ANNULÉE.
+   Un message qui s'efface tout seul pour dire « c'est perdu, définitivement » laisse le joueur
+   devant un écran où l'offre a simplement disparu.
+   On donne aussi les CHIFFRES : « capital insuffisant » sans montant n'apprend rien — il manque
+   combien, et à qui ? Le capital lu est celui d'APRÈS le refresh, donc celui qui a fait échouer
+   l'échange. */
+function tradeRefus(code,o,price){
+  const annule=TRADE_ANNULE.indexOf(code)>=0;
+  const nomC=CARDS[o.card_id]?t(CARDS[o.card_id].n):o.card_id;
+  const buyerId=(o.kind==="sell")?o.to_player:o.from_player;
+  const moi=(buyerId===S.myId), ach=pById(buyerId), cap=Math.round((ach&&ach.capital)||0);
+  let corps=`<div class="mini" style="text-align:left">${t(TRADE_CODES[code]||"⚠️ Une erreur est survenue")}</div>`;
+  if(code==="capital_insuffisant"){
+    corps=`<div class="mini" style="text-align:left">${ moi
+      ? t("Ce rachat coûte <b>{p} €</b>. Tu as <b>{c} €</b>, et il faut en garder au moins <b>{m} €</b> pour pouvoir continuer à miser — il te manque <b>{d} €</b>.",
+          {p:price,c:cap,m:TRADE_MIN_CAP,d:Math.max(0,Math.round(price+TRADE_MIN_CAP-cap))})
+      : t("{a} n'a plus assez de capital : l'offre est à <b>{p} €</b>, il lui reste <b>{c} €</b>, et chacun doit garder au moins <b>{m} €</b> pour pouvoir miser.",
+          {a:esc((ach&&ach.name)||"?"),p:price,c:cap,m:TRADE_MIN_CAP}) }</div>`;
+  } else if(code==="bonus_parti"){
+    corps=`<div class="mini" style="text-align:left">${t("Le bonus <b>{c}</b> n'est plus dans la main du vendeur : il l'a joué ou cédé entre-temps.",{c:esc(nomC)})}</div>`;
+  }
+  if(annule) corps+=`<div class="mini muted" style="text-align:left;margin-top:10px">${t("➡️ L'offre a été <b>annulée</b> : elle n'est plus en attente. L'autre joueur en est informé lui aussi. Tu peux en proposer une nouvelle quand tu veux.")}</div>`;
+  infoModal(annule?"🚫":"⚠️", t("Échange impossible"), corps);
+}
 // « la fonction n'existe pas » se reconnaît au code PostgREST PGRST202 ou au message de Postgres.
 function tradeServeurAbsent(e){ const m=((e&&e.message)||String(e||"")); return /PGRST202|does not exist|Could not find the function/i.test(m); }
 async function acceptTrade(id){
@@ -9520,7 +9593,9 @@ async function acceptTrade(id){
     } else if(code==="pari_acheteur"){
       tradeBloque(t("<b>L'acheteur a déjà validé son pari du jour.</b> L'échange est donc bloqué jusqu'à la résolution.")); return;
     } else {
-      toast(t(TRADE_CODES[code]||"⚠️ Une erreur est survenue"));
+      // ⚠️ refresh() D'ABORD, fenêtre ENSUITE : le capital affiché dans le message doit être celui
+      // qui a fait échouer l'échange, pas celui qu'on avait en mémoire avant l'appel.
+      await refresh(); tradeRefus(code,o,price); return;
     }
     await refresh(); return;
   }catch(e){
@@ -9531,9 +9606,11 @@ async function acceptTrade(id){
   try{
     const owner=await q(db.from("players").select("id,capital,hand").eq("id",ownerId).single());
     const buyer=await q(db.from("players").select("id,capital,hand").eq("id",buyerId).single());
-    if(!owner||!buyer){ toast(t("Offre introuvable.")); await refresh(); return; }
-    if(!(owner.hand||[]).includes(o.card_id)){ toast(t("Le bonus n'est plus disponible.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
-    if((buyer.capital||0)-price < TRADE_MIN_CAP){ toast(t("Capital insuffisant pour cet achat — offre annulée.")); await markTrade(id,"cancelled",reply); await refresh(); return; }
+    // ⚠️ Chemin de REPLI (fonction serveur absente). Il doit dire exactement la même chose que le
+    // chemin normal, sinon le joueur verrait un message selon que sa base a été migrée ou non.
+    if(!owner||!buyer){ await refresh(); tradeRefus("joueur_introuvable",o,price); return; }
+    if(!(owner.hand||[]).includes(o.card_id)){ await markTrade(id,"cancelled",reply,null,"bonus_parti"); await refresh(); tradeRefus("bonus_parti",o,price); return; }
+    if((buyer.capital||0)-price < TRADE_MIN_CAP){ await markTrade(id,"cancelled",reply,null,"capital_insuffisant"); await refresh(); tradeRefus("capital_insuffisant",o,price); return; }
     if(await hasBetForDay(ownerId, L.current_day)){ tradeBloque(t("<b>Le détenteur du bonus a déjà validé son pari du jour.</b> Il pourrait encore la jouer aujourd'hui, l'échange est donc bloqué.")); return; }
     if(await hasBetForDay(buyerId, L.current_day)){ tradeBloque(t("<b>L'acheteur a déjà validé son pari du jour.</b> L'échange est donc bloqué jusqu'à la résolution.")); return; }
     const oHand=(owner.hand||[]).filter(x=>x!==o.card_id); const bHand=[...(buyer.hand||[]), o.card_id];
@@ -9682,6 +9759,7 @@ function viewRulesFull(){
      ${t("Tu peux aussi <b>vendre</b> une de tes bonus à un joueur (il paie, il la reçoit) — pratique pour te refaire du capital.")}<br>
      ${t("⏳ <b>Quand ?</b> Tu peux <b>regarder les bonus des autres, proposer et mettre en vente à tout moment</b> — y compris une fois tes pronos validés, c'est même là qu'on a le temps de négocier. En revanche l'échange ne se <b>conclut</b> qu'entre deux journées : tant que le vendeur ou l'acheteur a un pari validé, l'offre reste <b>en attente</b> et devient acceptable dès la résolution (ça protège la règle du capital jamais négatif et évite qu'un bonus soit vendu et joué en même temps).")}<br>
      ${t("On n'échange que des bonus <b>encore en main</b>, et l'acheteur doit garder au moins <b>{a} €</b> pour pouvoir miser.",{a:TRADE_MIN_CAP})}<br>
+     ${t("🚫 Si, au moment d'accepter, l'acheteur n'a plus assez de capital ou si le bonus a quitté la main du vendeur, l'offre est <b>annulée</b> — et <b>les deux joueurs sont prévenus du motif</b>. Personne n'a refusé : c'est la situation qui a changé.")}<br>
      ${t("Tu es <b>prévenu</b> quand ton offre est acceptée ou refusée, et le bouton 🤝 signale les offres qu'on t'a faites.")}<br>
      <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i>`)}
 
