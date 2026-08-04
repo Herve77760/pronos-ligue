@@ -205,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.28";
+const APP_VERSION = "v8.29";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -7400,9 +7400,17 @@ function waitingResultsBody(d){
             ${[[gId,mine],[dId,false]].map(([pid,estMoi])=>{
                 const b=pariDe(pid), moi=(pid===S.myId);
                 const nom=moi?t("Toi"):esc((pById(pid)||{}).name||'?');
+                /* ⚠️ v8.29 (demandé par Hervé) — LE CADENAS DEVIENT CLIQUABLE. L'option 🕵️ était
+                   proposée sur l'onglet Pronos et nulle part ici, alors que c'est SUR CET ÉCRAN
+                   qu'on bute dessus. Toucher un cadenas est le geste que les gens tentent
+                   spontanément ; il ne menait à rien.
+                   ⚠️ ZÉRO PIXEL AJOUTÉ, et c'est le but : le cadenas est déjà là, on lui donne
+                   seulement une destination. Reprendre le `noteBox` doré de l'onglet Pronos aurait
+                   coûté cinq lignes pour répéter une explication que la page donne déjà.
+                   `event.stopPropagation()` : la cellule vit dans des blocs cliquables ailleurs. */
                 const contenu=(moi||voirAdv)
                   ? ligne(b,b?b.captain:-1,f,i)
-                  : `<span class="mini" style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`;
+                  : `<span class="mini clik" style="color:var(--muted);letter-spacing:2px" title="${t("Fonction premium")}" onclick="event.stopPropagation();showPremiumInfo('voiradv')">🔒 •••</span>`;
                 return `<div>${cell(moi,`<div class="mini muted">${nom}</div>${contenu}`)}</div>`; }).join('')}
           </div></div>`;
         /* ⚠️ v7.39 — LE SÉPARATEUR ÉTAIT INVISIBLE EN THÈME CLAIR. Il était écrit en blanc à 4 %
@@ -7456,7 +7464,15 @@ function waitingResultsBody(d){
                à l'écran mais ne commandent rien en commun. */''}
           ${autresOuvert?`<div class="mini muted" style="margin-top:8px">${hasOpt('voiradv')
               ? t("🕵️ Grâce à ton option <b>Voir l'adversaire</b>, tu vois aussi les pronos des autres duels.")
-              : t("Les pronos des autres duels sont masqués — l'option 🕵️ <b>Voir l'adversaire</b> les révèle, comme ceux de ton adversaire.")}</div>${autresD.map(affiche).join('')}`:''}</div>`;
+              : t("Les pronos des autres duels sont masqués — l'option 🕵️ <b>Voir l'adversaire</b> les révèle, comme ceux de ton adversaire.")+' '+premBadge('voiradv')
+              /* ⚠️ v8.29 — LA PASTILLE, PAS UNE CARTE. `premBadge` est une puce en ligne de quelques
+                 pixels ; elle se glisse au bout de la phrase qui explique déjà ce qui manque.
+                 Elle ne s'affiche que SANS l'option (elle est dans la branche `else`) : proposer
+                 d'acheter ce qu'on possède déjà est le meilleur moyen de faire ignorer l'encart.
+                 ⚠️ Elle complète le cadenas cliquable sans faire doublon : le cadenas n'est
+                 découvrable qu'au toucher, la pastille se voit. L'un sans l'autre laisserait
+                 l'option invisible, ou visible mais seulement après avoir déplié ce bloc. */
+              }</div>${autresD.map(affiche).join('')}`:''}</div>`;
     }
     // Source injoignable (quota API épuisé, réseau…) : on le DIT. Sans ce message, l'écran n'affiche
     // que des horloges et le joueur croit que les matchs n'ont pas été joués (signalé par Hervé).
