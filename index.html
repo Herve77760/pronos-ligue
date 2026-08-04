@@ -205,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.26";
+const APP_VERSION = "v8.28";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1116,6 +1116,14 @@ let poolCache=null, poolCacheAt=0; const POOL_TTL=30*60*1000; // 30 min (mémoir
 const POOL_SHARED_TTL   = 3*24*60*60*1000; // 3 jours — durée de vie de la réserve commune
 const HARVEST_WINDOW_D  = 8;               // jours d'avance ramassés (couvre les 3 jours de validité + marge)
 const SCORES_SHARED_TTL = 2*60*60*1000;    // 2 h — fréquence de mise à jour d'un championnat en cours
+/* ⚠️ v8.28 (relevé par Hervé) — DEUX DURÉES, PARCE QUE LE CACHE GARDE UNE RÉPONSE, PAS UN RÉSULTAT.
+   Une seule durée servait deux choses opposées : conserver un score (définitif, 2 h ou 2 jours, peu
+   importe) et conserver un « ce match n'est pas encore terminé » (provisoire, périmé en minutes).
+   Vécu sur Celtic–Dundee : appel à 22h16, coup de sifflet à 22h20. La réponse « pas terminé » est
+   restée en cache jusqu'à 00h16 — quatre minutes de retard sur l'appel ont gelé l'information deux
+   heures, pour TOUT LE MONDE. Une minute plus tard, le score s'affichait aussitôt. C'est ce qui
+   rend le symptôme si irrégulier : parfois instantané, parfois deux heures. */
+const SCORES_PENDING_TTL = 15*60*1000;     // 15 min — tant qu'un résultat ATTENDU manque encore
 const MATCH_DUREE_MIN   = 105;             // min. après le coup d'envoi avant d'espérer un résultat
 const CLAIM_TTL         = 2*60*1000;       // 2 min — si le client qui a pris le jeton meurt, un autre reprend
 
@@ -1212,10 +1220,23 @@ async function fetchRealResults(sportKeys){
 // marche pour la NBA à 3h du matin comme pour la Ligue 1 à 21h, sans table à maintenir.
 async function fetchRealResultsCached(sportKeys, enCours){
   const out={}; const aChercher=[];
-  for(const k of sportKeys){ const c=await cacheRead("scores:"+k, SCORES_SHARED_TTL);
+  for(const k of sportKeys){
+    /* ⚠️ v8.28 — LA DURÉE DU CACHE DÉPEND DE CE QU'ON ATTEND, plus d'une constante unique.
+       `enCours[k]` = coup d'envoi le plus ancien parmi les matchs SANS résultat de ce championnat.
+       S'il remonte à plus de MATCH_DUREE_MIN, un score est ATTENDU et ne nous est pas parvenu :
+       la copie en cache est donc suspecte, on ne lui accorde que 15 min.
+       ⚠️ LA CONDITION SUR LE COUP D'ENVOI EST LE GARDE-FOU DES CRÉDITS. Sans elle, un championnat
+       dont le prochain match est demain contiendrait en permanence des « pas terminé » et serait
+       réinterrogé toutes les 15 min pour un match pas encore commencé. Ici le cache court ne vit
+       que dans la FENÊTRE D'INCERTITUDE — entre l'heure où le match devrait être fini et celle où
+       le fournisseur publie le score. En pratique 10 à 40 min par match.
+       ⚠️ ET IL S'ÉTEINT SEUL, grâce à la v8.27 : dès qu'un résultat est enregistré, son match sort
+       d'`enCours`, donc le championnat repasse en cache long sans que personne n'ait à y penser. */
+    const ko=enCours && enCours[k];
+    const attendu = (ko!=null && Date.now() >= ko + MATCH_DUREE_MIN*60000);
+    const c=await cacheRead("scores:"+k, attendu?SCORES_PENDING_TTL:SCORES_SHARED_TTL);
     if(c){ Object.assign(out,c); continue; }
     // Trop tôt pour espérer un résultat → on ne dépense pas les 2 crédits. On ressert ce qu'on a.
-    const ko=enCours && enCours[k];
     if(ko!=null && Date.now() < ko + MATCH_DUREE_MIN*60000){
       const vieux=await cacheRead("scores:"+k, Infinity); if(vieux) Object.assign(out,vieux); continue; }
     aChercher.push(k); }
@@ -1263,17 +1284,47 @@ async function resolveRealIfReady(){
   const nowT=Date.now();
   for(const d of realDuels){ let touched=false;
     const nf=(d.fixtures||[]).map(f=>{ if(!f||!f.evId||f.canceled) return f;
+      /* ⚠️ v8.27 — UN MATCH DONT LE RÉSULTAT EST DÉJÀ ENREGISTRÉ N'EST PLUS ANNULABLE.
+         Ce garde-fou n'existait pas et n'était pas nécessaire : avant, `res` n'était écrit qu'à la
+         résolution, donc la journée était finie et cette boucle ne tournait plus. Maintenant qu'un
+         résultat s'écrit DÈS QU'IL TOMBE, un match joué peut rester des heures dans une journée
+         non résolue — et l'auto-annulation l'aurait marqué `canceled:true, res:null` en dépassant
+         STALE_MATCH_H, EFFAÇANT un résultat connu. La mise aurait été rendue à tort.
+         ⚠️ Et le cas n'a rien de théorique : il suffit que le dernier match de la journée soit le
+         lendemain, ce qui est courant en formule classique (48-96 h). */
+      if(f.res) return f;
       const r=results[f.evId]; if(r&&r.completed) return f;
       const t0=f.commence?new Date(f.commence).getTime():NaN;
       if(!isNaN(t0) && nowT > t0 + STALE_MATCH_H*3600000){ touched=true; return Object.assign({},f,{canceled:true,res:null}); }
       return f; });
     if(touched){ try{ await q(db.from("duels").update({fixtures:nf}).eq("id",d.id)); d.fixtures=nf; }catch(e){} } }
+  /* ⚠️ v8.27 (demandé par Hervé) — CHAQUE RÉSULTAT EST ENREGISTRÉ DÈS QU'IL TOMBE.
+     Avant, l'écriture attendait que TOUS les matchs de la journée soient finis : un match joué la
+     veille au soir restait affiché « 🏁 terminé · score en attente » jusqu'à ce que le dernier
+     match de la journée se termine, parfois le lendemain. Le résultat existait chez le
+     fournisseur, l'app le recevait à chaque sondage — et le jetait.
+     ⚠️ CE N'EST PAS UNE AVANCE SUR LA RÉSOLUTION : `resolveDay()` attend toujours `allDone`. On
+     sépare deux choses qui étaient confondues — CONNAÎTRE un résultat et SOLDER la journée.
+     ⚠️ AUCUNE FUITE DE L'OPTION ⏱️ : vérifié avant d'écrire cette ligne, ni l'écran d'attente ni
+     l'écran Pronos ne lisent `f.res` — seuls `runEngine`, `resolveDay` et `recapBody` le font, et
+     ce dernier n'est atteignable que sur une journée déjà résolue. Le direct reste payant.
+     ⚠️ On n'écrit QUE si quelque chose a changé (`touched`) : sans ça, chaque sondage réécrirait
+     les mêmes fixtures toutes les 20 minutes, pour rien. */
+  for(const d of realDuels){ let touched=false;
+    const fx=(d.fixtures||[]).map(f=>{ if(!f||!f.evId||f.canceled||f.res) return f;
+      const r=results[f.evId];
+      if(r&&r.completed&&r.res){ touched=true; return Object.assign({},f,{res:r.res}); }
+      return f; });
+    if(touched){ try{ await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); d.fixtures=fx; }catch(e){} } }
   let allDone=true;
-  // Un match ANNULÉ compte comme terminé : sinon une journée resterait bloquée indéfiniment.
-  realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId&&!f.canceled){ const r=results[f.evId]; if(!r||!r.completed) allDone=false; } }));
+  /* Un match ANNULÉ compte comme terminé : sinon une journée resterait bloquée indéfiniment.
+     ⚠️ `f.res ||` AJOUTÉ EN v8.27, et ce n'est pas cosmétique. L'API ne renvoie que les 3 derniers
+     jours (`daysFrom=3`) : passé ce délai un match DISPARAÎT de la réponse, `results[f.evId]`
+     devient introuvable et la journée ne se serait jamais résolue. Tant que le résultat n'était
+     écrit qu'à la toute fin, rien ne le rattrapait ; maintenant qu'il persiste, il fait foi. */
+  realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId&&!f.canceled){ const r=results[f.evId];
+    if(!f.res && (!r||!r.completed)) allDone=false; } }));
   if(!allDone) return; // il reste des matchs en cours
-  for(const d of realDuels){ const fx=d.fixtures.map(f=>{ if(f&&f.evId){ const r=results[f.evId]; if(r&&r.res) return Object.assign({},f,{res:r.res}); } return f; });
-    try{ await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); }catch(e){} }
   resolveDay();
 }
 // Échéances du jour courant. sel = fin sélection ; bet = clôture des paris.
@@ -9469,7 +9520,16 @@ function isComposing(){
    écrits. Perdre ce qu'on est en train de taper est le défaut le moins pardonnable. */
 function saisieEnCours(){ const a=document.activeElement;
   return !!(a && (a.tagName==="INPUT" || a.tagName==="TEXTAREA" || a.isContentEditable)); }
-function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings")&&!isComposing()&&!saisieEnCours()) refresh(); },4000); }
+/* ⚠️ v8.28 (relevé par Hervé) — « results » AJOUTÉ, et c'était l'oubli le plus coûteux.
+   Le sondage ne tournait que sur Pronos et Classement : l'écran RÉSULTATS, le seul où l'on attend
+   volontairement quelque chose, était le seul à ne jamais se mettre à jour. Un joueur qui fixait
+   cet écran après un match pouvait attendre indéfiniment — `refresh()` n'étant jamais appelé, la
+   vérification des scores ne repartait même pas, et son compteur de 20 min n'avançait pas.
+   Il fallait quitter l'écran et y revenir pour voir le score : le geste le moins intuitif possible.
+   ⚠️ AUCUN RISQUE DE REMONTÉE EN HAUT DE PAGE : le `scrollTo(0,0)` de `render()` est conditionné à
+   un changement de SIGNATURE d'écran (vue, statut, journée…), et aucune de ces valeurs ne bouge
+   pendant un sondage sur cet écran. Vérifié avant d'ajouter la vue, pas après. */
+function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if((S.view==="game"||S.view==="standings"||S.view==="results")&&!isComposing()&&!saisieEnCours()) refresh(); },4000); }
 // === NAVIGATION — une pile, PAS une case unique =======================================
 // v4.19. Avant : S.prevView, UNE seule case partagée par rules/rulesfull/settings/coulisses.
 // accueil → règles → paramètres écrasait "leagues" par "rules" → le retour des paramètres
