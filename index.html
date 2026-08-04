@@ -205,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.22";
+const APP_VERSION = "v8.23";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1425,6 +1425,7 @@ let standHist=false;   // ligue terminée : afficher le classement journée par 
 let STAND_H2H=null, STAND_H2H_LG=null;
 let palmares=null, adminData=null, palmOpen="", myStatsData=null;
 let adminUsers=null, adminPwd="";
+let adminConnex=null;   // ⏳ mesure temporaire des connexions — supprimer avec son bloc
 let adminReports=null, repOpen="";   // remontées des joueurs (v6.98) + n° de celle dépliée
 let admOpen="";                      // chapitre ouvert de l'écran Admin (v7.02)
 let endStats=null; // bilan de fin de ligue (calculé une fois quand la ligue est terminée)
@@ -8788,6 +8789,17 @@ function toggleAdm(k){ admOpen=(admOpen===k)?"":k; render(); }
 async function adminLoadUsers(){ const el=$("adminPwd"); const pwd=el?el.value:""; if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
   try{ adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:pwd})); adminPwd=pwd; showErr(""); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect.":("Erreur : "+e.message)); } }
+/* ⏳ MESURE TEMPORAIRE DES CONNEXIONS — chargement (bloc à supprimer, voir le repère ⏳ en fin
+   de fichier et SUPPRIMER-MESURE-CONNEXIONS.sql).
+   ⚠️ Réutilise `adminPwd` déjà saisi dans « Gestion des comptes » : la fonction serveur revérifie
+   le mot de passe à chaque appel, un jeton volé ne suffit pas. */
+async function adminLoadConnex(){
+  const pwd=adminPwd||(($("adminPwd")||{}).value||"");
+  if(!pwd){ showErr("Entre ton mot de passe admin dans « Gestion des comptes »."); return; }
+  try{ adminConnex=await q(db.rpc("admin_connexions",{p_admin_id:AUTH.id,p_admin_password:pwd,p_jours:14})); adminPwd=pwd; showErr(""); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect."
+            :(/schema cache|function/i.test(e.message)?"Mesure non installée — lance MESURE-CONNEXIONS-TEMPORAIRE.sql."
+            :("Erreur : "+e.message))); } }
 // Self-service : un utilisateur CONNECTÉ change SON mot de passe sans l'ancien (session active).
 /* ⚠️ v7.87 — CHANGER SON MOT DE PASSE EXIGE MAINTENANT L'ANCIEN.
    Avant, `updateUser({password})` ne demandait qu'une SESSION OUVERTE : trente secondes sur un
@@ -9237,6 +9249,26 @@ function viewAdmin(){
         </div>
         ${corps}`; })()}
     `;
+  /* ⏳ MESURE TEMPORAIRE DES CONNEXIONS — chapitre à supprimer avec le reste du bloc.
+     ⚠️ L'AVERTISSEMENT EN TÊTE N'EST PAS DÉCORATIF. C'est le seul endroit que tu reverras
+     régulièrement d'ici l'ouverture : il rappelle, à chaque consultation, que ce dispositif est
+     provisoire et où se trouve le bouton de sortie. Un « provisoire » sans rappel visible devient
+     un permanent par simple oubli.
+     ⚠️ La durée mesure le temps AU PREMIER PLAN, pas l'onglet ouvert (cf. `mesureConnexionDebut`).
+     Elle est juste à la minute près : la fermeture d'un onglet ne prévient pas. */
+  const dur=s=>{ s=+s||0; const h=Math.floor(s/3600), m=Math.round((s%3600)/60);
+    return h?`${h} h ${String(m).padStart(2,'0')}`:`${m} min`; };
+  const cConnex=`<div class="box mini" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10)">
+      ⏳ <b class="gold">Dispositif temporaire</b> — installé pour la phase de test.
+      <div class="mini muted" style="margin-top:3px">À retirer avant l'ouverture publique : lancer
+      <b>SUPPRIMER-MESURE-CONNEXIONS.sql</b>, puis supprimer les blocs ⏳ dans index.html.</div></div>
+    ${!adminConnex?`<button class="btn sm" onclick="adminLoadConnex()">📥 Charger les connexions (14 jours)</button>`
+      :(!adminConnex.length?`<div class="box mini muted">Aucune connexion enregistrée sur la période.</div>`
+      :`<div class="box" style="padding:4px 10px;overflow-x:auto"><table>
+          <tr><th>Jour</th><th>Joueur</th><th style="text-align:right">Sessions</th><th style="text-align:right">Temps</th></tr>
+          ${adminConnex.map(r=>`<tr><td class="mini">${esc(String(r.jour))}</td><td class="mini">${esc(r.username||'?')}</td><td class="num muted">${r.sessions}</td><td class="num"><b>${dur(r.secondes)}</b></td></tr>`).join("")}
+        </table></div>
+        <button class="btn ghost sm" onclick="adminConnex=null;render()">↻ Recharger</button>`)}`;
   const cMoi=`<div class="mini muted" style="margin-bottom:8px">Tu es connecté : tu peux changer <b>ton propre</b> mot de passe sans connaître l'ancien.</div>
       <button class="btn ghost" style="border-color:var(--gold);color:var(--gold)" onclick="changeMyPassword()">🔑 Changer MON mot de passe</button>`;
   const cComptes=`<label class="mini muted">Ton mot de passe admin</label>
@@ -9304,6 +9336,7 @@ function viewAdmin(){
     ${sec("jeu","🃏 Bonus, gages & récompenses", a.cardsPlayed+" bonus", cJeu)}
     ${sec("remontees","✉️ Remontées des joueurs", (adminReports?(adminReports.length+" au total"+(nouv?" · "+nouv+" 🆕":"")):"non chargées"), cRemontees)}
     ${sec("comptes","👤 Gestion des comptes", (adminUsers?adminUsers.length+" comptes":"non chargés"), cComptes)}
+    ${sec("connex","⏳ Connexions (mesure temporaire)", (adminConnex?adminConnex.length+" lignes":"non chargées"), cConnex)}
     ${sec("moi","🔑 Mon compte admin", "", cMoi)}`;
 }
 
@@ -10179,6 +10212,44 @@ function showUpdateBanner(){
   document.body.appendChild(b);
 }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkForUpdate(); });
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   ⏳ MESURE TEMPORAIRE DES CONNEXIONS — DÉBUT DU BLOC À SUPPRIMER AVANT L'OUVERTURE
+   Demandée par Hervé le 2026-08-04, POUR LA PHASE DE TEST UNIQUEMENT : voir qui s'est connecté
+   tel jour et combien de temps, afin de repérer ce qui bloque les gens.
+   ⚠️ TOUT CE QUI LA CONCERNE TIENT ENTRE CE REPÈRE ET « FIN DU BLOC », plus l'écran admin
+   marqué du même ⏳, plus `SUPPRIMER-MESURE-CONNEXIONS.sql`. Rien d'autre dans l'app n'en dépend :
+   c'est la condition pour que le retrait soit mécanique et non une chasse au trésor.
+   ⚠️ ENTIÈREMENT DÉFENSIVE. Si la table n'existe pas — avant la migration, ou après sa
+   suppression — les appels échouent en silence et la mesure s'éteint d'elle-même. L'app ne doit
+   jamais dépendre d'un dispositif provisoire.
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+let mesureId=null, mesureTimer=null, mesureEchecs=0;
+async function mesureConnexionDebut(){
+  if(!AUTH || mesureTimer) return;
+  try{
+    const r=await q(db.from("sessions").insert({user_id:AUTH.id}).select("id"));
+    mesureId=(r&&r[0]&&r[0].id)||null;
+  }catch(e){ return; }              // table absente → on n'arme même pas le minuteur
+  if(!mesureId) return;
+  /* ⚠️ SEULEMENT AU PREMIER PLAN (`visibilityState`). Sans ce test, un onglet oublié ouvert toute
+     la nuit compterait huit heures de « navigation » : on mesurerait la durée de vie d'un onglet,
+     pas le temps passé devant l'app — et le chiffre serait pire qu'absent, il serait crédible.
+     ⚠️ La fermeture ne prévient pas : on perd au plus une minute. Descendre sous 60 s coûterait
+     des écritures pour une précision dont personne n'a l'usage. */
+  mesureTimer=setInterval(async ()=>{
+    try{
+      if(document.visibilityState!=="visible") return;
+      await q(db.from("sessions").update({last_seen:new Date().toISOString()}).eq("id",mesureId));
+      mesureEchecs=0;
+    }catch(e){
+      // La table a pu être supprimée en cours de session (retrait de la mesure). Trois échecs
+      // d'affilée et l'on s'arrête, plutôt que de battre une requête morte toutes les minutes.
+      if(++mesureEchecs>=3 && mesureTimer){ clearInterval(mesureTimer); mesureTimer=null; }
+    }
+  }, 60000);
+}
+/* ⏳ FIN DU BLOC — la suite (écran admin) porte le même repère ⏳ dans viewAdmin(). */
+
 (async function boot(){
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
   // (v7.92 : `initSwipeNav()` retiré ici — voir la note à l'endroit de la définition supprimée.)
@@ -10187,6 +10258,7 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkFor
     if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null }; }
   }catch(e){}
   if(!AUTH){ S.view="auth"; render(); return; }
+  mesureConnexionDebut();   // ⏳ MESURE TEMPORAIRE — retirer avec le bloc du même nom (v8.23)
   const last=loadLast();
   if(last&&last.leagueId){ S.leagueId=last.leagueId; S.myId=last.myId; S.view="game"; startPoll(); refresh(); }
   else { S.view="home"; loadMyLeagues(); }
