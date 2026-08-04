@@ -205,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.31";
+const APP_VERSION = "v8.32";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4817,7 +4817,14 @@ function viewEssai(){
         <li>${t("Si ta cagnotte tombe sous <b>{a} €</b>, elle est <b>remontée à {b} €</b> pour que tu puisses continuer à miser — au prix d'<b>un point</b> au classement.",{a:RECAP_THRESHOLD,b:RECAP_TARGET})}</li>
         <li>${t("Aux enchères, un bonus que <b>personne</b> n'achète reste <b>hors jeu toute la saison</b> : réfléchis à ce que tu laisses passer.")}</li></ul></div>
     <div class="box" style="border-color:var(--green);background:rgba(37,192,125,.10)"><div class="mini">${t("🎉 Voilà une saison complète ! Tu connais tout l'enchaînement. Prêt pour une vraie ligue entre amis ?")}</div></div>
-    ${AUTH?`<button class="btn" onclick="openCreate()">🎉 ${t("Créer une ligue entre amis")}</button>`:`<button class="btn" onclick="S.view='auth';render()">🎉 ${t("S'inscrire pour jouer")}</button>`}
+    ${/* ⚠️ v8.32 (relevé par Hervé) — « S'inscrire pour jouer » MÈNE À L'ÉCRAN D'INSCRIPTION, pas
+         à la connexion. Le bouton promettait une inscription et déposait sur un formulaire de
+         CONNEXION : il fallait ensuite trouver « Créer un compte » par soi-même. C'est le moment
+         le plus favorable de tout le parcours — quelqu'un vient de jouer une saison entière et
+         décide de s'inscrire — et on lui demandait une étape de plus.
+         ⚠️ `showErr('')` : une erreur laissée par un essai de connexion précédent traînerait en
+         haut de l'écran d'inscription, sans rapport avec ce qu'on y fait. */''}
+    ${AUTH?`<button class="btn" onclick="openCreate()">🎉 ${t("Créer une ligue entre amis")}</button>`:`<button class="btn" onclick="showErr('');S.view='signup';render()">🎉 ${t("S'inscrire pour jouer")}</button>`}
     <div style="height:8px"></div><button class="btn ghost" onclick="startEssai()">🔁 ${t("Refaire une partie d'essai")}</button>
     <div style="height:8px"></div><button class="btn ghost" onclick="exitEssai()">${AUTH?t("← Retour à l'accueil"):t("← Retour à la connexion")}</button>`;
 }
