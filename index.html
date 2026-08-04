@@ -205,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.33";
+const APP_VERSION = "v8.34";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5827,7 +5827,16 @@ function viewPrepTabs(){
   return prepInfosTab();
 }
 function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else delete bidL[id];
-  const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=maxBonusJoueur();   // v8.33 : borné par les bonus réellement offerts const over=tot>SHOP_CAP,tooMany=cnt>maxCards;
+  /* ⚠️ v8.34 — COMMENTAIRE DÉPLACÉ AU-DESSUS, PAS EN BOUT DE LIGNE. En v8.33 j'ai remplacé le
+     calcul du plafond en y accolant un `//` : sur CETTE ligne, du code suivait encore, et
+     `const over=…, tooMany=…` s'est retrouvé DANS le commentaire. `setBid` plantait donc à la
+     première sélection — compteur et jauge figés (signalé par Hervé).
+     ⚠️ CE QUE ÇA APPREND SUR L'OUTILLAGE : `check-syntax` est passé au vert, le fichier compile
+     parfaitement. Un `//` ne casse pas la syntaxe, il supprime du sens. Et aucun test n'exerçait
+     `setBid`, qui ne s'exécute qu'au clic. Ne jamais terminer par `//` une ligne qu'on n'a pas lue
+     en entier — dans ce fichier, plusieurs instructions partagent souvent la même ligne. */
+  const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length;
+  const maxCards=maxBonusJoueur(), over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   const bt=$("bt"); if(bt){bt.textContent=Math.round(tot); bt.className=over?'red':'';}
   const bc=$("bc"); if(bc){bc.textContent=cnt; bc.className=tooMany?'red':'';}
   // Cibler par ID, jamais par classe : l'écran de préparation contient DEUX .gauge — la progression
