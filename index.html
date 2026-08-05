@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.43";
+const APP_VERSION = "v8.46";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -538,6 +538,18 @@ const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
 // simulé) et pour les règles affichées : sans ça, le simulé tirait uniformément entre les sports
 // (≈33 % de foot) alors que le réel visait 75 % — deux jeux différents sous le même nom.
 const POOL_N=9, POOL_FOOT=7;   // 9 matchs proposés (réel ET simulé), dont ~7 de foot (≈ 75 % ; affiché « environ 75 % »)
+/* ⚠️ v8.45 (règle d'Hervé, 2026-08-05) — PLAFOND DE GROS FAVORIS DANS LES MATCHS RÉELS.
+   Le constat : une journée où presque tous les matchs ont un favori à 1,10-1,25 n'a plus d'intérêt
+   — tout le monde coche le même vainqueur, les nets se ressemblent et le duel ne départage plus
+   rien. On vise donc AU PLUS 2 affiches « écrasées » sur les 9 proposées.
+   Le favori d'un match, c'est la plus PETITE de ses deux cotes : min(oh, oa) — valable aussi pour
+   le tennis et le basket, qui n'ont pas de nul.
+   ⚠️ CE PLAFOND N'EST PAS UN COUPERET (arbitré avec Hervé) : on rend TOUJOURS 9 affiches. Quand le
+   vivier du jour ne contient pas assez de matchs serrés, on complète avec des favoris — mais en
+   commençant par les MOINS écrasants (1,28 avant 1,10). Refuser de compléter aurait réduit le
+   choix du joueur qui doit piocher 5 matchs, pour un mal moindre. */
+const FAV_ODD_MAX=1.3;   // en-dessous de cette cote, l'affiche est réputée « écrasée »
+const FAV_MAX=2;         // nombre visé de telles affiches par lot de POOL_N
 // ⚠️ POOL_FOOT est un OBJECTIF, pas un minimum (règle confirmée par Hervé le 31/07). Quand la
 // fenêtre de la journée ne contient pas assez de football, `batir` complète avec le basket et le
 // tennis plutôt que d'aller chercher des matchs plus lointains : le rythme prime sur le dosage.
@@ -1032,7 +1044,34 @@ function selectPool(all){
       tourDeRole(reste, N-pool.length, dec).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
     if(pool.length<N) completer(primary);
     if(pool.length<N) completer(cand);
-    return pool.slice(0,N);
+    return quotaFavoris(pool.slice(0,N), primary, cand);
+  };
+  /* Plafond de gros favoris (voir FAV_ODD_MAX / FAV_MAX en tête de fichier).
+     On ne jette JAMAIS une affiche sans la remplacer : le lot garde sa taille. L'ordre de
+     préférence pour la remplir est, dans l'ordre : les matchs serrés encore disponibles, puis —
+     s'il n'y en a pas assez — les favoris écartés, du MOINS écrasant au plus écrasant.
+     ⚠️ On conserve les 2 favoris les moins écrasants, pas les 2 premiers venus : sinon un lot
+     pouvait garder deux affiches à 1,05 et écarter celle à 1,29, qui reste la plus jouable. */
+  const quotaFavoris=(lot,primary,cand)=>{
+    const favOdd=e=>Math.min(+e.oh||99, +e.oa||99);
+    const ecrase=e=>favOdd(e)<FAV_ODD_MAX;
+    const favs=lot.filter(ecrase);
+    if(favs.length<=FAV_MAX) return lot;
+    const parCoteDesc=(a,b)=>favOdd(b)-favOdd(a);          // 1,29 avant 1,05
+    const gardes=favs.slice().sort(parCoteDesc).slice(0,FAV_MAX);
+    const retenus=lot.filter(e=>!ecrase(e)||gardes.indexOf(e)>=0);
+    const manque=lot.length-retenus.length;
+    if(manque<=0) return retenus;
+    // Réserve = tout ce qui reste disponible, LOT COMPRIS (les favoris écartés y reviennent).
+    // On ratisse tout le vivier et pas seulement le lot déjà tiré : sinon la qualité du repli
+    // dépendrait de ce que `tourDeRole` a pioché au hasard, et non de ce que le vivier contient.
+    const ajouter=(dst,src)=>{ src.forEach(e=>{ if(dst.indexOf(e)<0) dst.push(e); }); return dst; };
+    const reserve=ajouter(ajouter(ajouter([],primary),cand),lot).filter(e=>retenus.indexOf(e)<0);
+    // 1) d'abord les matchs serrés, dans l'ordre de priorité du vivier…
+    for(const e of reserve.filter(e=>!ecrase(e))){ if(retenus.length>=lot.length) break; retenus.push(e); }
+    // 2) …puis, à défaut, des favoris, du MOINS écrasant au plus écrasant.
+    for(const e of reserve.filter(ecrase).sort(parCoteDesc)){ if(retenus.length>=lot.length) break; retenus.push(e); }
+    return retenus;
   };
   /* ---- FENÊTRE DURE, PROPRE À LA FORMULE (v7.29, règle d'Hervé) ----------------------------
      Ce qu'il a vécu le 31/07 : ligue en mode FAST créée le vendredi, l'app lui propose des matchs
@@ -2888,6 +2927,23 @@ const EN={
   "Ex. : rejouer une ligue terminée à l'identique":"E.g. replay a finished league with the same setup",
   "<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.":"<b>Goal:</b> a prediction championship among friends, on real events and real odds. Everyone starts with <b>100 virtual €</b>; the winner is whoever has the most <b>championship points</b>.",
   "📚 Voir les règles détaillées →":"📚 See the detailed rules →", "📚 Règles détaillées":"📚 Detailed rules",
+  "L'essentiel en une page. Le détail complet est dans <b>📚 Règles détaillées</b>.":"The essentials on one page. Full detail is in <b>📚 Detailed rules</b>.",
+  "🎯 Le but":"🎯 The goal",
+  "Un championnat de pronostics entre amis, en <b>argent fictif</b> (100 € au départ). Le champion est celui qui a le plus de <b>points</b> — pas le plus d'argent.":"A prediction championship among friends, in <b>play money</b> (€100 to start). The champion is the one with the most <b>points</b> — not the most money.",
+  "Tu affrontes <b>un seul adversaire</b> en <b>duel</b>.":"You face <b>one single opponent</b> in a <b>duel</b>.",
+  "Celui qui <b>reçoit</b> choisit les <b>5 matchs</b>, imposés aux deux.":"The <b>home</b> player picks the <b>5 matches</b>, which apply to both.",
+  "Chacun fait ses <b>pronostics et ses mises</b> (au total ≤ <b>{a} %</b> de son capital).":"Each player makes their <b>predictions and stakes</b> (totalling ≤ <b>{a}%</b> of their capital).",
+  "<b>👑 match favori</b> : gain <b>et</b> perte <b>doublés</b>. Et <b>1 bonus</b> au maximum.":"<b>👑 favourite match</b>: winnings <b>and</b> losses <b>doubled</b>. Plus <b>1 bonus</b> at most.",
+  "Le duel revient à celui qui a <b>gagné le plus d'argent</b> : <b>2 pts</b> (nul <b>1</b>, perdu <b>0</b>).":"The duel goes to whoever <b>won the most money</b>: <b>2 pts</b> (draw <b>1</b>, loss <b>0</b>).",
+  "<b>+1</b> si ton net est <b>positif</b>, <b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour.":"<b>+1</b> if your net is <b>positive</b>, <b>+1</b> for the <b>⭐ best forecaster</b> of the day.",
+  "Le duel revient à celui qui a <b>gagné le plus d'argent</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Le perdant : <b>1 pt</b> si son net est positif, <b>0</b> sinon (<b>1 partout</b> en cas de nul).":"The duel goes to whoever <b>won the most money</b>: <b>3 pts</b> if their net is positive, <b>1 pt</b> otherwise. The loser: <b>1 pt</b> if their net is positive, <b>0</b> otherwise (<b>1 each</b> on a draw).",
+  "<b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour.":"<b>+1</b> for the <b>⭐ best forecaster</b> of the day.",
+  "🔥 <b>Dernière journée</b> : les points de duel <b>comptent double</b>.":"🔥 <b>Final matchday</b>: duel points <b>count double</b>.",
+  "Les points <b>s'additionnent sur toute la saison</b> : c'est le <b>classement</b>. À égalité, on départage au <b>capital</b>.":"Points <b>add up across the whole season</b>: that is the <b>standings</b>. Ties are broken on <b>capital</b>.",
+  "🃏 Les bonus":"🃏 The bonuses",
+  "Des pouvoirs à <b>usage unique</b>, achetés aux <b>enchères</b> avant la saison (≤ <b>{a} €</b> au total). <b>Un seul par journée.</b> En cours de saison, on peut s'en <b>racheter</b> entre joueurs.":"<b>One-shot</b> powers, bought at <b>auction</b> before the season (≤ <b>€{a}</b> in total). <b>One per matchday only.</b> During the season, players can <b>buy</b> them from each other.",
+  "🎭 L'enjeu":"🎭 What's at stake",
+  "Selon ce que la ligue a choisi : une <b>récompense</b> 🏆 pour le champion, un <b>gage</b> 🎭 pour le dernier — ou les deux. Ils sont proposés par les joueurs à la préparation.":"Depending on what the league chose: a <b>reward</b> 🏆 for the champion, a <b>forfeit</b> 🎭 for the last-placed player — or both. They are proposed by the players during preparation.",
   "📚 Comment marche le jeu":"📚 How the game works",
   "Le fonctionnement complet, dans le détail : calendrier, mises, match favori, points, bonus, enjeu final.":"How it all works, in detail: schedule, stakes, favourite match, points, bonus bonuses, final stake.",
   "Le fonctionnement complet du jeu, dans le détail. Pour un aperçu rapide, vois plutôt <b>📖 Règles du jeu</b>.":"How the game works, in full detail. For a quick overview, see <b>📖 Game rules</b> instead.",
@@ -4516,7 +4572,14 @@ async function changeMyUsername(){ if(!AUTH) return;
 // principe de jeu, puis on navigue via les onglets du bas (Ligues, Stats, …).
 function viewHome(){
   return `<div class="box"><div class="row" style="justify-content:space-between;align-items:center;gap:10px"><b style="font-size:19px">${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</b>${avatarHTML(AUTH.avatar,34)}</div>${sloganHTML("haut",true)}</div>
-    ${howItWorksHTML()}
+    ${/* ⚠️ v8.46 (arbitré avec Hervé) — LE BLOC « 💡 Comment ça marche ? » A ÉTÉ RETIRÉ D'ICI.
+          Il était devenu la TROISIÈME version du même contenu — après le tuto (bouton juste en
+          dessous) et la page 📖 Règles (bouton présent en permanence en haut) — et la plus dense
+          des trois, plus longue que la page de règles elle-même une fois celle-ci allégée en v8.44.
+          L'accueil redevient ce qu'il doit être : bonjour, puis où aller.
+          ⚠️ `howItWorksHTML()` N'EST PAS SUPPRIMÉE : elle reste affichée dans le SALON D'ATTENTE
+          (viewLobby), le seul endroit où elle gagne sa place — c'est là qu'atterrit un invité venu
+          par un code, qui n'a peut-être jamais rien lu du jeu. Ne pas la remettre ici. */''}
     <div class="box mini muted">🏆 ${t("Pour <b>créer</b> une ligue ou en <b>rejoindre</b> une avec un code, va sur l'onglet <b>Ligues</b>.")}</div>
     <button class="btn" onclick="backToLeagues()">🏆 ${t("Aller sur mes ligues")}</button>
     ${(myLeagues&&myLeagues.length)
@@ -5827,7 +5890,10 @@ function viewPrep(){
     const r=(cur==="reward" && isBoth());
     const ok=prepStepVoted(cur);
     return `${entete}
-     ${prepStep===0?howItWorksHTML():''}
+     ${/* ⚠️ v8.46 — bloc « 💡 Comment ça marche ? » retiré ici aussi : le joueur vient de le lire
+           dans le SALON D'ATTENTE, d'où il sort à l'instant pour arriver sur cette préparation.
+           Le resservir sur l'écran où il doit CHOISIR son gage ne faisait que repousser le choix
+           plus bas. Il reste au salon, à sa place. */''}
      ${voteSectionHTML(r)}
      <div style="height:8px"></div>
      <button class="btn" ${ok?'':'disabled'} onclick="prepStepGo(1)">${ok?t("Suivant →"):(r?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage"))}</button>
@@ -10388,47 +10454,47 @@ async function acceptTrade(id){
 async function refuseTrade(id){ const reply=tradeReply(id); await markTrade(id,"refused",reply); infoWin(t("Offre refusée.")); await refresh(); }
 async function cancelTrade(id){ await markTrade(id,"cancelled",null); infoWin(t("Offre annulée.")); await refresh(); }
 function viewRules(){
-  const card=id=>`<div style="display:flex;gap:10px;align-items:flex-start;margin:9px 0"><span class="sport" style="flex:0 0 auto">${CARDS[id].e}</span><div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b class="mini">${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}${CARDS[id].t?'<span class="tag">'+t("🎯 à cible")+'</span>':''}</div><div class="mini muted">${esc(t(CARDS[id].d))}</div></div></div>`;
+  /* ⚠️ v8.44 (arbitré avec Hervé sur maquette) — CETTE PAGE EST UN APERÇU, PAS LA RÉFÉRENCE.
+     Elle avait dérivé en doublon des 📚 Règles détaillées : NEUF pavés ET les fiches des bonus au
+     complet, au point qu'on ne savait plus laquelle des deux lire — celui qui voulait « comprendre
+     vite » abandonnait. On garde ici le strict nécessaire : but, déroulé d'une journée, points et
+     classement, bonus, enjeu. TOUT le reste vit dans viewRulesFull() et y figure déjà (filet de
+     sécurité, match annulé à 24 h, départage complet, flèche ▲ de mouvement, oubli, ligue
+     abandonnée, rachat premium, fiches des bonus, format à deux, options de ligue).
+     ⚠️ NE PAS Y REMETTRE DE DÉTAIL « pour être complet » : c'est exactement comme ça qu'elle a
+     grossi. Une règle qui manque se rajoute dans les règles DÉTAILLÉES, pas ici.
+     ⚠️ LE CLASSEMENT EST MENTIONNÉ EXPRÈS (relevé par Hervé sur la maquette) : la page disait
+     comment on marque des points sans jamais dire qu'ils s'ADDITIONNENT pour faire le classement.
+     ⚠️ Les chiffres restent INJECTÉS (STAKE_CAP, SHOP_CAP) et le barème reste CALCULÉ
+     (scoringShown) : une ligue en ancien barème ne doit pas lire le nouveau.
+     ⚠️ L'ENJEU EST DIT AU CONDITIONNEL (« selon ce que la ligue a choisi ») : cette page se lit
+     aussi HORS ligue, et affirmer « le dernier fait un gage » serait faux en mode récompense. */
   return `<button class="btn ghost sm" onclick="closeRules()">${t("← Retour")}</button>
    <div class="box"><h2 style="margin-top:0">${t("📖 Règles du jeu")}</h2>
-     <p class="mini">${t("<b>But :</b> championnat de pronostics entre amis, sur de vrais événements et de vraies cotes. On démarre à <b>100 € virtuels</b> ; le vainqueur est celui qui a le plus de <b>points de championnat</b>.")}</p></div>
-   <div class="box"><b>${t("🗓️ Format")}</b>
-     <div class="mini muted" style="margin-top:6px">${t("De <b>2 à {a} joueurs</b> — et la durée en découle : chacun affronte chacun aller-retour, soit <b>2 × (nombre de joueurs − 1) journées</b> (8 joueurs → 14 journées). Si le nombre d'humains est impair, un 🤖 joueur IA complète (il ne subit pas le gage). Chaque jour = une confrontation en duel. ⚠️ <b>À deux</b> (deux joueurs, ou seul face au 🤖), l'organisateur choisit <b>2 ou 4 journées</b> au moment de clôturer les inscriptions.",{a:MAX_PLAYERS})} <i>${t("(le 🤖 joueur IA est une option premium — à souscrire ; paiement désactivé pendant les tests)")}</i></div></div>
+     <div class="mini muted">${t("L'essentiel en une page. Le détail complet est dans <b>📚 Règles détaillées</b>.")}</div></div>
+   <div class="box"><b>${t("🎯 Le but")}</b>
+     <div class="mini muted" style="margin-top:6px;line-height:1.75">${t("Un championnat de pronostics entre amis, en <b>argent fictif</b> (100 € au départ). Le champion est celui qui a le plus de <b>points</b> — pas le plus d'argent.")}</div></div>
    <div class="box"><b>${t("⚽ Une journée")}</b>
-     <ul class="mini muted" style="margin:6px 0 0;padding-left:18px">
-       <li>${t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> (imposées aux deux).")}</li>
-       <li>${t("Chacun fait ses <b>pronostics + mises</b>. Total des mises ≤ <b>{a} %</b> du capital ({b} % avec le bonus Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</li>
-       <li>${t("<b>👑 Match favori</b> : un match désigné secrètement — gain <b>et</b> perte <b>doublés</b>.")}</li>
-       <li>${t("🛟 <b>Filet de sécurité</b> : la <b>perte maximale possible</b> d'une journée ne peut jamais dépasser ton capital — tu ne finiras <b>jamais dans le négatif</b> (si besoin, baisse la mise de ton match favori).")}</li>
-       <li>${t("Optionnel : <b>1 bonus</b> (voir plus bas), révélée à la résolution.")}</li>
-       <li>${t("Gain d'un pari = mise × (cote − 1) ; pari perdu = − mise. Le capital ne descend jamais sous 0.")}</li>
-       <li>${t("🚫 Match non terminé <b>{a} h</b> après l'heure prévue (annulé, reporté, abandonné) : <b>mise rendue</b> et bonus rendu. Il ne compte pas, <b>même s'il est rejoué plus tard</b>.",{a:STALE_MATCH_H})}</li>
+     <ul class="mini muted" style="margin:6px 0 0;padding-left:18px;line-height:1.75">
+       <li>${t("Tu affrontes <b>un seul adversaire</b> en <b>duel</b>.")}</li>
+       <li>${t("Celui qui <b>reçoit</b> choisit les <b>5 matchs</b>, imposés aux deux.")}</li>
+       <li>${t("Chacun fait ses <b>pronostics et ses mises</b> (au total ≤ <b>{a} %</b> de son capital).",{a:pct(STAKE_CAP)})}</li>
+       <li>${t("<b>👑 match favori</b> : gain <b>et</b> perte <b>doublés</b>. Et <b>1 bonus</b> au maximum.")}</li>
      </ul></div>
-   <div class="box"><b>${t("🏆 Points & classement")}</b>
-     <div class="mini muted" style="margin-top:6px">${t("Chaque journée, dans ton <b>duel</b>, le <b>vainqueur</b> est celui qui a le <b>meilleur résultat net</b> (gains − mises). À <b>net égal</b>, c'est un <b>match nul</b> — ni le gain ni la mise ne départagent.")}
-     <br>${scoringShown()
-       ? t("Points : <b>résultat</b> (victoire <b>2</b>, nul <b>1</b>, défaite <b>0</b>) <b>+ 1 pt</b> si ton net est positif. Soit <b>3 pts</b> au mieux, <b>0</b> au pire.")
-       : t("Points : <b>vainqueur</b> = <b>3 pts</b> si son net est positif, <b>1 pt</b> si son net est négatif ; <b>perdant</b> = <b>1 pt</b> si son net est positif, <b>0 pt</b> si son net est négatif ; <b>match nul</b> = <b>1 pt</b> chacun.")}
-     <br>${t("Bonus : le <b>meilleur pronostiqueur</b> ⭐ (plus gros net parmi <b>tous</b> les joueurs) gagne <b>+1 point</b>.")} ${t("(À partir de <b>3 joueurs</b> : à deux, le plus gros net revient forcément au vainqueur du duel — le point serait redondant.)")}
-     <br><b class="gold">🔥 ${t("Dernière journée : les points de <b>duel comptent double</b>. Un écart peut se combler d'un coup — rien n'est jamais joué jusqu'au tout dernier match.")}</b> <span class="mini muted">${t("(le +1 du ⭐ meilleur pronostiqueur de la journée n'est pas doublé)")}</span>
-     <br>${t("Départage au classement : capital, puis victoires en duel, plus gros gain, plus grosse cote.")}</div></div>
-   <div class="box"><b>${t("▲ Mouvement au classement")}</b>
-     <div class="mini muted" style="margin-top:6px">${t("À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.")}</div></div>
-   <div class="box"><b>${t("🃏 Bonus (enchères)")}</b>
-     <div class="mini muted" style="margin:6px 0">${t("Au démarrage, phase de <b>préparation</b> : chacun vote pour le gage <b>et</b> mise en aveugle sur les bonus, sans attendre les autres. Chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé) ; les non-gagnants sont <b>remboursés</b>. Total des mises ≤ <b>{a} €</b>, jusqu'à autant de bonus que de journées. Les mises gagnantes sont retirées de ton <b>capital de départ</b>. 1 bonus joué max par journée. Certaines bonus sont <b>à cible</b> 🎯 : tu choisis toi-même le match concerné au moment de parier. ⚠️ Un bonus sur lequel <b>personne</b> ne mise reste <b>hors jeu toute la saison</b> : rien n'en remet en circulation, et les rachats ne font que déplacer ceux déjà attribués.",{a:SHOP_CAP})}</div>
-     ${cardsAZ().map(card).join("")}</div>
-   <div class="box"><b>${t("🤝 Racheter un bonus")}</b> <span class="prem" onclick="showPremiumInfo('rachat')">${t("✨ Premium")}</span>
-     <div class="mini muted" style="margin-top:6px">${t("En cours de championnat, tu peux proposer une somme à un adversaire pour lui <b>racheter un bonus</b> qu'il a encore en main. Il accepte ou refuse ; s'il accepte, le bonus est à toi et le montant lui est versé. Possible tant que tu n'as pas validé ton pari du jour, en gardant au moins <b>{a} €</b> pour continuer à parier.",{a:TRADE_MIN_CAP})}
-     ${/* ⚠️ v7.86 (question d'Hervé) — CETTE PRÉCISION MANQUAIT ICI ET DANS LA BOUTIQUE, alors
-          qu'elle figure depuis toujours sur l'écran du rachat. Les règles ne décrivaient que le
-          fait de PROPOSER, sous une étiquette Premium : on en concluait que tout était verrouillé.
-          Deux dégâts. Côté jeu, on reçoit un jour une offre sans avoir lu que ça pouvait arriver.
-          Côté vente, c'est un argument perdu — un marché où seuls les abonnés peuvent répondre
-          n'aurait aucun intérêt. La dire renforce l'option au lieu de l'affaiblir. */''}
-     <br><br>${t("💡 <b>Recevoir une offre, l'accepter ou la refuser est gratuit</b>, pour tout le monde. Seul le fait d'en <b>proposer</b> une demande l'option — c'est ce qui permet à ta proposition d'atteindre n'importe quel joueur de ta ligue.")}
-     <i>${t("(option premium — à souscrire ; paiement désactivé pendant les tests)")}</i></div></div>
-   <div class="box"><b>${t("😴 Oubli")}</b><div class="mini muted" style="margin-top:6px">${t("Pas de validation à temps → <b>aucun pari pris en compte</b>, <b>{b} pt</b> au classement et <b>−{a} % du capital</b>.",{a:pct(forgotPenShown()),b:forgotPtsShown()})}
-     <br><br>${t("💤 <b>Ligue abandonnée</b> : si <b>plus personne</b> ne joue pendant <b>{a} jours</b>, la ligue se ferme toute seule. Elle est alors considérée comme <b>fermée avant son terme</b> : <b>aucun vainqueur, aucun perdant</b>, et <b>ni gage ni récompense</b> ne s'appliquent. Elle ne compte pas non plus dans les statistiques.",{a:LIGUE_FERME_J})}</div></div>
+   <div class="box"><b>${t("🏆 Points et classement")}</b>
+     <ul class="mini muted" style="margin:6px 0 0;padding-left:18px;line-height:1.75">
+       ${scoringShown()
+         ? `<li>${t("Le duel revient à celui qui a <b>gagné le plus d'argent</b> : <b>2 pts</b> (nul <b>1</b>, perdu <b>0</b>).")}</li>
+       <li>${t("<b>+1</b> si ton net est <b>positif</b>, <b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour.")}</li>`
+         : `<li>${t("Le duel revient à celui qui a <b>gagné le plus d'argent</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Le perdant : <b>1 pt</b> si son net est positif, <b>0</b> sinon (<b>1 partout</b> en cas de nul).")}</li>
+       <li>${t("<b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour.")}</li>`}
+       <li class="gold">${t("🔥 <b>Dernière journée</b> : les points de duel <b>comptent double</b>.")}</li>
+       <li>${t("Les points <b>s'additionnent sur toute la saison</b> : c'est le <b>classement</b>. À égalité, on départage au <b>capital</b>.")}</li>
+     </ul></div>
+   <div class="box"><b>${t("🃏 Les bonus")}</b>
+     <div class="mini muted" style="margin-top:6px;line-height:1.75">${t("Des pouvoirs à <b>usage unique</b>, achetés aux <b>enchères</b> avant la saison (≤ <b>{a} €</b> au total). <b>Un seul par journée.</b> En cours de saison, on peut s'en <b>racheter</b> entre joueurs.",{a:SHOP_CAP})}</div></div>
+   <div class="box"><b>${t("🎭 L'enjeu")}</b>
+     <div class="mini muted" style="margin-top:6px;line-height:1.75">${t("Selon ce que la ligue a choisi : une <b>récompense</b> 🏆 pour le champion, un <b>gage</b> 🎭 pour le dernier — ou les deux. Ils sont proposés par les joueurs à la préparation.")}</div></div>
    <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
 }
 
