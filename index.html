@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.42";
+const APP_VERSION = "v8.43";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1745,6 +1745,7 @@ const EN={
   "→ choisis le 2ᵉ résultat sur le match ciblé.":"→ pick the 2nd result on the targeted match.",
   "Plus de bonus en main.":"No bonuses left in hand.",
   "Désigne ton match favori 👑":"Name your favourite match 👑", "Mise trop élevée":"Stake too high",
+  "Choisis ton pronostic sur chaque match":"Pick your prediction on every match",
   "Choisis la cible 🎯":"Choose the target 🎯", "Choisis le 2ᵉ résultat 🎲":"Choose the 2nd result 🎲",
   "Match favori et bonus sur des matchs différents":"Favourite match and bonus on different matches",
   "Mise de 1 € min. sur chaque pari":"Min €1 stake on each bet", "Valider mes pronostics →":"Confirm my picks →",
@@ -4634,14 +4635,15 @@ function essaiSetTgt(d,i){ if(essaiCard[d]!=="tout") return; essaiCardTgt[d]=(es
 function essaiSetStake(d,i,v){ essaiStakes[d][i]=Math.max(0,Math.round(+v||0));
   const tot=(essaiStakes[d]||[]).reduce((a,b)=>a+(+b||0),0), max=Math.floor(essaiCapital(d)*0.5), over=tot>max;
   const fx=essaiFx(d); const allMin=fx.every((f,i2)=>(+essaiStakes[d][i2]||0)>=1);
-  const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&!over&&capOk&&tgtOk;
+  const pickOk=fx.every((f,i2)=>essaiPicks[d][i2]!=null);
+  const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&pickOk&&!over&&capOk&&tgtOk;
   const el=document.getElementById("essaist"); if(el){ el.textContent=tot; el.parentNode.className=over?'red':''; }
   const g=document.getElementById("essaigauge"); if(g){ g.querySelector("i").style.width=(max>0?Math.min(100,Math.round(tot/max*100)):0)+"%"; g.classList.toggle("over",over); }
   // v8.38 : le bandeau rouge et le bouton rouge suivent la frappe, comme dans le vrai jeu.
   const ov=document.getElementById("essaiover");
   if(ov){ ov.style.display=over?"":"none";
     const tx=document.getElementById("essaiovertxt"); if(tx&&over) tx.innerHTML=t("— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.",{a:tot,b:max,c:Math.max(0,tot-max)}); }
-  const b=document.getElementById("essaibetbtn"); if(b){ b.disabled=!ok; b.classList.toggle("danger",over); b.textContent= over? t("Mise trop élevée") : (!allMin? t("Mise de 1 € min. par pari") : (!capOk? t("Désigne ton match favori 👑") : (!tgtOk? t("Choisis la cible 🎯 du bonus") : t("Valider mes pronos →")))); } }
+  const b=document.getElementById("essaibetbtn"); if(b){ b.disabled=!ok; b.classList.toggle("danger",over); b.textContent= over? t("Mise trop élevée") : (!pickOk? t("Choisis ton pronostic sur chaque match") : (!allMin? t("Mise de 1 € min. par pari") : (!capOk? t("Désigne ton match favori 👑") : (!tgtOk? t("Choisis la cible 🎯 du bonus") : t("Valider mes pronos →"))))); } }
 function essaiToggleSel(k){ const j=essaiSel.indexOf(k); if(j>=0) essaiSel.splice(j,1); else if(essaiSel.length<3) essaiSel.push(k); render(); }
 // Les matchs d'une journée : la J1 est CHOISIE par le joueur, la J2 lui est imposée (v8.38).
 function essaiFx(d){ return d===0 ? essaiSel.map(k=>ESSAI_POOL[k]) : ESSAI_J2; }
@@ -4687,8 +4689,17 @@ function viewEssai(){
   const betScreen=(d,fx,goNext,showGuide)=>{ const won=essaiWon(); const usedBefore=essaiCard.slice(0,d).filter(Boolean); const avail=won.filter(id=>usedBefore.indexOf(id)<0);
     const cap=essaiCapital(d); const max=Math.floor(cap*0.5);
     const tot=(essaiStakes[d]||[]).reduce((a,b)=>a+(+b||0),0), over=tot>max, allMin=fx.every((f,i)=>(+essaiStakes[d][i]||0)>=1);
-    const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&!over&&capOk&&tgtOk;
-    const lbl= over?t("Mise trop élevée"):(!allMin?t("Mise de 1 € min. par pari"):(!capOk?t("Désigne ton match favori 👑"):(!tgtOk?t("Choisis la cible 🎯 du bonus"):t("Valider mes pronos →"))));
+    // ⚠️ v8.43 (bug signalé par Hervé, vu à l'étape 8/11) — ON POUVAIT VALIDER SANS AVOIR CHOISI UN
+    // SEUL PRONOSTIC. La validation ne regardait que les mises, la 👑 et la cible du bonus : jamais
+    // le pronostic lui-même. En J1 ça ne se voyait pas (l'écran « choisis les matchs » pré-remplit
+    // essaiPicks[0] avec les favoris), mais depuis la v8.38 — qui a déplacé ce choix de la J2 vers la
+    // J1 — PLUS RIEN n'initialisait essaiPicks[1] : à la J2, aucune cote n'était surlignée, et le
+    // joueur validait avec des pronostics `undefined`. Les résultats affichaient alors « Nul » sur
+    // les 3 matchs (le libellé de repli) et TOUS les paris perdus. On verrouille donc le bouton tant
+    // qu'un match n'a pas son pronostic — filet qui vaut pour les deux journées.
+    const pickOk=fx.every((f,i)=>essaiPicks[d][i]!=null);
+    const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&pickOk&&!over&&capOk&&tgtOk;
+    const lbl= over?t("Mise trop élevée"):(!pickOk?t("Choisis ton pronostic sur chaque match"):(!allMin?t("Mise de 1 € min. par pari"):(!capOk?t("Désigne ton match favori 👑"):(!tgtOk?t("Choisis la cible 🎯 du bonus"):t("Valider mes pronos →")))));
     return `${showGuide?`<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>${t("Comment parier :")}</b></div>
         <div class="mini muted" style="margin-top:3px;line-height:1.8">${t("1️⃣ choisis le <b>résultat</b> de chaque match · 2️⃣ saisis ta <b>mise</b> · 3️⃣ touche la <b>👑</b> de ton <b>match favori</b> (obligatoire : il compte <b>×2</b>, en gain <b>comme en perte</b>) · 4️⃣ un <b>bonus</b> si tu veux, puis valide.")}</div></div>`:''}
       <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><div class="row"><span class="muted">${t("Ton capital")}</span><b>${cap} €</b></div>
@@ -4919,7 +4930,11 @@ function viewEssai(){
     <div class="box"><div class="mini muted">${t("Classement — après 1 journée sur 6")}</div>
       <div style="overflow-x:auto;margin-top:6px"><table style="width:100%;font-variant-numeric:tabular-nums">
       ${(()=>{ const caps=essaiCapitals(0); return essaiRank(essaiTotals(0),caps).map((p,i)=>`<tr><td style="width:1%">${["🥇","🥈","🥉"][i]||(i+1)+'.'}</td><td>${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num" style="white-space:nowrap"><b>${p.pts} pt${p.pts>1?'s':''}</b></td><td class="num muted" style="white-space:nowrap">${caps[p.id].toFixed(2)} €</td></tr>`).join(""); })()}</table></div></div>
-    <button class="btn" onclick="essaiGo(7)">${t("Journée 2 →")}</button>`; }
+    ${/* ⚠️ v8.43 — ON PRÉ-REMPLIT LES PRONOSTICS DE LA J2 (les favoris), exactement comme l'écran
+          « choisis les matchs » le fait pour la J1. Sans ça, la J2 s'ouvrait avec AUCUNE cote
+          surlignée — d'où le bug ci-dessus. Le joueur reste libre de changer chaque pronostic ;
+          on lui évite juste de partir d'un écran vide qui se validait en silence. */''}
+    <button class="btn" onclick="essaiPicks[1]=essaiFx(1).map(essaiFav);essaiStakes[1]=[];essaiCap[1]=-1;essaiCard[1]=null;essaiCardTgt[1]=-1;essaiGo(7)">${t("Journée 2 →")}</button>`; }
   // 7 — paris J2 : nouvel adversaire, et cette fois les matchs sont IMPOSÉS (v8.38)
   if(essaiStep===7){ const rk=essaiRank(essaiTotals(0),essaiCapitals(0)); const mr=rk.findIndex(p=>p.id==="marco")+1;
     return `${head(7)}
