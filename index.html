@@ -205,7 +205,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.34";
+const APP_VERSION = "v8.35";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3854,8 +3854,22 @@ function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); }
 // `sel` = MON prono sur ce match, ou null si je n'ai pas parié dessus (match d'un AUTRE duel) :
 // dans ce cas on reste en gris neutre, sinon on trancherait un pari qu'on n'a pas à connaître.
 // Renvoie null si le résultat n'est pas encore connu (l'appelant affiche alors l'heure ou ⏳).
+/* ⚠️ v8.35 — LE RÉSULTAT ENREGISTRÉ FAIT FOI, AVANT celui de l'appel en cours (signalé par Hervé
+   sur 7SMXN : « le résultat de lundi du match de York City ne s'affiche pas »).
+   Depuis la v8.27, un score est écrit dans `duels.fixtures[].res` DÈS QU'IL TOMBE, et c'est lui que
+   `resolveDay` utilisera pour compter les gains. L'affichage, lui, ne lisait que `liveRes` — la
+   réponse de l'API RÉCUPÉRÉE PENDANT CETTE SESSION DE PAGE. Deux façons de perdre un résultat
+   pourtant connu et stocké en base :
+     • l'API ne renvoie que les 3 derniers jours (`daysFrom=3`) — au 4e jour le match en sort et
+       la ligne repassait à « 🏁 terminé · score en attente », définitivement ;
+     • `resolveRealIfReady` s'est arrêté avant l'appel (throttle 20 min, un duel sans matchs
+       choisis, journée en cours de résolution…) : `liveRes` reste vide pour toute la session.
+   ⚠️ AUCUNE FUITE : `f.res` n'est écrit que pour un match TERMINÉ, et `liveVerdict` n'est appelé
+   que derrière l'option ⏱️ (`liveShow`). On montre ce que la base sait déjà, pas plus tôt.
+   ⚠️ Et c'est la source la PLUS SÛRE des deux : c'est exactement celle qui décidera des gains. */
 function liveVerdict(f, sel){
-  const r=liveRes[f.evId]; if(!(r && r.completed && r.res)) return null;
+  const r = (f && f.res) ? {completed:true, res:f.res} : liveRes[f.evId];
+  if(!(r && r.completed && r.res)) return null;
   const w = r.res==='1' ? f.home : (r.res==='2' ? f.away : t("Nul"));
   if(sel==null) return {txt:esc(w), ok:null};
   const ok=(r.res===sel);
@@ -4054,7 +4068,21 @@ async function refresh(){
        pour le tour de polling où il change. La garde d'origine protégeait d'un renvoi en boucle
        pendant la saisie des paris — elle tient toujours. */
     const jourVientDeTomber = (prevDay!=null && L.current_day>prevDay);
-    const jourNonVu = (L.status==="running" && (prevLeagueStatus===null || jourVientDeTomber)
+    /* ⚠️ v8.35 — LA DERNIÈRE JOURNÉE ÉTAIT LA SEULE QU'ON NE VOYAIT JAMAIS (signalé par Hervé sur
+       DRDJ3 : « la ligue s'est ouverte sur le bilan de la saison plutôt que sur les résultats de la
+       dernière journée »). Le renvoi automatique était réservé à `status==="running"` : or la
+       journée qui TERMINE la saison fait passer la ligue en `done` dans le même mouvement — au tour
+       de sondage suivant la condition ne valait déjà plus, et le renvoi vers le bilan (plus bas)
+       prenait la main. Résultat : la journée la plus attendue de la saison — celle qui désigne le
+       vainqueur, avec ses points de duel ×2 — était la seule à passer sans être montrée.
+       ⚠️ `alleeAuTerme` : une ligue FERMÉE AVANT TERME par l'organisateur passe aussi en `done`,
+       mais sa journée en cours a été abandonnée, pas jouée. Pour celle-là le bilan reste le bon
+       écran d'arrivée — on ne renvoie que sur une saison allée jusqu'au bout.
+       ⚠️ Rien n'est enlevé au bilan : `getSeen()` étant posé par `openResults`, la ligue s'ouvrira
+       droit sur le bilan à TOUTES les visites suivantes. Le renvoi ne joue qu'une fois. */
+    const alleeAuTerme = ((L.num_days|0)>0 && (L.current_day|0)>=(L.num_days|0));
+    const finDeSaison  = (L.status==="done" && alleeAuTerme);
+    const jourNonVu = ((L.status==="running"||finDeSaison) && (prevLeagueStatus===null || jourVientDeTomber)
                        && L.current_day>getSeen() && L.current_day>=1) ? L.current_day-1 : null;
     S.recap = false;
     const dispDay = Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
@@ -4110,7 +4138,12 @@ async function refresh(){
     // plus rien à parier ; le bilan est l'écran qui a du sens. ⚠️ `prevLeagueStatus===null` = PREMIER
     // chargement de cette ligue : sans cette condition, chaque tour de polling ramènerait le joueur
     // sur le classement alors qu'il consulte les résultats ou les règles.
-    if(L.status==="done" && prevLeagueStatus===null && S.view==="game"){ S.view="standings"; standHist=false; standDay=null; }
+    // ⚠️ v8.35 — `jourNonVu==null` AJOUTÉ : les résultats de la dernière journée PASSENT AVANT le
+    // bilan (cf. le bloc `finDeSaison` plus haut). Sans cette garde, la bascule vers le classement
+    // aurait continué de gagner : elle change `S.view`, et le renvoi vers les résultats (tout en
+    // bas) exige `S.view==="game"`. Une fois la journée vue, `jourNonVu` revaut null et on retrouve
+    // exactement le comportement v7.23 — ouverture directe sur le bilan.
+    if(L.status==="done" && prevLeagueStatus===null && S.view==="game" && jourNonVu==null){ S.view="standings"; standHist=false; standDay=null; }
     prevLeagueStatus=L.status;
     prevDay=L.current_day;   // v7.98 : APRÈS le calcul de `jourVientDeTomber`, jamais avant
     if(L.status==="lobby") maybeAutoStartFull();   // ligue pleine → clôture auto + démarrage
