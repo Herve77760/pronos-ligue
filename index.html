@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.68";
+const APP_VERSION = "v8.69";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1081,12 +1081,19 @@ function selectPool(all){
   /* ---- FENÊTRE DURE, PROPRE À LA FORMULE (v7.29, règle d'Hervé) ----------------------------
      Ce qu'il a vécu le 31/07 : ligue en mode FAST créée le vendredi, l'app lui propose des matchs
      du MARDI suivant. « Le principe du mode fast, c'est de jouer vite, quasiment tous les 2 jours. »
-     LA RÈGLE : au-delà de la fenêtre, on ne prend RIEN. Fast = 24 à 48 h, Classique = 48 à 96 h,
+     LA RÈGLE : au-delà de la fenêtre, on ne prend RIEN. Fast = 12 à 36 h, Classique = 24 à 72 h,
      la fin étant repoussée jusqu'à 22 h ce soir-là (`finDeSoiree`) pour ne pas couper les coups
      d'envoi européens de 18h30-21h — le défaut sauterait aux yeux sur une fenêtre finissant à 18 h.
-     Ces bornes ne sont pas des constantes de plus : `cutoffMin` (clôture des paris) vaut déjà
-     sel+bet, soit 24 h en fast et 48 h en classique — la fenêtre ajoute exactement un cycle de la
-     formule derrière. Fast s'étend donc jusqu'à 48 h, Classique jusqu'à 96 h, automatiquement.
+     Ces bornes ne sont pas des constantes de plus : `cutoffMin` vaut `bet` (12 h fast / 24 h
+     classique) et la fenêtre ajoute `sel+bet` derrière, soit un cycle complet de la formule.
+     Fast s'étend donc jusqu'à 36 h, Classique jusqu'à 72 h, automatiquement.
+     ⚠️ CES CHIFFRES ONT ÉTÉ FAUX DE LA v7.32 À LA v8.69. Ce paragraphe annonçait 24/48 h pour
+     `cutoffMin` et 48/96 h pour la fenêtre : c'était l'état d'AVANT la v7.32, qui a retiré le
+     `sel` de `cutoffMin` sans que le commentaire suive. Le code, lui, n'a jamais été faux — et
+     les chiffres montrés au joueur non plus, ils sont calculés depuis `FORMULAS`. Le piège était
+     donc entièrement ici : lire ce paragraphe et « corriger » le code pour le faire coller aurait
+     doublé le délai d'attente de toutes les ligues. Vérifier ces nombres en exécutant
+     `selectPool`, jamais en relisant la prose.
      ⚠️ LA BOUCLE D'ÉLARGISSEMENT A ÉTÉ SUPPRIMÉE. Elle repoussait la limite de 6 h en 6 h jusqu'à
      8 JOURS quand le lot n'était pas complet : c'est elle, et elle seule, qui est allée chercher
      mardi. Elle partait d'une bonne intention (toujours rendre 9 affiches) qui s'est révélée
@@ -2242,7 +2249,7 @@ const EN={
   "Cette option a expiré le <b>{a}</b>. Reprends-la pour la réactiver.":"This option expired on <b>{a}</b>. Take it again to reactivate it.",
   // Contrôle de fraîcheur à la validation des 5 matchs (v7.34).
   "Liste à rafraîchir":"List needs refreshing",
-  "Depuis que cet écran est ouvert, {a} des matchs choisis se joue(nt) trop tôt : ton adversaire n'aurait plus ses <b>{b} h</b> pour pronostiquer. Voici une liste à jour.":"Since this screen was opened, {a} of the matches you picked now kick off too soon: your opponent would no longer have their <b>{b}h</b> to make their picks. Here's an up-to-date list.",
+  "Depuis que cet écran est ouvert, {a} des matchs choisis se joue(nt) trop tôt : ton adversaire n'aurait plus ses <b>{b} h</b> pour pronostiquer. Voici une liste à jour — <b>tes 5 choix sont à refaire</b>.":"Since this screen was opened, {a} of the matches you picked now kick off too soon: your opponent would no longer have their <b>{b}h</b> to make their picks. Here's an up-to-date list — <b>you'll need to pick your 5 again</b>.",
   // « Choisis vite » sur l'écran de sélection (v7.33) + fenêtre des matchs recalculée (v7.32).
   "Les matchs proposés commencent au plus tôt <b>{a}</b> — c'est le temps de pari garanti à ton adversaire ({b} h). Chaque heure d'attente les repousse d'autant : plus tu choisis tôt, plus la journée se joue tôt.":"The matches on offer start no earlier than <b>{a}</b> — that's the betting time your opponent is guaranteed ({b}h). Every hour you wait pushes them back just as much: the sooner you pick, the sooner the matchday is played.",
   "Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b>, ou s'ouvre d'un jour ou deux pour aller chercher une <b>plus belle affiche</b> plutôt qu'un match anonyme tout proche.":"These fixtures kick off <b>shortly after betting closes</b>, never days later: at most <b>{f}h</b> in ⚡ Fast, <b>{c}h</b> in 🗓️ Classique — with a little slack on the final evening, until <b>{h}:00</b>, so European evening kick-offs aren't cut off. In a quiet period the matchday has <b>fewer than {a} fixtures</b>, or opens up by a day or two to reach a <b>better fixture</b> rather than an anonymous one close by.",
@@ -6541,14 +6548,22 @@ function toggleSel(i){ const k=selChosen.indexOf(i); if(k>=0)selChosen.splice(k,
    ⚠️ CE TROU EXISTAIT AVANT LA v7.32, avec une marge de 24h au lieu de 12h : plus difficile à
    atteindre, mais tout aussi ouvert. Ce n'est pas une régression, c'est un manque d'origine.
    On revérifie donc les 5 matchs contre l'heure RÉELLE de la validation, et on renvoie le joueur
-   sur une liste fraîche si l'un d'eux est devenu trop proche. */
+   sur une liste fraîche si l'un d'eux est devenu trop proche.
+   ⚠️ v8.69 (relevé par Hervé) — LA REMISE À ZÉRO EST DITE. `selChosen=[]` décoche les CINQ matchs,
+   y compris ceux qui étaient encore valables : la liste est reconstruite, donc les positions
+   d'avant ne veulent plus rien dire. C'est le comportement voulu, mais il était silencieux — on
+   revenait sur un écran vide sans savoir si l'app avait gardé quelque chose. La phrase le dit.
+   ⚠️ Ne PAS « améliorer » en recochant les matchs encore valables sans traiter le vrai problème :
+   il faudrait les retrouver par `evId` dans la NOUVELLE liste, où ils peuvent avoir disparu (la
+   réserve a pu tourner). Un match recoché qui n'est plus proposé serait pire que la remise à
+   zéro. Arbitré avec Hervé le 2026-08-06 : on dit, on ne bricole pas. */
 async function saveSelection(){ if(busy)return;
   const fx=selChosen.map(i=>selPool[i]);
   const mini=Date.now()+((leagueFormula().bet||24))*3600000;
   const tropProche=fx.filter(f=>{ const ts=fixtureKickoff(f); return ts && ts<mini; }).length;
   if(tropProche){
     infoModal("⏳", t("Liste à rafraîchir"),
-      `<div class="mini muted" style="text-align:left">${t("Depuis que cet écran est ouvert, {a} des matchs choisis se joue(nt) trop tôt : ton adversaire n'aurait plus ses <b>{b} h</b> pour pronostiquer. Voici une liste à jour.",{a:tropProche,b:(leagueFormula().bet||24)})}</div>`);
+      `<div class="mini muted" style="text-align:left">${t("Depuis que cet écran est ouvert, {a} des matchs choisis se joue(nt) trop tôt : ton adversaire n'aurait plus ses <b>{b} h</b> pour pronostiquer. Voici une liste à jour — <b>tes 5 choix sont à refaire</b>.",{a:tropProche,b:(leagueFormula().bet||24)})}</div>`);
     selPool=null; selChosen=[]; render(); return; }
   busy=true;
   try{ const d=myDuel(); await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); selPool=null; selChosen=[]; await refresh(); }
