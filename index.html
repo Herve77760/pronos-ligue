@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.58";
+const APP_VERSION = "v8.67";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1419,6 +1419,46 @@ function deadlinePassed(){ return deadlinePassedFor(myDuel()); }
 // là où la clôture d'un seul duel ne suffit pas.
 function allDuelsClosed(){ const dz=duels||[]; if(!dz.length) return deadlinePassed();
   return dz.every(d=>deadlinePassedFor(d)); }
+/* ─── QUAND LA JOURNÉE SE RÉSOUDRA (v8.60, demandé par Hervé sur la ligue 4EB93) ──────────────
+   Hervé voyait les matchs du duel voisin déjà « 🏁 terminé » et les siens annoncés pour le
+   lendemain soir, sans rien qui explique ni combien de temps ça allait durer. Ce n'est pas un
+   défaut mais la mécanique du jeu : chaque duel a SES 5 matchs, choisis par son joueur à
+   domicile, et `resolveRealIfReady` n'appelle `resolveDay` que quand TOUS les matchs de TOUS
+   les duels sont finis. Une journée se termine donc à l'heure du duel le plus tardif.
+   ⚠️ L'app disait déjà « plus tu choisis tôt, plus la journée se joue tôt » — mais SEULEMENT à
+   celui qui choisit. Ceux qui ATTENDENT, eux, n'avaient aucune explication : c'est à eux que
+   cette échéance s'adresse, et c'est pour ça qu'elle nomme le match qui fait attendre.
+   ⚠️ AUCUNE FUITE : les affiches des autres duels sont déjà publiques sur cet écran (seuls les
+   PRONOS sont sous l'option 🕵️). On ne dit que l'heure et le nom d'un match déjà affiché.
+   ⚠️ Un duel SANS matchs choisis n'a pas d'heure de fin — la journée n'a alors pas d'échéance du
+   tout, et c'est une information plus utile qu'une heure inventée : on nomme qui l'on attend. */
+function resolutionETA(){
+  const dz=duels||[];
+  if(!L || L.data_mode!=="real" || !dz.length) return null;
+  const sansMatchs=dz.filter(d=>!Array.isArray(d.fixtures)||!d.fixtures.length);
+  if(sansMatchs.length) return {pending:[...new Set(sansMatchs.map(d=>(pById(d.home_id)||{}).name||'?'))]};
+  let ts=0, last=null;
+  dz.forEach(d=>(d.fixtures||[]).forEach(f=>{ if(!f||f.canceled) return;
+    const ko=fixtureKickoff(f); if(!ko) return;
+    // Même durée que partout ailleurs (MATCH_DUREE_MIN) : deux estimations différentes de « quand
+    // un match est fini » finiraient par se contredire à l'écran.
+    const fin=ko+MATCH_DUREE_MIN*60000;
+    if(fin>ts){ ts=fin; last=f; } }));
+  return (ts&&last) ? {ts:Math.round(ts/300000)*300000, f:last} : null;
+}
+// Ligne d'échéance affichée sur l'écran d'attente. Vide si la fin est déjà passée : « résolution
+// attendue hier 23:00 » ferait douter du bon fonctionnement du jeu, alors qu'il ne manque plus
+// qu'un score — ce que disent déjà les autres messages de l'écran.
+/* `dejaDit` = la ligne d'en-tête vient d'annoncer « on attend la fin de tous les matchs de la
+   ligue ». On ne redit pas la règle deux fois de suite dans le même encadré — mais on la garde
+   quand les paris sont encore OUVERTS, car l'en-tête dit alors tout autre chose (« journée en
+   cours ») et l'échéance arriverait sans explication. */
+function resolutionETALine(dejaDit){
+  const e=resolutionETA(); if(!e) return '';
+  if(e.pending) return `<div class="mini muted" style="margin-top:6px">⏳ ${t("La journée n'a pas encore d'échéance : {a} n'a pas choisi ses matchs. Tant qu'un duel n'a pas les siens, la journée ne peut pas se terminer — pour personne.",{a:'<b>'+esc(e.pending.join(', '))+'</b>'})}</div>`;
+  if(e.ts<=Date.now()) return '';
+  return `<div class="mini muted" style="margin-top:6px">⏳ ${t("Résolution attendue <b>{a}</b> — le dernier match de la ligue est {b}.",{a:fmtWhen(e.ts),b:'<b>'+esc(e.f.home)+' – '+esc(e.f.away)+'</b>'})}${dejaDit?'':' '+t("La journée se solde quand le dernier match de <b>tous les duels</b> est fini, pas seulement les tiens.")}</div>`;
+}
 // Simulé : les matchs fictifs doivent être « joués » (coup d'envoi + 2h) avant de publier les résultats — même
 // déroulé qu'en réel (clôture → écran d'attente → résultats). Fixtures sans horaire (anciennes journées) = ignorées.
 function simMatchesDone(){ const dz=duels||[]; if(!dz.length) return false; const now=Date.now();
@@ -1587,8 +1627,10 @@ const EN={
   "🏠 Retour à l'accueil":"🏠 Back to home",
   "Cette ligue est <b>terminée</b> — tu la retrouveras dans le dossier <b>« Ligues terminées »</b> de l'accueil.":"This league is <b>finished</b> — you'll find it in the <b>“Finished leagues”</b> folder on the home screen.",
   "🎓 Première fois ? Découvrir le jeu":"🎓 First time? Discover the game",
-  "▶️ Essayer le jeu (démo, sans compte)":"▶️ Try the game (demo, no account)",
-  "Découvre une saison complète en 2 min, avant même de t'inscrire.":"Discover a full season in 2 min, before you even sign up.",
+  "🎓 Le tuto complet (2 min)":"🎓 The full tutorial (2 min)",
+  "🚀 La saison en accéléré":"🚀 The season, fast-forward",
+  "Tous les écrans du jeu, sans les explications.":"Every screen of the game, without the explanations.",
+  "La même saison, mais tout est expliqué.":"The same season, with everything explained.",
   "📖 Lire les règles":"📖 Read the rules",
   "⏰ tu as une <b>heure limite</b> pour valider. Sans pronos validés, le duel est <b>perdu d'avance</b> — quel que soit le résultat d'en face — et tu prends <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Aïe 😬":"⏰ you have a <b>deadline</b> to confirm. With no picks confirmed, the duel is <b>lost before it starts</b> — whatever your opponent does — and you take <b>{b} pt</b> in the standings and <b>−{a}%</b> of your capital. Ouch 😬",
   "🃏 L'heure des enchères !":"🃏 Auction time!",
@@ -1599,6 +1641,7 @@ const EN={
   "🏆 Le grand objectif":"🏆 The big goal",
   "Finir la saison avec un max de points pour être <b>champion</b> et empocher la <b>récompense</b> 🏆… et laisser le <b>dernier</b> repartir avec un bon vieux <b>gage</b> bien mérité 🎭":"Finish the season with as many points as possible to be <b>champion</b> and take the <b>reward</b> 🏆… and leave the <b>last-placed</b> player with a well-earned <b>forfeit</b> 🎭",
   "⚡ Comment ça marche ?":"⚡ How does it work?",
+  "<b>Tes pronostics</b> : chaque journée, tu prédis le <b>résultat des matchs</b> — qui gagne — et tu <b>mises</b> sur chacun. Prono juste, tu gagnes selon la <b>cote</b> ; raté, tu perds ta mise.":"<b>Your predictions</b>: each matchday you call the <b>result of the matches</b> — who wins — and <b>stake</b> money on each one. Right call, you win at the <b>odds</b>; wrong, you lose your stake.",
   "<b>Le duel de la journée</b> : tu affrontes <b>un adversaire</b> sur <b>les mêmes matchs</b>. Le <b>meilleur résultat</b> du jour prend <b>2 points</b> (<b>0</b> pour l'autre, <b>1 partout</b> à égalité).":"<b>The duel of the day</b>: you face <b>one opponent</b> on <b>the same matches</b>. The <b>best result</b> of the day takes <b>2 points</b> (<b>0</b> for the other, <b>1 each</b> on a tie).",
   "<b>Ton capital</b> : <b>100 €</b> d'<b>argent fictif</b> pour miser. <b>Miser gros peut tout rapporter… ou tout coûter.</b>":"<b>Your capital</b>: <b>€100</b> of <b>play money</b> to bet with. <b>Betting big can win you everything… or cost you everything.</b>",
   "<b>🃏 Tes bonus</b> : des pouvoirs à <b>usage unique</b> — doubler un gain, amortir une perte, <b>siphonner</b> l'adversaire. Tu les remportes aux <b>enchères</b> au départ et tu en joues <b>un par journée</b> au maximum.":"<b>🃏 Your bonuses</b>: <b>one-shot</b> powers — double a win, soften a loss, <b>siphon</b> your opponent. You win them at the opening <b>auction</b> and play <b>one per matchday</b> at most.",
@@ -1621,6 +1664,9 @@ const EN={
   "Cette fois tu joues ✈️ <b>à l'extérieur</b> : c'est 🐼 <b>Marco</b> qui reçoit, donc <b>lui</b> qui a choisi les 3 matchs. Mêmes règles : résultat, mise, 👑 match favori (obligatoire), bonus.":"This time you are playing ✈️ <b>away</b>: 🐼 <b>Marco</b> is at home, so <b>he</b> picked the 3 fixtures. Same rules: result, stake, 👑 favourite match (required), bonus.",
   "— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.":"— you have staked <b>€{a}</b> for a maximum of <b>€{b}</b>. Lower your stakes by <b>€{c}</b> to be able to confirm.",
   "<b>Touche la 👑 sur ton match favori</b> — son gain <b>et</b> sa perte comptent double. C'est obligatoire pour valider.":"<b>Tap the 👑 on your favourite match</b> — its gain <b>and</b> its loss count double. It is required to confirm.",
+  // v8.63 — variante du TUTO seul : elle dit OÙ appuyer (« ci-dessous » = la liste de matchs
+  // qui suit). Le vrai jeu garde la ligne du dessus. Les deux coexistent volontairement.
+  "<b>Touche la 👑 sur l'un des matchs ci-dessous</b> — <b>obligatoire</b> ; son gain <b>et</b> sa perte comptent double.":"<b>Tap the 👑 on one of the matches below</b> — <b>required</b>; its gain <b>and</b> its loss count double.",
   "Choisir":"Choose",   // v8.36 : distinct de la cle "choisir" (minuscule) — la recherche EN{} est SENSIBLE A LA CASSE
   
   "Ton argent":"Your money",
@@ -1652,7 +1698,7 @@ const EN={
   "{w} l'emporte ({a} €). Tu n'avais pas misé → tu <b>gardes ton capital</b>.":"{w} wins it ({a} €). You didn't bid → you <b>keep your capital</b>.",
   "Duel du jour contre 🦊 <b>Léa</b>. Choisis un résultat par match, ta <b>mise</b>, ton 👑 <b>match favori</b> (obligatoire), et éventuellement un bonus remporté.":"Today's duel against 🦊 <b>Léa</b>. Pick a result per match, your <b>stake</b>, your 👑 <b>favourite match</b> (required), and optionally a bonus you won.",
   "Comment parier :":"How to bet:",
-  "1️⃣ choisis le <b>résultat</b> de chaque match · 2️⃣ saisis ta <b>mise</b> · 3️⃣ touche la <b>👑</b> de ton <b>match favori</b> (obligatoire : il compte <b>×2</b>, en gain <b>comme en perte</b>) · 4️⃣ un <b>bonus</b> si tu veux, puis valide.":"1️⃣ pick each match's <b>result</b> · 2️⃣ enter your <b>stake</b> · 3️⃣ tap the <b>👑</b> on your <b>favourite match</b> (required: it counts <b>×2</b>, on gains <b>and losses</b>) · 4️⃣ a <b>bonus</b> if you like, then confirm.",
+  "1️⃣ choisis le <b>résultat</b> de chaque match · 2️⃣ saisis ta <b>mise</b> · 3️⃣ touche la <b>👑</b> de ton <b>match favori</b> (obligatoire) · 4️⃣ un <b>bonus</b> si tu veux, puis valide.":"1️⃣ pick each match's <b>result</b> · 2️⃣ enter your <b>stake</b> · 3️⃣ tap the <b>👑</b> on your <b>favourite match</b> (required) · 4️⃣ a <b>bonus</b> if you like, then confirm.",
   "Déjà joué — un bonus ne sert qu'une fois":"Already played — a bonus is used only once",
   "⚠️ <b>Règle d'or</b> : tu ne peux pas poser 🎯 sur ton 👑 <b>match favori</b> — ils doivent être sur des <b>matchs différents</b> ! (Une petite exception existe dans le vrai jeu, mais restons simples ici.)":"⚠️ <b>Golden rule</b>: you cannot put 🎯 on your 👑 <b>favourite match</b> — they must be on <b>different matches</b>! (A small exception exists in the real game, but let's keep it simple here.)",
   "Choisis la cible 🎯 du bonus":"Choose the bonus's 🎯 target",
@@ -1756,7 +1802,6 @@ const EN={
   "Confirme ton mot de passe":"Confirm your password",
   "Les deux mots de passe ne sont pas identiques.":"The two passwords don't match.",
   // — v7.94 : les trois règles ajoutées au tuto (l'oubli, le renflouement, les bonus invendus) —
-  "<b>Valide avant l'heure limite.</b> Sans pronos validés, la journée est <b>perdue d'office</b> — quel que soit le résultat de l'adversaire — avec <b>{a} pt</b> au classement et <b>−{b} %</b> de capital.":"<b>Confirm before the deadline.</b> With no picks confirmed, the day is <b>lost outright</b> — whatever your opponent scores — with <b>{a} pt</b> in the standings and <b>−{b} %</b> of your balance.",
   "Si ta cagnotte tombe sous <b>{a} €</b>, elle est <b>remontée à {b} €</b> pour que tu puisses continuer à miser — au prix d'<b>un point</b> au classement.":"If your balance drops below <b>€{a}</b>, it is <b>topped up to €{b}</b> so you can keep betting — at the cost of <b>one point</b> in the standings.",
   "Aux enchères, un bonus que <b>personne</b> n'achète reste <b>hors jeu toute la saison</b> : réfléchis à ce que tu laisses passer.":"At the auction, a bonus <b>nobody</b> buys stays <b>out of play for the whole season</b> — think about what you let go.",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
@@ -1926,6 +1971,10 @@ const EN={
   "il te siphonne 15 % de ton bénéfice.":"they siphon off 15% of your profit.",
   "il t'annule ton bonus — ce total retomberait à {a} €.":"they cancel your bonus — this total would drop to €{a}.",
   "En face, la jauge et l'alerte de capital te disent ce que tu <b>risques</b>. Les deux se lisent ensemble.":"Opposite, the gauge and the capital warning tell you what you're <b>risking</b>. Read the two together.",
+  // — v8.60 : l'échéance de la journée, dite à ceux qui ATTENDENT (cf. `resolutionETALine`) —
+  "Résolution attendue <b>{a}</b> — le dernier match de la ligue est {b}.":"Resolution expected <b>{a}</b> — the league's last match is {b}.",
+  "La journée se solde quand le dernier match de <b>tous les duels</b> est fini, pas seulement les tiens.":"The matchday is settled once the last match of <b>every duel</b> is over, not just yours.",
+  "La journée n'a pas encore d'échéance : {a} n'a pas choisi ses matchs. Tant qu'un duel n'a pas les siens, la journée ne peut pas se terminer — pour personne.":"The matchday has no deadline yet: {a} hasn't picked their matches. Until every duel has its own, the matchday can't end — for anyone.",
   // — v7.65 : « terminé » ne veut pas dire « résultat connu » —
   "score en attente":"score pending",
   "<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.":"<b>finished · score pending</b>: the match has been played, but its score hasn't come through yet — until it does, there's no way to tell who won. The matchday resolves automatically as soon as every score is in.",
@@ -4404,8 +4453,25 @@ function viewAuth(){
          formulaire de connexion pour s'inscrire. */''}
     <button class="btn ghost" style="margin-top:8px" onclick="showErr('');S.view='signup';render()">${t("Créer un compte")}</button>
     <div class="mini muted" style="margin-top:12px">${t("Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b>, depuis n'importe quel appareil.")}</div></div>
-    <button class="btn ghost" onclick="startEssai()" style="border-color:var(--green);color:var(--green)">${t("▶️ Essayer le jeu (démo, sans compte)")}</button>
-    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Découvre une saison complète en 2 min, avant même de t'inscrire.")}</div>
+    ${/* ⚠️ v8.64 (demandé par Hervé) — DEUX PORTES D'ENTRÉE, PAS UNE. Il n'y avait qu'un bouton,
+         menant au tuto complet : 11 étapes, toute une saison. Qui ouvre l'app par curiosité n'a
+         pas signé pour ça et referme avant d'avoir vu un match — on perdait le visiteur au moment
+         précis où on essayait de le convaincre.
+         ⚠️ L'EXPRESS EST EN PREMIER ET EN VERT (la couleur d'appel de cet écran) : c'est le
+         parcours par défaut pour quelqu'un qui ne connaît pas le jeu. Le complet reste accessible,
+         en second, sans mise en avant — celui qui le veut le cherche, celui qui doute prend
+         l'autre. Inverser les deux, c'est revenir à ce qu'on vient de corriger.
+         ⚠️ Les sous-titres disent la DURÉE et l'EFFORT, pas le contenu : c'est là-dessus qu'on
+         choisit quand on ne connaît encore rien au jeu. */''}
+    ${/* ⚠️ v8.66 — DEUX PORTES, RANGÉES PAR QUANTITÉ DE LECTURE. L'accéléré passe en premier et
+         en vert : c'est le parcours par défaut pour qui ne connaît pas le jeu — il montre la
+         saison entière sans le mode d'emploi. Le complet reste juste dessous, sans mise en avant.
+         ⚠️ Ne PAS rajouter un troisième bouton « version ultra-courte » : essayé en v8.64,
+         supprimé en v8.66 (cf. `essaiMode`). */''}
+    <button class="btn ghost" onclick="startEssai('court')" style="border-color:var(--green);color:var(--green)">${t("🚀 La saison en accéléré")}</button>
+    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Tous les écrans du jeu, sans les explications.")}</div>
+    <button class="btn ghost" style="margin-top:10px" onclick="startEssai('complet')">${t("🎓 Le tuto complet (2 min)")}</button>
+    <div class="mini muted" style="text-align:center;margin-top:6px">${t("La même saison, mais tout est expliqué.")}</div>
     <button class="btn ghost" style="margin-top:10px" onclick="openRules()">${t("📖 Lire les règles")}</button>`;
 }
 async function doLogin(){
@@ -4625,6 +4691,18 @@ function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim();
    paris J2 → résultats → classement final + gage. 100 % local (aucune base, aucune IA payante).
    Des annotations « ℹ️ Dans le vrai jeu » signalent les simplifications (3 matchs vs 5, etc.). */
 let essaiStep=0, essaiGage=0, essaiBids={}, essaiPicks=[[],[]], essaiStakes=[[],[]], essaiCap=[-1,-1], essaiCard=[null,null], essaiCardTgt=[-1,-1], essaiSel=[];
+/* ─── DEUX PARCOURS DE TUTO (v8.66) ──────────────────────────────────────────────────────────
+   « court » = les 11 écrans du tuto classique, sans les explications. « complet » = tout.
+   ⚠️ CE N'EST PAS UN 2ᵉ JEU D'ÉCRANS : le court emprunte les MÊMES branches que le complet, seuls
+   les blocs de commentaire se taisent, via `ann()` et `dtl()` (voir `viewEssai`). Écrire un écran
+   « spécial court » ferait diverger deux versions du même écran — la faute que le tuto passe son
+   temps à éviter avec le vrai jeu.
+   ⚠️ UN TROISIÈME MODE « express » A EXISTÉ (v8.64), SUPPRIMÉ EN v8.66 — ne pas le réintroduire.
+   Il tenait en 4 écrans : le principe, un duel, son verdict, fin. Verdict d'Hervé après essai :
+   « ça ne donne pas l'image du jeu ». Sauter les enchères, la 2ᵉ journée et le classement ne
+   simplifiait pas le jeu, ça en montrait un AUTRE — un pari isolé, là où The Maestro League est
+   un championnat. Un tuto qui vend la mauvaise image coûte plus cher qu'un tuto trop long. */
+let essaiMode="complet";   // "court" (11 écrans, texte réduit) · "complet"
 // Bonus de FORCES DIFFÉRENTES (4/3/2). Pré-remplissage : tout 9>6 (gagné), parachute 8=8 (égalité →
 // rapidité), sangsue non misé (Léa l'emporte). Le joueur remporte donc 🔥 Tout ou Rien et 🪂 Parachute.
 const ESSAI_STAKE=10, ESSAI_CARDS=["tout","parachute","sangsue"];
@@ -4671,9 +4749,14 @@ const ESSAI_POOL=[
 function essaiFav(f){ return oddOf(f,"1")<=oddOf(f,"2")?"1":"2"; }
 // Enchères PRÉ-REMPLIES pour l'exemple (éditables) : tout 9 → tu bats Marco (8) ; parachute 5 → ÉGALITÉ
 // avec Léa & Marco (tu gagnes par la rapidité) ; sangsue 3 → Nina (7) l'emporte. → les 3 cas de figure.
-function startEssai(){ essaiStep=0; essaiGage=0; essaiBids={tout:9,parachute:5,sangsue:3}; essaiSel=[];   // accessible AVANT connexion (100 % local)
+/* `mode` = "court" | "complet" (cf. `essaiMode`). Toute autre valeur — y compris AUCUN argument —
+   retombe sur "complet" : les appels existants (accueil, « revoir le tuto », fin de partie)
+   gardent le comportement d'avant, c'est voulu. Seule la page de connexion propose le choix. */
+function startEssai(mode){ essaiMode=(mode==="court")?"court":"complet";
+  essaiStep=0; essaiGage=0; essaiBids={tout:9,parachute:5,sangsue:3}; essaiSel=[];   // accessible AVANT connexion (100 % local)
   // ⚠️ v8.38 : plus de pronos pré-remplis pour la J1 — ses matchs n'existent qu'après la sélection.
-  essaiPicks=[[],[]]; essaiStakes=[[],[]]; essaiCap=[-1,-1]; essaiCard=[null,null]; essaiCardTgt=[-1,-1]; navRoot(); S.view="essai"; render(); }
+  essaiPicks=[[],[]]; essaiStakes=[[],[]]; essaiCap=[-1,-1]; essaiCard=[null,null]; essaiCardTgt=[-1,-1];
+  navRoot(); S.view="essai"; render(); }
 function essaiGo(n){ essaiStep=n; render(); try{window.scrollTo(0,0);}catch(e){} }
 function essaiSetBid(id,v){ const x=Math.max(0,Math.min(40,Math.round(+v||0))); if(x>0) essaiBids[id]=x; else delete essaiBids[id];
   const tot=Object.values(essaiBids).reduce((a,b)=>a+(+b||0),0); const over=tot>40;   // miser est FACULTATIF
@@ -4738,11 +4821,20 @@ function essaiTotals(upto){ const T={me:0,lea:0,marco:0,nina:0}; for(let d=0;d<=
 // Classement : plus de POINTS d'abord, puis plus grosse CAGNOTTE (si fournie), puis « toi » devant.
 function essaiRank(T,caps){ return ESSAI_PLAYERS.map(p=>({...p,pts:T[p.id]})).sort((a,b)=>(b.pts-a.pts)||((caps?caps[b.id]:0)-(caps?caps[a.id]:0))||(a.id==="me"?-1:(b.id==="me"?1:0))); }
 function viewEssai(){
+  const court=(essaiMode==="court");
   const N=11, head=step=>`<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
       <div class="row" style="gap:6px"><button class="btn ghost sm" onclick="exitEssai()">${AUTH?'🏠 '+t("Accueil"):'← '+t("Connexion")}</button>${step>0?`<button class="btn ghost sm" onclick="essaiGo(${step-1})">${t("← Précédent")}</button>`:''}</div>
       <span class="mini muted"><b>${t("étape {a}/{b}",{a:step+1,b:N})}</b></span></div>
     <div class="gauge" style="margin-bottom:12px"><i style="width:${Math.round((step+1)/N*100)}%"></i></div>`;
-  const ann=txt=>`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">ℹ️ <b>${t("Dans le vrai jeu")}</b> : ${txt}</div>`;
+  /* ⚠️ v8.65 — EN MODE COURT, `ann` ET `dtl` SE TAISENT. `ann` = les encarts « ℹ️ Dans le vrai
+     jeu » (ce que la démo simplifie) ; `dtl` = les blocs d'explication facultatifs. Tout ce qui
+     reste est ce qu'on ne peut PAS deviner en regardant l'écran : le barème, les montants, la
+     consigne du geste en cours.
+     ⚠️ Passer par ces deux fonctions plutôt que par un `if` dans chaque étape a une raison : un
+     bloc oublié reste visible (donc trop de texte, défaut visible), là où un `if` mal fermé
+     casserait l'écran. La panne est du bon côté. */
+  const ann=txt=>court?'':`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">ℹ️ <b>${t("Dans le vrai jeu")}</b> : ${txt}</div>`;
+  const dtl=html=>court?'':html;
   const betCard=(d,f,i)=>{ const showTgt=(essaiCard[d]==="tout"), isTgt=essaiCardTgt[d]===i;
     return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
       <div class="row" style="gap:6px;flex:0 0 auto"><span class="tog cap ${essaiCap[d]===i?'on':''} clik" onclick="essaiSetCap(${d},${i})" title="${t("Match favori")}">👑</span>${showTgt?`<span class="tog tgt ${isTgt?'on':''} clik" onclick="essaiSetTgt(${d},${i})" title="${t("Cible du bonus")}">${(essaiCard[d]&&CARDS[essaiCard[d]])?CARDS[essaiCard[d]].e:'🎯'}</span>`:''}</div></div>
@@ -4762,8 +4854,21 @@ function viewEssai(){
     const pickOk=fx.every((f,i)=>essaiPicks[d][i]!=null);
     const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&pickOk&&!over&&capOk&&tgtOk;
     const lbl= over?t("Mise trop élevée"):(!pickOk?t("Choisis ton pronostic sur chaque match"):(!allMin?t("Mise de 1 € min. par pari"):(!capOk?t("Désigne ton match favori 👑"):(!tgtOk?t("Choisis la cible 🎯 du bonus"):t("Valider mes pronos →")))));
+    /* ⚠️ v8.62 (2ᵉ doublon relevé par Hervé sur la même capture) — LE « ×2 » N'EST EXPLIQUÉ QU'UNE
+       FOIS. Le 3️⃣ disait « (obligatoire : il compte ×2, en gain comme en perte) » et le rappel bleu
+       de l'encadré doré, quinze lignes plus bas, « son gain et sa perte comptent double. C'est
+       obligatoire pour valider » — la même règle, dans les mêmes mots, tous les deux à l'écran
+       tant que la 👑 n'est pas posée. Le guide garde donc le GESTE (« touche la 👑… (obligatoire) »),
+       le rappel garde l'EXPLICATION.
+       ⚠️ C'EST LE GUIDE QUI MAIGRIT, PAS LE RAPPEL : le rappel bleu est la copie mot pour mot de
+       l'écran du VRAI jeu (cf. v8.37, quinze lignes plus bas) — le raccourcir ferait diverger le
+       tuto de ce qu'on apprend à reconnaître, et on réapprendrait deux fois. Le guide, lui,
+       n'existe que dans le tuto : il peut se contenter d'énumérer les quatre gestes.
+       ⚠️ Le rappel disparaît une fois la 👑 posée. C'est voulu, et c'est déjà le cas dans le vrai
+       jeu : à ce moment-là le geste est fait, et le barème ×2 est réexpliqué à l'étape 7 avec les
+       résultats — là où il devient enfin visible sur des chiffres. */
     return `${showGuide?`<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>${t("Comment parier :")}</b></div>
-        <div class="mini muted" style="margin-top:3px;line-height:1.8">${t("1️⃣ choisis le <b>résultat</b> de chaque match · 2️⃣ saisis ta <b>mise</b> · 3️⃣ touche la <b>👑</b> de ton <b>match favori</b> (obligatoire : il compte <b>×2</b>, en gain <b>comme en perte</b>) · 4️⃣ un <b>bonus</b> si tu veux, puis valide.")}</div></div>`:''}
+        <div class="mini muted" style="margin-top:3px;line-height:1.8">${t("1️⃣ choisis le <b>résultat</b> de chaque match · 2️⃣ saisis ta <b>mise</b> · 3️⃣ touche la <b>👑</b> de ton <b>match favori</b> (obligatoire) · 4️⃣ un <b>bonus</b> si tu veux, puis valide.")}</div></div>`:''}
       <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><div class="row"><span class="muted">${t("Ton capital")}</span><b>${cap} €</b></div>
         <div class="row" style="margin-top:4px"><span class="muted">${t("Misé")}</span><b class="${over?'red':''}"><span id="essaist">${tot}</span> € / ${max} € max</b></div>
         <div class="gauge ${over?'over':''}" id="essaigauge" style="margin-top:6px"><i style="width:${max>0?Math.min(100,Math.round(tot/max*100)):0}%"></i></div>
@@ -4775,17 +4880,34 @@ function viewEssai(){
           <b>⚠️ ${t("Mise trop élevée")}</b> <span id="essaiovertxt">${t("— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.",{a:tot,b:max,c:Math.max(0,tot-max)})}</span></div>
         ${/* v8.37 — LA MÊME CONSIGNE QUE DANS LE VRAI JEU, au même endroit et disparaissant pareil.
              C'est ici qu'on apprend le geste : un tuto qui montre autre chose que l'écran réel fait
-             réapprendre deux fois. */''}
-        ${essaiCap[d]<0?`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">${t("<b>Touche la 👑 sur ton match favori</b> — son gain <b>et</b> sa perte comptent double. C'est obligatoire pour valider.")}</div>`:''}
-        ${/* ⚠️ v7.94 (demandé par Hervé) — L'OUBLI N'ÉTAIT ENSEIGNÉ NULLE PART. C'est pourtant la
-             seule faute qu'un débutant peut subir DÈS SA PREMIÈRE VRAIE JOURNÉE sans rien avoir
-             fait de travers : il suffit de ne pas valider à temps. Et c'est la plus chère du jeu —
-             duel perdu quel que soit le score de l'adversaire. Les autres règles absentes du tuto
-             (renflouement, bonus invendus) se découvrent en jouant, sans dégât ; celle-ci coûte
-             avant d'avoir été comprise. Elle est donc ici, à l'endroit où l'on valide.
-             ⚠️ Le barème passe par forgotPtsShown()/forgotPenShown() : hors ligue, ces fonctions
-             renvoient le barème actuel — un chiffre en dur mentirait le jour où il changera. */''}
-        <div class="mini" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">⏰ ${t("<b>Valide avant l'heure limite.</b> Sans pronos validés, la journée est <b>perdue d'office</b> — quel que soit le résultat de l'adversaire — avec <b>{a} pt</b> au classement et <b>−{b} %</b> de capital.",{a:forgotPtsShown(),b:pct(forgotPenShown())})}</div></div>
+             réapprendre deux fois.
+             ⚠️ v8.63 (arbitré par Hervé sur maquette) — CETTE CONSIGNE DIT MAINTENANT **OÙ**, ET
+             SEULEMENT DANS LE TUTO. « sur ton match favori » nommait la cible sans jamais désigner
+             l'endroit : c'est exactement ce qui avait bloqué le testeur de la v8.37, qui savait
+             qu'il devait poser une 👑 et ne trouvait pas sur quoi appuyer. « sur l'un des matchs
+             ci-dessous » pointe la liste qui suit immédiatement. Et « obligatoire » passe devant,
+             en un mot, au lieu de la phrase entière rejetée en fin de bulle : deux lignes au lieu
+             de trois, sans rien perdre.
+             ⚠️ LE VRAI JEU GARDE L'ANCIENNE FORMULATION (ligne ~6500) — décision d'Hervé, prise en
+             connaissance de la divergence. Les deux écrans ne sont donc plus mot pour mot
+             identiques sur cette bulle ; le geste et l'emplacement, eux, restent les mêmes, c'est
+             ce qui fait que le tuto continue d'apprendre le bon réflexe. Si l'on revient un jour
+             sur ce point, la formulation à propager est CELLE-CI, pas l'inverse. */''}
+        ${essaiCap[d]<0?`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">${t("<b>Touche la 👑 sur l'un des matchs ci-dessous</b> — <b>obligatoire</b> ; son gain <b>et</b> sa perte comptent double.")}</div>`:''}
+        ${/* ⚠️ LA RÈGLE DE L'OUBLI EST DITE UNE FOIS, EN HAUT DE L'ÉCRAN — PAS ICI (v8.61, relevé
+             par Hervé sur capture). Elle a été ajoutée en v7.94 dans cet encadré, « à l'endroit où
+             l'on valide » ; la v8.54 l'a réécrite dans le bandeau bleu « ℹ️ Dans le vrai jeu » de
+             l'étape 6 — mais SANS retirer celle-ci. Les deux se sont retrouvées sur le même écran,
+             à quarante mots d'intervalle, avec les mêmes chiffres : le joueur lit deux fois la
+             même menace et se demande si ce sont deux pénalités qui s'ajoutent.
+             ⚠️ C'EST LE BANDEAU BLEU QUI RESTE, et pas l'inverse : le tuto n'a AUCUNE heure limite
+             (la journée se résout à la seconde). « Valide avant l'heure limite » y était un ordre
+             impossible à suivre — on cherchait un compte à rebours qui n'existe pas. « Dans le
+             vrai jeu, tu as une heure limite » dit la même règle sans la fausse consigne.
+             ⚠️ La règle elle-même ne doit PAS disparaître du tuto : c'est la seule faute qu'un
+             débutant peut subir dès sa première vraie journée sans rien avoir fait de travers, et
+             la plus chère du jeu. Si le bandeau de l'étape 6 saute un jour, la remettre ici. */''}
+        </div>
       ${fx.map((f,i)=>betCard(d,f,i)).join("")}
       ${(avail.length||usedBefore.length)?`<div class="box"><div class="mini muted">${t("Pimente ton duel en activant un bonus (facultatif) :")}</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
         ${avail.map(id=>`<span class="chip ${essaiCard[d]===id?'g':''} clik" onclick="essaiSetCard(${d},'${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}
@@ -4891,19 +5013,34 @@ function viewEssai(){
           ⚠️ Le ⭐ meilleur pronostiqueur et le +1 net positif ne sont TOUJOURS pas ici (v8.36/v8.39) :
           ils sont expliqués plus loin, au moment où ils se voient. */''}
     <div class="box">
-      <div class="mini muted" style="line-height:1.75">${t("Prêt à en découdre ? <b>The Maestro League</b>, ce n'est <b>pas qu'un jeu de pronos</b> : c'est un <b>championnat de stratégie entre amis</b> 🎮")}</div>
+      ${dtl(`<div class="mini muted" style="line-height:1.75">${t("Prêt à en découdre ? <b>The Maestro League</b>, ce n'est <b>pas qu'un jeu de pronos</b> : c'est un <b>championnat de stratégie entre amis</b> 🎮")}</div>`)}
       <div class="mini" style="margin-top:11px"><b>${t("🏆 Le grand objectif")}</b></div>
       <div class="mini muted" style="line-height:1.75;margin-top:3px">${t("Finir la saison avec un max de points pour être <b>champion</b> et empocher la <b>récompense</b> 🏆… et laisser le <b>dernier</b> repartir avec un bon vieux <b>gage</b> bien mérité 🎭")}</div>
       <div class="mini" style="margin-top:11px"><b>${t("⚡ Comment ça marche ?")}</b></div>
       <ul class="mini muted" style="margin:5px 0 0;padding-left:17px;line-height:1.75">
+        ${/* ⚠️ v8.66 (relevé par Hervé) — ON NE DISAIT NULLE PART QU'IL FALLAIT PRONOSTIQUER.
+              « Comment ça marche ? » ouvrait sur le DUEL (« tu affrontes un adversaire sur les
+              mêmes matchs ») puis sur le capital (« 100 € pour miser ») : on parlait d'adversaire,
+              de points et d'argent sans jamais nommer le geste qui produit tout le reste — prédire
+              le résultat d'un match. Le mot « pronostic » n'apparaissait qu'à l'étape 6, une fois
+              le joueur déjà devant l'écran de paris.
+              ⚠️ CETTE PUCE PASSE EN PREMIER : c'est l'action, les autres n'en sont que les
+              conséquences (qui gagne le duel, avec quel argent, avec quels bonus). La lire après
+              le duel obligeait à reconstruire l'ordre à l'envers.
+              ⚠️ v8.67 (relevé par Hervé) — NE PAS ÉCRIRE « DE VRAIS MATCHS ». Une ligue se joue en
+              📡 données réelles OU en 🎮 simulé (cf. `L.data_mode`), et le tuto lui-même tourne sur
+              des matchs fictifs. Promettre du vrai en page 1 serait faux pour une moitié des
+              parties — et pour l'écran qu'on est en train de lire. « les matchs » couvre les deux
+              sans rien perdre : ce qui compte ici, c'est le geste, pas la source des rencontres. */''}
+        <li style="margin:6px 0">${t("<b>Tes pronostics</b> : chaque journée, tu prédis le <b>résultat des matchs</b> — qui gagne — et tu <b>mises</b> sur chacun. Prono juste, tu gagnes selon la <b>cote</b> ; raté, tu perds ta mise.")}</li>
         <li style="margin:6px 0">${t("<b>Le duel de la journée</b> : tu affrontes <b>un adversaire</b> sur <b>les mêmes matchs</b>. Le <b>meilleur résultat</b> du jour prend <b>2 points</b> (<b>0</b> pour l'autre, <b>1 partout</b> à égalité).")}</li>
         <li style="margin:6px 0">${t("<b>Ton capital</b> : <b>100 €</b> d'<b>argent fictif</b> pour miser. <b>Miser gros peut tout rapporter… ou tout coûter.</b>")}</li>
         <li style="margin:6px 0">${t("<b>🃏 Tes bonus</b> : des pouvoirs à <b>usage unique</b> — doubler un gain, amortir une perte, <b>siphonner</b> l'adversaire. Tu les remportes aux <b>enchères</b> au départ et tu en joues <b>un par journée</b> au maximum.")}</li>
       </ul>
-      <div class="mini" style="margin-top:10px;color:var(--gold);background:rgba(231,184,75,.10);border-radius:8px;padding:8px 10px;line-height:1.65">${t("🧠 <b>C'est là que tout se joue</b> : le bon bonus, au bon moment. <b>Un seul coup peut tout renverser.</b>")}</div>
+      ${dtl(`<div class="mini" style="margin-top:10px;color:var(--gold);background:rgba(231,184,75,.10);border-radius:8px;padding:8px 10px;line-height:1.65">${t("🧠 <b>C'est là que tout se joue</b> : le bon bonus, au bon moment. <b>Un seul coup peut tout renverser.</b>")}</div>`)}
       <div class="mini" style="margin-top:11px"><b>${t("🦊 La partie test")}</b></div>
       <div class="mini muted" style="line-height:1.75;margin-top:3px">${t("Pour te faire la main : une <b>saison éclair de 2 journées</b> à <b>4 joueurs</b> — 🦊 Léa, 🐼 Marco, 🦉 Nina et toi.")}</div>
-      <div class="mini" style="margin-top:11px;color:var(--green);background:rgba(37,192,125,.10);border-radius:8px;padding:8px 10px">${t("👉 Les résultats tombent en un clin d'œil — suis le guide !")}</div></div>
+      ${dtl(`<div class="mini" style="margin-top:11px;color:var(--green);background:rgba(37,192,125,.10);border-radius:8px;padding:8px 10px">${t("👉 Les résultats tombent en un clin d'œil — suis le guide !")}</div>`)}</div>
     <button class="btn" onclick="essaiGo(1)">${t("C'est parti →")}</button>`; }
   // 1 — gage
   if(essaiStep===1){ return `${head(1)}
@@ -4944,16 +5081,16 @@ function viewEssai(){
       <ul class="mini muted" style="margin:6px 0 0;padding-left:17px;line-height:1.75">
         <li style="margin:6px 0">${t("<b>Le principe</b> : un bonus est un pouvoir à <b>usage unique</b> (doubler un gain, amortir une perte…). Tu en joues <b>un par journée</b> au maximum — et c'est souvent lui qui renverse un duel.")}</li>
         <li style="margin:6px 0">${t("<b>Comment les remporter</b> : tout s'achète <b>ici, avant la saison</b>. Chacun mise <b>en secret</b> ; le <b>plus offrant</b> l'emporte (à égalité, le plus rapide). Tu ne paies que ce que tu <b>remportes</b> (déduit de tes 100 €). Miser reste <b>facultatif</b>.")}</li>
-        <li style="margin:6px 0">${t("<b>Le piège stratégique</b> : ne vide pas ton capital ici… Tout est dans le <b>dosage</b> : t'armer de bonus… sans vider ton capital qui te servira pour <b>parier gros</b> ensuite.")}</li>
+        ${dtl(`<li style="margin:6px 0">${t("<b>Le piège stratégique</b> : ne vide pas ton capital ici… Tout est dans le <b>dosage</b> : t'armer de bonus… sans vider ton capital qui te servira pour <b>parier gros</b> ensuite.")}</li>`)}
       </ul>
-      <div class="mini muted" style="margin-top:6px">${t("👉 On t'a pré-rempli des mises — <b>ajuste-les</b>, ou mets 0.")}</div>
+      ${dtl(`<div class="mini muted" style="margin-top:6px">${t("👉 On t'a pré-rempli des mises — <b>ajuste-les</b>, ou mets 0.")}</div>`)}
       <div class="row" style="margin-top:6px"><span class="muted">${t("Total misé")}</span><b class="${over?'red':''}"><span id="essaibt">${tot}</span> € / 40 € max</b></div>
       ${/* ⚠️ v7.13 (Hervé) : ce texte affirmait que « l'organisateur peut créer des bonus
             personnalisés ». C'est FAUX — seuls le GAGE et la RÉCOMPENSE sont personnalisables
             (option ✏️ Gage & récompense sur mesure). La liste des bonus est fixe.
             Le nombre vient de CARD_IDS : il ne peut pas se démoder si on ajoute un bonus. */
         ann(t("il existe <b>bien plus de bonus</b> : <b>{a}</b> dans une vraie ligue, contre 3 ici pour aller vite.",{a:CARD_IDS.length}))}</div>
-    <div class="mini muted" style="margin-bottom:6px">👉 ${t("Touche un bonus pour découvrir ses super-pouvoirs.")}</div>
+    ${dtl(`<div class="mini muted" style="margin-bottom:6px">👉 ${t("Touche un bonus pour découvrir ses super-pouvoirs.")}</div>`)}
     ${/* Mise en page ALIGNÉE SUR LE VRAI JEU (v7.14, signalé par Hervé : « pas terrible » dans le
           tuto, « plus lisible » dans le jeu). Le défaut venait d'une SEULE ligne flex contenant
           emoji + nom + pastilles avec `flex-wrap` : `.row` étant en `space-between`, les éléments
@@ -4971,7 +5108,7 @@ function viewEssai(){
   if(essaiStep===3){ const won=essaiWon(); const spent=essaiSpent();
     const pOf=k=>ESSAI_PLAYERS.find(x=>x.id===k)||{n:"?",e:""}; const nmK=k=>k==="me"?t("Toi"):esc(pOf(k).n);
     return `${head(3)}
-    <div class="box"><h2 style="margin-top:0">${t("🃏 Résultat des enchères")}</h2><div class="mini muted">${t("Les 4 joueurs ont misé en secret. Le <b>plus offrant</b> remporte le bonus ; à <b>égalité</b>, le plus <b>rapide</b> l'emporte.")}</div></div>
+    <div class="box"><h2 style="margin-top:0">${t("🃏 Résultat des enchères")}</h2>${dtl(`<div class="mini muted">${t("Les 4 joueurs ont misé en secret. Le <b>plus offrant</b> remporte le bonus ; à <b>égalité</b>, le plus <b>rapide</b> l'emporte.")}</div>`)}</div>
     ${ESSAI_CARDS.map(id=>{ const R=essaiAuctionResult(id); const mine=essaiBids[id]||0; const mineWon=R.win==="me"; const w=pOf(R.win);
       const chip=mineWon?t("✓ à toi · {a} €",{a:R.best}):t("{a} · {b} €",{a:w.e+' '+esc(w.n),b:R.best});
       const bidsL=ESSAI_ORDER.map(k=>`<span${k===R.win?' style="color:var(--green);font-weight:700"':(R.bids[k]<=0?' class="muted"':'')}>${pOf(k).e} ${nmK(k)} ${R.bids[k]>0?R.bids[k]+'€':'—'}${k===R.win?' ✅':''}</span>`).join('&nbsp;·&nbsp;');
@@ -4988,7 +5125,7 @@ function viewEssai(){
           <span class="sport clik" style="flex:0 0 auto" onclick="showCardInfo('${id}')">${CARDS[id].e}</span>
           <div style="min-width:0;flex:1 1 auto"><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b class="clik" onclick="showCardInfo('${id}')">${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div></div>
         </div>
-        <span class="chip ${mineWon?(R.tie?'gold':'g'):'red'}" style="flex:0 0 auto;white-space:nowrap">${chip}</span></div><div class="mini" style="margin-top:6px">${bidsL}</div><div class="mini muted" style="margin-top:5px">${expl}</div></div>`; }).join("")}
+        <span class="chip ${mineWon?(R.tie?'gold':'g'):'red'}" style="flex:0 0 auto;white-space:nowrap">${chip}</span></div>${dtl(`<div class="mini" style="margin-top:6px">${bidsL}</div><div class="mini muted" style="margin-top:5px">${expl}</div>`)}</div>`; }).join("")}
     <div class="box" style="border:2px solid var(--green);background:rgba(37,192,125,.10)">
       <div class="mini"><b>${t("🃏 Bonus remportés")} :</b> ${won.length?won.map(id=>CARDS[id].e+' '+esc(t(CARDS[id].n))).join(' · '):t("aucun")}</div>
       <div class="mini" style="margin-top:5px">${t("Dépensé : <b>{a} €</b> → il te reste <b>{b} €</b> de capital pour parier toute la saison.",{a:spent,b:100-spent})}</div></div>
@@ -5010,7 +5147,7 @@ function viewEssai(){
           ⚠️ LES CHIFFRES SONT INJECTÉS (forgotPtsShown / forgotPenShown) et pas écrits en dur :
           ils suivent le barème de la ligue, ancien comme nouveau. */''}
     ${ann(t("⏰ tu as une <b>heure limite</b> pour valider. Sans pronos validés, le duel est <b>perdu d'avance</b> — quel que soit le résultat d'en face — et tu prends <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Aïe 😬",{a:pct(forgotPenShown()),b:forgotPtsShown()}))}</div>
-    ${betScreen(0,essaiFx(0),"essaiGo(6)",true)}`; }
+    ${betScreen(0,essaiFx(0),"essaiGo(6)",!court)}`; }
   // 6 — résultats J1 (barème expliqué + classement à 4)
   if(essaiStep===6){ const R=dayResults(0,essaiFx(0));
     return `${head(6)}
@@ -5021,7 +5158,7 @@ function viewEssai(){
         <li>${t("Duel : <b>gagné 2</b> · <b>nul 1</b> · <b>perdu 0</b>")}</li>
         <li>${t("<b>+1</b> si ton <b>net est positif</b>")}</li>
         <li>${t("<b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour (plus gros net de la ligue)")}</li></ul></div>
-    <div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:8px 10px;line-height:1.6">💡 <b>${t("Ne pas confondre")}</b> : ${t("le <b>gain en €</b> nourrit ton <b>capital</b> (pour miser ensuite), les <b>points</b> font le <b>classement</b>. On peut gagner de l'argent et perdre le duel.")}</div>
+    ${dtl(`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:8px 10px;line-height:1.6">💡 <b>${t("Ne pas confondre")}</b> : ${t("le <b>gain en €</b> nourrit ton <b>capital</b> (pour miser ensuite), les <b>points</b> font le <b>classement</b>. On peut gagner de l'argent et perdre le duel.")}</div>`)}
     <div class="box"><div class="mini muted">${t("Classement — après 1 journée sur 6")}</div>
       <div style="overflow-x:auto;margin-top:6px"><table style="width:100%;font-variant-numeric:tabular-nums">
       ${(()=>{ const caps=essaiCapitals(0); return essaiRank(essaiTotals(0),caps).map((p,i)=>`<tr><td style="width:1%">${["🥇","🥈","🥉"][i]||(i+1)+'.'}</td><td>${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num" style="white-space:nowrap"><b>${p.pts} pt${p.pts>1?'s':''}</b></td><td class="num muted" style="white-space:nowrap">${caps[p.id].toFixed(2)} €</td></tr>`).join(""); })()}</table></div></div>
@@ -5033,10 +5170,10 @@ function viewEssai(){
   // 7 — paris J2 : nouvel adversaire, et cette fois les matchs sont IMPOSÉS (v8.38)
   if(essaiStep===7){ const rk=essaiRank(essaiTotals(0),essaiCapitals(0)); const mr=rk.findIndex(p=>p.id==="marco")+1;
     return `${head(7)}
-    <div class="box" style="border:2px solid var(--blue);background:rgba(90,166,224,.10)"><div class="mini"><b>${t("🆕 Nouvelle journée, nouvel adversaire")}</b></div>
-      <div class="mini muted" style="margin-top:3px">${t("En J1 tu affrontais 🦊 Léa. Cette journée, tu défies 🐼 <b>Marco</b> — actuellement <b>{a}{b} au classement</b>. Chaque journée oppose de nouveaux duels.",{a:mr,b:mr===1?"er":"e"})}</div></div>
+    ${dtl(`<div class="box" style="border:2px solid var(--blue);background:rgba(90,166,224,.10)"><div class="mini"><b>${t("🆕 Nouvelle journée, nouvel adversaire")}</b></div>
+      <div class="mini muted" style="margin-top:3px">${t("En J1 tu affrontais 🦊 Léa. Cette journée, tu défies 🐼 <b>Marco</b> — actuellement <b>{a}{b} au classement</b>. Chaque journée oppose de nouveaux duels.",{a:mr,b:mr===1?"er":"e"})}</div></div>`)}
     <div class="box"><h2 style="margin-top:0">${t("📅 Journée 2 — tes pronos")}</h2>
-      <div class="mini muted">${t("Cette fois tu joues ✈️ <b>à l'extérieur</b> : c'est 🐼 <b>Marco</b> qui reçoit, donc <b>lui</b> qui a choisi les 3 matchs. Mêmes règles : résultat, mise, 👑 match favori (obligatoire), bonus.")}</div></div>
+      ${dtl(`<div class="mini muted">${t("Cette fois tu joues ✈️ <b>à l'extérieur</b> : c'est 🐼 <b>Marco</b> qui reçoit, donc <b>lui</b> qui a choisi les 3 matchs. Mêmes règles : résultat, mise, 👑 match favori (obligatoire), bonus.")}</div>`)}</div>
     ${betScreen(1,essaiFx(1),"essaiGo(8)",false)}`; }
   // 8 — résultats J2 (classement à 4)
   if(essaiStep===8){ const R2c=dayResults(1,essaiFx(1));
@@ -5051,10 +5188,10 @@ function viewEssai(){
   if(essaiStep===9){ return `${head(9)}
     <div class="box" style="text-align:center"><div style="font-size:38px">📅➡️🏁</div><h2 style="margin:8px 0 4px">${t("Une vraie saison continue…")}</h2>
       <div class="mini muted" style="text-align:left;line-height:1.7">${t("On s'arrête à <b>2 journées</b> pour la démo. Une vraie ligue en enchaîne <b>bien plus</b> : selon le nombre de joueurs, <b>chacun affronte tous les autres</b>.")}</div>
-      <div class="mini" style="margin-top:8px;color:var(--green);background:rgba(37,192,125,.10);border-radius:8px;padding:7px 9px;text-align:left">🔁 ${t("En cours de saison, tu peux aussi <b>acheter / vendre</b> tes bonus non utilisés à tes adversaires.")}</div>
+      ${dtl(`<div class="mini" style="margin-top:8px;color:var(--green);background:rgba(37,192,125,.10);border-radius:8px;padding:7px 9px;text-align:left">🔁 ${t("En cours de saison, tu peux aussi <b>acheter / vendre</b> tes bonus non utilisés à tes adversaires.")}</div>`)}
       </div>
-    <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><b class="gold">🔥 ${t("Suspense jusqu'au bout")}</b>
-      <div class="mini" style="margin-top:4px">${t("À la <b>dernière journée</b>, les points de <b>duel comptent double</b> : même dernier, on peut renverser la table. <b>Rien n'est jamais joué.</b>")}</div></div>
+    ${dtl(`<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><b class="gold">🔥 ${t("Suspense jusqu'au bout")}</b>
+      <div class="mini" style="margin-top:4px">${t("À la <b>dernière journée</b>, les points de <b>duel comptent double</b> : même dernier, on peut renverser la table. <b>Rien n'est jamais joué.</b>")}</div></div>`)}
     <button class="btn" onclick="essaiGo(10)">${t("Voir le classement final 🏆 →")}</button>`; }
   // 10 — classement final à 4 + gage + options du vrai jeu
   const nmOf=id=>ESSAI_PLAYERS.find(x=>x.id===id)||{n:"?",e:""};
@@ -5066,7 +5203,7 @@ function viewEssai(){
     <div class="box"><div class="mini muted">${t("Classement final — après les 6 journées")}</div>
       <div style="padding:2px 0;overflow-x:auto;margin-top:6px"><table style="font-variant-numeric:tabular-nums"><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
       ${rows.map((p,i)=>`<tr><td>${["🥇","🥈","🥉"][i]||i+1}</td><td>${p.e} ${esc(p.n)}${p.me?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num"><b>${p.pts}</b></td><td class="num muted">${p.cap.toFixed(2)} €</td></tr>`).join("")}</table></div></div>
-    <div class="mini muted" style="margin-top:-2px">${t("Exemple d'un classement en fin de saison. Le rang se fait aux <b>points</b> ; le <b>capital</b> (argent fictif) montre qui a le mieux géré son argent.")}</div>
+    ${dtl(`<div class="mini muted" style="margin-top:-2px">${t("Exemple d'un classement en fin de saison. Le rang se fait aux <b>points</b> ; le <b>capital</b> (argent fictif) montre qui a le mieux géré son argent.")}</div>`)}
     <div class="box" style="border:2px solid var(--gold);background:rgba(224,182,79,.12);text-align:center">
       <div class="gold" style="font-size:13px;font-weight:800;letter-spacing:.4px">${t("🏆 LA RÉCOMPENSE")}</div>
       <div class="mini muted" style="margin-top:2px">${t("pour le champion — {a}",{a:champ.e+' '+esc(champ.n)})}</div>
@@ -6791,7 +6928,38 @@ function viewWait(dayLbl){
          change ; sur un nom long, la pastille descend sous le nom au lieu de l'écraser.
          ⚠️ Ne pas remettre `flex:0 0 auto` sur la pastille « pour qu'elle reste sur une ligne » :
          c'est exactement ce qui cassait le nom. */
-      return `<div class="box row" style="flex-wrap:wrap;gap:6px 10px"><span class="mini" style="flex:1 1 150px;min-width:0"><b>${esc(f.home)} – ${esc(f.away)}</b>${(info||mk)?`<br>${info}${mk}`:''}</span><span class="chip" style="flex:0 1 auto;white-space:normal">${selD} @${oddD} · ${b.stake}€</span></div>`;
+      /* ⚠️ v8.59 (capture d'Hervé) — UNE CARTE SUR CINQ NE SE LISAIT PAS COMME LES AUTRES.
+         Vu sur « Bristol City – Walsall » : nom, puis « Coupe de la Ligue · » seul sur une ligne,
+         « aujourd'hui 20:45 » sur la suivante, les logos 👑 🃏 sur une troisième — et la pastille
+         du prono flottant à droite, en face de rien. Les quatre autres cartes affichaient bien
+         nom / compétition·heure / prono.
+         LA CAUSE : la disposition était UN SEUL bloc flex à deux enfants (le texte à gauche, la
+         pastille à droite). Tant que la pastille redescend, on LIT trois lignes empilées — mais
+         c'est un hasard de largeur, pas une règle. Dès que le texte de gauche devient assez long
+         (compétition + heure + deux logos bonus), il se découpe tout seul et la pastille reste en
+         haut à droite : la même carte, disposée autrement, sans que rien ne l'ait décidé.
+         LA CORRECTION : on écrit explicitement les trois lignes que l'écran montrait déjà par
+         accident — nom, puis compétition · heure, puis la pastille du prono avec les logos bonus
+         juste à côté d'elle. La longueur du texte et le nombre de bonus ne peuvent plus changer
+         l'ordre de lecture : les cinq cartes sont bâties pareil, celle qui porte deux bonus comme
+         celle qui n'en porte aucun.
+         ⚠️ Les logos vont désormais AVEC LE PRONO (ils le qualifient : 👑 = capitaine sur ce
+         match, 🃏 = bonus joué dessus) et non plus avec la compétition, où ils ne parlaient de
+         rien. C'est ce qu'Hervé demandait dès la v8.01 ; ça ne coûtait plus de hauteur ici, la
+         ligne de la pastille existant de toute façon.
+         ⚠️ v8.59 (2ᵉ correction, capture d'Hervé) — LES LOGOS DÉCROCHAIENT SUR LE PLUS LONG PRONO.
+         Vu sur « Union Saint-Gilloise / Bodø/Glimt @2.00 / 3.40 · 10€ » — la pastille la plus
+         longue possible (double chance : deux équipes ET deux cotes) : elle remplissait la ligne,
+         et 👑 🔥 basculaient SEULS sur la ligne suivante. Le logo orphelin, revenu par la porte
+         de derrière : `flex-wrap` place les éléments d'après leur largeur NATURELLE avant de les
+         faire rétrécir — une pastille trop large éjecte donc ses voisins au lieu de leur céder
+         de la place.
+         LA CORRECTION : plus de retour à la ligne du tout sur cette ligne. C'est la PASTILLE qui
+         rétrécit (`flex:0 1 auto` + `min-width:0`, son texte passe sur deux lignes à l'intérieur)
+         et les logos sont bloqués à leur taille (`flex:0 0 auto`). Ils ne peuvent plus se
+         détacher du prono qu'ils qualifient, quelle que soit la longueur du nom des équipes.
+         ⚠️ Ne pas remettre `flex-wrap:wrap` ici : c'est ce qui décrochait les logos. */
+      return `<div class="box"><div class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b></div>${info?`<div class="mini" style="margin-top:3px">${info}</div>`:''}<div style="display:flex;align-items:center;gap:6px;margin-top:7px"><span class="chip" style="flex:0 1 auto;min-width:0;white-space:normal">${selD} @${oddD} · ${b.stake}€</span>${mk?`<span style="flex:0 0 auto;display:flex;align-items:center;gap:6px">${mk}</span>`:''}</div></div>`;
     }).join("") : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
     const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
     const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
@@ -7638,7 +7806,7 @@ function waitingResultsBody(d){
   const attenteScore = liveShow && (duels||[]).some(dz=>(dz.fixtures||[]).some(
     f=>f && f.evId && !f.canceled && !liveVerdict(f,null) && matchEtat(f)==="fini"));
   let h=`${recapNav(d)}<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
-    <div class="mini" style="color:var(--accent)">⏳ ${closed?(plusieursDuels?t("Paris clôturés — on attend la fin de <b>tous les matchs de la ligue</b>, pas seulement des tiens."):t("Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.")):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?(plusieursDuels?t("Paris clôturés — on attend la fin de <b>tous les matchs de la ligue</b>, pas seulement des tiens."):t("Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.")):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}${isCurrent?resolutionETALine(closed):''}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
     ${/* ⚠️ v7.78 — L'ALERTE « PRONOS NON VALIDÉS » (demandée par Hervé). Tant que les paris sont
          ouverts, cet écran montrait exactement la même chose à qui a validé et à qui n'a rien fait :
          l'affiche des matchs et l'heure de clôture. Or l'oubli est la faute la PLUS CHÈRE du jeu —
