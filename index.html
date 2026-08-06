@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.69";
+const APP_VERSION = "v8.71";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2479,7 +2479,9 @@ const EN={
   "Voir le classement journée par journée":"See the standings matchday by matchday",
   "Revenir au bilan de la ligue":"Back to the league summary",
   "📋 Résultats · J{a}":"📋 Results · MD{a}", "Les affiches du jour":"Today's fixtures", "vs":"vs", "Les 5 matchs ne sont pas encore choisis.":"The 5 matches haven't been picked yet.",
-  "Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.":"Matchday in progress — picks and stakes will be revealed once the day is over.",
+  "Journée en cours.":"Matchday in progress.",
+  // v8.71 — pourquoi rien n'est visible tant que TON premier match n'a pas commencé.
+  "Rien n'est visible pour l'instant — ni les résultats, ni les pronos des autres. Tout dépend du <b>coup d'envoi de ton premier match</b>, {a} : avant lui, ton pari peut encore changer, et voir le pari de quelqu'un qui peut encore le modifier serait un avantage, pas une information.":"Nothing is visible yet — neither the results nor anyone else's picks. It all hinges on the <b>kick-off of your first match</b>, {a}: until then your bet can still change, and seeing a bet that can still be changed would be an advantage, not information.",
   "✅ Cette option est <b>active sur ton compte</b>. Profites-en !":"✅ This option is <b>active on your account</b>. Enjoy!",
   "🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.":"🔒 This option isn't <b>active on your account yet</b>. Subscribe to use it — <b>during the test phase there's no payment</b>: activation is instant.",
   "Souscrire à cette option":"Subscribe to this option",
@@ -7061,7 +7063,26 @@ function viewWait(dayLbl){
     const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
     const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
     // Statut des pronos de CHAQUE joueur (qui a validé, qui n'a pas encore) — demandé par Hervé.
-    const pronosRoster = humansN>1 ? `<h2 class="mini" style="margin:10px 2px 4px">${t("Pronos des joueurs · {a}/{b}",{a:doneN,b:humansN})}${dt.ok?' · '+t("clôture dans {a}",{a:fmtLeft(dt.bet)}):''}</h2>`
+    /* ⚠️ v8.70 (capture d'Hervé sur la ligue 4EB93) — CETTE LIGNE LISAIT LA MAUVAISE ÉCHÉANCE,
+       et l'annonçait dans une phrase cassée : « clôture dans délai écoulé ».
+       DEUX DÉFAUTS QUI SE CACHAIENT L'UN L'AUTRE :
+       1. `dt.bet` est le MINUTEUR DE LA FORMULE. En données réelles, la clôture est le PREMIER
+          COUP D'ENVOI des 5 matchs depuis la v7.32 — les deux n'ont aucune raison de coïncider.
+          Sur 4EB93, le minuteur était expiré depuis des heures alors que le vrai délai courait
+          jusqu'au soir : l'écran annonçait donc une clôture passée juste sous un bouton
+          « ✏️ Modifier (jusqu'à la clôture) » toujours actif. C'est exactement le défaut corrigé
+          en v7.43 ailleurs, resté ici. On lit maintenant la MÊME source que `deadlinePassed()` et
+          que `betLineHTML()` : `duelDeadline(myDuel())`.
+       2. `fmtLeft` renvoie le texte « délai écoulé », qui ne peut pas s'insérer derrière « dans ».
+          Une fois (1) corrigé, le cas ne devrait plus se produire ici — ce bloc n'est rendu que
+          si les paris sont ENCORE ouverts. On garde quand même la garde : elle couvre le repli
+          sur `dt.bet` quand le duel n'a pas encore ses matchs, seul chemin qui puisse repasser
+          une date dépassée. ⚠️ Ne pas composer « dans {a} » avec `fmtLeft` sans cette garde. */
+    const dlRoster=duelDeadline(myDuel())||dt.bet;
+    const clotureRoster = !dlRoster ? '' : (Date.now()>=dlRoster
+      ? ' · '+t("Paris clôturés 🔒")
+      : ' · '+t("clôture dans {a}",{a:fmtLeft(dlRoster)}));
+    const pronosRoster = humansN>1 ? `<h2 class="mini" style="margin:10px 2px 4px">${t("Pronos des joueurs · {a}/{b}",{a:doneN,b:humansN})}${clotureRoster}</h2>`
       + players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id); const dd=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const noFx=!!(dd&&!dd.fixtures);
         const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`:(noFx?`<span class="chip">${t("attend ses matchs")}</span>`:`<span class="chip">${t("⏳ pas encore")}</span>`);
         return `<div class="box row"><div class="row" style="gap:9px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div>${chip}</div>`; }).join('') : '';
@@ -7883,6 +7904,24 @@ function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.r
   return back + recapBody(d); }
 // Écran d'attente de l'onglet Résultats : quand la journée n'est pas encore terminée (ex. J1 avant
 // toute résolution). On montre les affiches du jour si elles sont connues ; pronos/mises masqués.
+/* ─── POURQUOI ON NE VOIT RIEN ENCORE (v8.71, demandé par Hervé) ─────────────────────────────
+   Sur la ligue 4EB93 : les matchs du duel voisin étaient déjà « 🏁 terminé » et les siens ne
+   commençaient que le soir. L'écran ne montrait donc aucun résultat, aucun prono — sans dire
+   pourquoi, ni jusqu'à quand. On ne sait pas si l'app attend, si elle est cassée, ou si l'on a
+   raté un réglage.
+   ⚠️ LA LIGNE QUE CE BLOC REMPLACE ÉTAIT FAUSSE POUR LES DÉTENTEURS DE 🕵️. Elle promettait des
+   pronos « révélés une fois la journée terminée » ; avec l'option Voir l'adversaire, ils le sont
+   dès TA clôture — le premier coup d'envoi de tes 5 matchs (v7.32) — donc bien avant la fin de la
+   journée. L'ancienne phrase est réduite à « Journée en cours. » et l'explication vit ici.
+   ⚠️ ON DIT LA RAISON, PAS SEULEMENT LA RÈGLE. « Rien n'est visible » se subit ; « ton pari peut
+   encore changer, et voir un pari encore modifiable serait un avantage » s'accepte. C'est une
+   règle d'équité, pas une limitation technique, et l'écrire évite qu'on la prenne pour un défaut.
+   ⚠️ L'HEURE VIENT DE `duelDeadline`, comme partout ailleurs depuis la v8.70. Ne pas la recalculer
+   ici : c'est ce qui avait produit le « clôture dans délai écoulé » deux écrans plus loin. */
+function verrouAvantCloture(){
+  const dl=duelDeadline(myDuel()); if(!dl || Date.now()>=dl) return '';
+  return `<div class="mini muted" style="margin-top:6px;line-height:1.6">🔒 ${t("Rien n'est visible pour l'instant — ni les résultats, ni les pronos des autres. Tout dépend du <b>coup d'envoi de ton premier match</b>, {a} : avant lui, ton pari peut encore changer, et voir le pari de quelqu'un qui peut encore le modifier serait un avantage, pas une information.",{a:'<b>'+fmtWhen(dl)+'</b>'})}</div>`;
+}
 function waitingResultsBody(d){
   const org=me()&&me().is_organizer;
   const isCurrent=(L.status==="running" && d===(L.current_day||0));
@@ -7903,7 +7942,7 @@ function waitingResultsBody(d){
   const attenteScore = liveShow && (duels||[]).some(dz=>(dz.fixtures||[]).some(
     f=>f && f.evId && !f.canceled && !liveVerdict(f,null) && matchEtat(f)==="fini"));
   let h=`${recapNav(d)}<div class="box"><h2 style="margin-top:0">${t("📋 Résultats · J{a}",{a:d+1})}</h2>
-    <div class="mini" style="color:var(--accent)">⏳ ${closed?(plusieursDuels?t("Paris clôturés — on attend la fin de <b>tous les matchs de la ligue</b>, pas seulement des tiens."):t("Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.")):t("Journée en cours — les pronos et les mises seront révélés une fois la journée terminée.")}</div>${closed?'':betLineHTML()}${isCurrent?resolutionETALine(closed):''}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?(plusieursDuels?t("Paris clôturés — on attend la fin de <b>tous les matchs de la ligue</b>, pas seulement des tiens."):t("Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.")):t("Journée en cours.")}</div>${closed?'':betLineHTML()}${closed?'':verrouAvantCloture()}${isCurrent?resolutionETALine(closed):''}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
     ${/* ⚠️ v7.78 — L'ALERTE « PRONOS NON VALIDÉS » (demandée par Hervé). Tant que les paris sont
          ouverts, cet écran montrait exactement la même chose à qui a validé et à qui n'a rien fait :
          l'affiche des matchs et l'heure de clôture. Or l'oubli est la faute la PLUS CHÈRE du jeu —
