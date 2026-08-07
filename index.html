@@ -223,7 +223,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.77";
+const APP_VERSION = "v8.78";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1792,6 +1792,10 @@ const EN={
   "Ouvrir →":"Open →", "Salon · inscriptions ouvertes":"Lobby · sign-ups open", "Vote du gage":"Forfeit vote", "En cours":"Ongoing",
   // v8.68 — accueil : le bandeau « à toi de jouer » et les lignes de ligue.
   "À toi de jouer":"Your move",
+  // v8.78 — bandeau « résultats à découvrir », prioritaire sur « pronos à faire ».
+  "Résultats à découvrir":"Results to discover",
+  "la journée {a} est jouée, tu n'as pas encore vu le verdict.":"matchday {a} has been played — you haven't seen the verdict yet.",
+  "Voir les résultats":"See the results",
   "tes pronos ne sont pas validés.":"your picks aren't locked in.",
   "Clôture {a} · <b>{b}</b>":"Closes {a} · <b>{b}</b>",
   "dans {c}":"in {c}",
@@ -3867,8 +3871,12 @@ function loadLast(){ try{return JSON.parse(localStorage.getItem("pl_last"));}cat
    que personne n'en dépendait. La redirection de la v7.49 l'a rendu visible.
    ⚠️ Effet de bord assumé : les anciennes clés ne sont plus lues, donc chacun sera redirigé UNE
    fois vers la dernière journée résolue. Sans conséquence, et plutôt conforme à l'intention. */
-function seenKey(){ return "pl_seen_"+S.leagueId+"_"+(S.myId||"?"); }
-function getSeen(){ return +(localStorage.getItem(seenKey())||0); }
+/* ⚠️ v8.78 — PARAMÉTRÉES POUR L'ACCUEIL, `S.leagueId`/`S.myId` PAR DÉFAUT. L'accueil doit savoir
+   si les résultats d'une AUTRE ligue que celle ouverte ont été vus. Même principe que `dayTimes`
+   en v8.68 : on paramètre la fonction existante plutôt que d'en écrire une seconde, sinon deux
+   endroits calculeraient « déjà vu » et finiraient par ne plus dire la même chose. */
+function seenKey(lid,pid){ return "pl_seen_"+(lid||S.leagueId)+"_"+((pid!=null?pid:S.myId)||"?"); }
+function getSeen(lid,pid){ return +(localStorage.getItem(seenKey(lid,pid))||0); }
 function setSeen(v){ localStorage.setItem(seenKey(), v); }
 /* ===== MODE CONSULTATION (v7.11, demandé par Hervé) =========================================
  * « Que je puisse cliquer sur la ligue, même fermée, et être redirigé vers cette ligue. Juste
@@ -4692,6 +4700,20 @@ async function loadHomeTodo(){
       const duel=(dls||[]).find(x=>x.league_id===m.lg.id && x.day===d && (x.home_id===m.pid||x.away_id===m.pid));
       const monPari=(bts||[]).find(x=>x.league_id===m.lg.id && x.day===d && x.player_id===m.pid);
       const ph=phaseLigue(m.lg, duel, monPari); if(ph) homePhase[m.lg.id]=ph;
+      /* ⚠️ v8.78 (défaut vécu par Hervé) — LES RÉSULTATS NON VUS PASSENT DEVANT, et le bandeau le
+         DIT. Avant : le bandeau annonçait « fais tes pronos », mais l'app, en ouvrant la ligue,
+         renvoie d'abord vers la journée résolue qu'on n'a pas acquittée (`jourNonVu`, v7.49). Le
+         bouton promettait donc un écran et en donnait un autre — et il fallait revenir à l'accueil
+         et recliquer pour atteindre les pronos.
+         ⚠️ ON NE CONTOURNE PAS LA REDIRECTION, ON S'ALIGNE DESSUS. Forcer l'écran de pronos aurait
+         fait sauter la découverte des résultats — la partie la plus attendue du jeu — sans que
+         personne ne l'ait demandé. C'est le bandeau qui mentait, pas la redirection.
+         ⚠️ MÊME CONDITION QUE `jourNonVu` (`current_day > getSeen()`), sinon les deux écrans se
+         contrediraient à nouveau, ce qui est précisément le défaut qu'on corrige. */
+      if((m.lg.current_day|0)>=1 && (m.lg.current_day|0)>getSeen(m.lg.id,m.pid)){
+        homeTodo.push({lg:m.lg, pid:m.pid, kind:"resultats", jour:(m.lg.current_day|0)});
+        return;                                             // une seule action par ligue à la fois
+      }
       // Pas encore de duel (matchs pas tirés) → rien à faire, et surtout aucune échéance à annoncer.
       if(!duel) return;
       const t=duelDeadline(duel,m.lg);
@@ -4699,9 +4721,10 @@ async function loadHomeTodo(){
       const b=(bts||[]).find(x=>x.league_id===m.lg.id && x.day===d && x.player_id===m.pid);
       // Un pari SANS pronostic ne compte pas comme validé — même règle qu'à l'écran Résultats (v8.25).
       if(b && Array.isArray(b.picks) && b.picks.length) return;
-      homeTodo.push({lg:m.lg, pid:m.pid, deadline:t});
+      homeTodo.push({lg:m.lg, pid:m.pid, kind:"pronos", deadline:t});
     });
-    homeTodo.sort((a,b)=>a.deadline-b.deadline);            // le plus urgent en premier
+    // Les résultats à découvrir d'abord, puis les pronos par urgence.
+    homeTodo.sort((a,b)=> (a.kind===b.kind) ? ((a.deadline||0)-(b.deadline||0)) : (a.kind==="resultats"?-1:1));
   }catch(e){ homeTodo=[]; homePhase={}; }
   homeTodoLoaded=true; render();
 }
@@ -4811,7 +4834,15 @@ function viewHome(){
      Sans l'heure, « tes pronos ne sont pas validés » ne dit pas s'il reste dix minutes ou deux
      jours — donc ne déclenche rien. Le barème de l'oubli (−1 pt, −10 %) n'est PAS répété ici : il
      est déjà sur l'écran de pronos et sur l'écran Résultats, ce serait la troisième fois. */
-  const alerte=homeTodo.map(x=>`<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)">
+  /* ⚠️ v8.78 — DEUX BANDEAUX, PAS UN. « Résultats à découvrir » est une bonne nouvelle (doré) ;
+     « pronos non validés » est un avertissement (rouge). Les peindre pareil les rendrait
+     interchangeables, alors que l'un se savoure et l'autre se règle avant une échéance. */
+  const alerte=homeTodo.map(x=> x.kind==="resultats"
+    ? `<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.12)">
+      <b class="gold">🎁 ${t("Résultats à découvrir")}</b>
+      <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("la journée {a} est jouée, tu n'as pas encore vu le verdict.",{a:x.jour})}</div>
+      <button class="btn" style="margin-top:10px" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Voir les résultats")}</button></div>`
+    : `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)">
       <b class="red">⚠️ ${t("À toi de jouer")}</b>
       <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("tes pronos ne sont pas validés.")}</div>
       <div class="mini muted" style="margin-top:2px">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>
