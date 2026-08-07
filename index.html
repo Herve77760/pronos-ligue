@@ -239,7 +239,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.109";
+const APP_VERSION = "v8.110";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5040,10 +5040,19 @@ async function loadHomeTodo(){
      redirection automatique EN OUVRANT la ligue ; l'accueil n'avait jamais reçu le même réflexe).
      ⚠️ `alleeAuTerme` SEULEMENT, PAS TOUTE LIGUE `done` : une ligue fermée AVANT TERME par
      l'organisateur (`closeLeague`) n'a pas de dernière journée jouée à découvrir — même garde que
-     `finDeSaison` dans `refresh()`, pour ne pas promettre un bandeau qui n'aurait rien à montrer. */
+     `finDeSaison` dans `refresh()`, pour ne pas promettre un bandeau qui n'aurait rien à montrer.
+     ⚠️ v8.110 (demandé par Hervé, après un compte de test à l'historique chargé) — PLAFOND DE
+     3 JOURS DEPUIS LA FIN. Sans lui, un compte avec beaucoup de ligues jamais rouvertes après leur
+     fin (vieux tests, ligues d'amis abandonnées) se retrouve avec un bandeau par ligue morte à
+     chaque visite — le signal utile (« ta ligue vient de finir ») se noie dans le bruit de fond.
+     Passé ce délai, la ligue reste bien sûr consultable — juste plus poussée sur l'accueil.
+     `finished_at` MANQUANT → ON NE MONTRE PAS : plus sûr de sous-signaler une ligue si ancienne
+     qu'elle date d'avant cette colonne que de ressusciter tout un historique par défaut. */
   (myLeagues||[]).filter(m=>m.lg && m.lg.status==="done" && m.pid).forEach(m=>{
     const alleeAuTerme = ((m.lg.num_days|0)>0 && (m.lg.current_day|0)>=(m.lg.num_days|0));
     if(!alleeAuTerme) return;
+    const finDepuisMs = m.lg.finished_at ? (Date.now()-new Date(m.lg.finished_at).getTime()) : Infinity;
+    if(finDepuisMs > 3*24*3600*1000) return;
     if((m.lg.current_day|0)>=1 && (m.lg.current_day|0)>getSeen(m.lg.id,m.pid)){
       homeTodo.push({lg:m.lg, pid:m.pid, kind:"resultats", jour:(m.lg.current_day|0)});
     }
