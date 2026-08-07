@@ -223,7 +223,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.81";
+const APP_VERSION = "v8.100";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -456,9 +456,17 @@ function modeCards(m){ return (m==="simple") ? CARD_IDS.filter(id=>SIMPLE_CARDS.
    bonus seulement sont mis aux enchères. Compter les quatorze y serait tout aussi faux.
    ⚠️ ET C'EST DYNAMIQUE PAR CONSTRUCTION — aucun 14 écrit nulle part. Ajouter ou retirer un bonus
    de `CARD_IDS` (ou de `SIMPLE_CARDS`) déplace le plafond tout seul, ce qui était la demande. */
+/* ⚠️ v8.82 — AVEC LA TRÊVE, LE PLAFOND DE DÉPART TOMBE À LA MOITIÉ DES JOURNÉES. C'est la
+   contrepartie de la seconde fenêtre : on n'achète plus de quoi tenir toute la saison, seulement
+   l'aller. Et comme les bonus non joués sont perdus à la trêve, ce plafond vaut EXACTEMENT le
+   nombre de journées restantes avant elle — acheter à fond oblige donc à jouer un bonus par jour,
+   sans marge. C'est voulu : le maximum devient un pari, pas un confort.
+   ⚠️ LA BORNE PAR LES BONUS EXISTANTS RESTE (v8.33) : annoncer un plafond qu'on ne peut pas
+   atteindre est une promesse fausse — en mode Simple il n'y a que 6 bonus. */
 function maxBonusJoueur(){
   const jours = Math.max(1, (L && L.num_days) || 1);
-  return Math.max(1, Math.min(jours, modeCards(getMode()).length));
+  const plafond = hasTreve() ? Math.max(1, Math.floor(jours/2)) : jours;
+  return Math.max(1, Math.min(plafond, modeCards(getMode()).length));
 }
 function modeGagePool(m){ return (m==="simple") ? GAGES.filter(g=>g.s) : GAGES.slice(); }
 const MODES={
@@ -524,6 +532,68 @@ function isSolo(){ return (players||[]).filter(p=>!p.is_ai).length===1; }
    nouvelles parties écrivent donc `ar`.
    ⚠️ ON LIT ENCORE `soloAR` : les parties solo déjà lancées le portent, et les oublier ferait
    passer une partie en 4 journées à 2 journées au prochain calcul de calendrier. */
+/* ─── TRÊVE DE MI-SAISON (v8.82) ─────────────────────────────────────────────────────────────
+   ⚠️ LE RÉGLAGE EST FIGÉ DANS LA LIGUE, ON NE LIT PAS `hasOpt('treve')` EN JEU. Les options
+   premium EXPIRENT au bout d'un an (v7.45) : une ligue en cours perdrait sa trêve le jour où
+   l'abonnement du créateur s'arrête, et les règles changeraient sous les pieds des joueurs en
+   pleine saison. L'option n'autorise donc que la CASE À COCHER à la création ; ensuite c'est
+   `treve:true` dans le JSON `gage` qui fait foi, comme `enjeu` et `ar`.
+   ⚠️ SECONDE GARDE, VOLONTAIREMENT REDONDANTE : pas de trêve sous 4 journées. Une ligue peut
+   être relancée, migrée ou créée par un chemin non prévu ; une trêve après une seule journée
+   n'aurait aucun sens. La case à cocher force déjà 4 journées côté création — cette garde-ci
+   protège tous les autres chemins. */
+const TREVE_MIN_JOURS=4;
+/* ⚠️ v8.89 (bug vécu par Hervé sur 7JLL9 : la trêve ne s'est jamais déclenchée) — LA COLONNE
+   `gage` N'EST PLUS UN JSON UNE FOIS LA LIGUE LANCÉE. `resolvePrep` l'écrase par le LIBELLÉ du
+   gage gagnant (« Payer sa tournée »…). Tout réglage qui n'y survit pas doit être recopié dans
+   `prep_summary`, exactement comme `enjeu` le fait depuis toujours (cf. `getEnjeu`).
+   Je ne l'avais pas fait : `JSON.parse` échouait en silence, `hasTreve` rendait false, et la
+   bascule de mi-parcours n'avait aucune chance de se produire.
+   ⚠️ ORDRE DE LECTURE : le JSON d'abord (salon et préparation), le récap ensuite (saison en
+   cours). Le même ordre que `getEnjeu` — s'en écarter ferait diverger deux réglages jumeaux. */
+function hasTreve(lg){ const g=lg||L; if(!g) return false;
+  let on=false;
+  try{ const o=JSON.parse(g.gage); if(o && typeof o==='object' && o.treve) on=true; }catch(e){}
+  if(!on && g.prep_summary && g.prep_summary.treve) on=true;
+  return on && ((g.num_days|0)===0 || (g.num_days|0)>=TREVE_MIN_JOURS); }
+// Journée (index 0) à partir de laquelle la seconde moitié commence. `num_days` est toujours PAIR
+// (`makeSchedule` rend 2×(n−1), et le doublage des duos conserve la parité) → division exacte.
+function jourTreve(lg){ const g=lg||L; return hasTreve(g) ? ((g.num_days|0)/2) : -1; }
+/* ─── ÉTAT DE LA TRÊVE (v8.83) ───────────────────────────────────────────────────────────────
+   Tout vit dans le JSON `gage`, comme les votes et les enchères de la préparation : mises,
+   validations, échéance, et la liste des bonus PERDUS par chacun.
+   ⚠️ AUCUNE COLONNE AJOUTÉE, et c'est délibéré (même raisonnement qu'en v7.45 pour les dates
+   d'options) : une migration sur une base qui porte des parties en cours est le genre de risque
+   qu'on ne prend pas pour une fonctionnalité en test. `hand` est la seule colonne touchée, et
+   elle existe déjà.
+   ⚠️ `day` MÉMORISE LA JOURNÉE OÙ LA TRÊVE S'EST OUVERTE : c'est ce qui empêche d'y rentrer deux
+   fois. Sans lui, une ligue relancée ou un `current_day` remis en arrière rouvrirait la trêve et
+   effacerait les bonus une seconde fois. */
+/* ⚠️ v8.89 — L'ÉTAT VIT DANS `prep_summary`, PAS DANS `gage`. Même raison que ci-dessus : `gage`
+   n'est plus un JSON une fois la saison lancée, et y écrire aurait DÉTRUIT le libellé du gage —
+   les joueurs auraient perdu l'enjeu de leur saison. `prep_summary` est du jsonb, déjà l'endroit
+   où vivent les réglages d'après-lancement. */
+function treveState(){ const s=L&&L.prep_summary; return (s&&s.treve_st)||null; }
+function treveFaite(lg){ const g=lg||L; const s=g&&g.prep_summary;
+  return !!(s && s.treve_st && s.treve_st.day!=null); }
+/* ⚠️ v8.100 (bug vécu par Hervé : après les enchères de la trêve, l'app annonçait « 🚀 Démarrage
+   du championnat… ») — `resolveTreve()` réutilise `status:"starting"` COMME VERROU ATOMIQUE, sur
+   le même modèle que `resolvePrep()` au tout premier lancement (cf. `resolveTreve()`, un peu plus
+   bas). Les deux passent donc par le MÊME statut le temps de leur résolution — mais tous les
+   écrans qui lisent `status==="starting"` ne connaissaient qu'un seul sens : « la ligue démarre
+   pour la première fois ». Pendant que la trêve s'attribue (plusieurs écritures séquentielles),
+   ce statut était donc lu comme un lancement initial, alors que la saison est à la moitié.
+   ⚠️ ON NE CHANGE PAS LE VERROU : lui donner un nom différent pour la trêve aurait fallu dupliquer
+   toute la garde atomique de `resolveTreve()` pour un gain nul — la distinction se fait très bien
+   en lecture, avec ce qu'on sait déjà : `treveFaite()` (la trêve a été OUVERTE) sans `closed_at`
+   (elle n'est pas encore refermée) ne peut être vrai QUE pendant cette fenêtre de résolution. */
+function treveEnResolution(lg){ const g=lg||L; const s=g&&g.prep_summary;
+  return g.status==="starting" && treveFaite(g) && !(s&&s.treve_st&&s.treve_st.closed_at); }
+// Plafond de bonus À LA TRÊVE = journées restantes (bornées par les bonus qui existent).
+// `num_days/2` par construction, mais on le calcule sur le RESTANT : si un jour la trêve tombe
+// ailleurs qu'à la moitié, ce plafond suivra sans qu'on ait à y repenser.
+function maxBonusTreve(){ const reste=Math.max(1,(L.num_days|0)-(L.current_day|0));
+  return Math.max(1, Math.min(reste, modeCards(getMode()).length)); }
 function getAR(){ try{ const o=JSON.parse(L.gage); const v=(o&&(o.ar!=null?o.ar:o.soloAR)); if(v) return +v; }catch(e){} return 2; }
 function getSoloAR(){ return getAR(); }   // ancien nom, conservé pour les appels existants
 function isReward(){ return getEnjeu()==="reward"; }
@@ -2299,6 +2369,63 @@ const EN={
   "Les deux types de ligues réunis. Attention : en simulé les cotes sont tirées au sort, battre les cotes n'y a pas le même sens.":"Both kinds of league together. Careful: in simulated leagues the odds are drawn at random, so beating the odds doesn't mean the same thing.",
   // Onglets du dossier de stats (v7.24) — réelles / simulées / tout.
   "🔀 Tout":"🔀 All", "🎮 Simulées":"🎮 Simulated",
+  // v8.82 — trêve de mi-saison (option premium, réglage figé à la création).
+  "🃏 Enchères de bonus":"🃏 Bonus auctions",
+  // v8.83 — la trêve elle-même.
+  "Trêve de mi-saison":"Mid-season truce",
+  "La saison s'arrête le temps d'un transfert. <b>Tous les bonus non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> pour racheter parmi <b>tous</b> les bonus.":"The season pauses for a transfer window. <b>Every unplayed bonus is lost</b> — yours and everyone else's — and each player receives <b>€{a}</b> to buy again from <b>all</b> the bonuses.",
+  "Ces {a} € ne sortent pas de ta cagnotte, et <b>ce que tu ne dépenses pas est perdu</b>. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.":"These €{a} do not come out of your balance, and <b>whatever you don't spend is lost</b>. You can take <b>{b}</b> bonuses at most — the number of matchdays left.",
+  "Perdus à la trêve :":"Lost at the truce:",
+  "Reprise dans {a} au plus tard — ou dès que tout le monde a validé.":"Play resumes in {a} at the latest — or as soon as everyone has confirmed.",
+  "prêts":"ready", "bonus":"bonuses",
+  "Dépasse {a} € — réduis tes mises":"Over €{a} — lower your bids",
+  "Trop de bonus — {a} maximum":"Too many bonuses — {a} maximum",
+  "Modifier mes enchères ✓":"Edit my bids ✓", "Valider mes enchères →":"Confirm my bids →",
+  "✅ Validé — tu peux encore modifier tant que la trêve dure.":"✅ Confirmed — you can still change things while the truce lasts.",
+  "Enchères enregistrées ✓":"Bids saved ✓", "Trêve terminée — la saison reprend ✓":"Truce over — the season resumes ✓",
+  "trêve — prêt":"truce — ready", "trêve — enchères à faire":"truce — bids to place",
+  // v8.100 — l'écran/l'étiquette « démarrage » ne doit pas s'afficher pendant la résolution de la trêve.
+  "Résolution de la trêve…":"Resolving the truce…",
+  "Attribution des bonus de mi-saison.":"Assigning the mid-season bonuses.",
+  "trêve — résolution…":"truce — resolving…",
+  // v8.93 — écran de révélation post-trêve et séparation aux Coulisses.
+  "La trêve est terminée":"The truce is over",
+  "Voici qui a remporté quoi à la mi-saison — jette un œil avant de reprendre.":"Here's who won what at the mid-season point — take a look before play resumes.",
+  "🃏 Enchères de la trêve — bonus attribués":"🃏 Truce auction — bonuses awarded",
+  "La saison reprend →":"The season resumes →",
+  "🃏 Enchères — au départ":"🃏 Auction — at the start",
+  "🔄 Enchères — à la trêve (mi-saison)":"🔄 Auction — at the truce (mid-season)",
+  // v8.94 — répartition des bonus en 3 groupes (fiche joueur + bilan final).
+  "Au départ":"At the start", "Depuis la trêve":"Since the truce",
+  "Perdus à la trêve":"Lost at the truce",
+  // v8.96 — bandeau « choisis tes matchs » sur l'accueil, quand aucun n'a encore été tiré.
+  "c'est toi qui reçois : choisis les 5 matchs de la journée.":"you're at home: pick the day's 5 matches.",
+  "Choisir les matchs":"Pick the matches",
+  // v8.98 — bandeau « trêve terminée » sur l'accueil, aligné sur ce que l'app affiche réellement.
+  "découvre qui a remporté quoi à la mi-saison, avant de reprendre.":"see who won what at the mid-season point, before play resumes.",
+  "Voir les enchères de la trêve":"See the truce auction",
+  "— aucun":"— none",
+  "😶 Perdus à la trêve":"😶 Lost at the truce",
+  "Au départ seulement":"At the start only",
+  "Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison.":"A single auction, before matchday one. Your bonuses stay with you all season.",
+  "Au départ et à mi-parcours":"At the start and at half-way",
+  "À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>40 €</b> — hors cagnotte — pour tout racheter. Au départ, chacun est limité à la <b>moitié</b> des journées en bonus.":"Half-way through, unplayed bonuses are <b>lost</b> and everyone gets <b>€40</b> — outside their balance — to buy again. At the start, everyone is capped at <b>half</b> the matchdays in bonuses.",
+  // ⚠️ « Enchères » n'est PAS redéfinie ici : la clé existe déjà plus haut (traduite « Auction »).
+  // Une seconde entrée du même nom écraserait la première partout dans l'app, en silence.
+  "Départ + trêve":"Start + truce", "Au départ":"At the start",
+  "🃏 Enchères":"🃏 Auctions",
+  "Départ + trêve de mi-saison":"Start + mid-season truce", "Au départ seulement":"At the start only",
+  "🔄 Au départ et à mi-parcours":"🔄 At the start and at half-way", "🎯 Au départ seulement":"🎯 At the start only",
+  "À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>{a} €</b> — hors cagnotte — pour tout racheter.":"Half-way through, unplayed bonuses are <b>lost</b> and everyone receives <b>€{a}</b> — outside their balance — to buy again.",
+  "Enchères au départ et à la trêve":"Auctions at the start and at the truce",
+  "Enchères au départ seulement":"Auctions at the start only",
+  "À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Ce que tu ne dépenses pas est perdu.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés.":"Half-way through, the season pauses: any bonus you haven't played is <b>lost</b>, and everyone receives <b>€40</b> — not taken from your balance — to buy again from <b>all</b> the bonuses. Whatever you don't spend is lost.<br><br>That is why, at the start, everyone is capped at <b>half</b> the matchdays in bonuses: they are meant to be played, not hoarded.",
+  "Une seule vente aux enchères, avant la première journée. Les bonus que tu remportes te suivent toute la saison, et tu les joues quand tu veux — au maximum un par journée.":"A single auction, before matchday one. The bonuses you win stay with you all season, and you play them whenever you like — at most one per matchday.",
+  "Trêve activée : le solo passe à 4 journées (une trêve après une seule journée n'aurait pas de sens).":"Truce enabled: solo moves to 4 matchdays (a truce after a single day would make no sense).",
+  "Incompatible avec la trêve de mi-saison":"Not compatible with the mid-season truce",
+  "Incompatible avec la trêve : il faut au moins 4 journées pour couper la saison en deux.":"Not compatible with the truce: at least 4 matchdays are needed to split the season in two.",
+  "La trêve coupe la saison en deux : il faut au moins 4 journées. Décoche « Au départ et à mi-parcours » si tu veux une partie en 2 journées.":"The truce splits the season in two, so at least 4 matchdays are needed. Untick « At the start and at half-way » if you want a 2-matchday game.",
+  "Cette ligue a la <b>trêve de mi-saison</b> : les enchères se jouent en deux fois, et chacun peut remporter au départ la <b>moitié</b> des journées en bonus.":"This league has the <b>mid-season truce</b>: auctions happen twice, and at the start everyone can win up to <b>half</b> the matchdays in bonuses.",
   "Tes ligues des deux types réunies. Touche 📡 ou 🎮 pour séparer.":"Both kinds of league together. Tap 📡 or 🎮 to split them.",
   "Uniquement tes ligues jouées sur de vrais matchs, avec les cotes du marché.":"Only your leagues played on real matches, with market odds.",
   "Uniquement tes ligues en matchs simulés, où les cotes sont tirées au sort.":"Only your leagues on simulated matches, where odds are drawn at random.",
@@ -3483,6 +3610,16 @@ const PITCHES={
     "Débloque tous les bonus d'interaction — 🩸 Sangsue, 🎁 Chérie c'est cadeau, ❄️ Effet Kiss Cool.",
     "Payé une fois par l'organisateur → tout le monde y a droit, personne n'est lésé.",
     "Sans elles, le jeu est bien élevé. Avec, c'est la guerre (amicale)."]},
+  /* ⚠️ v8.82 — LA TRÊVE EST UN FORMAT, PAS UN AVANTAGE. Comme 🃏 Bonus complets ou 🤖 Joueur IA,
+     elle est débloquée par le créateur et s'applique À TOUTE LA LIGUE : même dotation de 40 € pour
+     chacun, mêmes bonus perdus pour chacun. Celui qui paie n'obtient aucun edge sur ses
+     adversaires — c'est ce qui la range du bon côté de la doctrine (vendre du format et du
+     confort, jamais un avantage compétitif). Ne pas la transformer un jour en bonus individuel. */
+  treve:{e:"🔄",t:"Trêve de mi-saison",hook:"Une seconde fenêtre de transferts, à mi-parcours.",pts:[
+    "À la moitié des journées, tout s'arrête : les bonus non joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> pour tout racheter.",
+    "Ces 40 € ne sortent pas de ta cagnotte — et ce que tu ne dépenses pas est perdu.",
+    "Au départ, chacun ne peut acheter que <b>la moitié</b> des journées en bonus : il faudra les jouer, pas les garder.",
+    "Payée une fois par l'organisateur → tout le monde joue avec la même règle."]},
   ia:{e:"🤖",t:"Joueur IA",hook:"Pas assez de potes ? L'IA ne juge pas.",pts:[
     "Envie de t'entraîner en solo — ou, soyons honnêtes, petite panne d'amis ce soir ? L'IA répond présent.",
     "Il te manque un joueur pour être pair, et pas envie d'attendre Pierrot qui met 3 plombes à valider ? L'IA complète en deux secondes.",
@@ -3627,7 +3764,7 @@ async function subscribeOpt(key){
   catch(e){ showErr("Souscription : "+e.message); }
 }
 // 🛒 BOUTIQUE — toutes les options premium en un endroit + le Pack complet (souscrire à tout d'un coup).
-const SHOP_ORDER=["rachat","bonuscomplets","ia","stats","direct","live","gageperso","voiradv"];   // "recap" (Partager ma saison) retiré : gratuit par défaut (v6.65) ; "live" séparé de "direct" en v6.99
+const SHOP_ORDER=["rachat","bonuscomplets","treve","ia","stats","direct","live","gageperso","voiradv"];   // "recap" (Partager ma saison) retiré : gratuit par défaut (v6.65) ; "live" séparé de "direct" en v6.99
 // Garde volontairement DANS la fonction, pas seulement sur la visibilité du bouton : aujourd'hui la
 // boutique est un simple catalogue (aucune écriture en base), mais la phase 4 y mettra de vrais
 // boutons « Débloquer ». Si le bouton réapparaissait un jour hors connexion, l'écran resterait
@@ -3663,12 +3800,49 @@ function viewShop(){
     ${card("pack",true)}`;
 }
 // Bonus d'un joueur (clic sur son nom au classement) : restants + utilisés (barrés). Données LIVE.
+/* ⚠️ v8.94 (demandé par Hervé) — TROIS GROUPES, PAS UN SEUL TAS. Sans trêve, « hand + cards_used »
+   suffisait : un bonus est soit encore en main, soit déjà joué. Avec la trêve, un troisième état
+   existe — perdu sans avoir été joué — et le MÊME nom de bonus peut avoir été remporté à deux
+   moments différents (le stock entier est remis en vente à la trêve). Les confondre effacerait
+   l'information que la trêve vient justement d'ajouter : qui a eu quoi, et quand.
+   ⚠️ `cards_used` NE PORTE AUCUNE DATE — juste une liste d'identifiants. On reconstitue l'origine
+   de chaque occurrence en consommant d'abord ce qui a été remporté AU DÉPART, puis à la TRÊVE :
+   un bonus du même type gagné deux fois se répartit donc dans le bon ordre chronologique.
+   ⚠️ LE RELIQUAT NON RATTACHÉ PART AU DÉPART, PAS À LA POUBELLE. Une ligue créée avant la v8.83
+   n'a pas de `treve_st` ; un `cards_used` qui ne correspond à aucune des deux enchères doit
+   quand même s'afficher quelque part — le perdre du rendu serait pire que de mal le classer. */
+function bonusOrigins(p){
+  const s=L.prep_summary||{}; const st=s.treve_st;
+  const round1=((s.players||[]).find(x=>x.pid===p.id)||{}).hand||[];
+  const round2=st?(st.auction||[]).filter(a=>a.winner===p.id).map(a=>a.card):[];
+  const perdus=st&&st.perdus?(st.perdus[p.id]||[]):[];
+  const pool=(p.cards_used||[]).slice();
+  const take=id=>{ const i=pool.indexOf(id); if(i>=0){ pool.splice(i,1); return true; } return false; };
+  // « Au départ » exclut les perdus : ils ont leur propre liste, comme aux Coulisses (v8.93).
+  const dep=round1.filter(id=>!perdus.includes(id)).map(id=>({id,used:take(id)}));
+  const treve=round2.map(id=>({id,used:take(id)}));
+  pool.forEach(id=>dep.push({id,used:true}));
+  return {dep, treve, perdus, hasTreve:!!(st&&st.closed_at)};
+}
+// Une pastille de bonus, barrée si déjà utilisée — même style partout dans l'app (v8.77).
+const bonusChip=(id,used)=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="${used?'opacity:.45':''}"><span class="em">${CARDS[id].e}</span>${used?'<s>'+esc(t(CARDS[id].n))+'</s>':esc(t(CARDS[id].n))}</div>`;
 function showPlayerCards(pid){ const p=pById(pid); if(!p) return;
-  const hand=p.hand||[], used=p.cards_used||[];
+  const o=bonusOrigins(p);
   let body;
-  if(!hand.length && !used.length) body=`<div class="mini muted">${t("Aucun bonus.")}</div>`;
-  else body=`<div class="mini muted" style="margin-bottom:6px">${t("Restants en couleur · barré = déjà utilisé. Touche un bonus pour sa description.")}</div>
-    <div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div>`;
+  if(!o.hasTreve){
+    const hand=p.hand||[], used=p.cards_used||[];
+    if(!hand.length && !used.length) body=`<div class="mini muted">${t("Aucun bonus.")}</div>`;
+    else body=`<div class="mini muted" style="margin-bottom:6px">${t("Restants en couleur · barré = déjà utilisé. Touche un bonus pour sa description.")}</div>
+    <div class="cards">${hand.map(id=>bonusChip(id,false)).join("")}${used.map(id=>bonusChip(id,true)).join("")}</div>`;
+  } else {
+    // ⚠️ Ligue AVEC trêve : trois blocs, dans l'ordre chronologique de la saison.
+    body=`<div class="mini muted" style="margin-bottom:6px">${t("Restants en couleur · barré = déjà utilisé. Touche un bonus pour sa description.")}</div>
+    <div class="mini" style="margin-top:2px"><b>🎯 ${t("Au départ")}</b></div>
+    ${o.dep.length?`<div class="cards" style="margin-top:4px">${o.dep.map(x=>bonusChip(x.id,x.used)).join("")}</div>`:`<div class="mini muted">${t("— aucun")}</div>`}
+    ${o.perdus.length?`<div class="mini" style="margin-top:10px;color:var(--red)"><b>😶 ${t("Perdus à la trêve")}</b> — ${o.perdus.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(', ')}</div>`:''}
+    <div class="mini" style="margin-top:10px"><b>🔄 ${t("Depuis la trêve")}</b></div>
+    ${o.treve.length?`<div class="cards" style="margin-top:4px">${o.treve.map(x=>bonusChip(x.id,x.used)).join("")}</div>`:`<div class="mini muted">${t("— aucun")}</div>`}`;
+  }
   infoModal(avatarHTML(p.emoji,42), p.name||"?", body); }
 function showDuelPtsInfo(pid){
   const p=pById(pid)||{}; const d=duels.find(x=>x.home_id===pid||x.away_id===pid);
@@ -3811,7 +3985,15 @@ function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.
    distinct. Deux mécaniques différentes pour le même geste auraient été un piège de plus.
    ⚠️ Par défaut 4 journées : c'est le format le plus riche à deux, et celui du solo. */
 let _dureeResolve=null, _dureeChoix=2;
-function choixDureeSet(v){ _dureeChoix=v;
+/* ⚠️ v8.84 (demandé par Hervé) — « 2 JOURNÉES » EST REFUSÉ QUAND LA LIGUE A LA TRÊVE, et on le
+   DIT. La v8.82 décochait la trêve en silence : l'organisateur avait payé une option et la voyait
+   disparaître sans comprendre. On garde donc la carte VISIBLE — la masquer ferait chercher un
+   réglage évanoui — mais elle porte sa mention et refuse le clic en expliquant.
+   ⚠️ `toast` ET NON `infoModal` : une fenêtre est déjà ouverte (celle du choix), en empiler une
+   seconde la masquerait ou la fermerait selon les navigateurs. */
+function choixDureeSet(v){
+  if(v===1 && hasTreve()){ toast(t("Incompatible avec la trêve : il faut au moins 4 journées pour couper la saison en deux.")); return; }
+  _dureeChoix=v;
   [1,2].forEach(k=>{ const el=document.getElementById("dur"+k); if(el) el.style.borderColor=(k===v)?"var(--green)":"var(--border)"; });
   const b=document.getElementById("durOk"); if(b) b.textContent=t("Clôturer et lancer — {a} journées",{a:v*2});
 }
@@ -3824,8 +4006,14 @@ function choixDuree(){
     infoModal("🗓️", t("Combien de journées ?"),
       `<div class="mini muted" style="text-align:left;line-height:1.6">${
         t("Vous êtes <b>deux</b> : chacun affronte l'autre à domicile puis à l'extérieur. Vous pouvez enchaîner ce cycle une <b>seconde fois</b>.")}
-       <div style="margin-top:8px">${t("Le nombre de bonus qu'on peut remporter aux enchères suit la durée : <b>2 journées → 2 bonus</b> au plus, <b>4 journées → 4</b>.")}</div></div>
-       ${carte(1,t("1 aller-retour — 2 journées"),t("Partie courte : chacun reçoit une fois."))}
+       <div style="margin-top:8px">${hasTreve()
+         ? t("Cette ligue a la <b>trêve de mi-saison</b> : les enchères se jouent en deux fois, et chacun peut remporter au départ la <b>moitié</b> des journées en bonus.")
+         : t("Le nombre de bonus qu'on peut remporter aux enchères suit la durée : <b>2 journées → 2 bonus</b> au plus, <b>4 journées → 4</b>.")}</div></div>
+       ${hasTreve()
+         ? `<div class="box" style="text-align:left;margin:6px 0;opacity:.55;border-color:var(--border)" onclick="choixDureeSet(1)">
+              <b class="mini">${t("1 aller-retour — 2 journées")}</b>
+              <div class="mini" style="margin-top:3px;color:var(--red)">🔒 ${t("Incompatible avec la trêve de mi-saison")}</div></div>`
+         : carte(1,t("1 aller-retour — 2 journées"),t("Partie courte : chacun reçoit une fois."))}
        ${carte(2,t("2 allers-retours — 4 journées"),t("Chacun reçoit deux fois, et les enchères ont un vrai enjeu."))}
        <div class="mini gold" style="text-align:left;margin-top:8px">${t("⚠️ Ce choix est définitif : le calendrier est écrit juste après.")}</div>
        <button class="btn" id="durOk" style="margin-top:12px" onclick="choixDureeEnd(_dureeChoix)">${t("Clôturer et lancer — {a} journées",{a:4})}</button>
@@ -4183,7 +4371,24 @@ function retourAuxStats(){
   if(!myStatsData) loadMyStats().then(render);
 }
 let loadedDay=null;          // journée chargée dans duels/bets (évite d'afficher une journée passée sur Pronos, D5)
+/* ⚠️ v8.99 (bug vécu par Hervé sur la ligue UWQ7W : un pari jour 3 marqué « non validé à temps »
+   alors que le testeur venait de démarrer la ligue et n'avait pas eu 24h) — AUCUNE GARDE DE
+   RÉ-ENTRANCE SUR `refresh()`, ET `startPoll()` LE RAPPELLE TOUTES LES 4 SECONDES. `refresh()`
+   enchaîne de nombreux aller-retours réseau (joueurs, duels, paris, tirage des matchs, pronos de
+   l'IA…) et peut sans peine dépasser 4 s — surtout juste après une résolution, qui rappelle
+   `refresh()` en sortie. Si le sondage suivant se déclenchait PENDANT qu'un appel précédent
+   tournait encore, les deux couraient en même temps sur les MÊMES variables globales (`L`,
+   `duels`, `bets`) : l'un pouvait lire un instantané laissé par l'autre à un moment incohérent.
+   Preuve relevée en base : le pari de l'IA et la ligne « pas parié » de Polo, journée 3, portaient
+   le même `created_at` à la microseconde — signe que `resolveDay()` avait généré les deux d'un
+   coup, donc s'était déclenché AVANT que le tirage des matchs et le pari de l'IA (qui tournent
+   normalement juste avant, dans le MÊME `refresh()`) aient pu s'exécuter pour cette journée.
+   ⚠️ MÊME PRINCIPE QUE `resolving` (déjà présent pour `resolveDay()`, cf. plus bas) : un tick du
+   sondage qui arrive alors qu'un `refresh()` tourne encore est simplement IGNORÉ plutôt que de se
+   superposer. Rien n'est perdu : le tick suivant (4 s plus tard) reprendra avec un état propre. */
+let refreshing=false;
 async function refresh(){
+  if(refreshing) return;
   // On CAPTURE la ligue visée au départ. `refresh()` est asynchrone (polling / boot) : pendant ses
   // `await`, l'utilisateur peut revenir à « Mes ligues » (backToLeagues met S.leagueId et L à null).
   // Sans garde, le refresh déjà en vol continuait avec des valeurs nulles → « null is not an object
@@ -4192,6 +4397,7 @@ async function refresh(){
   // ligue courante a changé — `stale()`.
   const lid=S.leagueId; if(!lid) return;
   const stale=()=> S.leagueId!==lid;
+  refreshing=true;
   try{
     L = await q(db.from("leagues").select("*").eq("id",lid).maybeSingle());  // maybeSingle : renvoie null (pas une erreur) si la ligue a été supprimée
     if(stale()) return;                       // l'utilisateur a quitté la ligue pendant le chargement
@@ -4226,6 +4432,15 @@ async function refresh(){
         o.votes=o.votes||{}; o.voteTs=o.voteTs||{}; o.bids=o.bids||{}; o.bidTs=o.bidTs||{}; if(both){o.votesR=o.votesR||{};o.voteTsR=o.voteTsR||{};}
         try{ await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",lid)); L.gage=JSON.stringify(o); }catch(e){}
       }
+    }
+    /* Fin de TRÊVE automatique — même règle que la préparation : dès que tous les humains ont
+       validé, ou à l'échéance de 24 h. ⚠️ Placé AVANT le bloc `prep` : les deux ne peuvent pas
+       coexister, mais l'ordre rend la lecture sans ambiguïté. */
+    if(L.status==="truce" && !resolvingTreve && !LECTURE_SEULE){
+      const st=treveState()||{}; const humans=players.filter(p=>!p.is_ai);
+      const tous=humans.length>=1 && humans.every(p=>(st.done||{})[p.id]);
+      const dl=st.deadline && new Date(st.deadline).getTime()<=Date.now();
+      if(tous||dl){ resolveTreve(); return; }
     }
     // fin de préparation AUTOMATIQUE : dès que tous ont validé (ou délai écoulé), on démarre sans clic
     if(L.status==="prep" && !resolving){
@@ -4318,7 +4533,18 @@ async function refresh(){
        signature changerait à chaque sondage pour rien. */
     const chartSig=L.current_day+"|"+players.map(p=>p.id+":"+(p.capital||0)).sort().join(",");
     if(chartDay!==chartSig){ chartDay=chartSig; chartBets=null; standDuels=null; standTrades=null; }
-    if((L.status==="running"||L.status==="done") && chartBets===null && L.current_day>=1){
+    /* ⚠️ v8.92 (bug vécu par Hervé : un gain de 7,31 € s'affiche puis se réécrit tout seul en
+       « 0 point ») — MÊME OUBLI QUE POUR `bottomBar` (v8.91) : le statut `truce` n'était pas
+       dans cette condition. `recapBody` a son propre filet, documenté juste au-dessus de sa
+       fonction : quand `loadedDay` (la journée dont les globals `bets`/`duels` portent VRAIMENT
+       les données) diverge de la journée AFFICHÉE, il retombe sur l'historique `chartBets`. Mais
+       pendant la trêve, ce cache n'était jamais rempli — le filet existait, il était juste vide.
+       Le premier rendu, juste après la résolution, montre encore les globals corrects (d'où le
+       7,31 € vu un instant) ; le sondage suivant les recharge pour la nouvelle journée et le
+       filet, vide, ne rattrape rien : 0 partout.
+       ⚠️ `truce` REJOINT running/done, PAS lobby/prep : il n'y a pas de scores à afficher avant
+       qu'une journée soit résolue, mais la trêve arrive TOUJOURS après au moins une résolution. */
+    if((L.status==="running"||L.status==="done"||L.status==="truce") && chartBets===null && L.current_day>=1){
       chartBets = await q(db.from("bets").select("player_id,day,net,picks,card,captain,duel_id,submitted").eq("league_id",lid).not("net","is",null));
       standDuels = await q(db.from("duels").select("day,home_id,away_id,fixtures").eq("league_id",lid));
       // Rachats ACCEPTÉS : ils déplacent du capital sans être le gain de personne. Sans eux, le
@@ -4351,8 +4577,20 @@ async function refresh(){
     // 🔗 Un lien depuis les stats a demandé une journée précise : il PRIME sur le renvoi
     // automatique vers les résultats non vus — c'est une navigation voulue par le joueur.
     if(lienJournee!=null){ const _d=lienJournee; lienJournee=null; openResults(_d); }
-    else if(jourNonVu!=null && S.view==="game") openResults(jourNonVu);
+    /* ⚠️ v8.98 (bug vécu par Hervé : la page d'accueil promettait « résultats de la journée 2 »,
+       mais c'est l'écran des enchères de la trêve qu'il fallait voir) — `openResults(jourNonVu)`
+       CHANGE `S.view` EN "results", ÉCRASANT LE RENDU QUE `render()` VIENT DE PRODUIRE JUSTE
+       AU-DESSUS. Or `viewGame()` (appelé par ce `render()`) affiche `viewTreveSummary()` en
+       PREMIER quand la trêve vient de se clore et n'a pas encore été acquittée — avant même de
+       songer aux résultats de journée. Sans cette garde, cet écran s'affichait un instant puis
+       disparaissait aussitôt derrière l'auto-renvoi vers Résultats : exactement le genre de
+       course entre deux écrans qui a déjà produit le défaut du 7,31 €/0 point (v8.92).
+       ⚠️ ON NE PERD RIEN : la trêve acquittée (`ackTreveResult`), `jourNonVu` reste posé et le
+       prochain passage ici (tour de sondage suivant, ou reclic depuis l'accueil) déclenchera le
+       renvoi normalement. */
+    else if(jourNonVu!=null && S.view==="game" && treveResultSeen()) openResults(jourNonVu);
   }catch(e){ showErr("Connexion : "+e.message); }
+  finally{ refreshing=false; }
 }
 // Récapitalisation : une fenêtre fermable à l'ouverture du récap concerné (un bandeau seul passait
 // inaperçu — signalé par Hervé). Une seule fois par ligue+journée, mémorisé en localStorage.
@@ -4658,8 +4896,13 @@ let homeTodo=[], homeTodoLoaded=false, homePhase={};
    AUTRE ligue n'est pas chargée sur l'accueil (`players` décrit la ligue ouverte). Ces deux clés
    sont celles que lit `getAR()` — dont `soloAR`, conservée pour les parties déjà lancées. */
 function phasePrep(lg, pid, shopDone){
+  // ⚠️ v8.83 — la trêve passe par ici et non par `phaseLigue` : c'est une phase d'ENCHÈRES, pas
+  // une phase de journée. `treve_st.done` dit si CE joueur a validé, comme `shop_done` au départ.
+  if(lg.status==="truce"){ const s=lg.prep_summary||{};
+    const fait=!!((s.treve_st&&s.treve_st.done)||{})[pid];
+    return fait ? {e:"✅", t:t("trêve — prêt")} : {e:"🔄", t:t("trêve — enchères à faire")}; }
   if(lg.status==="lobby")    return {e:"🕓", t:t("inscriptions ouvertes")};
-  if(lg.status==="starting") return {e:"🚀", t:t("démarrage…")};
+  if(lg.status==="starting") return treveEnResolution(lg) ? {e:"🔄", t:t("trêve — résolution…")} : {e:"🚀", t:t("démarrage…")};
   if(lg.status!=="prep") return null;
   if(shopDone) return {e:"✅", t:t("prêt · on attend les autres")};
   let o={}; try{ o=JSON.parse(lg.gage)||{}; }catch(e){}
@@ -4700,6 +4943,17 @@ async function loadHomeTodo(){
       const duel=(dls||[]).find(x=>x.league_id===m.lg.id && x.day===d && (x.home_id===m.pid||x.away_id===m.pid));
       const monPari=(bts||[]).find(x=>x.league_id===m.lg.id && x.day===d && x.player_id===m.pid);
       const ph=phaseLigue(m.lg, duel, monPari); if(ph) homePhase[m.lg.id]=ph;
+      /* ⚠️ v8.98 (bug vécu par Hervé : le bandeau promettait « résultats de la journée 2 », mais
+         c'est l'écran des enchères de la trêve qui s'ouvrait) — MÊME PRINCIPE QUE v8.78 CI-DESSOUS,
+         appliqué à la trêve : `viewGame()` affiche `viewTreveSummary()` en TOUT PREMIER dès que la
+         trêve vient de se clore et n'est pas encore acquittée — avant même le renvoi vers les
+         résultats non vus (désormais mis en garde par `treveResultSeen()`, cf. `refresh()`). Le
+         bandeau doit donc annoncer CET écran-là, pas les résultats, tant qu'il n'a pas été vu. */
+      { const stt=m.lg.prep_summary&&m.lg.prep_summary.treve_st, clos=stt&&stt.closed_at;
+        if(clos && localStorage.getItem("pl_treveu_"+m.lg.id+"_"+m.pid+"_"+clos)!=="1"){
+          homeTodo.push({lg:m.lg, pid:m.pid, kind:"treve"});
+          return;
+        } }
       /* ⚠️ v8.78 (défaut vécu par Hervé) — LES RÉSULTATS NON VUS PASSENT DEVANT, et le bandeau le
          DIT. Avant : le bandeau annonçait « fais tes pronos », mais l'app, en ouvrant la ligue,
          renvoie d'abord vers la journée résolue qu'on n'a pas acquittée (`jourNonVu`, v7.49). Le
@@ -4714,8 +4968,24 @@ async function loadHomeTodo(){
         homeTodo.push({lg:m.lg, pid:m.pid, kind:"resultats", jour:(m.lg.current_day|0)});
         return;                                             // une seule action par ligue à la fois
       }
-      // Pas encore de duel (matchs pas tirés) → rien à faire, et surtout aucune échéance à annoncer.
+      /* ⚠️ v8.96 (bug vécu par Hervé : « 47h pour faire mes pronos » alors qu'aucun match n'était
+         encore choisi) — `duelDeadline` SANS FIXTURES RETOMBE SUR LE MINUTEUR DE LA FORMULE
+         (day_started_at + sel+bet), PAS SUR « rien à faire ». Ce repli existe pour une bonne
+         raison ailleurs (il sert de filet tant que la sélection n'est pas finie), mais ici il
+         produisait un delai qui n'a AUCUN rapport avec un pari : il n'y a même pas de matchs sur
+         lesquels parier. Le bandeau promettait donc une échéance de pronos qui n'existe pas.
+         ⚠️ TROIS CAS, PAS UN SEUL GARDE-FOU :
+           1. pas de duel du tout → rien à faire (inchangé) ;
+           2. duel SANS matchs choisis, et JE SUIS le joueur à domicile → c'est MOI qui bloque,
+              on me le dit avec la bonne action (« Choisis tes matchs »), pas un faux délai de pari ;
+           3. duel SANS matchs choisis, et je suis à l'extérieur → j'attends l'autre joueur, rien
+              n'est actionnable POUR MOI : aucun bandeau, la phase « ⏳ choix des matchs » sur la
+              ligne de la ligue suffit à le dire. */
       if(!duel) return;
+      if(!Array.isArray(duel.fixtures) || !duel.fixtures.length){
+        if(duel.home_id===m.pid) homeTodo.push({lg:m.lg, pid:m.pid, kind:"choix"});
+        return;
+      }
       const t=duelDeadline(duel,m.lg);
       if(!t || Date.now()>=t) return;                       // clôture passée : trop tard, on se tait
       const b=(bts||[]).find(x=>x.league_id===m.lg.id && x.day===d && x.player_id===m.pid);
@@ -4723,8 +4993,10 @@ async function loadHomeTodo(){
       if(b && Array.isArray(b.picks) && b.picks.length) return;
       homeTodo.push({lg:m.lg, pid:m.pid, kind:"pronos", deadline:t});
     });
-    // Les résultats à découvrir d'abord, puis les pronos par urgence.
-    homeTodo.sort((a,b)=> (a.kind===b.kind) ? ((a.deadline||0)-(b.deadline||0)) : (a.kind==="resultats"?-1:1));
+    // La trêve d'abord (c'est ce que `viewGame()` affiche en premier), puis les résultats à
+    // découvrir, puis « choisir ses matchs », puis les pronos par urgence.
+    const rang={treve:0, resultats:1, choix:2, pronos:3};
+    homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
   }catch(e){ homeTodo=[]; homePhase={}; }
   homeTodoLoaded=true; render();
 }
@@ -4734,8 +5006,12 @@ async function loadHomeTodo(){
    « En cours ». Une ligue qu'on venait de créer s'annonçait comme lancée.
    ⚠️ Le libellé mort n'a pas été simplement renommé : garder `gage_vote` « au cas où » aurait
    laissé croire qu'un statut de ce nom circule encore. Il a disparu du code en même temps. */
-function statusLabel(s){ return s==="lobby"?t("Salon · inscriptions ouvertes")
-  :s==="prep"?t("Préparation") :s==="starting"?t("Démarrage…")
+// ⚠️ v8.100 — PREND L'OBJET LIGUE, PAS SEULEMENT SON STATUT : `status==="starting"` sert de verrou
+// atomique à la fois au tout premier lancement ET à la résolution de la trêve (cf. `treveEnResolution`
+// juste au-dessus) — impossible de distinguer les deux avec la seule chaîne de statut.
+function statusLabel(lg){ const s=lg&&lg.status;
+  return s==="lobby"?t("Salon · inscriptions ouvertes")
+  :s==="prep"?t("Préparation") :s==="starting"?(treveEnResolution(lg)?t("trêve — résolution…"):t("Démarrage…")) :s==="truce"?t("Trêve de mi-saison")
   :s==="done"?t("Terminé"):t("En cours"); }
 // NB : puces « • » et non 1️⃣2️⃣3️⃣ — ce bloc s'affiche sous « Étape 1 sur 3 » depuis la v4.16, et
 // deux numérotations concurrentes à l'écran se contredisaient (les enchères sont l'étape FINALE de la
@@ -4837,11 +5113,21 @@ function viewHome(){
   /* ⚠️ v8.78 — DEUX BANDEAUX, PAS UN. « Résultats à découvrir » est une bonne nouvelle (doré) ;
      « pronos non validés » est un avertissement (rouge). Les peindre pareil les rendrait
      interchangeables, alors que l'un se savoure et l'autre se règle avant une échéance. */
-  const alerte=homeTodo.map(x=> x.kind==="resultats"
+  const alerte=homeTodo.map(x=> x.kind==="treve"
+    ? `<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.12)">
+      <b class="gold">🔄 ${t("La trêve est terminée")}</b>
+      <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("découvre qui a remporté quoi à la mi-saison, avant de reprendre.")}</div>
+      <button class="btn" style="margin-top:10px" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Voir les enchères de la trêve")}</button></div>`
+    : x.kind==="resultats"
     ? `<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.12)">
       <b class="gold">🎁 ${t("Résultats à découvrir")}</b>
       <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("la journée {a} est jouée, tu n'as pas encore vu le verdict.",{a:x.jour})}</div>
       <button class="btn" style="margin-top:10px" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Voir les résultats")}</button></div>`
+    : x.kind==="choix"
+    ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)">
+      <b class="red">⚠️ ${t("À toi de jouer")}</b>
+      <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("c'est toi qui reçois : choisis les 5 matchs de la journée.")}</div>
+      <button class="btn" style="margin-top:10px" onclick="openLeague('${x.lg.id}','${x.pid}')">🎯 ${t("Choisir les matchs")}</button></div>`
     : `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)">
       <b class="red">⚠️ ${t("À toi de jouer")}</b>
       <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("tes pronos ne sont pas validés.")}</div>
@@ -4858,7 +5144,7 @@ function viewHome(){
       <div><b>${esc(m.lg.name)}</b>${/* ⚠️ v8.74 — LA PHASE REMPLACE « En cours », qui ne distinguait rien. Repli sur `statusLabel`
        tant que `homePhase` n'est pas chargé (deux requêtes en tâche de fond) : sans ce repli, la
        ligne clignoterait d'un libellé vide vers le bon, à chaque retour sur l'accueil. */''}
-        <div class="mini muted">${t("Code")} ${esc(m.lg.code)} · ${(()=>{ const p=(m.lg.status==='running')?homePhase[m.lg.id]:phasePrep(m.lg,m.pid,m.shopDone); return p?(p.e+' '+p.t):statusLabel(m.lg.status); })()}${m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):''}</div></div>
+        <div class="mini muted">${t("Code")} ${esc(m.lg.code)} · ${(()=>{ const p=(m.lg.status==='running')?homePhase[m.lg.id]:phasePrep(m.lg,m.pid,m.shopDone); return p?(p.e+' '+p.t):statusLabel(m.lg); })()}${m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):''}</div></div>
       <div class="row" style="gap:6px;flex:0 0 auto">${(m.lg.status==='running'&&homeTodoLoaded&&!doitJouer(m.lg.id))?`<span class="chip g">${t("✅ à jour")}</span>`:''}<span class="chip b">${t("Ouvrir →")}</span></div></div>`).join("");
 
   const bloc = act.length
@@ -4888,7 +5174,7 @@ function viewLeagues(){
     ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost" onclick="askNotif()">${t("🔔 Activer les notifications")}</button><div class="mini muted" style="text-align:center;margin-top:-4px">${t("Pour être prévenu quand c'est à toi de jouer (onglet ouvert).")}</div>`:''}
     ${(()=>{
       const row=m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer">
-        <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div></div>
+        <div><b>${esc(m.lg.name)}</b><div class="mini muted">Code ${esc(m.lg.code)} · ${statusLabel(m.lg)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div></div>
         <div class="row" style="gap:6px;flex:0 0 auto"><button class="btn ghost sm" title="${t("Caractéristiques de la ligue")}" onclick="event.stopPropagation();showLeagueInfo('${m.lg.id}')" style="flex:0 0 auto">⚙️</button><span class="chip b">${t("Ouvrir →")}</span></div></div>`;
       const active=myLeagues.filter(m=>m.lg.status!=='done');
       // Terminées : les DERNIÈRES finies en haut → tri par finished_at, repli sur created_at (ligues finies avant la migration).
@@ -5520,13 +5806,29 @@ let newLg=null;
 // Défauts = ce que le créateur peut réellement utiliser : s'il a l'option, on pré-sélectionne l'option
 // payante (complet / réel) ; sinon on reste sur le gratuit (simple / simulé) pour éviter tout blocage.
 function newLgDefaults(){ return { name:t("Ligue de {a}",{a:AUTH?AUTH.name:''}), type:'amis',
-  formula:'classique', mode: hasOpt('bonuscomplets')?'complet':'simple', data: hasOpt('direct')?'real':'sim', enjeu:'gage', soloAR:2 }; }
+  formula:'classique', mode: hasOpt('bonuscomplets')?'complet':'simple', data: hasOpt('direct')?'real':'sim', enjeu:'gage', soloAR:2, treve:false }; }
 function openCreate(){ if(!AUTH) return; newLg=newLgDefaults(); navOpen("create"); }
 function cancelCreate(){ newLg=null; navBack(); }
 function setNew(k,v){ if(!newLg) newLg=newLgDefaults();
   if(k==='type' && v==='solo' && !requireOpt('ia')) return;          // jouer seul vs IA = option premium
   if(k==='mode' && v==='complet' && !requireOpt('bonuscomplets')) return; // jeu complet des bonus = premium
   if(k==='data' && v==='real' && !requireOpt('direct')) return;      // choisir des données réelles = option 📡 (le suivi en direct, lui, dépend de ⏱️ `live`)
+  if(k==='treve' && v===true && !requireOpt('treve')) return;        // trêve de mi-saison = option premium
+  /* ⚠️ v8.82 — COCHER LA TRÊVE FORCE 4 JOURNÉES, ET ON LE DIT (arbitré avec Hervé). Le seul format
+     qui descend sous 4 journées est le solo en « 1 aller-retour » : une trêve y tomberait après
+     une seule journée. On bascule donc le format plutôt que de griser la case — mais jamais en
+     silence : le toast explique, sinon le joueur retrouve 4 journées sans comprendre pourquoi.
+     ⚠️ L'INVERSE N'EST PAS VRAI : repasser à 1 aller-retour décoche la trêve. Sans ça on
+     enregistrerait une ligue de 2 journées avec `treve:true`, que `hasTreve()` refuserait ensuite
+     — le joueur aurait payé pour un réglage silencieusement ignoré. */
+  if(k==='treve' && v===true && newLg.type==='solo' && newLg.soloAR===1){ newLg.soloAR=2; toast(t("Trêve activée : le solo passe à 4 journées (une trêve après une seule journée n'aurait pas de sens).")); }
+  /* ⚠️ v8.84 — ON REFUSE, ON NE DÉCOCHE PLUS. La v8.82 éteignait la trêve en silence quand on
+     repassait à 2 journées : l'organisateur perdait une option payante sans un mot, et pouvait
+     lancer la ligue en croyant l'avoir encore. Le clic est maintenant sans effet, avec sa raison.
+     ⚠️ Le sens INVERSE reste automatique (cocher la trêve depuis 1 A/R passe à 4 journées) : là
+     on ajoute ce qui manque au lieu de retirer ce qui a été payé. Les deux ne sont pas
+     symétriques, et c'est voulu. */
+  if(k==='soloAR' && v===1 && newLg.treve){ infoWin(t("La trêve coupe la saison en deux : il faut au moins 4 journées. Décoche « Au départ et à mi-parcours » si tu veux une partie en 2 journées."), "🔒 "+t("Incompatible avec la trêve de mi-saison")); return; }
   newLg[k]=v; render(); }
 function viewCreate(){
   if(!newLg) newLg=newLgDefaults();
@@ -5546,8 +5848,15 @@ function viewCreate(){
    <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}<br>🔄 ${t("Le rythme est modifiable en cours de partie (par l'organisateur).")}</div>`:``}
    <h2>${t("🎛️ Mode de jeu")}</h2>
    ${['simple','complet'].map(k=>card(g.mode===k,"setNew('mode','"+k+"')",t(MODES[k].n),t(MODES[k].d),k==='complet'?premBadge('bonuscomplets'):'')).join("")}
+   ${/* ⚠️ v8.82 — LE CHOIX DES ENCHÈRES. Placé APRÈS le mode de jeu, parce qu'il en dépend : c'est
+        le mode qui décide combien de bonus existent, et donc ce que vaut un plafond. */''}
+   <h2>${t("🃏 Enchères de bonus")}</h2>
+   ${card(!g.treve,"setNew('treve',false)","🎯 "+t("Au départ seulement"),t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison."))}
+   ${card(!!g.treve,"setNew('treve',true)","🔄 "+t("Au départ et à mi-parcours"),t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>40 €</b> — hors cagnotte — pour tout racheter. Au départ, chacun est limité à la <b>moitié</b> des journées en bonus."),premBadge('treve'))}
    ${solo? `<h2>${t("🤖 Format du solo")}</h2>
-     ${card(g.soloAR===1,"setNew('soloAR',1)",t("1 aller-retour — 2 journées"),t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."))}
+     ${g.treve
+       ? `<div class="box row" style="opacity:.55" onclick="setNew('soloAR',1)"><div><b>${t("1 aller-retour — 2 journées")}</b><div class="mini" style="color:var(--red)">🔒 ${t("Incompatible avec la trêve de mi-saison")}</div></div></div>`
+       : card(g.soloAR===1,"setNew('soloAR',1)",t("1 aller-retour — 2 journées"),t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."))}
      ${card(g.soloAR===2,"setNew('soloAR',2)",t("2 allers-retours — 4 journées"),t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."))}
      <div class="box mini muted">${t("🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça.")}</div>`
    : `<h2>${t("🎭 Enjeu de la ligue")}</h2>
@@ -5577,12 +5886,29 @@ async function startLeagueCore(lg){
   const tirer=e=>drawDiverse(itemPool(e,mode), 5);   // toujours 5 options variées (anti-doublon par catégorie)
   const options=tirer(both?"gage":enjeu); const optionsR=both?tirer("reward"):null;
   const votes={},voteTs={},bids={},bidTs={}; const votesR={},voteTsR={};
-  for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length, mode, options.length, optionsR?optionsR.length:0);
+  // ⚠️ v8.87 — PLAFOND, pas `sched.length` : avec la trêve, on n'achète que pour l'aller.
+  const capIA = Math.max(1, Math.min(o.treve ? Math.floor(sched.length/2) : sched.length, modeCards(mode).length));
+  for(const p of ps){ if(p.is_ai){ const ap=aiPrep(capIA, mode, options.length, optionsR?optionsR.length:0);
     votes[p.id]=ap.vote; voteTs[p.id]=Date.now(); bids[p.id]=ap.bids; bidTs[p.id]=Date.now();
     if(both){ votesR[p.id]=ap.voteR; voteTsR[p.id]=Date.now(); }
     await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
   const deadline=new Date(Date.now()+24*3600*1000).toISOString();
+  /* ⚠️ v8.86 (bug trouvé par Hervé : « en duo face à l'IA ça propose encore 4 bonus au lieu de 2 »)
+     — CE BLOC CONSTRUIT UN OBJET NEUF ET PERDAIT LES RÉGLAGES FIGÉS À LA CRÉATION. La préparation
+     du solo réécrit `gage` de zéro ; tout ce que `createLeague` y avait mis et qui n'est pas
+     recopié ici DISPARAÎT au lancement. La trêve s'évaporait donc entre la création et la première
+     journée, et `maxBonusJoueur()` retombait sur le plafond plein.
+     ⚠️ `soloAR` ÉTAIT PERDU AUSSI, et le défaut se voyait ailleurs : l'onglet Infos affiche le
+     « 🤖 Format » quand `o.soloAR` existe, sinon il montre « 🎭 Enjeu » — une notion qui n'a aucun
+     sens en solo. On le recopie donc également.
+     ⚠️ L'AUTRE CHEMIN (`doCloseRegistration`) N'AVAIT PAS LE DÉFAUT : il MUTE l'objet existant au
+     lieu d'en créer un. C'est ce qui rendait le bug invisible entre amis et visible en solo.
+     ⚠️ RÈGLE : tout réglage ajouté un jour à la création doit être recopié ici. Un objet
+     reconstruit à la main est un piège qui ne se voit qu'à l'usage. */
   const st={options,votes,voteTs,bids,bidTs,deadline,mode,enjeu};
+  if(o.treve) st.treve=true;
+  if(o.soloAR!=null) st.soloAR=o.soloAR;
+  if(o.ar!=null) st.ar=o.ar;
   if(both){ st.optionsR=optionsR; st.votesR=votesR; st.voteTsR=voteTsR; }
   await q(db.from("leagues").update({status:"prep",num_days:sched.length,current_day:0,gage:JSON.stringify(st)}).eq("id",lg.id));
 }
@@ -5601,7 +5927,10 @@ async function createLeague(){
     const data = (newLg.data==='real' && hasOpt('direct')) ? 'real' : 'sim';
     const formula = (newLg.formula==='fast') ? 'fast' : 'classique';
     const st = { mode };                         // réglages figés stockés dans le JSON `gage`
-    if(solo) st.soloAR = (newLg.soloAR===1?1:2);
+    // ⚠️ v8.82 — `hasOpt` VÉRIFIÉ ICI, PAS EN JEU : l'option autorise le choix, la ligue le fige.
+    // Une option expirée ne doit jamais changer les règles d'une saison déjà lancée (cf. hasTreve).
+    if(newLg.treve && hasOpt('treve')) st.treve = true;
+    if(solo) st.soloAR = (st.treve ? 2 : (newLg.soloAR===1?1:2));
     else {
       st.enjeu = newLg.enjeu||'gage';
       // Vote du gage ouvert dès le LOBBY (amis) → on tire les options tout de suite + maps de votes vides.
@@ -5639,7 +5968,11 @@ async function joinLeague(code){
 function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
   if(L.status==="lobby"||L.status==="prep") return viewPrepTabs();
-  if(L.status==="starting") return `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
+  if(L.status==="truce") return viewTreve();
+  if(!treveResultSeen()) return viewTreveSummary();
+  if(L.status==="starting") return treveEnResolution(L)
+    ? `<div class="box" style="text-align:center"><div style="font-size:30px">🔄</div><b>${t("Résolution de la trêve…")}</b><div class="mini muted" style="margin-top:6px">${t("Attribution des bonus de mi-saison.")}</div></div>`
+    : `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
   if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">⚙️</div><b>Résolution de la journée…</b><div class="mini muted" style="margin-top:6px">Calcul des gains en cours.</div></div>`;
   // Ligue terminée → l'onglet Pronos annonce la fin de saison et RENVOIE au bilan (v7.23, demandé par
   // Hervé). Avant, il affichait le bilan lui-même : la barre du bas disait « ⚽ Pronos » alors que le
@@ -5771,6 +6104,19 @@ function enjeuTableHTML(r){
      ${corps}
      <div class="mini" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">${rew?t("🏆 <b>Motivation express :</b> le champion repart avec la récompense votée par le dernier — une excellente raison de viser la <b>première</b> place !"):t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`;
 }
+/* ⚠️ v8.93 — RENDU D'UN TOUR D'ENCHÈRES, FACTORISÉ. Jusqu'ici ce bloc n'existait que dans
+   `prepSummaryBody()`, pour le tour du départ. La trêve en rejoue un second, identique dans sa
+   forme (qui a gagné quoi, contre qui, à quel prix) : dupliquer le HTML aurait fait deux versions
+   à maintenir, qui auraient fini par diverger — exactement le défaut que ce fichier corrige sans
+   cesse. `pName` est passé en argument plutôt que recalculé : le tour de la trêve n'a pas la même
+   liste de joueurs sous la main que `s.players` (paiement à 0, capital non touché). */
+function auctionRoundHTML(auction, pName){
+  return (auction||[]).length ? (auction||[]).map(a=>`<div class="box"><div class="row"><div class="row" style="gap:10px"><span class="sport" title="${esc(t(CARDS[a.card].d))}">${CARDS[a.card].e}</span>
+        <div><b title="${esc(t(CARDS[a.card].d))}">${esc(t(CARDS[a.card].n))}</b><div class="mini muted">${esc(t(CARDS[a.card].d))}</div></div></div>
+        <div style="text-align:right;flex:0 0 auto"><div class="mini">→ <b>${pName(a.winner)}</b></div><div class="mini gold">${a.amount} €</div></div></div>
+      <div class="mini muted" style="margin-top:7px;border-top:1px solid var(--border);padding-top:6px">${t("Enchères :")} ${a.bids.map(bd=>`${pName(bd.pid)} <b>${bd.amt}€</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}`).join(' &nbsp;·&nbsp; ')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold">${t("🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:a.amount})}</span>`:''}</div></div>`).join("")
+    : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`;
+}
 function prepSummaryBody(){
   const s=L.prep_summary||{}; const both=(s.enjeu==="both");
   const pName=pid=>{const p=(s.players||[]).find(x=>x.pid===pid)||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
@@ -5779,12 +6125,8 @@ function prepSummaryBody(){
   // récompense reste retiré : la majorité ne décide plus, l'afficher laisserait croire le contraire.)
   return `${isSolo()?'':`<h2>${t("🎭 L'enjeu du tournoi")}</h2>
    ${enjeuTableHTML(false)}${both?enjeuTableHTML(true):''}`}
-   <h2>${t("🃏 Enchères — bonus attribués")}</h2>
-   ${(s.auction||[]).length? (s.auction||[]).map(a=>`<div class="box"><div class="row"><div class="row" style="gap:10px"><span class="sport" title="${esc(t(CARDS[a.card].d))}">${CARDS[a.card].e}</span>
-        <div><b title="${esc(t(CARDS[a.card].d))}">${esc(t(CARDS[a.card].n))}</b><div class="mini muted">${esc(t(CARDS[a.card].d))}</div></div></div>
-        <div style="text-align:right;flex:0 0 auto"><div class="mini">→ <b>${pName(a.winner)}</b></div><div class="mini gold">${a.amount} €</div></div></div>
-      <div class="mini muted" style="margin-top:7px;border-top:1px solid var(--border);padding-top:6px">${t("Enchères :")} ${a.bids.map(bd=>`${pName(bd.pid)} <b>${bd.amt}€</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}`).join(' &nbsp;·&nbsp; ')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold">${t("🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:a.amount})}</span>`:''}</div></div>`).join("")
-     : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`}
+   <h2>${(L.prep_summary&&L.prep_summary.treve_st&&L.prep_summary.treve_st.closed_at)?t("🃏 Enchères — au départ"):t("🃏 Enchères — bonus attribués")}</h2>
+   ${auctionRoundHTML(s.auction, pName)}
    ${(()=>{ /* ⚠️ v7.84 (demandé par Hervé) — LES BONUS INVENDUS DISPARAISSAIENT SANS UN MOT.
         Ce bloc ne listait que les bonus ayant reçu une mise. Or un bonus que personne n'achète
         n'est PAS remis en jeu plus tard : les mains sont figées à la fin des enchères (`hand:won`)
@@ -5811,6 +6153,34 @@ function prepSummaryBody(){
         <td class="num muted">${p.spent}€</td><td class="num"><b>${eur(p.capital)}€</b></td>
         <td class="mini">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(' '):'–'}</td></tr>`).join("")}</table></div>
    ${prepSuperlatives(s)}`;
+}
+/* ⚠️ v8.93 (demandé par Hervé : « il faut qu'on les voit d'abord, comme au début de ligue ») —
+   UN VRAI PALIER, PAS UN TOAST. La trêve se refermait sur `toast(...)`, une notification
+   fugace : le joueur atterrissait directement sur les pronos de la journée suivante sans avoir
+   vu qui avait remporté quoi. `viewPrepSummary()` existe déjà pour le tour du départ mais n'est
+   jamais affiché automatiquement — l'app se contente d'un `infoWin` et compte sur les Coulisses.
+   Pour la trêve, où il n'y a RIEN d'autre à faire en attendant (contrairement au départ, qui
+   s'enchaîne sur le premier choix de matchs), l'absence de palier se voit davantage : on avait
+   l'impression de rater une étape.
+   ⚠️ VISIBLE PAR TOUS, PAS SEULEMENT PAR CELUI QUI RÉSOUT. Un `infoModal` déclenché dans
+   `resolveTreve()` ne s'ouvrirait que dans le navigateur du client qui a gagné la course de
+   résolution. Ce nouvel écran se déclenche donc à l'AFFICHAGE (comme `jourNonVu` pour les
+   résultats non vus), pas à la résolution : chacun le voit à sa prochaine visite, quel que soit
+   qui a résolu. Repère : `pl_treveu_<ligue>_<joueur>`, sur le modèle de `pl_preps_`/`pl_seen_`. */
+function treveResultSeen(){ const s=L&&L.prep_summary; const clos=s&&s.treve_st&&s.treve_st.closed_at;
+  if(!clos) return true;   // rien à montrer → jamais bloquant
+  return localStorage.getItem("pl_treveu_"+L.id+"_"+(S.myId||"?")+"_"+clos)==="1"; }
+function ackTreveResult(){ const s=L&&L.prep_summary; const clos=s&&s.treve_st&&s.treve_st.closed_at;
+  if(clos) localStorage.setItem("pl_treveu_"+L.id+"_"+(S.myId||"?")+"_"+clos,"1"); render(); }
+function viewTreveSummary(){
+  const s=L.prep_summary||{}; const st=s.treve_st||{};
+  const pName=pid=>{const p=pById(pid)||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
+  return `<div class="box"><h2 style="margin-top:0">🔄 ${t("La trêve est terminée")}</h2>
+      <div class="mini muted">${t("Voici qui a remporté quoi à la mi-saison — jette un œil avant de reprendre.")}</div></div>
+    <h2>${t("🃏 Enchères de la trêve — bonus attribués")}</h2>
+    ${auctionRoundHTML(st.auction, pName)}
+    ${prepSuperlatives({auction:st.auction, players:s.players||[]})}
+    <button class="btn" onclick="ackTreveResult()">${t("La saison reprend →")}</button>`;
 }
 function viewPrepSummary(){
   return `<div class="box"><h2 style="margin-top:0">${t("🎬 C'est parti !")}</h2><div class="mini muted">${t("Voici le gage proposé et les enchères de bonus — jette un œil avant ton premier pari.")}</div></div>
@@ -5844,6 +6214,20 @@ function viewCoulisses(){
      <b class="mini" style="letter-spacing:2px;user-select:all">${esc(L.code)}</b></div>
    ${L.status==="prep"?`<div class="mini muted" style="margin:-4px 2px 8px">${t("Partage-le pour inviter d'autres joueurs.")}</div>`:''}
    ${L.prep_summary?prepSummaryBody():`<div class="box mini muted">${t("La ligue n'a pas encore démarré : le tirage arrive bientôt !")}</div>`}
+   ${/* ⚠️ v8.93 — LA TRÊVE APPARAÎT SÉPARÉMENT, EN DESSOUS, PAS MÊLÉE AU TOUR DU DÉPART. Elle a
+        ses propres bonus (le stock entier est remis en vente), ses propres perdants (les bonus
+        non joués de la première moitié) et n'a rien à voir avec le gage/l'enjeu déjà montrés
+        au-dessus. Fusionner les deux sous un même titre aurait raconté un seul événement là où
+        il y en a deux, à des moments différents de la saison — Hervé le demande explicitement :
+        « une séparation entre ce qui s'est passé au début et à la trêve ».
+        ⚠️ `treve_st.closed_at` EST LA GARDE, PAS `hasTreve()` : une ligue qui a l'option mais où
+        la trêve n'est pas encore arrivée (ou une ligue sans l'option du tout) ne doit montrer
+        AUCUNE trace de ce second tour — il n'a simplement pas encore eu lieu, ou pas lieu du tout. */''}
+   ${(()=>{ const st=(L.prep_summary&&L.prep_summary.treve_st)||null; if(!st||!st.closed_at) return '';
+     const pName=pid=>{const p=pById(pid)||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
+     const perdusHTML=Object.keys(st.perdus||{}).length ? `<div class="box mini muted"><b>${t("😶 Perdus à la trêve")}</b>
+       ${Object.entries(st.perdus).map(([pid,ids])=>`<div style="margin-top:4px">${pName(pid)} : ${ids.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(', ')}</div>`).join('')}</div>` : '';
+     return `<h2>${t("🔄 Enchères — à la trêve (mi-saison)")}</h2>${auctionRoundHTML(st.auction, pName)}${perdusHTML}${prepSuperlatives({auction:st.auction, players:(L.prep_summary&&L.prep_summary.players)||[]})}`; })()}
    ${(L.prep_summary && L.status==="running")?`<button class="btn" onclick="goGame()">⚽ ${t("Aller aux pronos →")}</button>`:''}`;
 }
 // Choix du format en SOLO : 1 ou 2 allers-retours contre l'IA (2 ou 4 journées).
@@ -5881,6 +6265,15 @@ function viewLobby(){
     <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>`:''}
     <h2>${t("🎛️ Mode de jeu")}</h2>
     ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    ${/* ⚠️ v8.85 — RAPPELÉ AUSSI DANS LE SALON. C'est là que les invités arrivent avec un code ;
+         ils n'ont pas vu l'écran de création et découvriraient la règle à la trêve. En lecture
+         seule : le réglage est figé depuis la création, contrairement au mode et aux données que
+         l'organisateur peut encore changer ici. */''}
+    <h2>${t("🃏 Enchères de bonus")}</h2>
+    <div class="box row"><div><b>${hasTreve()?t("🔄 Au départ et à mi-parcours"):t("🎯 Au départ seulement")}</b>
+      <div class="mini muted">${hasTreve()
+        ? t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>{a} €</b> — hors cagnotte — pour tout racheter.",{a:SHOP_CAP})
+        : t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison.")}</div></div></div>
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     ${solo?soloFormatHTML(org):`<h2>${t("🎭 Enjeu de la ligue")}</h2>
@@ -6178,7 +6571,9 @@ async function doCloseRegistration(){
     st.votes=st.votes||{}; st.voteTs=st.voteTs||{}; st.bids=st.bids||{}; st.bidTs=st.bidTs||{};
     if(both){ st.votesR=st.votesR||{}; st.voteTsR=st.voteTsR||{}; }
     // L'IA fait sa prépa (vote + enchères) tout de suite — 2 votes en mode "both".
-    for(const p of ps){ if(p.is_ai){ const ap=aiPrep(sched.length, mode, st.options.length, st.optionsR?st.optionsR.length:0);
+    // ⚠️ v8.87 — même correction que dans `startLeagueCore` (voir la note sur `aiPrep`).
+    const capIA = Math.max(1, Math.min(st.treve ? Math.floor(sched.length/2) : sched.length, modeCards(mode).length));
+    for(const p of ps){ if(p.is_ai){ const ap=aiPrep(capIA, mode, st.options.length, st.optionsR?st.optionsR.length:0);
       st.votes[p.id]=ap.vote; st.voteTs[p.id]=Date.now(); st.bids[p.id]=ap.bids; st.bidTs[p.id]=Date.now();
       if(both){ st.votesR[p.id]=ap.voteR; st.voteTsR[p.id]=Date.now(); }
       await q(db.from("players").update({shop_done:true}).eq("id",p.id)); } }
@@ -6199,7 +6594,13 @@ async function maybeAutoStartFull(){
   L.status="starting";
   await doCloseRegistration();   // crée le calendrier, passe en prépa
 }
-function aiPrep(nDays, mode, optCount, optCountR){ const ids=modeCards(mode||"complet").slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
+/* ⚠️ v8.87 (bug trouvé par Hervé : « l'IA a pris 4 bonus au lieu de 2 ») — LE PREMIER ARGUMENT
+   EST UN PLAFOND, PAS UN NOMBRE DE JOURNÉES. Il s'appelait `nDays` parce que les deux coïncidaient
+   avant la trêve ; depuis, le plafond vaut la MOITIÉ des journées et les deux ont divergé. Les
+   appelants passaient `sched.length` — le total — et l'IA achetait pour une saison entière.
+   ⚠️ Renommé `maxCartes` exprès : un nom qui décrit ce que la valeur EST empêche de lui repasser
+   un jour le nombre de journées « parce que ça marchait avant ». */
+function aiPrep(maxCartes, mode, optCount, optCountR){ const nDays=maxCartes; const ids=modeCards(mode||"complet").slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
   // Enchères des IA : elles VISENT plusieurs bonus et engagent une bonne part de leur budget, sinon
   // la vente aux enchères paraît morte (avant : souvent 1 seul petit bonus → IA passives, signalé par
   // Hervé). ~15 % d'IA « prudentes » ne misent presque rien, pour garder de la variété.
@@ -6379,6 +6780,54 @@ function prepGagesTab(){
 // Deux jeux d'enchères identiques ? Sert à savoir si une prépa DÉJÀ validée a été modifiée (→ re-valider).
 function bidsSame(a,b){ const ka=Object.keys(a||{}).filter(k=>+a[k]>0), kb=Object.keys(b||{}).filter(k=>+b[k]>0);
   if(ka.length!==kb.length) return false; return ka.every(k=>+a[k]===+((b||{})[k]||0)); }
+/* ─── ÉCRAN DE TRÊVE (v8.83) ─────────────────────────────────────────────────────────────────
+   Volontairement bâti sur les MÊMES briques que les enchères de préparation (mêmes lignes de
+   bonus, même `setBid`, même jauge) : c'est la même mécanique, elle doit se manipuler pareil.
+   ⚠️ CE QUI DIFFÈRE EST DIT EN HAUT, pas laissé à deviner : les bonus perdus, la dotation qui ne
+   sort pas de la cagnotte, et ce qui n'est pas dépensé qui disparaît. Un joueur qui découvre sa
+   main vidée sans explication croit à un bug — c'est la première chose qu'il verra.
+   ⚠️ `bidL` EST PARTAGÉ avec l'écran de préparation. On le recharge sur `S.bidLLeague` en y
+   mêlant la phase, sinon on rouvrirait la trêve avec les mises du départ déjà inscrites. */
+function viewTreve(){
+  const meP=me(); if(!meP) return `<div class="box">…</div>`;
+  const st=treveState()||{}; const dejaFait=!!(st.done||{})[S.myId];
+  const perdus=(st.perdus||{})[S.myId]||[];
+  const maxCards=maxBonusTreve();
+  const ids=modeCards(getMode()).slice().sort((a,b)=>t(CARDS[a].n).localeCompare(t(CARDS[b].n),undefined,{sensitivity:"base"}));
+  const cle="treve:"+L.id;
+  if(S.bidLLeague!==cle){ bidL=Object.assign({}, (st.bids||{})[S.myId]||{}); S.bidLLeague=cle; }
+  const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
+  const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
+  const humans=players.filter(p=>!p.is_ai); const prets=humans.filter(p=>(st.done||{})[p.id]).length;
+  return `<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)">
+      <h2 style="margin-top:0">🔄 ${t("Trêve de mi-saison")}</h2>
+      <div class="mini" style="line-height:1.6">${t("La saison s'arrête le temps d'un transfert. <b>Tous les bonus non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> pour racheter parmi <b>tous</b> les bonus.",{a:SHOP_CAP})}</div>
+      <div class="mini muted" style="margin-top:6px;line-height:1.6">${t("Ces {a} € ne sortent pas de ta cagnotte, et <b>ce que tu ne dépenses pas est perdu</b>. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.",{a:SHOP_CAP,b:maxCards})}</div>
+      ${perdus.length?`<div class="mini" style="margin-top:8px;color:var(--red)">${t("Perdus à la trêve :")} ${perdus.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(' · ')}</div>`:''}
+      <div class="mini muted" style="margin-top:8px">⏳ ${t("Reprise dans {a} au plus tard — ou dès que tout le monde a validé.",{a:fmtLeft(st.deadline)})} · <b>${prets}/${humans.length}</b> ${t("prêts")}</div></div>
+    <div class="box"><div class="row mini"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b> / ${maxCards} ${t("bonus")}</span></div>
+      <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
+   ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport clik" onclick="showCardInfo('${id}')">${CARDS[id].e}</span>
+      <div style="min-width:0"><b class="mini clik" onclick="showCardInfo('${id}')">${esc(t(CARDS[id].n))}</b><div class="mini muted">${esc(t(CARDS[id].d))}</div></div></div>
+      <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
+   <button class="btn" id="essaibidbtn" ${(over||tooMany)?'disabled':''} onclick="saveTreve()">${over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Trop de bonus — {a} maximum",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →")))}</button>
+   ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`:''}`;
+}
+async function saveTreve(){ if(busy)return; busy=true; showErr("");
+  try{
+    const sum = Object.assign({}, L.prep_summary||{});
+    const st=sum.treve_st; if(!st){ busy=false; return; }
+    st.bids=st.bids||{}; st.bidTs=st.bidTs||{}; st.done=st.done||{};
+    // ⚠️ L'HORODATAGE NE SE RÉÉCRIT PAS À CHAQUE MODIFICATION : il départage les égalités. Le
+    // remettre à jour ferait perdre sa priorité à celui qui a misé en premier puis corrigé un
+    // chiffre — exactement l'injustice que la règle « à égalité, le plus rapide » veut éviter.
+    if(st.bidTs[S.myId]==null) st.bidTs[S.myId]=Date.now();
+    st.bids[S.myId]=Object.assign({},bidL); st.done[S.myId]=true;
+    sum.treve_st=st;
+    await q(db.from("leagues").update({prep_summary:sum}).eq("id",L.id));
+    busy=false; await refresh(); toast(t("Enchères enregistrées ✓"));
+  }catch(e){ showErr("Enchères : "+e.message); busy=false; }
+}
 function prepEncheresTab(){
   const meP=me(); const maxCards=maxBonusJoueur();   // v8.33 : borné par les bonus réellement offerts
   const ids=modeCards(getMode()).slice().sort((a,b)=>t(CARDS[a].n).localeCompare(t(CARDS[b].n),undefined,{sensitivity:"base"}));
@@ -6410,6 +6859,7 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
   return ((L.data_mode==='real') ? kv("⏱️ "+t("Rythme"), t(leagueFormula().n), 'formula') : '')
    + kv("🎛️ "+t("Mode"), t(MODES[getMode()].n), 'mode')
    + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"), 'data')
+   + kv("🃏 "+t("Enchères"), hasTreve()?t("Départ + trêve"):t("Au départ"), 'treve')
    + extra; }
 // Explication d'un réglage figé (clic sur une ligne de la page Infos).
 function paramInfo(kind){
@@ -6420,6 +6870,11 @@ function paramInfo(kind){
   else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."); }
   else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur.")); }
   else if(kind==='solo'){ emoji="🤖"; const one=(o.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
+  else if(kind==='treve'){ emoji="🃏";
+    title = hasTreve()?t("Enchères au départ et à la trêve"):t("Enchères au départ seulement");
+    body = hasTreve()
+      ? t("À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Ce que tu ne dépenses pas est perdu.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés.")
+      : t("Une seule vente aux enchères, avant la première journée. Les bonus que tu remportes te suivent toute la saison, et tu les joues quand tu veux — au maximum un par journée."); }
   infoModal(emoji, title, `<div class="mini muted" style="text-align:left;line-height:1.55">${body}</div>`);
 }
 function prepInfosTab(){
@@ -6564,12 +7019,32 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
     // enchères : chaque bonus au plus offrant (égalité → premier à avoir misé) ; perdants remboursés
     const ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
     const paid={},won={},auction=[]; ps.forEach(p=>{paid[p.id]=0;won[p.id]=[];});
+    /* ⚠️ v8.87 — LE PLAFOND EST APPLIQUÉ ICI AUSSI. Il n'existait QUE dans l'écran (le bouton se
+       désactive au-delà) : rien n'empêchait un lot de dépasser. C'est ce qui a laissé l'IA
+       remporter 4 bonus — elle ne passe par aucun écran. Un plafond qui ne vit que dans
+       l'interface n'est pas une règle du jeu, c'est une suggestion.
+       ⚠️ Même formule que `maxBonusJoueur()`, mais recalculée sur `fresh` : `L` n'est pas
+       forcément à jour au moment de la résolution. */
+    /* ⚠️ v8.88 — `mode` N'EXISTE PAS DANS CETTE FONCTION. La v8.87 l'y a utilisé par analogie avec
+       `doCloseRegistration`, où la variable est bien déclarée : lire une variable non déclarée lève
+       une ReferenceError, le `catch` l'avalait, et la ligue restait bloquée sur « Démarrage du
+       championnat… » — le statut `starting` était déjà posé, plus rien ne le relançait.
+       ⚠️ CE QUE ÇA APPREND : `check-syntax` compile le fichier et ne peut PAS voir ça, une variable
+       inconnue étant une erreur d'EXÉCUTION. Et aucun de mes essais ne passait par `resolvePrep`,
+       qui exige une vraie base. Toute ligne ajoutée dans une fonction qu'on ne peut pas exercer
+       doit être relue variable par variable — c'est le seul filet qui reste.
+       On lit donc le mode dans `st`, la source déjà parsée juste au-dessus. */
+    const modeLot = ((st&&st.mode)==='simple') ? 'simple' : 'complet';
+    const capLot = Math.max(1, Math.min(hasTreve(fresh) ? Math.floor((fresh.num_days|0)/2) : (fresh.num_days|0), modeCards(modeLot).length));
     for(const cardId in CARDS){ const cand=ps.map(p=>({pid:p.id,amt:(bids[p.id]&&+bids[p.id][cardId])||0,ts:(bidTs[p.id]!=null?bidTs[p.id]:Infinity)})).filter(c=>c.amt>0);
-      if(!cand.length) continue; cand.sort((a,b)=> (b.amt-a.amt) || (a.ts-b.ts)); const wpid=cand[0].pid; won[wpid].push(cardId); paid[wpid]+=cand[0].amt;
+      if(!cand.length) continue; cand.sort((a,b)=> (b.amt-a.amt) || (a.ts-b.ts)); const wpid=cand[0].pid;
+      if(won[wpid].length>=capLot) continue;                 // plafond : le bonus n'est attribué à personne
+      won[wpid].push(cardId); paid[wpid]+=cand[0].amt;
       auction.push({card:cardId, winner:wpid, amount:cand[0].amt, bids:cand.map(c=>({pid:c.pid,amt:c.amt}))}); }
     for(const p of ps){ await q(db.from("players").update({hand:won[p.id],capital:Math.max(0,100-paid[p.id]),shop_done:true}).eq("id",p.id)); }
     // récap de préparation (affiché avant le coup d'envoi)
-    const summary={ gage, enjeu, gageDesc:(options[winIdx]&&options[winIdx].d)||gageDescOf(gage),
+    // ⚠️ v8.89 — `treve` RECOPIÉ ICI : c'est le seul endroit qui survit au lancement (voir hasTreve).
+    const summary={ gage, enjeu, treve:!!(st&&st.treve), mode:((st&&st.mode)==='simple'?'simple':'complet'), gageDesc:(options[winIdx]&&options[winIdx].d)||gageDescOf(gage),
       options: options.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})), voteMap: votes, customs, // pour l'enjeu « façon championnat » (choix du pôle opposé appliqué à la fin) + textes perso de chacun
       gageVotes: options.map((o,i)=>({t:(o&&o.t)||o, d:(o&&o.d)||'', count:Object.values(votes).filter(v=>v===i).length, win:i===winIdx})),
       auction,
@@ -7418,6 +7893,77 @@ function runEngine(pdIn, capStart, dz, N){
   const dayNet={},dayBest={},dayWins={}; for(const pid in G){ dayNet[pid]=Math.round((G[pid].net+G[pid].bonus)*100)/100; dayBest[pid]=G[pid].bestOdd; dayWins[pid]=G[pid].perBet.filter(x=>x.win).length; }
   return {dayNet,dayBest,dayWins,stolen,cloned};
 }
+/* ─── OUVERTURE DE LA TRÊVE (v8.83) ──────────────────────────────────────────────────────────
+   Trois choses, dans cet ordre : on ARCHIVE les bonus non joués, on VIDE les mains, on prépare
+   la vente. L'ordre compte — vider avant d'archiver perdrait la trace, et le joueur ouvrirait
+   l'app en constatant que ses bonus se sont évaporés sans explication.
+   ⚠️ LE CAPITAL N'EST PAS TOUCHÉ. Les 40 € de la trêve sont une DOTATION, pas un prélèvement :
+   c'est ce qui empêche la trêve de favoriser celui qui mène (arbitré avec Hervé). La résolution
+   n'écrira donc jamais `capital`, contrairement à celle de la préparation.
+   ⚠️ L'IA MISE TOUT DE SUITE, sinon elle traverserait toute la seconde moitié sans un bonus et
+   les duels contre elle perdraient leur sel. `aiPrep` prend le nombre de journées : on lui passe
+   le RESTANT, pas le total, sinon elle achèterait pour une saison qu'elle n'a plus. */
+async function ouvrirTreve(lg, jour, ps){
+  try{
+    const joueurs = ps || await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
+    // ⚠️ v8.89 — LE MODE VIENT DU RÉCAP, PAS DE `gage` : à ce stade la ligue tourne, `gage` ne
+    // porte plus que le libellé du gage. Le récap est la source des réglages d'après-lancement.
+    const sum = Object.assign({}, lg.prep_summary||{});
+    const mode=(sum.mode==='simple')?'simple':(getMode()==='simple'?'simple':'complet');
+    const reste=Math.max(1,(lg.num_days|0)-jour);
+    const st={ day:jour, bids:{}, bidTs:{}, done:{}, perdus:{},
+               deadline:new Date(Date.now()+24*3600*1000).toISOString() };
+    for(const p of joueurs){
+      const main=Array.isArray(p.hand)?p.hand.slice():[];
+      if(main.length) st.perdus[p.id]=main;                    // archivé AVANT d'effacer
+      if(p.is_ai){ const ap=aiPrep(reste, mode, 0, 0); st.bids[p.id]=ap.bids; st.bidTs[p.id]=Date.now(); st.done[p.id]=true; }
+      await q(db.from("players").update({hand:[]}).eq("id",p.id));
+    }
+    sum.treve_st=st;
+    await q(db.from("leagues").update({prep_summary:sum}).eq("id",lg.id));
+  }catch(e){ showErr("Ouverture de la trêve : "+e.message); }
+}
+/* ─── RÉSOLUTION DE LA TRÊVE (v8.83) ─────────────────────────────────────────────────────────
+   Même règle d'attribution que la préparation — chaque bonus au plus offrant, égalité départagée
+   par la rapidité — mais DEUX différences qui comptent :
+     • le capital n'est JAMAIS écrit (dotation, pas prélèvement) ;
+     • la main est REMPLACÉE, pas complétée : elle a été vidée à l'ouverture, ce qui est la règle
+       « les bonus non joués sont perdus ».
+   ⚠️ VERROU ATOMIQUE, comme `resolvePrep` : `eq("status","truce")` garantit qu'un seul client
+   résout, même si trois téléphones rafraîchissent en même temps. Sans lui, deux résolutions
+   simultanées attribueraient deux fois les mêmes bonus.
+   ⚠️ LE PLAFOND EST APPLIQUÉ ICI AUSSI, pas seulement dans l'écran. Un client modifié pourrait
+   envoyer vingt mises ; on garde les plus élevées et on ignore le reste (`maxBonusTreve`). */
+let resolvingTreve=false;
+async function resolveTreve(){ if(resolvingTreve||resolving) return; resolvingTreve=true; showErr("");
+  try{
+    const claim=await q(db.from("leagues").update({status:"starting"}).eq("id",L.id).eq("status","truce").select("*"));
+    if(!claim||!claim.length){ resolvingTreve=false; await refresh(); return; }
+    const fresh=claim[0];
+    const sum = Object.assign({}, fresh.prep_summary||{});
+    const st=sum.treve_st||{bids:{},bidTs:{}};
+    const mode=(sum.mode==='simple')?'simple':(getMode()==='simple'?'simple':'complet');
+    const ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
+    const reste=Math.max(1,(fresh.num_days|0)-(fresh.current_day|0));
+    const plafond=Math.max(1, Math.min(reste, modeCards(mode).length));
+    const won={},paid={},auction=[]; ps.forEach(p=>{won[p.id]=[];paid[p.id]=0;});
+    for(const cardId of modeCards(mode)){
+      const cand=ps.map(p=>({pid:p.id, amt:((st.bids||{})[p.id]&&+st.bids[p.id][cardId])||0, ts:(st.bidTs&&st.bidTs[p.id]!=null)?st.bidTs[p.id]:Infinity})).filter(c=>c.amt>0);
+      if(!cand.length) continue;
+      cand.sort((a,b)=> (b.amt-a.amt) || (a.ts-b.ts));
+      const w=cand[0]; if(won[w.pid].length>=plafond) continue;   // plafond appliqué côté serveur
+      won[w.pid].push(cardId); paid[w.pid]+=w.amt;
+      auction.push({card:cardId, winner:w.pid, amount:w.amt, bids:cand.map(c=>({pid:c.pid,amt:c.amt}))});
+    }
+    // ⚠️ `hand` SEULEMENT : ni `capital`, ni `shop_done`. La dotation ne se reporte pas et ne se
+    // rembourse pas — ce qui n'a pas été converti en bonus est perdu, c'est toute la règle.
+    for(const p of ps) await q(db.from("players").update({hand:won[p.id]}).eq("id",p.id));
+    st.auction=auction; st.spent=paid; st.closed_at=new Date().toISOString(); sum.treve_st=st;
+    await q(db.from("leagues").update({prep_summary:sum,status:"running"}).eq("id",L.id));
+    try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString(),bet_started_at:null}).eq("id",L.id)); }catch(e){}
+    resolvingTreve=false; await refresh(); toast(t("Trêve terminée — la saison reprend ✓"));
+  }catch(e){ showErr("Trêve : "+e.message); resolvingTreve=false; }
+}
 async function resolveDay(){
   if(resolving)return; resolving=true; showErr("");
   try{
@@ -7568,7 +8114,24 @@ async function resolveDay(){
     // la joindre à la mise à jour ci-dessus ferait échouer AUSSI `recap_note`.
     if(recapLog){ try{ await q(db.from("leagues").update({recap_log:recapLog}).eq("id",L.id)); }catch(e){} }
     const next=D+1; const done=next>=fresh.num_days;
-    await q(db.from("leagues").update({current_day:next,status:done?"done":"running"}).eq("id",L.id));
+    /* ─── ENTRÉE EN TRÊVE (v8.83) ─────────────────────────────────────────────────────────────
+       ⚠️ ICI ET NULLE PART AILLEURS. C'est le SEUL endroit du jeu où la journée avance ; y poser
+       la bascule fait que tout le reste s'arrête tout seul — paris, tirage des matchs, pronos de
+       l'IA, résolution automatique testent tous `status==="running"`. Aller désactiver chacun
+       séparément aurait été la vraie source de bugs.
+       ⚠️ ON N'Y RENTRE QU'UNE FOIS : `treveFaite()` lit `treve_st.day`. Une ligue relancée ou un
+       `current_day` revenu en arrière rouvrirait sinon la trêve et effacerait les bonus une
+       seconde fois — les joueurs perdraient ce qu'ils viennent d'acheter. */
+    /* ⚠️ v8.90 (bug vécu par Hervé : « Assurance » listée en « perdue » alors qu'il venait de la
+       jouer) — `ps` EST OBSOLÈTE À CE POINT. Il a été lu tout en haut de `resolveDay`, AVANT que
+       cette même fonction ne déplace les bonus joués de `hand` vers `cards_used` (écrit en base
+       quelques lignes plus haut, mais jamais répercuté sur le tableau `ps` en mémoire). Passer ce
+       `ps` périmé à `ouvrirTreve` lui faisait archiver une main qui n'était déjà plus la vraie.
+       On relit donc les joueurs depuis la base, APRÈS l'écriture de `upd` : c'est la première
+       fonction du code de la trêve qui peut se fier à un `hand` à jour. */
+    const versTreve = !done && hasTreve(fresh) && next===jourTreve(fresh) && !treveFaite(fresh);
+    if(versTreve){ const psAJour=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order")); await ouvrirTreve(fresh, next, psAJour); }
+    await q(db.from("leagues").update({current_day:next,status:done?"done":(versTreve?"truce":"running")}).eq("id",L.id));
     if(done){ try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} } // date de fin (défensif si colonne absente) — tri des ligues terminées
     if(!done){ try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString()}).eq("id",L.id)); }catch(e){} // début journée suivante (défensif si colonne absente)
       try{ await q(db.from("leagues").update({bet_started_at:null}).eq("id",L.id)); }catch(e){} } // remise à zéro du compte à rebours des paris
@@ -9427,7 +9990,22 @@ function viewStandings(){
         <button class="btn ghost sm" style="margin-top:8px" onclick="setFormulaNext()">${t("🔄 Changer le format (dès la journée suivante)")}</button></div>`; })():''}
     ${ptsChart()}
     ${capChart()}
-    ${(hand.length||used.length)?`<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div><div class="cards">${hand.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}${used.map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}</div></div>`:''}
+    ${(()=>{
+      // ⚠️ v8.95 (capture d'Hervé : « je ne vois pas ces infos ») — TROISIÈME ENDROIT QUI FAISAIT
+      // LE MÊME TAS. La v8.94 a séparé la fiche joueur (`showPlayerCards`, ouverte au clic sur un
+      // nom) et le bilan final (`viewEnd`) — mais ce bloc-ci, sur l'écran Classement LUI-MÊME, sous
+      // le graphique de capital, montre MES bonus directement, sans clic. Trois endroits, trois
+      // fois le même calcul brut : je n'avais traité que deux des trois.
+      if(!hand.length && !used.length) return '';
+      const o=meP?bonusOrigins(meP):{hasTreve:false};
+      if(!o.hasTreve) return `<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div><div class="cards">${hand.map(id=>bonusChip(id,false)).join("")}${used.map(id=>bonusChip(id,true)).join("")}</div></div>`;
+      return `<div class="box"><div class="mini muted">${t("🃏 Tes bonus")} <span class="mini">${t("(touche un bonus pour sa description · barré = déjà utilisé)")}</span></div>
+        <div class="mini muted" style="margin-top:8px">🎯 ${t("Au départ")}</div>
+        ${o.dep.length?`<div class="cards" style="margin-top:3px">${o.dep.map(x=>bonusChip(x.id,x.used)).join("")}</div>`:`<div class="mini muted">${t("— aucun")}</div>`}
+        ${o.perdus.length?`<div class="mini" style="margin-top:6px;color:var(--red)">😶 ${t("Perdus à la trêve")} : ${o.perdus.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(', ')}</div>`:''}
+        <div class="mini muted" style="margin-top:6px">🔄 ${t("Depuis la trêve")}</div>
+        ${o.treve.length?`<div class="cards" style="margin-top:3px">${o.treve.map(x=>bonusChip(x.id,x.used)).join("")}</div>`:`<div class="mini muted">${t("— aucun")}</div>`}</div>`;
+    })()}
     ${L.status==="done" ? enjeuFinalHTML() : enjeuProjeteHTML()}`;
 }
 // Enjeu(x) à l'écran final. En mode "both" il y en a DEUX → on affiche les deux encadrés.
@@ -9692,11 +10270,18 @@ function viewEnd(){
    ${ptsChart()}
    ${capChart()}
    <div class="box"><div class="mini muted">${t("🃏 Bonus de chaque joueur")} <span class="mini">${t("(barré = utilisé · survole pour la description)")}</span></div>
-     ${ord.map(p=>{ const owned=[...(p.cards_used||[]),...(p.hand||[])];
-       return `<div style="margin-top:8px"><div class="mini"><b>${avaName(p)}</b>${owned.length?'':' <span class="muted">'+t("— aucun bonus")+'</span>'}</div>
+     ${ord.map(p=>{ const o=bonusOrigins(p); const owned=[...(p.cards_used||[]),...(p.hand||[])];
+       if(!o.hasTreve) return `<div style="margin-top:8px"><div class="mini"><b>${avaName(p)}</b>${owned.length?'':' <span class="muted">'+t("— aucun bonus")+'</span>'}</div>
          ${owned.length?`<div class="cards" style="margin-top:4px">
-           ${(p.cards_used||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')" style="opacity:.45"><span class="em">${CARDS[id].e}</span><s>${esc(t(CARDS[id].n))}</s></div>`).join("")}
-           ${(p.hand||[]).map(id=>`<div class="cardchip clik" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; }).join("")}</div>
+           ${(p.cards_used||[]).map(id=>bonusChip(id,true)).join("")}
+           ${(p.hand||[]).map(id=>bonusChip(id,false)).join("")}</div>`:''}</div>`;
+       // ⚠️ Ligue AVEC trêve : même séparation en 3 groupes que dans la fiche joueur.
+       return `<div style="margin-top:8px"><div class="mini"><b>${avaName(p)}</b></div>
+         <div class="mini muted" style="margin-top:4px">🎯 ${t("Au départ")}</div>
+         ${o.dep.length?`<div class="cards" style="margin-top:3px">${o.dep.map(x=>bonusChip(x.id,x.used)).join("")}</div>`:`<div class="mini muted">${t("— aucun")}</div>`}
+         ${o.perdus.length?`<div class="mini" style="margin-top:5px;color:var(--red)">😶 ${t("Perdus à la trêve")} : ${o.perdus.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(', ')}</div>`:''}
+         <div class="mini muted" style="margin-top:5px">🔄 ${t("Depuis la trêve")}</div>
+         ${o.treve.length?`<div class="cards" style="margin-top:3px">${o.treve.map(x=>bonusChip(x.id,x.used)).join("")}</div>`:`<div class="mini muted">${t("— aucun")}</div>`}</div>`; }).join("")}</div>
    <button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button><div style="height:8px"></div>
    ${(me()&&me().is_organizer)?`<button class="btn" onclick="relaunchLeague()">${t("🔁 Relancer une compétition avec les mêmes joueurs")}</button>
      <div class="mini muted" style="text-align:center;margin:6px 0 12px">${t("Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.")}</div>`:''}
@@ -9715,11 +10300,19 @@ function showLeagueInfo(lid){
   if(lg.prep_summary&&lg.prep_summary.enjeu) enjeu=lg.prep_summary.enjeu; const rew=(enjeu==="reward");
   const real=(lg.data_mode==="real");
   const row=(lab,val)=>`<div class="box row" style="text-align:left"><b>${lab}</b><span class="chip" style="flex:0 0 auto">${val}</span></div>`;
-  let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg.status)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
+  let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
     ${real?`<div class="box" style="text-align:left"><div class="row"><b>${t("Format")}</b><span class="chip" style="flex:0 0 auto">${t(f.n)}</span></div><div class="mini muted" style="margin-top:5px">${t(f.d)}</div></div>`:''}
     ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"))}
     ${row(t("🎭 Enjeu"), rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)"))}
     ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"))}
+    ${/* ⚠️ v8.85 (demandé par Hervé) — LES ENCHÈRES FIGURENT DANS LES CARACTÉRISTIQUES. C'est un
+         réglage figé au même titre que le mode ou l'enjeu, et il change la façon de jouer toute
+         la saison : sans lui, un joueur qui rejoint une ligue ne sait pas qu'il devra dépenser
+         ses bonus avant la mi-parcours.
+         ⚠️ `hasTreve(lg)` ET NON `hasTreve()` : cette fenêtre s'ouvre depuis la liste des ligues,
+         où `L` désigne une autre ligue — ou aucune. La fonction prend une ligue en argument
+         précisément pour ce cas. */''}
+    ${row(t("🃏 Enchères"), hasTreve(lg)?t("Départ + trêve de mi-saison"):t("Au départ seulement"))}
     ${(m.org&&lg.status!=="done")?`<div style="height:6px"></div><button class="btn ghost sm" style="border-color:var(--red);color:var(--red);width:100%" onclick="closeLeagueFromHome('${lg.id}')">${t("🛑 Fermer la ligue")}</button><div class="mini muted" style="margin-top:6px">${t("Archive la ligue dans « Ligues terminées ». Action irréversible.")}</div>`:''}`;
   infoModal("⚙️", t("Caractéristiques de la ligue"), body);
 }
@@ -9901,7 +10494,7 @@ async function adminSetAllOptions(uid, all){
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute OPTIONS-ADMIN.sql dans Supabase)")); } }
 // Libellés courts des options pour l'écran Admin (français ; l'écran Admin n'est pas traduit).
-const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Bonus complètes", ia:"🤖 Joueur IA", stats:"📊 Stats perso", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
+const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Bonus complètes", treve:"🔄 Trêve", ia:"🤖 Joueur IA", stats:"📊 Stats perso", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
@@ -10456,6 +11049,8 @@ function render(){
 function isComposing(){
   if(S.view!=="game"||!L) return false;
   if(L.status==="prep") return !!(me() && !me().shop_done); // prépa (vote/enchères) en cours
+  // ⚠️ v8.83 — les échanges restaient déjà fermés hors `running`, donc la trêve les ferme
+  // d'office : les mains viennent d'être vidées, une offre en cours n'aurait plus d'objet.
   if(L.status!=="running"||S.recap) return false;
   const d=myDuel(); if(!d) return false;
   if(!d.fixtures) return d.home_id===S.myId; // à domicile : en train de choisir les 5 matchs
@@ -10526,10 +11121,21 @@ function runningTabs(){ const resOc = "openResults("+resultsDefaultDay()+")"; //
   + navTab("standings","📊",t("Classt"),"goStandings()")
   + navTab("leaguestats","📈",t("Stats"),"openLeagueStats()")
   + `</div>`; }
+/* ⚠️ v8.91 (bug vu par Hervé : « je ne peux QUE faire les enchères, rien d'autre à consulter »)
+   — LE STATUT `truce` N'ÉTAIT DANS AUCUNE DES DEUX CONDITIONS. La v8.83 a ajouté ce statut au
+   jeu ; je n'ai mis à jour ni celle-ci ni celle du bas, donc pendant la trêve `bottomBar()`
+   retombait sur `return ''` — toute la barre disparaissait, il ne restait que le contenu de
+   l'écran (les enchères), sans aucun moyen d'aller ailleurs.
+   ⚠️ `truce` REJOINT running/done, PAS lobby/prep : la barre de préparation (Infos/Joueurs/
+   Gages/Enchères) montrerait l'onglet 💰 Enchères du DÉPART, un écran différent de la trêve —
+   la confusion serait pire que l'absence de barre. La barre normale, elle, ne pose aucun
+   problème : `viewGame()` sait déjà afficher l'écran de trêve sur l'onglet Pronos quel que soit
+   `S.ptab`, et les autres onglets (Résultats, Classement, Stats) restent parfaitement lisibles
+   pendant une trêve — ce sont ceux des journées déjà jouées. */
 function bottomBar(){ if(!AUTH) return '';
   if(S.leagueId && L && (L.status==="lobby"||L.status==="prep") && LEAGUE_TABVIEWS.includes(S.view)) return prepTabs();
   if(HOME_VIEWS.includes(S.view)) return homeTabs();
-  if(LEAGUE_TABVIEWS.includes(S.view) && L && (L.status==="running"||L.status==="done")) return runningTabs();
+  if(LEAGUE_TABVIEWS.includes(S.view) && L && (L.status==="running"||L.status==="done"||L.status==="truce")) return runningTabs();
   return ''; }
 function setPtab(x){ S.ptab=x; render(); }
 function navPtab(id,ic,lb){ const on=S.ptab===id; return `<button class="navtab${on?' on':''}" ${on?'':`onclick="setPtab('${id}')"`}><span class="ic">${ic}</span><span class="lb">${lb}</span></button>`; }
