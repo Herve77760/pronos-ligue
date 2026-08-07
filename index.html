@@ -223,7 +223,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.105";
+const APP_VERSION = "v8.106";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -515,7 +515,21 @@ function formulaKey(lg){ const g=lg||L; let f=(g&&g.formula)||'classique';
   return FORMULAS[f]?f:'classique'; }
 function leagueFormula(lg){ return FORMULAS[formulaKey(lg)] || FORMULAS.classique; }
 // Mode de contenu & gage perso : stockés dans le JSON `gage` (lobby puis prépa). Défaut "complet".
-function getMode(){ try{ const o=JSON.parse(L.gage); if(o&&o.mode) return o.mode; }catch(e){} return "complet"; }
+/* ⚠️ v8.106 (bug vécu par Hervé sur A5FS6 : la révélation de la trêve annonçait « personne n'a
+   misé » alors que si) — MÊME OUBLI QUE v8.89 (`hasTreve`/`treveState`), DANS UNE FONCTION VOISINE
+   QUI N'AVAIT JAMAIS REÇU LE MÊME CORRECTIF. `gage` cesse d'être du JSON dès que la ligue est
+   lancée (`resolvePrep` l'écrase par le libellé texte du gage) — `JSON.parse` échoue alors
+   TOUJOURS, et cette fonction retombait sur "complet" quelle que soit la vraie configuration.
+   `getEnjeu()`, juste en dessous, a ce repli sur `prep_summary` depuis le début ; `getMode()` ne
+   l'avait jamais eu.
+   ⚠️ CONSÉQUENCE CONCRÈTE : le formulaire d'enchères de la trêve (`viewTreve`, via
+   `modeCards(getMode())`) proposait donc TOUJOURS le catalogue "complet", même sur une ligue en
+   mode 🎯 Simple — alors que `resolveTreve()`, lui, lit `prep_summary.mode` (fiable, écrit au
+   lancement) et n'attribuait donc que les cartes du mode Simple. Les mises portaient sur des
+   bonus que la résolution n'examinait jamais : `auction` ressortait vide, d'où « personne n'a
+   misé » malgré des enchères bien réelles. */
+function getMode(){ try{ const o=JSON.parse(L.gage); if(o&&o.mode) return o.mode; }catch(e){}
+  const s=L&&L.prep_summary; if(s&&s.mode) return s.mode; return "complet"; }
 // Enjeu de la ligue : "gage" (défi au dernier, défaut) ou "reward" (récompense au premier). Stocké dans le JSON `gage` (lobby/prépa) puis recopié dans prep_summary.
 // Enjeu d'une ligue : "gage" | "reward" | "both" (v4.15). En mode "both" il y a DEUX votes et donc
 // DEUX jeux de données : le bloc principal (`options`/`votes`/`customs`) porte le GAGE, et un bloc
