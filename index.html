@@ -37,11 +37,27 @@
     /* un pseudo ou un gage personnalise sans espace ne doit pas elargir la page */
     overflow-wrap:break-word;}
   .num,td.num,.big,.code{font-variant-numeric:tabular-nums;}
-  .app{max-width:540px;margin:0 auto;padding:20px 16px 92px;}
+  /* ⚠️ v8.108 — 150px DE MARGE EN HAUT : compense le bandeau `.bar` passé en `position:fixed`
+     juste plus bas (même principe que les 92px du bas pour `#bottomnav`). Valeur mesurée : le
+     bandeau fait ~122px une fois les boutons repliés sur une 2ᵉ ligne (cas le plus fréquent, dès
+     qu'il y a plus de 2-3 boutons) — STABLE quelle que soit la largeur d'écran, `.app` plafonnant
+     déjà le contenu à 540px. 150px garde une marge de sécurité sans créer un vide visible. */
+  .app{max-width:540px;margin:0 auto;padding:150px 16px 92px;}
   h1{font-size:21px;margin:0;letter-spacing:-.4px;font-weight:800;}
   h2{font-size:15px;margin:22px 4px 10px;letter-spacing:.01em;}
   .sub{color:var(--muted);font-size:13.5px;}
-  .bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px;}
+  /* ⚠️ v8.108 (demandé par Hervé) — LE BANDEAU DU HAUT RESTE VISIBLE AU DÉFILEMENT, comme celui du
+     bas (`#bottomnav`, déjà `position:fixed`). `sticky` ESSAYÉ D'ABORD, ET ÇA NE MARCHAIT PAS :
+     `html,body{overflow-x:hidden}` (juste au-dessus, fix iOS documenté, À NE PAS TOUCHER) upgrade
+     silencieusement `overflow-y` en `auto` sur les DEUX (règle du spec CSS : un seul axe restreint
+     suffit à faire basculer l'autre) — `body` devient alors le "conteneur défilant" de référence
+     pour `sticky`, alors que le VRAI défilement a lieu plus haut, au niveau du document. Le
+     bandeau ne se figeait donc jamais : vérifié à l'écran, il partait bien au-delà du haut de la
+     fenêtre en scrollant. `#bottomnav` n'a jamais ce problème : `fixed` se positionne toujours par
+     rapport à la fenêtre, quel que soit ce que `overflow` fait aux ancêtres. Même remède ici. */
+  .bar{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;
+    position:fixed;left:0;right:0;top:0;z-index:55;background:var(--bg);
+    max-width:540px;margin:0 auto;padding:14px 16px;box-shadow:0 2px 8px rgba(20,29,43,.06);}
   .topbtns{display:flex;gap:8px;width:100%;margin-top:2px;}
   .topbtns .btn{flex:1 1 0;min-width:0;padding-left:0;padding-right:0;text-align:center;}
   .box{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin:12px 0;box-shadow:var(--shadow);}
@@ -223,7 +239,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.106";
+const APP_VERSION = "v8.109";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4959,7 +4975,20 @@ function phaseLigue(lg, duel, monPari){
   if(fx.some(f=>matchEtat(f)!=="avant")) return {e:"⚽", t:t("matchs en cours")};
   return {e:"🕐", t:t("matchs à venir")};
 }
+/* ⚠️ v8.109 (bug vécu par Hervé : « Ligue de Hervé — journée 6 » affichée EN DOUBLE sur l'accueil)
+   — MÊME DÉFAUT QUE `refresh()` AVANT LE VERROU DE v8.99, ET NULLE PART AILLEURS CORRIGÉ DEPUIS :
+   aucune garde de ré-entrance. `loadHomeTodo()` est appelée par `loadMyLeagues()`, elle-même
+   déclenchée à plusieurs endroits (retour à l'accueil, sortie d'essai, boot…) — si un second appel
+   démarre avant que le premier ait fini d'attendre `bets`/`duels`, les DEUX finissent par pousser
+   dans le MÊME tableau global `homeTodo` : le second le réinitialise (`homeTodo=[]`) après que le
+   premier a déjà démarré son attente, puis les deux `forEach` poussent chacun leur exemplaire de
+   la même ligue. Le symptôme est purement visuel (rien n'est cassé en base), mais un bandeau
+   « résultats à découvrir » qui se répète 2-3 fois plante le doute sur ce qui est vraiment vu. */
+let homeTodoLoading=false;
 async function loadHomeTodo(){
+  if(homeTodoLoading) return;
+  homeTodoLoading=true;
+  try{
   const act=(myLeagues||[]).filter(m=>m.lg && m.lg.status==="running" && m.pid);
   homeTodo=[]; homePhase={}; homeTodoLoaded=false;
   /* ⚠️ v8.103 (relevé par Hervé sur XLRSR : un joueur avec des enchères de préparation à faire
@@ -5000,6 +5029,24 @@ async function loadHomeTodo(){
     }
     const s=m.lg.prep_summary||{}; const fait=!!((s.treve_st&&s.treve_st.done)||{})[m.pid];
     if(!fait) homeTodo.push({lg:m.lg, pid:m.pid, kind:"trevebid"});
+  });
+  /* ⚠️ v8.107 (bug vécu par Hervé : une ligue tout juste terminée, vue par l'admin, disparaissait
+     du coup d'œil de l'AUTRE joueur — ni bandeau, ni « Tes ligues en cours », alors qu'il n'avait
+     vu ni la dernière journée ni le classement final) — `status==="done"` n'a JAMAIS fait partie
+     de cette fonction, alors que `viewHome()` retire justement les ligues `done` de « Tes ligues
+     en cours » (elles vivent dans « Toutes mes ligues » → Terminées). Sans bandeau pour compenser,
+     une ligue qui vient de se terminer devient invisible sur l'accueil pile au moment où elle a le
+     plus à annoncer — le résultat le plus attendu de toute la saison (v8.35 le dit déjà pour la
+     redirection automatique EN OUVRANT la ligue ; l'accueil n'avait jamais reçu le même réflexe).
+     ⚠️ `alleeAuTerme` SEULEMENT, PAS TOUTE LIGUE `done` : une ligue fermée AVANT TERME par
+     l'organisateur (`closeLeague`) n'a pas de dernière journée jouée à découvrir — même garde que
+     `finDeSaison` dans `refresh()`, pour ne pas promettre un bandeau qui n'aurait rien à montrer. */
+  (myLeagues||[]).filter(m=>m.lg && m.lg.status==="done" && m.pid).forEach(m=>{
+    const alleeAuTerme = ((m.lg.num_days|0)>0 && (m.lg.current_day|0)>=(m.lg.num_days|0));
+    if(!alleeAuTerme) return;
+    if((m.lg.current_day|0)>=1 && (m.lg.current_day|0)>getSeen(m.lg.id,m.pid)){
+      homeTodo.push({lg:m.lg, pid:m.pid, kind:"resultats", jour:(m.lg.current_day|0)});
+    }
   });
   if(!act.length){ homeTodoLoaded=true; render(); return; }
   try{
@@ -5070,6 +5117,7 @@ async function loadHomeTodo(){
     homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
   }catch(e){ homeTodo=[]; homePhase={}; }
   homeTodoLoaded=true; render();
+  } finally { homeTodoLoading=false; }
 }
 /* ⚠️ v8.76 — « gage_vote » N'EXISTE PLUS, ET CE TEST MORT FAISAIT PASSER LA PRÉPARATION POUR UNE
    PARTIE EN COURS (relevé par Hervé sur l'accueil). Les statuts réellement écrits sont : lobby,
