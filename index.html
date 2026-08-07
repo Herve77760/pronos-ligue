@@ -109,11 +109,23 @@
   .tog::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:100%;height:44px;min-width:40px;}
   .tog.cap.on{background:color-mix(in srgb,var(--gold) 16%,transparent);border-color:var(--gold);color:var(--gold);}
   .tog.tgt.on{background:color-mix(in srgb,var(--blue) 16%,transparent);border-color:var(--blue);color:var(--blue);}
-  .cards{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
-  .cardchip{border:1px solid var(--border);background:var(--panel2);border-radius:12px;padding:9px 11px;
-    font-size:13px;cursor:pointer;text-align:center;min-width:76px;}
+  /* ⚠️ v8.77 (relevé par Hervé sur capture) — GRILLE, PAS UNE LIGNE FLEX. En `flex-wrap`, chaque
+     pastille prenait la largeur de SON NOM : « Assurance tous risques » suffisait à occuper la
+     ligne entière et à repousser la suivante. On voyait donc un bonus par ligne, et très gros.
+     `auto-fill` + `minmax(140px,1fr)` donne exactement 2 colonnes sur un téléphone (311 px utiles
+     dans une `.box`) et 3 sur un écran large, quelle que soit la longueur des noms.
+     ⚠️ NE PAS REMETTRE `min-width` sur la pastille : c'est la grille qui décide de la largeur
+     maintenant, et un plancher la ferait déborder de sa colonne.
+     ⚠️ `.cardchip.sm` EXISTAIT DANS LE HTML SANS AUCUNE RÈGLE — la classe était écrite sur les
+     bonus « en main de l'adversaire » et ne faisait rien depuis toujours. On lui donne le sens
+     qu'elle annonce : ce bloc est une information secondaire, il se lit plus petit. */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px;}
+  .cardchip{border:1px solid var(--border);background:var(--panel2);border-radius:12px;padding:8px 8px;
+    font-size:12.5px;line-height:1.3;cursor:pointer;text-align:center;}
   .cardchip.on{border-color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,transparent);color:var(--blue);}
-  .cardchip .em{font-size:19px;display:block;margin-bottom:2px;}
+  .cardchip .em{font-size:17px;display:block;margin-bottom:1px;}
+  .cardchip.sm{padding:6px 7px;font-size:11.5px;}
+  .cardchip.sm .em{font-size:15px;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   /* Les 6 tableaux vivent deja dans un conteneur `overflow-x:auto` : ils defilent CHEZ EUX et ne
      peuvent pas elargir la page. Donc surtout PAS de `overflow-wrap:anywhere` ici — ca coupait les
@@ -211,7 +223,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.76";
+const APP_VERSION = "v8.77";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
