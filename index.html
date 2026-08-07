@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.74";
+const APP_VERSION = "v8.76";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1787,6 +1787,21 @@ const EN={
   "🏆 Tes ligues en cours · {a}":"🏆 Your leagues in progress · {a}",
   // v8.74 — phase de chaque ligue sur l'accueil (remplace le « En cours » indifférencié).
   "choix des matchs":"picking the matches",
+  // v8.76 — phase de PREPARATION sur l'accueil.
+  "Démarrage…":"Starting…",
+  "inscriptions ouvertes":"registration open",
+  "démarrage…":"starting…",
+  "prêt · on attend les autres":"ready · waiting for the others",
+  "gage à choisir":"forfeit to choose",
+  "récompense à choisir":"reward to choose",
+  "enchères à faire":"bids to place",
+  // v8.75 — appel à l'action sur l'onglet Infos de la préparation.
+  "Prépare ta saison":"Get your season ready",
+  "Deux étapes : choisis ce que tu mets en jeu, puis mise sur les bonus que tu veux emporter.":"Two steps: choose what you put on the line, then bid for the bonuses you want to take with you.",
+  "Une seule étape : mise sur les bonus que tu veux emporter pour la saison.":"Just one step: bid for the bonuses you want to take into the season.",
+  "Choisir mon gage":"Choose my forfeit",
+  "Choisir ma récompense":"Choose my reward",
+  "Faire mes enchères de bonus":"Bid for my bonuses",
   "pronos à faire":"picks to make",
   "pronos validés":"picks locked in",
   "matchs à venir":"matches to come",
@@ -4570,10 +4585,12 @@ async function logout(){ if(!await confirmTxt("👋",t("Se déconnecter"),t("Se 
 
 /* ============ MES LIGUES ============ */
 async function loadMyLeagues(){
-  try{ const mine=await q(db.from("players").select("id,league_id,is_organizer").eq("user_id",AUTH.id));
+  // ⚠️ v8.76 : `shop_done` AJOUTÉ ICI plutôt que par une requête dédiée — l'accueil en a besoin
+  // pour dire si TA préparation est faite. Une colonne de plus sur une requête déjà lancée.
+  try{ const mine=await q(db.from("players").select("id,league_id,is_organizer,shop_done").eq("user_id",AUTH.id));
     if(mine.length){ const ids=[...new Set(mine.map(m=>m.league_id))];
       const lgs=await q(db.from("leagues").select("*").in("id",ids));
-      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id, org:!!(mine.find(m=>m.league_id===l.id)||{}).is_organizer}))
+      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id, org:!!(mine.find(m=>m.league_id===l.id)||{}).is_organizer, shopDone:!!(mine.find(m=>m.league_id===l.id)||{}).shop_done}))
         .sort((a,b)=> (a.lg.created_at<b.lg.created_at?1:-1));
     } else myLeagues=[];
   }catch(e){ showErr("Chargement des ligues : "+e.message); myLeagues=[]; }
@@ -4609,6 +4626,31 @@ let homeTodo=[], homeTodoLoaded=false, homePhase={};
    ⚠️ `matchEtat` NE DÉVOILE AUCUN RÉSULTAT : il ne rend que avant / encours / fini, déduit de
    l'heure écoulée. C'est ce que `koOuEtat` affiche déjà gratuitement sur l'écran Résultats. Ne
    jamais enrichir ces libellés avec un score ou un verdict — ce serait contourner l'option ⏱️. */
+/* ⚠️ v8.76 — LA PHASE DE PRÉPARATION, elle aussi (demandé par Hervé : « en attente de sélection
+   de gage ou alors d'enchère »). Elle se lit ENTIÈREMENT dans la ligne de ligue déjà chargée :
+   `lg.gage` est un JSON qui contient les votes, et `shop_done` vient de `loadMyLeagues`. Aucune
+   requête de plus.
+   ⚠️ L'ORDRE DES VOTES RECOPIE `votesManquants()` — SOURCE DE VÉRITÉ, ne pas « corriger » ici.
+   Piège : quel que soit l'enjeu, le PREMIER vote se range dans `votes` (jamais dans `votesR`),
+   même en mode récompense seule ; `votesR` ne sert qu'au second vote du mode « gage + récompense ».
+   Inverser les deux ferait annoncer « récompense à choisir » à quelqu'un qui a déjà voté.
+   ⚠️ SOLO RECONNU PAR `ar`/`soloAR` et non par le nombre de joueurs : la liste des joueurs d'une
+   AUTRE ligue n'est pas chargée sur l'accueil (`players` décrit la ligue ouverte). Ces deux clés
+   sont celles que lit `getAR()` — dont `soloAR`, conservée pour les parties déjà lancées. */
+function phasePrep(lg, pid, shopDone){
+  if(lg.status==="lobby")    return {e:"🕓", t:t("inscriptions ouvertes")};
+  if(lg.status==="starting") return {e:"🚀", t:t("démarrage…")};
+  if(lg.status!=="prep") return null;
+  if(shopDone) return {e:"✅", t:t("prêt · on attend les autres")};
+  let o={}; try{ o=JSON.parse(lg.gage)||{}; }catch(e){}
+  const solo=(o.ar!=null||o.soloAR!=null), enjeu=o.enjeu||"gage";
+  if(!solo){
+    const v=o.votes||{}, vr=o.votesR||{};
+    if(v[pid]==null) return (enjeu==="reward") ? {e:"🏆", t:t("récompense à choisir")} : {e:"🎭", t:t("gage à choisir")};
+    if(enjeu==="both" && vr[pid]==null) return {e:"🏆", t:t("récompense à choisir")};
+  }
+  return {e:"💰", t:t("enchères à faire")};
+}
 function phaseLigue(lg, duel, monPari){
   if(lg.status!=="running") return null;
   if(!duel || !Array.isArray(duel.fixtures) || !duel.fixtures.length) return {e:"⏳", t:t("choix des matchs")};
@@ -4651,7 +4693,15 @@ async function loadHomeTodo(){
   }catch(e){ homeTodo=[]; homePhase={}; }
   homeTodoLoaded=true; render();
 }
-function statusLabel(s){ return s==="lobby"?t("Salon · inscriptions ouvertes"):s==="gage_vote"?t("Préparation"):s==="done"?t("Terminé"):t("En cours"); }
+/* ⚠️ v8.76 — « gage_vote » N'EXISTE PLUS, ET CE TEST MORT FAISAIT PASSER LA PRÉPARATION POUR UNE
+   PARTIE EN COURS (relevé par Hervé sur l'accueil). Les statuts réellement écrits sont : lobby,
+   prep, starting, running, done — `prep` et `starting` tombaient donc dans le `else`, c'est-à-dire
+   « En cours ». Une ligue qu'on venait de créer s'annonçait comme lancée.
+   ⚠️ Le libellé mort n'a pas été simplement renommé : garder `gage_vote` « au cas où » aurait
+   laissé croire qu'un statut de ce nom circule encore. Il a disparu du code en même temps. */
+function statusLabel(s){ return s==="lobby"?t("Salon · inscriptions ouvertes")
+  :s==="prep"?t("Préparation") :s==="starting"?t("Démarrage…")
+  :s==="done"?t("Terminé"):t("En cours"); }
 // NB : puces « • » et non 1️⃣2️⃣3️⃣ — ce bloc s'affiche sous « Étape 1 sur 3 » depuis la v4.16, et
 // deux numérotations concurrentes à l'écran se contredisaient (les enchères sont l'étape FINALE de la
 // préparation). La dernière ligne s'adapte à l'enjeu : « le dernier fait le gage » est faux en mode
@@ -4765,7 +4815,7 @@ function viewHome(){
       <div><b>${esc(m.lg.name)}</b>${/* ⚠️ v8.74 — LA PHASE REMPLACE « En cours », qui ne distinguait rien. Repli sur `statusLabel`
        tant que `homePhase` n'est pas chargé (deux requêtes en tâche de fond) : sans ce repli, la
        ligne clignoterait d'un libellé vide vers le bon, à chaque retour sur l'accueil. */''}
-        <div class="mini muted">${t("Code")} ${esc(m.lg.code)} · ${(m.lg.status==='running'&&homePhase[m.lg.id])?(homePhase[m.lg.id].e+' '+homePhase[m.lg.id].t):statusLabel(m.lg.status)}${m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):''}</div></div>
+        <div class="mini muted">${t("Code")} ${esc(m.lg.code)} · ${(()=>{ const p=(m.lg.status==='running')?homePhase[m.lg.id]:phasePrep(m.lg,m.pid,m.shopDone); return p?(p.e+' '+p.t):statusLabel(m.lg.status); })()}${m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):''}</div></div>
       <div class="row" style="gap:6px;flex:0 0 auto">${(m.lg.status==='running'&&homeTodoLoaded&&!doitJouer(m.lg.id))?`<span class="chip g">${t("✅ à jour")}</span>`:''}<span class="chip b">${t("Ouvrir →")}</span></div></div>`).join("");
 
   const bloc = act.length
@@ -6340,11 +6390,38 @@ function prepInfosTab(){
            : t("En attente que l'organisateur clôture les inscriptions…"))
     : t("Clôture des enchères dans {a} au plus tard — pas besoin d'attendre : ça démarre dès que tout le monde a validé.",{a:fmtLeft(st.deadline)});
   const banner = (!lobby && shopDone) ? `<div class="box" style="border-color:var(--green)"><b class="mini">${t("✅ Ta préparation est validée")}</b><div class="mini muted" style="margin-top:4px">${validated>=humansN?t("🚀 Tout le monde est prêt — lancement imminent…"):t("En attente des autres — <b>{a}/{b}</b> prêts. Tu peux encore modifier tes gages / enchères.",{a:validated,b:humansN})}</div></div>` : '';
+  /* ─── v8.75 (demandé par Hervé) — DIRE QUOI FAIRE, PAS SEULEMENT OÙ ON EST ──────────────────
+     En arrivant dans une ligue qui démarre, on tombe sur cet onglet Infos : les réglages, un
+     délai, et rien d'autre. Les deux actions attendues — voter son gage/sa récompense, puis
+     miser sur les bonus — vivent derrière deux onglets du bas que rien ne désigne. Un joueur
+     qui découvre le jeu ne sait pas qu'il doit y aller, ni qu'il y a DEUX étapes.
+     Même remède qu'en v7.78 sur l'écran Résultats (« ⚽ Aller faire mes pronos ») : on nomme la
+     prochaine action et on y emmène.
+     ⚠️ LE BOUTON DÉSIGNE LA PREMIÈRE ÉTAPE MANQUANTE, pas une liste. `votesManquants()` fait déjà
+     foi ailleurs (il bloque `savePrep`) — on s'appuie dessus plutôt que de recalculer, sinon le
+     bouton pourrait envoyer sur un onglet que la validation juge complet.
+     ⚠️ EN SOLO, `votesManquants()` REND TOUJOURS [] (aucun enjeu à voter) et l'onglet 🎭 n'existe
+     pas : le bouton pointe directement les enchères, et le texte annonce une seule étape. Ne pas
+     « simplifier » en supprimant ce test — il enverrait vers un onglet absent.
+     ⚠️ RIEN PENDANT LE LOBBY : les inscriptions sont ouvertes, il n'y a objectivement rien à
+     préparer tant que l'organisateur n'a pas clôturé. Un bouton d'action y serait un mensonge. */
+  const solo=isSolo();
+  const etape = (lobby || shopDone) ? null : (()=>{
+    const miss=votesManquants();
+    if(miss.length) return {tab:"gages", lbl:(miss[0]==="reward")?("🏆 "+t("Choisir ma récompense")):("🎭 "+t("Choisir mon gage"))};
+    return {tab:"encheres", lbl:"💰 "+t("Faire mes enchères de bonus")};
+  })();
+  const aFaire = etape ? `<div class="box" style="border-color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,transparent)">
+      <b>👉 ${t("Prépare ta saison")}</b>
+      <div class="mini muted" style="margin-top:4px">${solo
+        ? t("Une seule étape : mise sur les bonus que tu veux emporter pour la saison.")
+        : t("Deux étapes : choisis ce que tu mets en jeu, puis mise sur les bonus que tu veux emporter.")}</div>
+      <button class="btn" style="margin-top:10px" onclick="setPtab('${etape.tab}')">${etape.lbl} →</button></div>` : '';
   return `<div class="box"><h2 style="margin-top:0">ℹ️ ${t("Infos de la ligue")}</h2>
      ${lobby?`<div class="row" style="justify-content:space-between;margin:4px 0"><span class="muted mini">🏷️ ${t("Code")}</span><b>${esc(L.code)}</b></div>`:''}
      ${prepParamsHTML()}
      <div class="mini muted" style="margin-top:6px">⏳ ${note}</div></div>
-   ${banner}`; }
+   ${aFaire}${banner}`; }
 function viewPrepTabs(){
   // Plus d'écran unique après validation : les onglets Gages/Enchères restent actifs et éditables (le
   // joueur peut revoir/modifier sa saisie tant que le championnat n'est pas lancé). Le statut « validé /
