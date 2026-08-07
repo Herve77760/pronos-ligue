@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.71";
+const APP_VERSION = "v8.72";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9620,6 +9620,33 @@ async function adminSetBlocked(uid, block){ const u=(adminUsers||[]).find(x=>x.i
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render();
     infoWin(block?("🔒 Accès coupé pour "+esc(u.username||"")):("🔓 Accès réactivé pour "+esc(u.username||""))); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Blocage : "+e.message)); } }
+/* ─── SUPPRIMER UN COMPTE (v8.72, demandé par Hervé) ─────────────────────────────────────────
+   L'écran Admin savait couper l'accès, pas supprimer : il fallait passer par le tableau de bord
+   Supabase, que personne n'ouvre pour faire le ménage de trois comptes de test.
+   ⚠️ CE BOUTON N'EFFACE PAS LES PARTIES, et c'est délibéré (cf. SUPPRIMER-COMPTE-ADMIN.sql) :
+   `duels.home_id/away_id` référencent `players(id)` sans `on delete cascade`, donc effacer un
+   joueur engagé dans une journée casserait la ligue pour tous les autres. La fonction se contente
+   de détacher (`user_id = null`) et renvoie le nombre de ligues concernées — qu'on AFFICHE, pour
+   que l'admin sache exactement ce qui reste derrière.
+   ⚠️ LA CONFIRMATION RAPPELLE QUE « BLOQUER » EXISTE. C'est presque toujours le bon geste : il
+   coupe l'accès et se défait d'un clic. Une suppression proposée sans son alternative réversible
+   se choisit par défaut, et on ne s'en aperçoit qu'après. */
+async function adminDeleteUser(uid){ const u=(adminUsers||[]).find(x=>x.id===uid)||{};
+  if(uid===AUTH.id){ infoWin("Tu ne peux pas supprimer ton propre compte.","⚠️"); return; }
+  if(!await confirmTxt("🗑️","Supprimer le compte",
+      "Supprimer définitivement « "+(u.username||"?")+" » ?\n\n"+
+      "⚠️ IRRÉVERSIBLE. Le compte disparaît et son pseudo redevient libre.\n\n"+
+      "Ses parties ne sont PAS effacées : ses paris, ses points et son nom restent dans les ligues où il a joué — sa place y devient simplement inoccupée.\n\n"+
+      "Pour seulement l'empêcher de se connecter, utilise plutôt 🔒 Couper l'accès : c'est réversible.",
+      "Supprimer")) return;
+  try{ const r=await q(db.rpc("admin_delete_user",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid}));
+    const o=(Array.isArray(r)&&r.length)?r[0]:{}; const nl=+o.ligues||0;
+    adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render();
+    infoWin("🗑️ Compte « "+esc(u.username||"?")+" » supprimé."+(nl?(" Il reste inscrit dans "+nl+" ligue"+(nl>1?"s":"")+", où sa place est désormais inoccupée."):" Il n'était inscrit dans aucune ligue.")); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis)."
+    :(/cannot_delete_admin/.test(e.message)?"Le compte admin ne peut pas être supprimé."
+    :(/admin_delete_user|schema cache|function/i.test(e.message)?("Suppression : "+e.message+" (exécute SUPPRIMER-COMPTE-ADMIN.sql dans Supabase)")
+    :("Suppression : "+e.message)))); } }
 // Activer / verrouiller une option premium sur un compte (pour TESTER le futur modèle payant en te
 // connectant avec ce compte). `u.options` null = tout offert (défaut test) : on matérialise alors la
 // liste complète avant de retirer la case cliquée. ⚠️ Effet à la PROCHAINE connexion du compte visé
@@ -10048,6 +10075,11 @@ function viewAdmin(){
           <div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">
             <button class="btn ghost sm" style="flex:0 0 auto;border-color:var(--gold);color:var(--gold)" onclick="adminResetPwd('${u.id}')">🔑 Mot de passe</button>
             ${u.id===AUTH.id?'':`<button class="btn ghost sm" style="flex:0 0 auto;border-color:${u.banned?'var(--green)':'var(--red)'};color:${u.banned?'var(--green)':'var(--red)'}" onclick="adminSetBlocked('${u.id}',${u.banned?'false':'true'})">${u.banned?'🔓 Réactiver l\'accès':'🔒 Couper l\'accès'}</button>`}
+            ${/* ⚠️ v8.72 — LA SUPPRESSION EST EN DERNIER ET EN GRIS, pas en rouge. Le rouge est
+                 déjà pris par « Couper l'accès », qui est le geste courant ; peindre les deux en
+                 rouge les rendrait interchangeables au coup d'œil, alors que l'un se défait et
+                 l'autre non. La confirmation, elle, dit tout. */''}
+            ${u.id===AUTH.id?'':`<button class="btn ghost sm" style="flex:0 0 auto" onclick="adminDeleteUser('${u.id}')">🗑️ Supprimer</button>`}
           </div>
           ${(()=>{ if(u.id===AUTH.id) return `<div class="mini muted" style="margin-top:9px">🎟️ Options premium — <b>toutes</b> (compte admin, automatique).</div>`;
             const oo=Array.isArray(u.options)?u.options:null;
