@@ -223,7 +223,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.78";
+const APP_VERSION = "v8.79";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -8061,7 +8061,22 @@ function viewResults(){ if(!L) return `<div class="box">…</div>`; const d=(S.r
   // Journée résolue ? (d < journées résolues). Sinon → écran d'attente (pas de résultats à montrer).
   const resolvedCount = (L.status==="done" ? (L.num_days||0) : (L.current_day||0));
   if(d<0 || d>=resolvedCount) return back + waitingResultsBody(Math.max(0,d));
-  return back + recapBody(d); }
+  /* ⚠️ v8.79 (relevé par Hervé) — LE PIED DE PAGE MANQUAIT SUR CET ÉCRAN-CI. Le bouton
+     « 🏆 Voir le classement final → » existe depuis longtemps… mais dans `viewRecap`, l'écran de
+     DÉCOUVERTE affiché juste après la résolution. L'onglet Résultats, lui, appelle `recapBody`
+     tout nu : on relisait la dernière journée d'une saison finie sans aucune sortie vers le
+     classement — alors que c'est précisément là qu'on veut aller. Deux écrans qui montrent le même
+     contenu n'offraient pas les mêmes suites.
+     ⚠️ MÊMES LIBELLÉS ET MÊME FONCTION que `viewRecap` (`goStandings`) : si l'un des deux change
+     de destination un jour, l'autre doit suivre — ne pas réécrire une variante ici.
+     ⚠️ LE BOUTON PLEIN EST RÉSERVÉ À LA DERNIÈRE JOURNÉE D'UNE SAISON FINIE. Sur une journée
+     ordinaire, le classement général n'est qu'une consultation parmi d'autres : un bouton plein
+     lui donnerait le poids d'une étape à franchir, et ferait croire que la saison est terminée. */
+  const finDeSaison = (L.status==="done" && d===((L.num_days||0)-1));
+  const pied = finDeSaison
+    ? `<button class="btn" style="margin-top:10px" onclick="goStandings()">${t("🏆 Voir le classement final →")}</button>`
+    : `<button class="btn ghost" style="margin-top:10px" onclick="goStandings()">${t("Voir le classement général")}</button>`;
+  return back + recapBody(d) + pied; }
 // Écran d'attente de l'onglet Résultats : quand la journée n'est pas encore terminée (ex. J1 avant
 // toute résolution). On montre les affiches du jour si elles sont connues ; pronos/mises masqués.
 /* ─── POURQUOI ON NE VOIT RIEN ENCORE (v8.71, demandé par Hervé) ─────────────────────────────
