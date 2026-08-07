@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.73";
+const APP_VERSION = "v8.74";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1785,6 +1785,13 @@ const EN={
   "dans {c}":"in {c}",
   "Faire mes pronos":"Make my picks",
   "🏆 Tes ligues en cours · {a}":"🏆 Your leagues in progress · {a}",
+  // v8.74 — phase de chaque ligue sur l'accueil (remplace le « En cours » indifférencié).
+  "choix des matchs":"picking the matches",
+  "pronos à faire":"picks to make",
+  "pronos validés":"picks locked in",
+  "matchs à venir":"matches to come",
+  "matchs en cours":"matches under way",
+  "résultats en attente":"awaiting results",
   "✅ à jour":"✅ up to date",
   "Toutes mes ligues":"All my leagues",
   "Créer ma première ligue":"Create my first league",
@@ -4587,10 +4594,38 @@ async function loadMyLeagues(){
    l'écran de pronos : deux calculs séparés finiraient par annoncer deux heures différentes.
    ⚠️ ÉCHEC SILENCIEUX (`catch` → liste vide) : c'est un confort, pas une donnée de jeu. Un accueil
    sans bandeau reste utilisable ; un accueil bloqué sur une erreur réseau, non. */
-let homeTodo=[], homeTodoLoaded=false;
+let homeTodo=[], homeTodoLoaded=false, homePhase={};
+/* ─── LA PHASE DE CHAQUE LIGUE (v8.74, demandé par Hervé) ────────────────────────────────────
+   « En cours » disait que la ligue était lancée, pas ce qu'elle attendait : on ne savait pas
+   s'il fallait pronostiquer, si les matchs se jouaient, ou si l'on attendait des scores. Or
+   `loadHomeTodo` charge DÉJÀ les duels et les paris — on n'exploitait qu'une seule question
+   (« faut-il agir ? ») d'une récolte qui contient toute la réponse. Zéro requête de plus.
+   ⚠️ L'ORDRE DES TESTS EST LA RÈGLE ELLE-MÊME, ne pas le réarranger :
+     1. pas de duel / pas de matchs → on attend le joueur à domicile, rien d'autre n'existe ;
+     2. avant la clôture → c'est la phase des PRONOS (les matchs sont forcément à venir, la
+        clôture ÉTANT le premier coup d'envoi depuis la v7.32 : « matchs à venir » ici serait
+        vrai mais inutile, on veut savoir si l'on doit jouer) ;
+     3. après la clôture → c'est la phase des MATCHS, et là seulement leur état compte.
+   ⚠️ `matchEtat` NE DÉVOILE AUCUN RÉSULTAT : il ne rend que avant / encours / fini, déduit de
+   l'heure écoulée. C'est ce que `koOuEtat` affiche déjà gratuitement sur l'écran Résultats. Ne
+   jamais enrichir ces libellés avec un score ou un verdict — ce serait contourner l'option ⏱️. */
+function phaseLigue(lg, duel, monPari){
+  if(lg.status!=="running") return null;
+  if(!duel || !Array.isArray(duel.fixtures) || !duel.fixtures.length) return {e:"⏳", t:t("choix des matchs")};
+  const t0=duelDeadline(duel,lg);
+  if(t0 && Date.now()<t0){
+    const parie=!!(monPari && Array.isArray(monPari.picks) && monPari.picks.length);
+    return parie ? {e:"✅", t:t("pronos validés")} : {e:"⚠️", t:t("pronos à faire")};
+  }
+  const fx=duel.fixtures.filter(f=>f && !f.canceled);
+  if(!fx.length) return null;
+  if(fx.every(f=>matchEtat(f)==="fini")) return {e:"🏁", t:t("résultats en attente")};
+  if(fx.some(f=>matchEtat(f)!=="avant")) return {e:"⚽", t:t("matchs en cours")};
+  return {e:"🕐", t:t("matchs à venir")};
+}
 async function loadHomeTodo(){
   const act=(myLeagues||[]).filter(m=>m.lg && m.lg.status==="running" && m.pid);
-  homeTodo=[]; homeTodoLoaded=false;
+  homeTodo=[]; homePhase={}; homeTodoLoaded=false;
   if(!act.length){ homeTodoLoaded=true; render(); return; }
   try{
     const lids=[...new Set(act.map(m=>m.lg.id))], pids=act.map(m=>m.pid);
@@ -4601,6 +4636,8 @@ async function loadHomeTodo(){
     act.forEach(m=>{
       const d=m.lg.current_day||0;
       const duel=(dls||[]).find(x=>x.league_id===m.lg.id && x.day===d && (x.home_id===m.pid||x.away_id===m.pid));
+      const monPari=(bts||[]).find(x=>x.league_id===m.lg.id && x.day===d && x.player_id===m.pid);
+      const ph=phaseLigue(m.lg, duel, monPari); if(ph) homePhase[m.lg.id]=ph;
       // Pas encore de duel (matchs pas tirés) → rien à faire, et surtout aucune échéance à annoncer.
       if(!duel) return;
       const t=duelDeadline(duel,m.lg);
@@ -4611,7 +4648,7 @@ async function loadHomeTodo(){
       homeTodo.push({lg:m.lg, pid:m.pid, deadline:t});
     });
     homeTodo.sort((a,b)=>a.deadline-b.deadline);            // le plus urgent en premier
-  }catch(e){ homeTodo=[]; }
+  }catch(e){ homeTodo=[]; homePhase={}; }
   homeTodoLoaded=true; render();
 }
 function statusLabel(s){ return s==="lobby"?t("Salon · inscriptions ouvertes"):s==="gage_vote"?t("Préparation"):s==="done"?t("Terminé"):t("En cours"); }
@@ -4725,7 +4762,10 @@ function viewHome(){
   const act=(myLeagues||[]).filter(m=>m.lg && m.lg.status!=="done");
   const doitJouer=id=>homeTodo.some(x=>x.lg.id===id);
   const lignes=act.map(m=>`<div class="box row" onclick="openLeague('${m.lg.id}','${m.pid}')" style="cursor:pointer;margin:8px 0">
-      <div><b>${esc(m.lg.name)}</b><div class="mini muted">${t("Code")} ${esc(m.lg.code)} · ${statusLabel(m.lg.status)}${m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):''}</div></div>
+      <div><b>${esc(m.lg.name)}</b>${/* ⚠️ v8.74 — LA PHASE REMPLACE « En cours », qui ne distinguait rien. Repli sur `statusLabel`
+       tant que `homePhase` n'est pas chargé (deux requêtes en tâche de fond) : sans ce repli, la
+       ligne clignoterait d'un libellé vide vers le bon, à chaque retour sur l'accueil. */''}
+        <div class="mini muted">${t("Code")} ${esc(m.lg.code)} · ${(m.lg.status==='running'&&homePhase[m.lg.id])?(homePhase[m.lg.id].e+' '+homePhase[m.lg.id].t):statusLabel(m.lg.status)}${m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):''}</div></div>
       <div class="row" style="gap:6px;flex:0 0 auto">${(m.lg.status==='running'&&homeTodoLoaded&&!doitJouer(m.lg.id))?`<span class="chip g">${t("✅ à jour")}</span>`:''}<span class="chip b">${t("Ouvrir →")}</span></div></div>`).join("");
 
   const bloc = act.length
