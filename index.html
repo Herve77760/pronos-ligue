@@ -223,7 +223,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.100";
+const APP_VERSION = "v8.105";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2404,6 +2404,12 @@ const EN={
   // v8.98 — bandeau « trêve terminée » sur l'accueil, aligné sur ce que l'app affiche réellement.
   "découvre qui a remporté quoi à la mi-saison, avant de reprendre.":"see who won what at the mid-season point, before play resumes.",
   "Voir les enchères de la trêve":"See the truce auction",
+  // v8.103 — bandeau « préparation à faire » sur l'accueil (ligue pas encore lancée).
+  "la préparation de la saison t'attend :":"the season's prep is waiting for you:",
+  "Aller à la préparation":"Go to prep",
+  // v8.104 — même bandeau, pour les enchères de la trêve encore OUVERTES (pas la révélation).
+  "c'est la trêve : les bonus sont remis en vente, à toi de miser.":"it's the truce: bonuses are back up for auction, place your bids.",
+  "Faire mes enchères de la trêve":"Place my truce bids",
   "— aucun":"— none",
   "😶 Perdus à la trêve":"😶 Lost at the truce",
   "Au départ seulement":"At the start only",
@@ -4493,7 +4499,18 @@ async function refresh(){
        droit sur le bilan à TOUTES les visites suivantes. Le renvoi ne joue qu'une fois. */
     const alleeAuTerme = ((L.num_days|0)>0 && (L.current_day|0)>=(L.num_days|0));
     const finDeSaison  = (L.status==="done" && alleeAuTerme);
-    const jourNonVu = ((L.status==="running"||finDeSaison) && (prevLeagueStatus===null || jourVientDeTomber)
+    /* ⚠️ v8.101 (bug vécu par Hervé : à la trêve, l'adversaire de celui qui vient de valider tombe
+       direct sur les enchères, sans avoir vu les résultats de la journée qui vient de se terminer)
+       — MÊME DÉFAUT QUE v8.35 CI-DESSUS, UN AUTRE STATUT DE SORTIE. `resolveDay()` fait passer la
+       ligue en `status:"truce"` AU MÊME COUP QUE `current_day++` (cf. `resolveDay`, `versTreve`)
+       — exactement comme `done` le fait pour la dernière journée. Ce renvoi ne connaissait que la
+       sortie vers `running`/`done` : la trêve, une TROISIÈME sortie possible depuis un jour résolu,
+       n'y était pas — les résultats de CETTE dernière journée avant la trêve pouvaient donc passer
+       sans être montrés, exactement comme la journée finale avant v8.35.
+       ⚠️ `viewGame()` affiche l'écran des enchères dès `status==="truce"`, AVANT même de vérifier
+       les résultats non vus (cf. son propre dispatch) : sans ce renvoi, rien ne redirige plus tôt
+       vers Résultats, et l'écran des enchères gagne toujours la course. */
+    const jourNonVu = ((L.status==="running"||L.status==="truce"||finDeSaison) && (prevLeagueStatus===null || jourVientDeTomber)
                        && L.current_day>getSeen() && L.current_day>=1) ? L.current_day-1 : null;
     S.recap = false;
     const dispDay = Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
@@ -4931,6 +4948,45 @@ function phaseLigue(lg, duel, monPari){
 async function loadHomeTodo(){
   const act=(myLeagues||[]).filter(m=>m.lg && m.lg.status==="running" && m.pid);
   homeTodo=[]; homePhase={}; homeTodoLoaded=false;
+  /* ⚠️ v8.103 (relevé par Hervé sur XLRSR : un joueur avec des enchères de préparation à faire
+     n'avait AUCUN bandeau sur l'accueil, juste la petite étiquette dans la liste des ligues) —
+     CETTE BOUCLE NE PORTAIT QUE SUR `status==="running"`. Une ligue encore en préparation (vote
+     du gage/récompense, enchères de bonus AVANT le lancement de la saison) en était donc absente,
+     alors qu'elle est tout aussi actionnable qu'une journée en cours.
+     ⚠️ AUCUNE REQUÊTE RÉSEAU NÉCESSAIRE ICI : tout ce qu'il faut (`lg.gage`, `shopDone`) est déjà
+     dans `myLeagues`, chargé par `loadMyLeagues()`. On le traite donc à part, avant la boucle
+     `running` plus bas qui, elle, a besoin de `bets`/`duels`. `phasePrep()` dit déjà TOUT seul si
+     le joueur a fini (`shopDone`) — dans ce cas rien à ajouter, il attend juste les autres. */
+  (myLeagues||[]).filter(m=>m.lg && m.lg.status==="prep" && m.pid && !m.shopDone).forEach(m=>{
+    const ph=phasePrep(m.lg, m.pid, m.shopDone);
+    if(ph) homeTodo.push({lg:m.lg, pid:m.pid, kind:"prep", label:ph});
+  });
+  /* ⚠️ v8.104 (relevé par Hervé sur XLRSR : toujours aucun bandeau, cette fois la ligue n'était
+     plus en préparation mais EN TRÊVE — même étiquette « 🔄 trêve — enchères à faire » que
+     `phasePrep()` renvoie déjà, juste au-dessus du bloc ci-dessus) — LE CORRECTIF v8.103 NE
+     COUVRAIT QUE `status==="prep"`. La trêve rouvre EXACTEMENT la même mécanique d'enchères à
+     mi-saison (cf. `ouvrirTreve`/`resolveTreve`), avec sa propre condition de « fini » —
+     `treve_st.done[pid]`, pas `shopDone` (qui n'existe que pour la préparation du départ). Même
+     oubli, sur la DEUXIÈME phase d'enchères du jeu plutôt que la première.
+     ⚠️ NE SE CONFOND PAS AVEC LE BANDEAU « treve » DE v8.98 : celui-là annonce la RÉVÉLATION une
+     fois les enchères de la trêve refermées (`treve_st.closed_at` posé) ; celui-ci couvre la
+     fenêtre D'AVANT, tant qu'elles sont encore OUVERTES. Les deux ne peuvent pas se chevaucher :
+     `closed_at` n'existe pas encore ici, et `status` n'est plus `"truce"` une fois refermé. */
+  (myLeagues||[]).filter(m=>m.lg && m.lg.status==="truce" && m.pid).forEach(m=>{
+    /* ⚠️ v8.105 (bug vécu par Hervé sur XLRSR : le bouton « Faire mes enchères de la trêve »
+       envoyait vers les Résultats) — LE BANDEAU IGNORAIT `jourNonVu` (v8.101). `status==="truce"`
+       fait maintenant partie de son renvoi automatique : ouvrir la ligue montre d'abord la
+       dernière journée non vue (celle qui a déclenché la trêve) AVANT l'écran des enchères. Le
+       bandeau promettait donc un écran et en donnait un autre — même défaut que v8.78/v8.96/v8.98,
+       même remède : ALIGNER LE BANDEAU SUR CE QUI VA RÉELLEMENT S'AFFICHER. Priorité identique à
+       celle des ligues `running` : résultats non vus d'abord, enchères ensuite. */
+    if((m.lg.current_day|0)>=1 && (m.lg.current_day|0)>getSeen(m.lg.id,m.pid)){
+      homeTodo.push({lg:m.lg, pid:m.pid, kind:"resultats", jour:(m.lg.current_day|0)});
+      return;
+    }
+    const s=m.lg.prep_summary||{}; const fait=!!((s.treve_st&&s.treve_st.done)||{})[m.pid];
+    if(!fait) homeTodo.push({lg:m.lg, pid:m.pid, kind:"trevebid"});
+  });
   if(!act.length){ homeTodoLoaded=true; render(); return; }
   try{
     const lids=[...new Set(act.map(m=>m.lg.id))], pids=act.map(m=>m.pid);
@@ -4994,8 +5050,9 @@ async function loadHomeTodo(){
       homeTodo.push({lg:m.lg, pid:m.pid, kind:"pronos", deadline:t});
     });
     // La trêve d'abord (c'est ce que `viewGame()` affiche en premier), puis les résultats à
-    // découvrir, puis « choisir ses matchs », puis les pronos par urgence.
-    const rang={treve:0, resultats:1, choix:2, pronos:3};
+    // découvrir, puis une préparation à démarrer, puis « choisir ses matchs », puis les pronos
+    // par urgence.
+    const rang={treve:0, resultats:1, prep:2, trevebid:2, choix:3, pronos:4};
     homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
   }catch(e){ homeTodo=[]; homePhase={}; }
   homeTodoLoaded=true; render();
@@ -5123,6 +5180,16 @@ function viewHome(){
       <b class="gold">🎁 ${t("Résultats à découvrir")}</b>
       <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("la journée {a} est jouée, tu n'as pas encore vu le verdict.",{a:x.jour})}</div>
       <button class="btn" style="margin-top:10px" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Voir les résultats")}</button></div>`
+    : x.kind==="prep"
+    ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)">
+      <b class="red">⚠️ ${t("À toi de jouer")}</b>
+      <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("la préparation de la saison t'attend :")} ${x.label.e} ${esc(x.label.t)}.</div>
+      <button class="btn" style="margin-top:10px" onclick="openLeague('${x.lg.id}','${x.pid}')">💰 ${t("Aller à la préparation")}</button></div>`
+    : x.kind==="trevebid"
+    ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)">
+      <b class="red">⚠️ ${t("À toi de jouer")}</b>
+      <div class="mini" style="margin-top:4px"><b>${esc(x.lg.name)}</b> — ${t("c'est la trêve : les bonus sont remis en vente, à toi de miser.")}</div>
+      <button class="btn" style="margin-top:10px" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Faire mes enchères de la trêve")}</button></div>`
     : x.kind==="choix"
     ? `<div class="box" style="border-color:#8a3b3b;background:rgba(248,113,113,.10)">
       <b class="red">⚠️ ${t("À toi de jouer")}</b>
@@ -7445,7 +7512,7 @@ async function submitBet(){
     }
   }
   busy=true;
-  try{ const d=myDuel(); const playedDay=L.current_day;   // la journée qu'on vient de jouer (avant la résolution auto qui fait avancer current_day)
+  try{ const d=myDuel(); const playedDay=L.current_day; const lid=L.id;   // la journée qu'on vient de jouer (avant la résolution auto qui fait avancer current_day)
     await q(db.from("bets").upsert({league_id:L.id,day:L.current_day,player_id:S.myId,duel_id:d.id,
       picks:bet.picks,captain:bet.captain,card:myCard,submitted:true},{onConflict:"player_id,day"}));
     bet={picks:null,captain:-1}; myCard=null; S.editingBet=false; await refresh();
@@ -7455,7 +7522,28 @@ async function submitBet(){
     // Résultats (Hervé v6.78). Couvre le solo (1 humain = toujours le dernier) et le multi.
     // ⚠️ On vise EXPLICITEMENT la journée qu'on vient de jouer (playedDay) : la résolution auto est
     // asynchrone, donc resultsDefaultDay() renverrait encore la journée précédente juste après (bug Hervé).
-    if(allHumansSubmitted()) openResults(playedDay);
+    if(allHumansSubmitted()){
+      /* ⚠️ v8.101 (bug vécu par Hervé : résultats bien affichés à la validation, mais l'accueil
+         redisait ensuite « résultats à découvrir » pour cette même journée déjà vue) — `refresh()`
+         CI-DESSUS NE FAIT QUE DÉCLENCHER `resolveDay()`, IL NE L'ATTEND PAS (`resolveDay();
+         return;` dans `refresh()`, volontairement non bloquant pour ne pas geler le sondage).
+         `L.current_day` N'AVAIT DONC PAS ENCORE AVANCÉ au moment où `openResults(playedDay)`
+         s'exécutait juste après — et `openResults` ne pose le repère « vu » QUE si
+         `playedDay < L.current_day` (c'est ainsi qu'il sait que la journée est vraiment résolue,
+         pas juste jouée). Le repère ne se posait donc jamais. PIRE : `S.view` passait quand même
+         à "results", ce qui empêchait EN PLUS le rattrapage automatique du `refresh()` suivant
+         (celui que `resolveDay()` appelle en sortie), qui exige `S.view==="game"` pour agir —
+         les deux mécanismes de pose du repère se neutralisaient l'un l'autre.
+         ⚠️ ON ATTEND LA VRAIE FIN, PAS UN DÉLAI FIXE : `resolving` retombe à `false` dès que
+         `resolveDay()` a fini d'écrire — même verrou que celui qui protège sa ré-entrance. Une
+         journée simulée résout en une poignée d'écritures séquentielles (quelques centaines de
+         ms) ; le plafond de 3 s n'est qu'un filet en cas de lenteur réseau, pas un blocage voulu.
+         ⚠️ `S.leagueId===lid` REVÉRIFIÉ APRÈS L'ATTENTE : si le joueur a quitté la ligue pendant
+         ce court délai, `L` peut être devenu `null` — on ne rappelle alors ni `resolving` (déjà
+         fait) ni `openResults`, qui planterait sur une ligue qui n'est plus la sienne. */
+      let tries=0; while(resolving && tries<60 && S.leagueId===lid){ await new Promise(r=>setTimeout(r,50)); tries++; }
+      if(S.leagueId===lid) openResults(playedDay);
+    }
   }catch(e){ showErr("Validation : "+e.message); } busy=false;
 }
 // Rouvrir ses pronos pour les modifier (tant que la clôture n'est pas passée). Précharge le pari existant.
