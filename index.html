@@ -211,7 +211,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.72";
+const APP_VERSION = "v8.73";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -7983,7 +7983,26 @@ function waitingResultsBody(d){
   // invisibles ici. Les garder identiques est volontaire — c'est ce qui fait que l'écran Résultats
   // avant et après résolution se ressemblent. Si l'un change, changer l'autre.
   const GH='display:grid;grid-template-columns:1fr 1fr;gap:8px';
-  const cell=(m,html)=>`<div style="background:var(--card2);border:1px solid ${m?'rgba(37,192,125,.45)':'var(--border)'};border-radius:8px;padding:6px 7px;text-align:center;font-size:12px">${html}</div>`;
+  /* ⚠️ v8.73 (demandé par Hervé) — LA CELLULE SE COLORE SELON LE VERDICT, quand il est connu.
+     Sur les duels des autres, on voyait le vainqueur à droite de l'affiche mais rien ne disait, d'un
+     coup d'œil, si le prono de chacun tombait juste : il fallait relire le nom choisi et le comparer
+     au vainqueur, cinq fois, pour chaque duel.
+     ⚠️ DEUX VERTS DE SENS DIFFÉRENT SUR LE MÊME ÉCRAN — le piège relevé par Hervé. Le vert existant
+     veut dire « c'est ma colonne » ; le nouveau veut dire « ce prono est gagnant ». On ne les
+     distingue donc PAS par la teinte, qui se confondrait, mais par trois choses à la fois :
+       • le verdict est REMPLI (fond teinté) et bordé de 2 px — « ma colonne » reste un filet de
+         1 px pâle, sans fond ;
+       • le verdict porte un ✓ ou un ✗ à côté du nom du joueur ;
+       • et le ✗ rouge n'a aucun équivalent dans l'ancien code.
+     Un liseré fin sans fond et une case pleine avec un symbole ne se confondent pas, même de loin,
+     même pour qui distingue mal le rouge du vert — c'est pour ça que le symbole n'est pas facultatif.
+     ⚠️ NE PAS SUPPRIMER LE VERT « MA COLONNE » en pensant qu'il fait doublon : il sert AVANT que le
+     match soit joué, quand il n'y a précisément aucun verdict à afficher. */
+  const cell=(m,html,ok)=>{
+    const st = (ok===true)  ? 'border:2px solid var(--green);background:color-mix(in srgb,var(--green) 16%,transparent)'
+             : (ok===false) ? 'border:2px solid var(--red);background:color-mix(in srgb,var(--red) 14%,transparent)'
+             : `border:1px solid ${m?'rgba(37,192,125,.45)':'var(--border)'};background:var(--card2)`;
+    return `<div style="${st};border-radius:8px;padding:6px 7px;text-align:center;font-size:12px">${html}</div>`; };
   const affiche = dz=>{ const fx=dz.fixtures||[]; if(!fx.length) return ''; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{}; const mine=(dz.id===myDuelId);
     /* ⚠️ v7.40 — SÉPARATION RENFORCÉE ENTRE LES DUELS (demandé par Hervé). Un simple filet de 1 px
        avec 8 px d'air ne suffisait pas : la liste de MES matchs et celle du duel voisin se lisaient
@@ -8079,10 +8098,28 @@ function waitingResultsBody(d){
                    seulement une destination. Reprendre le `noteBox` doré de l'onglet Pronos aurait
                    coûté cinq lignes pour répéter une explication que la page donne déjà.
                    `event.stopPropagation()` : la cellule vit dans des blocs cliquables ailleurs. */
-                const contenu=(moi||voirAdv)
+                const visible=(moi||voirAdv);
+                const contenu=visible
                   ? ligne(b,b?b.captain:-1,f,i)
                   : `<span class="mini clik" style="color:var(--muted);letter-spacing:2px" title="${t("Fonction premium")}" onclick="event.stopPropagation();showPremiumInfo('voiradv')">🔒 •••</span>`;
-                return `<div>${cell(moi,`<div class="mini muted">${nom}</div>${contenu}`)}</div>`; }).join('')}
+                /* ⚠️ TROIS CONDITIONS, ET AUCUNE N'EST FACULTATIVE.
+                   1. `liveShow` — le verdict est sous l'option ⏱️. `f.res` est écrit dès que le
+                      score tombe (v8.27) pour TOUT LE MONDE : colorer sans cette garde livrerait
+                      gratuitement le résultat en direct, que d'autres paient.
+                   2. `visible` — on ne colore que ce qu'on a le droit de lire. Colorer une case
+                      cadenassée dirait si le prono caché est gagnant : le cadenas ne cacherait plus
+                      rien. C'est la fuite de la v7.43, à l'identique.
+                   3. un prono existe sur ce match — sinon il n'y a rien à juger.
+                   ⚠️ LE 🧈 DOUBLE CHANCE N'EST PAS PRIS EN COMPTE (il couvre un 2ᵉ résultat) : un
+                   pari gagné par ce bonus s'affichera rouge jusqu'à la résolution. C'est le même
+                   raccourci que `liveTag` et `resPart` font déjà — les bonus restent cachés jusqu'aux
+                   résultats, on ne PEUT pas en tenir compte ici sans les dévoiler. Corriger cette
+                   cellule seule la ferait diverger des deux autres affichages. */
+                const selJ=(visible && b && Array.isArray(b.picks) && b.picks[i]) ? b.picks[i].sel : null;
+                const vj=(liveShow && selJ!=null) ? liveVerdict(f,selJ) : null;
+                const ok=vj?vj.ok:null;
+                const marque=(ok===true)?' <b class="green">✓</b>':((ok===false)?' <b class="red">✗</b>':'');
+                return `<div>${cell(moi,`<div class="mini muted">${nom}${marque}</div>${contenu}`,ok)}</div>`; }).join('')}
           </div></div>`;
         /* ⚠️ v7.39 — LE SÉPARATEUR ÉTAIT INVISIBLE EN THÈME CLAIR. Il était écrit en blanc à 4 %
            d'opacité : parfait sur fond sombre, rigoureusement invisible sur fond blanc. Les cinq
