@@ -245,7 +245,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.116";
+const APP_VERSION = "v8.118";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3368,7 +3368,7 @@ const EN={
   "🎯 Plus grosse cote gagnée":"🎯 Biggest odds won", "💀 Pire dégringolade d'une journée":"💀 Worst crash in a day",
   // — Palmarès : classement des pronostiqueurs (compétence pure) —
   "🧠 Classement des pronostiqueurs":"🧠 Forecaster rankings",
-  "Compétence de <b>pronostic pur</b> (bons pronos & cotes), <b>indépendante des mises</b>, toutes ligues confondues. Minimum <b>{a} pronostics</b> pour figurer. Touche un joueur pour son profil complet.":"<b>Pure forecasting</b> skill (accuracy & odds), <b>independent of stakes</b>, across all leagues. Minimum <b>{a} predictions</b> to qualify. Tap a player for their full profile.",
+  "Compétence de <b>pronostic pur</b> (bons pronos & cotes), <b>indépendante des mises</b>, sur toutes les ligues où tu as croisé ces joueurs. Minimum <b>{a} pronostics</b> pour figurer. Touche un joueur pour son profil complet.":"<b>Pure forecasting</b> skill (accuracy & odds), <b>independent of stakes</b>, across every league where you've crossed paths with these players. Minimum <b>{a} predictions</b> to qualify. Tap a player for their full profile.",
   "🎯 Meilleurs pronostiqueurs — % de réussite":"🎯 Best forecasters — success rate",
   "📈 Meilleure cote moyenne gagnante":"📈 Highest average winning odds",
   "💎 Meilleur rendement à mise fixe (bat les cotes)":"💎 Best flat-stake yield (beats the odds)",
@@ -3385,7 +3385,7 @@ const EN={
   "Rendement à mise fixe":"Flat-stake yield",
   "Si tu avais misé <b>1 € sur chacun</b> de tes pronos (cotes comprises) : ce que tu aurais gagné ou perdu <b>en moyenne par pari</b>. <b class=\"green\">Positif</b> = tu bats les cotes ; <b class=\"red\">négatif</b> = tu as souvent raison mais sur des favoris qui rapportent trop peu pour couvrir les erreurs.":"If you had staked <b>€1 on each</b> of your predictions (odds included): what you'd have won or lost <b>on average per bet</b>. <b class=\"green\">Positive</b> = you beat the odds; <b class=\"red\">negative</b> = you're often right but on favourites that pay too little to cover the misses.",
   "Ta position, sur {a} pronostiqueurs classés":"Your position, out of {a} ranked forecasters",
-  "🏆 Autres records (en €)":"🏆 Other records (in €)", "Les plus grosses perfs par journée, toutes ligues confondues.":"The biggest single-day performances across all leagues."
+  "🏆 Autres records (en €)":"🏆 Other records (in €)", "Les plus grosses perfs par journée, parmi les joueurs avec qui tu as déjà partagé une ligue.":"The biggest single-day performances, among players you've already shared a league with."
 };
 function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); }
   // Espace INSÉCABLE entre un nombre et son unité : « 10 € » ne doit jamais se retrouver coupé en
@@ -10728,6 +10728,10 @@ async function loadPalmares(){
     const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").not("net","is",null));
     const dls=await q(db.from("duels").select("id,fixtures"));
     const lgMap={},plMap={},dlMap={}; lgs.forEach(l=>lgMap[l.id]=l); pls.forEach(p=>plMap[p.id]=p); dls.forEach(d=>dlMap[d.id]=d);
+    // Le palmarès ne classe que les gens avec qui TOI tu as déjà partagé une ligue — pas tout le
+    // monde qui a jamais joué sur l'app (demandé par Hervé : classer des inconnus n'a pas de sens).
+    const mesLigues=new Set(pls.filter(p=>p.user_id===(AUTH&&AUTH.id)).map(p=>p.league_id));
+    const connus=new Set(pls.filter(p=>mesLigues.has(p.league_id)&&p.user_id).map(p=>p.user_id));
     const oddF=(f,s)=> s==="1"?f.oh:s==="2"?f.oa:f.od; const selNm=(f,s)=> s==="1"?f.home:s==="2"?f.away:t("Nul");
     /* ---- v7.26 : le palmarès se lit par TYPE DE DONNÉES, comme 📊 Mes stats (demandé par Hervé).
        L'argument est même plus fort ici que sur les stats : c'est un classement PUBLIC, et deux
@@ -10741,7 +10745,7 @@ async function loadPalmares(){
        totaux de la 1ʳᵉ (le piège déjà rencontré en v7.24). */
     const calcule=garde=>{
     const dayRecs=[], oddRecs=[];
-    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||pl.name==="Joueur IA") continue; const lg=lgMap[b.league_id]||{};
+    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||pl.name==="Joueur IA"||!connus.has(pl.user_id)) continue; const lg=lgMap[b.league_id]||{};
       if(!garde(lg)) continue;
       const d=dlMap[b.duel_id]; const fx=(d&&d.fixtures)||[];
       const picks=b.picks||[]; const staked=picks.reduce((a,x)=>a+(+x.stake||0),0);
@@ -10752,7 +10756,7 @@ async function loadPalmares(){
     }
     // Agrégat de PRONOSTIC PUR par personne (user_id), toutes ligues — indépendant des mises.
     const agg={};
-    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||!pl.user_id||pl.name==="Joueur IA") continue;
+    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||!pl.user_id||pl.name==="Joueur IA"||!connus.has(pl.user_id)) continue;
       if(!garde(lgMap[b.league_id]||{})) continue;   // même onglet que les records ci-dessus
       const d=dlMap[b.duel_id]; const fx=(d&&d.fixtures)||[]; const c=b.card;
       let a=agg[pl.user_id]; if(!a){ a=agg[pl.user_id]={uid:pl.user_id,name:pl.name,emoji:pl.emoji,picks:0,correct:0,winOddSum:0,wins:0,flat:0}; }
@@ -10782,7 +10786,7 @@ async function loadPalmares(){
       topFlat: rankMe(skHit, a=>a.flat),
       minP: MINP,
       // Sert à griser un onglet vide et à annoncer sa taille, comme sur 📊 Mes stats.
-      nbLigues: lgs.filter(l=>garde(l)).length
+      nbLigues: [...mesLigues].filter(id=>lgMap[id]&&garde(lgMap[id])).length
     }; };
     // Une ligue sans `data_mode` est du SIMULÉ : même repli que partout ailleurs (`L.data_mode||'sim'`).
     const estReel=lg=>(lg.data_mode||"sim")==="real";
@@ -10841,8 +10845,9 @@ function viewPalmares(){
      return `<div class="box" style="padding:10px 12px;cursor:pointer" onclick="togglePalm('${k}')">
        <div class="row"><div class="row" style="gap:8px"><b style="min-width:22px">${medal(i)}</b><span>${avaName(r)}</span></div><b class="${v.cls}">${v.txt} ${op?'▲':'▼'}</b></div>
        ${op?`<div style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">${detail(r)}</div>`:''}</div>`;}).join(""):`<div class="box mini muted">${empty||t("Pas encore de données.")}</div>`}`;
-  // Palmarès GÉNÉRAL : classement public, sans mise en avant du joueur courant (ses stats perso sont
-  // dans « Mes stats », option premium — demandé par Hervé). Ni bordure « toi », ni « Ta position ».
+  // Palmarès : classement entre gens qui se connaissent (v8.117 — limité aux co-joueurs, cf. `connus`
+  // dans loadPalmares), sans mise en avant du joueur courant (ses stats perso sont dans « Mes stats »,
+  // option premium — demandé par Hervé). Ni bordure « toi », ni « Ta position ».
   const secMe=(title,data,val,detail,tag,empty)=>{ const arr=(data&&data.top)||[];
     if(!arr.length) return `<h2>${title}</h2><div class="box mini muted">${empty||t("Pas encore de données.")}</div>`;
     const rows=arr.map((r,i)=>{ const k=tag+i; const op=palmOpen===k; const v=val(r);
@@ -10852,12 +10857,12 @@ function viewPalmares(){
     return `<h2>${title}</h2>${rows}`; };
   return `${back}
     <div class="box">${palmTabsHTML()}</div>
-    <div class="box" style="border-left:3px solid var(--accent)"><h2 style="margin-top:0">${t("🧠 Classement des pronostiqueurs")}</h2><div class="mini muted">${t("Compétence de <b>pronostic pur</b> (bons pronos & cotes), <b>indépendante des mises</b>, toutes ligues confondues. Minimum <b>{a} pronostics</b> pour figurer. Touche un joueur pour son profil complet.",{a:P.minP})}</div></div>
+    <div class="box" style="border-left:3px solid var(--accent)"><h2 style="margin-top:0">${t("🧠 Classement des pronostiqueurs")}</h2><div class="mini muted">${t("Compétence de <b>pronostic pur</b> (bons pronos & cotes), <b>indépendante des mises</b>, sur toutes les ligues où tu as croisé ces joueurs. Minimum <b>{a} pronostics</b> pour figurer. Touche un joueur pour son profil complet.",{a:P.minP})}</div></div>
     ${secMe(t("🎯 Meilleurs pronostiqueurs — % de réussite"), P.topHit, r=>({txt:(r.hit*100).toFixed(1)+"%",cls:'gold'}), statDetail, "ph", t("Pas encore assez de pronostics (min {a}).",{a:P.minP}))}
     ${secMe(t("📈 Meilleure cote moyenne gagnante"), P.topAvgOdd, r=>({txt:'@'+r.avgOdd.toFixed(2),cls:'gold'}), statDetail, "pa", t("Pas encore assez de pronostics gagnants."))}
     ${secMe(t("💎 Meilleur rendement à mise fixe (bat les cotes)"), P.topFlat, r=>({txt:(r.flat>=0?'+':'')+(r.flat*100).toFixed(0)+"%",cls:r.flat>=0?'green':'red'}), statDetail, "pf", t("Pas encore assez de pronostics (min {a}).",{a:P.minP}))}
     ${secMe(t("💩 Pires pronostiqueurs — % de réussite"), P.worstHit, r=>({txt:(r.hit*100).toFixed(1)+"%",cls:'red'}), statDetail, "pw", t("Pas encore assez de pronostics (min {a}).",{a:P.minP}))}
-    <div class="box"><h2 style="margin-top:0">${t("🏆 Autres records (en €)")}</h2><div class="mini muted">${t("Les plus grosses perfs par journée, toutes ligues confondues.")}</div></div>
+    <div class="box"><h2 style="margin-top:0">${t("🏆 Autres records (en €)")}</h2><div class="mini muted">${t("Les plus grosses perfs par journée, parmi les joueurs avec qui tu as déjà partagé une ligue.")}</div></div>
     ${sec(t("💥 Plus gros gain sur une journée"), P.bigGain, r=>({txt:fmt(r.net)+"€",cls:r.net>=0?'green':'red'}), dayDetail, "g")}
     ${sec(t("📈 Meilleur rendement d'une journée"), P.bestRet, r=>({txt:t("×{r} la mise",{r:r.ret.toFixed(2)}),cls:r.ret>=0?'green':'red'}), dayDetail, "r", t("Il faut avoir misé ≥ 5€."))}
     ${sec(t("🎯 Plus grosse cote gagnée"), P.bestOdd, r=>({txt:"@"+cote(r.odd),cls:'gold'}), oddDetail, "o")}
@@ -11384,7 +11389,7 @@ function viewProfil(){
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><b class="mini">✏️ ${t("Pseudo affiché")}</b><button class="btn ghost sm" onclick="changeMyUsername()">${t("Modifier")}</button></div>
       <div class="mini muted" style="margin-top:3px">${t("C'est le nom vu dans toutes tes ligues. Ton identifiant de connexion, lui, ne change pas.")}</div>
       <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${Array.from({length:AVIMG_COUNT},(_,i)=>{const v="avimg:"+i, on=AUTH.avatar===v; return `<button class="btn ghost sm" onclick="choisirAvatar('${v}')" style="padding:4px;line-height:0;border-radius:50%${on?';border-color:var(--accent)':''}">${avatarHTML(v,36)}</button>`;}).join("")}</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:8px">${Array.from({length:AVIMG_COUNT},(_,i)=>{const v="avimg:"+i, on=AUTH.avatar===v; return `<button class="btn ghost sm" onclick="choisirAvatar('${v}')" style="padding:4px;line-height:0;border-radius:50%;width:100%;aspect-ratio:1${on?';border-color:var(--accent)':''}"><img src="${esc(avimgUrl(i))}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block"></button>`;}).join("")}</div>
       <div class="mini muted" style="margin-top:14px">${t("📷 Ou charge ta propre image")}</div>
       <div class="row" style="gap:8px;margin-top:6px;align-items:center"><label class="btn ghost sm" style="cursor:pointer">${t("Choisir une image")}<input type="file" accept="image/*" onchange="uploadAvatar(this)" style="display:none"></label><span id="avUpMsg" class="mini muted"></span></div>
       ${/* ✨ « Ou colle un emoji » RETIRÉ en v7.18 (Hervé) : l'avatar est soit une illustration
