@@ -203,7 +203,13 @@
   .navtab.on{color:var(--ink);box-shadow:inset 0 2px 0 var(--accent);}
   .navtab.on .ic{filter:none;opacity:1;}
   .modal{position:fixed;inset:0;background:rgba(4,6,12,.62);display:flex;align-items:center;justify-content:center;z-index:100;padding:20px;}
-  .mbox{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px;max-width:340px;width:100%;text-align:center;box-shadow:var(--shadow);}
+  /* ⚠️ v8.113 (capture d'Hervé sur « Le gain potentiel ») — LE BOUTON OK DEVENAIT INATTEIGNABLE.
+     `.modal` centre `.mbox` avec `align-items:center`, mais rien ne bornait sa hauteur : une fiche
+     longue (plusieurs paris détaillés) débordait alors DES DEUX CÔTÉS de l'écran à parts égales —
+     le haut ET le bas dépassaient hors champ, le bouton de fermeture y compris. `max-height` +
+     `overflow-y:auto` rendent le contenu défilable À L'INTÉRIEUR du cadre plutôt que de laisser le
+     cadre lui-même excéder l'écran. */
+  .mbox{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px;max-width:340px;width:100%;max-height:85vh;overflow-y:auto;text-align:center;box-shadow:var(--shadow);}
   .clik{cursor:pointer;}
   .bem{font-size:1.35em;line-height:1;vertical-align:-2px;}
 </style>
@@ -239,7 +245,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.112";
+const APP_VERSION = "v8.116";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -302,8 +308,14 @@ function avatarSvg(seed,px){ px=px||30; var n=Math.abs(seed|0); var AV=function(
     +shirtSvg+neck+ears+face+hairSvg+beardSvg+brows+eyes+glassesSvg+nose+mouthSvg
     +'</svg>';
 }
+// Avatars "photo" prédéfinis (illustrations, choisies par Hervé — remplacent les 30 "av:N" dans
+// le sélecteur, cf. viewProfil). Hébergées sur Supabase Storage, adressées "avimg:N" pour rester
+// distinguables d'une VRAIE photo perso uploadée (qui elle reste une URL http brute, cf. choisirAvatar).
+const AVIMG_COUNT=20;
+function avimgUrl(i){ return SB_URL+"/storage/v1/object/public/avatars/presets/av_"+String(((i|0)%AVIMG_COUNT+AVIMG_COUNT)%AVIMG_COUNT).padStart(2,"0")+".jpg"; }
 // Rendu universel d'un avatar (image / SVG intégré / emoji hérité). px = taille en pixels.
 function avatarHTML(val,px){ px=px||26; val=(val==null?"":(""+val)).trim();
+  if(val.indexOf("avimg:")===0) return '<img src="'+esc(avimgUrl(parseInt(val.slice(6),10)||0))+'" alt="" style="width:'+px+'px;height:'+px+'px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle;flex:0 0 auto">';
   if(/^https?:\/\//.test(val)) return '<img src="'+esc(val)+'" alt="" style="width:'+px+'px;height:'+px+'px;border-radius:50%;object-fit:cover;display:inline-block;vertical-align:middle;flex:0 0 auto">';
   if(val.indexOf("av:")===0) return avatarSvg(parseInt(val.slice(3),10)||0, px);
   var e=val||"🙂"; var fs=Math.round(px*0.62);
@@ -322,8 +334,8 @@ function avaName(p,px){ p=p||{}; return avatarHTML(p.emoji!=null?p.emoji:p.avata
    cette duplication qui a permis au défaut de vivre à deux exemplaires. */
 function nomSujet(pid){ const p=pById(pid)||{};
   return avatarHTML(p.emoji)+' '+esc(p.name||'?')+(pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''); }
-// Avatar par défaut d'un nouveau joueur : une illustration intégrée (graine tournante), plus d'emoji imposé.
-function defaultAvatar(i){ return "av:"+(((i|0)%AV_COUNT)+AV_COUNT)%AV_COUNT; }
+// Avatar par défaut d'un nouveau joueur : une illustration prédéfinie (graine tournante), plus d'emoji imposé.
+function defaultAvatar(i){ return "avimg:"+(((i|0)%AVIMG_COUNT)+AVIMG_COUNT)%AVIMG_COUNT; }
 // Les effectifs doivent permettre un tirage SANS répétition : POOL_FOOT matchs de foot consomment
 // 2×POOL_FOOT équipes distinctes (18 pour 9 matchs). Avec les 10 clubs d'origine, faire passer le
 // foot de ~4 à 9 matchs (v4.66) rendait les doublons MATHÉMATIQUEMENT inévitables — d'où « 3 fois
@@ -701,6 +713,17 @@ const ELARGIR_MAX_J=1;       // palier d'élargissement si la fenêtre ne se rem
 const MAX_PLAYERS=12;
 const STAKE_CAP=0.5;        // total des mises ≤ 50 % du capital
 const STAKE_CAP_INVEST=0.7; // … 70 % avec le bonus Investisseur
+/* ⚠️ v8.114 (demandé par un testeur, via Hervé) — DERNIÈRE JOURNÉE : PLUS DE PLAFOND DE MISE.
+   Le capitaine reste OBLIGATOIRE et double sa mise en cas de perte (`lossMult`) — `worstLoss()`,
+   vérifié à la validation (`submitBet`), continue donc de borner le total réellement atteignable
+   un peu SOUS 100 % (l'écart correspond à la mise posée sur le match capitaine, ~1 € au minimum).
+   Ce plafond-ci n'a donc plus besoin d'être plus bas que 100 % : `worstLoss` fait déjà tout le
+   travail de protection, avec ou sans lui — vérifié en rejouant le moteur avec un miroir adverse
+   hostile (le capital final ne peut jamais descendre sous 0, `resolveDay` le plafonne toujours).
+   ⚠️ Une seule journée, pas « dernières journées » au pluriel : le reste de la saison garde son
+   plafond habituel, `derniereJournee()` (le test simple, PAS `derniereJourneeTrade()` ci-dessous —
+   les deux se ressemblent et une confusion a déjà existé, voir sa note). */
+const STAKE_CAP_LASTDAY=1;
 const FORGOT_PENALTY=0.25;  // ANCIEN barème : pari non validé à temps → −25 % du capital
 // ─── Barème v2 (décision d'Hervé, 19/07/2026) ────────────────────────────────────────────────
 // Points du duel = RÉSULTAT (V=2, N=1, D=0) + 1 pt si le net du joueur est positif.
@@ -725,7 +748,8 @@ function scoringShown(){ return (typeof L!=="undefined" && L) ? isScoring2(L) : 
 function forgotPtsShown(){ return scoringShown()?FORGOT_PTS2:FORGOT_PTS1; }
 function forgotPenShown(){ return scoringShown()?FORGOT_PENALTY2:FORGOT_PENALTY; }
 // Part du capital MAX misable pour un joueur (selon qu'il joue Investisseur ou non).
-function stakeCapOf(card){ return (card && card.id==="invest") ? STAKE_CAP_INVEST : STAKE_CAP; }
+function stakeCapOf(card){ if(derniereJournee()) return STAKE_CAP_LASTDAY;
+  return (card && card.id==="invest") ? STAKE_CAP_INVEST : STAKE_CAP; }
 // Les mêmes, en % entier, pour les textes affichés (« 50 % », « 25 % »…).
 function pct(x){ return Math.round(x*100); }
 // Enjeu final — RÈGLE UNIQUE (arrêtée le 2026-07-16, v4.14) : « CELUI QUI CHOISIT N'EST JAMAIS LE
@@ -2843,6 +2867,9 @@ const EN={
   // Info mise max + ROI (v6.13)
   "La mise max":"The max stake",
   "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor bonus) — that's what fills the gauge. Each bet must be <b>at least €1</b>.",
+  // v8.114 — plus de plafond de mise a la derniere journee.
+  "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>. Ce plafond saute pour la <b>dernière journée</b> de la saison.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor bonus) — that's what fills the gauge. Each bet must be <b>at least €1</b>. This cap is lifted on the season's <b>last matchday</b>.",
+  "Dernière journée : <b>plus de plafond</b>, tu peux miser jusqu'à la totalité de ton capital — c'est ce que remplit la jauge. Ton match favori (👑, mise doublée en cas de perte) reste comptabilisé, donc le maximum réellement atteignable tourne autour de 99 % plutôt que 100 % pile. Chaque pari doit avoir <b>au moins 1 €</b>.":"Last matchday: <b>no cap anymore</b> — you can stake up to your entire capital, which is what fills the gauge. Your favourite match (👑, stake doubled on a loss) still counts, so the real ceiling you can reach lands around 99% rather than exactly 100%. Each bet must be <b>at least €1</b>.",
   "Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé. <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.":"<b>ROI</b> (return on investment) relates your net result to the total you staked. <b>+20%</b> = you won €20 for every €100 staked; a <b>negative</b> ROI = you lost money on your bets.",
   "Gage & récompense sur mesure":"Custom forfeit & reward",
   "Impose TON défi (ou ta récompense) au lieu de piocher dans la liste.":"Set YOUR own challenge (or reward) instead of picking from the list.",
@@ -3123,6 +3150,8 @@ const EN={
   "Personne n'a misé sur les bonus — tout le monde démarre à 100 €.":"Nobody bid on the bonuses — everyone starts at 100 €.",
   "😶 Sans acquéreur":"😶 No takers",
   "Personne n'a misé dessus : ces <b>{a}</b> bonus restent <b>hors jeu toute la saison</b>. Aucun joueur ne peut en obtenir un — les échanges ne font que déplacer les bonus déjà attribués.":"Nobody bid on them: these <b>{a}</b> bonuses stay <b>out of play for the whole season</b>. No player can ever get one — trades only move bonuses that were already handed out.",
+  // v8.113 — même bloc, ligue AVEC trêve : les invendus du départ repassent aux enchères à la trêve.
+  "Personne n'a misé dessus au départ : ces <b>{a}</b> bonus restent hors jeu <b>jusqu'à la trêve</b>, où ils seront de nouveau proposés aux enchères.":"Nobody bid on them at the start: these <b>{a}</b> bonuses stay out of play <b>until the truce</b>, where they'll be auctioned again.",
   "Personne n'a misé dessus : ces bonus sont restés <b>hors jeu</b>. Cette ligue est antérieure à l'enregistrement des bonus proposés — la liste est reconstituée à partir du jeu actuel, elle peut donc être approximative.":"Nobody bid on them: these bonuses stayed <b>out of play</b>. This league predates the recording of which bonuses were offered — the list is rebuilt from the current set, so it may be approximate.",
   "💰 Capital de départ":"💰 Starting capital", "Dépensé":"Spent", "Capital":"Capital",
   // — v7.80 : le détail du capital (colonne « Cap. » du classement, rendue cliquable) —
@@ -3212,6 +3241,8 @@ const EN={
   "Tu affrontes <b>un seul adversaire</b> en <b>duel</b>.":"You face <b>one single opponent</b> in a <b>duel</b>.",
   "Celui qui <b>reçoit</b> choisit les <b>5 matchs</b>, imposés aux deux.":"The <b>home</b> player picks the <b>5 matches</b>, which apply to both.",
   "Chacun fait ses <b>pronostics et ses mises</b> (au total ≤ <b>{a} %</b> de son capital).":"Each player makes their <b>predictions and stakes</b> (totalling ≤ <b>{a}%</b> of their capital).",
+  // v8.114 — plus de plafond de mise a la derniere journee.
+  "Chacun fait ses <b>pronostics et ses mises</b> (au total ≤ <b>{a} %</b> de son capital — 100 % à la <b>dernière journée</b>).":"Each player makes their <b>predictions and stakes</b> (totalling ≤ <b>{a}%</b> of their capital — 100% on the <b>last matchday</b>).",
   "<b>👑 match favori</b> : gain <b>et</b> perte <b>doublés</b>. Et <b>1 bonus</b> au maximum.":"<b>👑 favourite match</b>: winnings <b>and</b> losses <b>doubled</b>. Plus <b>1 bonus</b> at most.",
   "Le duel revient à celui qui a <b>gagné le plus d'argent</b> : <b>2 pts</b> (nul <b>1</b>, perdu <b>0</b>).":"The duel goes to whoever <b>won the most money</b>: <b>2 pts</b> (draw <b>1</b>, loss <b>0</b>).",
   "<b>+1</b> si ton net est <b>positif</b>, <b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour.":"<b>+1</b> if your net is <b>positive</b>, <b>+1</b> for the <b>⭐ best forecaster</b> of the day.",
@@ -3233,6 +3264,8 @@ const EN={
   "⚽ Une journée, étape par étape":"⚽ A matchday, step by step",
   "Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça.":"The <b>home</b> player picks the duel's <b>5 fixtures</b>. They apply to both players. If they don't pick before the deadline, the fixtures are drawn automatically — <b>their opponent is never penalised</b> for it.",
   "Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur).":"Each player places their <b>picks and stakes</b>, in secret. Total stakes can't exceed <b>{a}% of your balance</b> ({b}% with the Investor bonus).",
+  // v8.114 — plus de plafond de mise a la derniere journee.
+  "Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur) — sauf à la <b>dernière journée</b>, où ce plafond saute : tu peux tout miser. Ton <b>match favori</b> reste compté double en cas de perte, donc le maximum réellement atteignable tourne autour de 99 % plutôt que 100 % pile.":"Each player places their <b>picks and stakes</b>, in secret. Total stakes can't exceed <b>{a}% of your balance</b> ({b}% with the Investor bonus) — except on the <b>last matchday</b>, when this cap is lifted: you can stake it all. Your <b>favourite match</b> still counts double on a loss, so the real ceiling you can reach lands around 99% rather than exactly 100%.",
   "Tu désignes un <b>👑 match favori</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>.":"You name a <b>👑 favourite match</b>: on that bet, your <b>gain AND your loss are doubled</b>.",
   "Tu peux jouer <b>un bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution.":"You may play <b>one bonus bonus</b> (only one per matchday). It stays <b>secret</b> until resolution.",
   "À la <b>clôture</b>, les pronos de tout le monde peuvent être révélés — <b>uniquement en matchs réels</b> et si l'option premium <b>Voir l'adversaire</b> a été souscrite. En <b>matchs simulés</b>, la journée se résout aussitôt, sans phase de découverte. Les bonus, elles, restent cachées jusqu'aux résultats.":"At the <b>close</b>, everyone's picks may be revealed — <b>only in real-match mode</b> and if the premium <b>See the opponent</b> option was purchased. In <b>simulated matches</b>, the day resolves right away, with no reveal phase. The bonuses stay hidden until the results.",
@@ -3434,7 +3467,9 @@ function showCaptainInfo(){ infoModal("👑",t("Match favori (pari doublé)"),
   `<div class="mini muted" style="text-align:left;line-height:1.6">${t("Chaque journée tu désignes secrètement <b>un match favori</b> parmi tes paris : son <b>gain ET sa perte sont doublés</b> (×2). Touche la 👑 sur le match de ton choix. Ce n'est pas un bonus — tu en désignes un à chaque journée.")}
    <div style="margin-top:10px">${t("👑 Touche la couronne d'un match pour l'y poser, et <b>touche-la à nouveau pour l'enlever</b>. La poser sur un autre match la déplace.")}</div>
    <div style="margin-top:10px">${t("Le <b>match favori</b> est <b>obligatoire</b> : tant qu'aucun match ne porte la 👑, le bouton de validation reste éteint.")}</div></div>`); }
-function showStakeInfo(){ infoModal("💰",t("La mise max"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</div>`); }
+function showStakeInfo(){ infoModal("💰",t("La mise max"),`<div class="mini muted" style="text-align:left;line-height:1.6">${derniereJournee()
+  ? t("Dernière journée : <b>plus de plafond</b>, tu peux miser jusqu'à la totalité de ton capital — c'est ce que remplit la jauge. Ton match favori (👑, mise doublée en cas de perte) reste comptabilisé, donc le maximum réellement atteignable tourne autour de 99 % plutôt que 100 % pile. Chaque pari doit avoir <b>au moins 1 €</b>.")
+  : t("Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>. Ce plafond saute pour la <b>dernière journée</b> de la saison.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)})}</div>`); }
 /* ⚠️ v7.67 — LA FICHE DU GAIN POTENTIEL. Elle existe pour la même raison que le chiffre : un
    nombre affiché doit pouvoir dire d'où il vient, sur place. Ici c'est d'autant plus nécessaire
    que trois choses le gonflent (Capitaine, bonus ciblé, Coup Double) et qu'aucune n'est visible
@@ -5492,7 +5527,7 @@ function viewEssai(){
   const betCard=(d,f,i)=>{ const showTgt=(essaiCard[d]==="tout"), isTgt=essaiCardTgt[d]===i;
     return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
       <div class="row" style="gap:6px;flex:0 0 auto"><span class="tog cap ${essaiCap[d]===i?'on':''} clik" onclick="essaiSetCap(${d},${i})" title="${t("Match favori")}">👑</span>${showTgt?`<span class="tog tgt ${isTgt?'on':''} clik" onclick="essaiSetTgt(${d},${i})" title="${t("Cible du bonus")}">${(essaiCard[d]&&CARDS[essaiCard[d]])?CARDS[essaiCard[d]].e:'🎯'}</span>`:''}</div></div>
-      <div class="odds" style="margin-top:8px">${["1",f.draw?"N":"","2"].filter(Boolean).map(v=>`<div class="odd ${essaiPicks[d][i]===v?'sel':''}" onclick="essaiSetPick(${d},${i},'${v}')">${esc(v==="1"?f.home.slice(0,8):v==="2"?f.away.slice(0,8):"Nul")}<b>${cote(oddOf(f,v))}</b></div>`).join("")}</div>
+      <div class="odds" style="margin-top:8px">${["1",f.draw?"N":"","2"].filter(Boolean).map(v=>`<div class="odd ${essaiPicks[d][i]===v?'sel':''}" onclick="essaiSetPick(${d},${i},'${v}')">${esc(v==="1"?f.home:v==="2"?f.away:"Nul")}<b>${cote(oddOf(f,v))}</b></div>`).join("")}</div>
       <div class="row" style="margin-top:8px"><span class="mini muted">${t("Mise (€)")}</span><input type="number" inputmode="numeric" min="1" step="1" value="${essaiStakes[d][i]||''}" style="width:74px" oninput="essaiSetStake(${d},${i},this.value)"></div></div>`; };
   const betScreen=(d,fx,goNext,showGuide)=>{ const won=essaiWon(); const usedBefore=essaiCard.slice(0,d).filter(Boolean); const avail=won.filter(id=>usedBefore.indexOf(id)<0);
     const cap=essaiCapital(d); const max=Math.floor(cap*0.5);
@@ -6285,10 +6320,18 @@ function prepSummaryBody(){
       const propose=Array.isArray(s.offered)?s.offered:null;
       const invendus=(propose||CARD_IDS).filter(id=>CARDS[id] && !vendus.has(id));
       if(!invendus.length) return '';
+      /* ⚠️ v8.113 (relevé par Hervé) — « HORS JEU TOUTE LA SAISON » MENT SUR UNE LIGUE AVEC TRÊVE.
+         Ce texte décrit l'enchère DU DÉPART (titre juste au-dessus : « au départ ») — mais sur une
+         ligue où l'option trêve est active, TOUT le catalogue est remis aux enchères à la trêve
+         (`ouvrirTreve`/`resolveTreve`) : un bonus invendu ici peut très bien trouver preneur au
+         second tour. Seule une ligue SANS trêve verrouille vraiment ses invendus pour de bon. */
+      const treveActive=hasTreve(L);
       return `<div class="box mini muted"><b>${t("😶 Sans acquéreur")}</b>
         <div style="margin-top:4px">${invendus.map(id=>`<span class="clik" onclick="showCardInfo('${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join(' &nbsp;·&nbsp; ')}</div>
         <div style="margin-top:6px">${propose
-          ? t("Personne n'a misé dessus : ces <b>{a}</b> bonus restent <b>hors jeu toute la saison</b>. Aucun joueur ne peut en obtenir un — les échanges ne font que déplacer les bonus déjà attribués.",{a:invendus.length})
+          ? (treveActive
+              ? t("Personne n'a misé dessus au départ : ces <b>{a}</b> bonus restent hors jeu <b>jusqu'à la trêve</b>, où ils seront de nouveau proposés aux enchères.",{a:invendus.length})
+              : t("Personne n'a misé dessus : ces <b>{a}</b> bonus restent <b>hors jeu toute la saison</b>. Aucun joueur ne peut en obtenir un — les échanges ne font que déplacer les bonus déjà attribués.",{a:invendus.length}))
           : t("Personne n'a misé dessus : ces bonus sont restés <b>hors jeu</b>. Cette ligue est antérieure à l'enregistrement des bonus proposés — la liste est reconstituée à partir du jeu actuel, elle peut donc être approximative.")}</div></div>`;
    })()}
    <h2>${t("💰 Capital de départ")}</h2>
@@ -7440,7 +7483,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
     return `<div class="box" style="background:rgba(90,166,224,.06);border-color:var(--blue);padding:8px 10px"><div class="mini muted"><b>${t("ℹ️ Pour info")}</b> — ${oc.length?t("bonus encore en main de {a} (pas forcément joués aujourd'hui) :",{a:'<b>'+esc(opp.name)+'</b>'}):t("{a} n'a plus aucun bonus en main.",{a:esc(opp.name)})}</div>${oc.length?`<div class="cards" style="margin-top:5px">${oc.map(id=>`<div class="cardchip clik sm" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; })();
   return `${quickBar('')}${lastDayBanner(L.current_day)}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
-    <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot" class="${over?'red':''}">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${invest?' <span class="blue">(📈 70%)</span>':''} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Match favori ×2")} ⓘ</span></div>
+    <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot" class="${over?'red':''}">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${derniereJournee()?' <span class="gold">(🏁 dernière journée)</span>':(invest?' <span class="blue">(📈 70%)</span>':'')} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Match favori ×2")} ⓘ</span></div>
     <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div>
     ${/* ⚠️ v8.38 (retour de testeur, via Hervé) — « LORSQUE LA MISE EST TROP ÉLEVÉE, CE N'EST PAS
          SUFFISAMMENT VISIBLE ». Il n'y avait que deux signaux, tous deux muets : une jauge de 8 px
@@ -7476,8 +7519,8 @@ function viewBet(d,dayLbl,opp,iAmHome){
       return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
         <div class="row" style="gap:6px"><span class="tog cap ${bet.captain===i?'on':''}" title="${bet.captain===i?t("Ce n'est plus mon match favori"):t("En faire mon match favori")}" onclick="setCap(${i})">👑</span>${tgt}</div></div>
         ${(compBadge(f)||koLabel(f))?`<div style="margin-top:3px">${compBadge(f)}${compBadge(f)&&koLabel(f)?' · ':''}${koLabel(f)}</div>`:''}
-        <div class="odds">${o("1",f.home.slice(0,7))}${f.draw?o("N","Nul"):""}${o("2",f.away.slice(0,7))}</div>
-        ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home.slice(0,7):v==='2'?f.away.slice(0,7):'Nul')}<b>${cote(oddOf(f,v))}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
+        <div class="odds">${o("1",f.home)}${f.draw?o("N","Nul"):""}${o("2",f.away)}</div>
+        ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="odds" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="odd ${myCard.sel2===v?'sel':''}" onclick="setSel2(${i},'${v}')">${esc(v==='1'?f.home:v==='2'?f.away:'Nul')}<b>${cote(oddOf(f,v))}</b></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
         ${/* ⚠️ v8.00 (relevé par Hervé) — LA COTE COMBINÉE A QUITTÉ LA LIGNE DU MATCH. Elle
              s'affichait sur CHACUNE des deux cartes ciblées, ce qui laissait croire que le gain de
              ce match l'incluait. Il ne l'inclut pas : 🏷️ est un bonus purement ADDITIF, versé une
@@ -9688,14 +9731,22 @@ function viewStats(){
       // Une ligue hors totaux reste consultable, mais grisée et étiquetée : la faire disparaître
       // laisserait croire à une perte de données, l'afficher sans marque à un total faux.
       const etat=!l.compte?t("Fermée avant terme"):(l.status==='done'?t("Terminée"):t("En cours"));
-      return `<div class="box row clik" style="margin:6px 0${l.compte?'':';opacity:.55'}" onclick="showLeagueStat('${l.id}')"><div><b class="mini">${esc(l.name)}</b><div class="mini muted">${etat}${l.solo?' · '+t("solo vs IA"):''}${l.rank&&l.compte?' · '+t("{a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div></div><span class="chip">${l.points} pts →</span></div>`; }).join("")}
+      /* ⚠️ v8.115 (relevé par Hervé : « 1ᵉ/1 » affiché alors que le joueur avait perdu face à
+         l'IA) — `rank`/`total` se calculent parmi les HUMAINS seulement (`humans.findIndex`
+         un peu plus haut) : en solo, `total` vaut toujours 1 et le rang toujours 1, qu'on ait
+         battu l'IA ou pas. La note juste au-dessus (v7.02) l'avait déjà compris pour les titres/
+         podiums globaux (`if(...&&!solo...)`) mais pas pour CET affichage-ci, resté à côté. Le
+         classement `{a}ᵉ/{b}` n'a de sens qu'à plusieurs humains ; en solo seuls les points (déjà
+         affichés dans la pastille) disent qui a gagné. */
+      return `<div class="box row clik" style="margin:6px 0${l.compte?'':';opacity:.55'}" onclick="showLeagueStat('${l.id}')"><div><b class="mini">${esc(l.name)}</b><div class="mini muted">${etat}${l.solo?' · '+t("solo vs IA"):''}${l.rank&&l.compte&&!l.solo?' · '+t("{a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div></div><span class="chip">${l.points} pts →</span></div>`; }).join("")}
   </div>
   ${(L&&L.status==="done")?`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button>`:''}`;  // partage : seulement une fois la ligue terminée
   return h; }
 function showLeagueStat(lid){
   const V=statsVue(); const l=((V&&V.leagues)||[]).find(x=>x.id===lid); if(!l) return;
   const line=(lab,val)=>`<div class="row" style="justify-content:space-between;margin:6px 0"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
-  const body=`<div class="mini muted" style="text-align:left;margin-bottom:8px">${l.status==='done'?t("Terminée"):t("En cours")}${l.rank?' · '+t("Classement : {a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div>`
+  // ⚠️ v8.115 — même garde que la liste « Par ligue » : rang trivial (toujours 1ᵉ/1) en solo vs IA.
+  const body=`<div class="mini muted" style="text-align:left;margin-bottom:8px">${l.status==='done'?t("Terminée"):t("En cours")}${l.solo?' · '+t("solo vs IA"):''}${l.rank&&!l.solo?' · '+t("Classement : {a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div>`
     +line(t("Points / capital"), l.points+" pts · "+eur(l.capital)+" €")
     +line(t("Journées jouées"), l.days)
     +line(t("Pronos gagnés"), l.won+"/"+l.picks+" ("+l.hit+" %)")
@@ -9775,6 +9826,7 @@ async function seasonCardData(){
   // Avatar : image importée (crossOrigin), avatar dessiné, ou emoji hérité.
   const av=(meP&&meP.emoji)||(AUTH&&AUTH.avatar)||"";
   if(/^https?:/.test(av))      d.avatar=await cdImg(av,true);
+  else if(/^avimg:/.test(av))  d.avatar=await cdImg(avimgUrl(+av.slice(6)||0),true);
   else if(/^av:/.test(av))     d.avatar=await cdImg("data:image/svg+xml;charset=utf-8,"+encodeURIComponent(avatarSvg(+av.slice(3)||0,320)),false);
   else if(av)                  d.emoji=av;
   return d;
@@ -11332,7 +11384,7 @@ function viewProfil(){
       <div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><b class="mini">✏️ ${t("Pseudo affiché")}</b><button class="btn ghost sm" onclick="changeMyUsername()">${t("Modifier")}</button></div>
       <div class="mini muted" style="margin-top:3px">${t("C'est le nom vu dans toutes tes ligues. Ton identifiant de connexion, lui, ne change pas.")}</div>
       <div class="mini muted" style="margin-top:14px">${t("🎭 Choisis ton avatar (visible dans toutes tes ligues)")}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${Array.from({length:AV_COUNT},(_,i)=>{const v="av:"+i, on=AUTH.avatar===v; return `<button class="btn ghost sm" onclick="choisirAvatar('${v}')" style="padding:4px;line-height:0;border-radius:50%${on?';border-color:var(--accent)':''}">${avatarSvg(i,36)}</button>`;}).join("")}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px">${Array.from({length:AVIMG_COUNT},(_,i)=>{const v="avimg:"+i, on=AUTH.avatar===v; return `<button class="btn ghost sm" onclick="choisirAvatar('${v}')" style="padding:4px;line-height:0;border-radius:50%${on?';border-color:var(--accent)':''}">${avatarHTML(v,36)}</button>`;}).join("")}</div>
       <div class="mini muted" style="margin-top:14px">${t("📷 Ou charge ta propre image")}</div>
       <div class="row" style="gap:8px;margin-top:6px;align-items:center"><label class="btn ghost sm" style="cursor:pointer">${t("Choisir une image")}<input type="file" accept="image/*" onchange="uploadAvatar(this)" style="display:none"></label><span id="avUpMsg" class="mini muted"></span></div>
       ${/* ✨ « Ou colle un emoji » RETIRÉ en v7.18 (Hervé) : l'avatar est soit une illustration
@@ -11456,13 +11508,23 @@ function journeesRestantes(){ return Math.max(0,((L&&L.num_days)||0)-((L&&L.curr
    ⚠️ LA CONDITION EST BIEN « ET », PAS « OU » : si personne n'a encore validé, l'échange peut
    se conclure TOUT DE SUITE et le bonus être joué le jour même — c'est le classique coup de
    dernière minute. Bloquer toute la dernière journée supprimerait un vrai coup de jeu. */
-function derniereJournee(){ return tradeRunning() && journeesRestantes()<=1; }
+/* ⚠️ v8.114 (découvert en implémentant le plafond de mise du dernier jour) — CE NOM COLLISIONNAIT
+   AVEC `derniereJournee()` DÉFINIE PLUS HAUT (ligne ~7423, le simple test `current_day===num_days-1`
+   qu'utilisent `alerteRecapHTML`/`submitBet`). Deux `function` de même nom au même niveau : en JS
+   la SECONDE écrase purement et simplement la première partout — les appels de la première (recap,
+   avertissement de mise) exécutaient donc CETTE version-ci sans que personne ne le sache.
+   ⚠️ SANS CONSÉQUENCE VISIBLE JUSQU'ICI, ET C'EST CE QUI REND ÇA DANGEREUX : `tradeRunning()`
+   (`L.status==="running"`) est vrai dans tous les contextes où l'autre définition est appelée — les
+   deux calculs concordaient par coïncidence. Un futur changement de l'une des deux aurait cassé
+   l'autre en silence, exactement le genre de piège que ce fichier repère d'habitude. Renommée pour
+   lever l'ambiguïté ; le calcul ne change pas, seul le nom devient sans équivoque. */
+function derniereJourneeTrade(){ return tradeRunning() && journeesRestantes()<=1; }
 /* Contrôle à l'ENVOI, en plus de celui de l'écran. L'écran ne suffit pas : la fenêtre de saisie
    du prix peut rester ouverte pendant qu'une journée se résout ou qu'un adversaire valide ses
    pronos — l'affichage ne se redessine pas sous les doigts du joueur. On teste LES DEUX camps :
    il suffit qu'un seul ait validé pour que l'offre ne puisse plus se conclure avant la fin. */
 async function rachatSansIssue(autreId){
-  if(!derniereJournee()) return false;
+  if(!derniereJourneeTrade()) return false;
   if(await hasBetForDay(S.myId, L.current_day)) return true;
   return await hasBetForDay(autreId, L.current_day);
 }
@@ -11481,7 +11543,7 @@ async function rachatSansIssue(autreId){
    corrigé en v8.10, qu'on reproduirait à l'identique. */
 async function balayeOffresSansIssue(lid){
   try{
-    if(!derniereJournee() || !trades.length) return;
+    if(!derniereJourneeTrade() || !trades.length) return;
     const concernees=trades.filter(o=>o.from_player===S.myId||o.to_player===S.myId);
     if(!concernees.length) return;
     // Lecture FRAÎCHE des paris du jour : `bets` peut porter une autre journée si le joueur
@@ -11563,7 +11625,7 @@ function viewTrade(){
   // ⚠️ v8.13 — Le seul cas où l'on referme l'écran ouvert en v8.09 : dernière journée ET pronos
   // posés. Ici la fermeture est la bonne réponse — laisser proposer donnerait un marché dont
   // aucune issue n'existe. On dit POURQUOI, sinon c'est un écran qui disparaît sans raison.
-  if(derniereJournee() && pariPose){
+  if(derniereJourneeTrade() && pariPose){
     h+=`<div class="box"><b class="mini">🏁 ${t("Dernière journée")}</b>
       <div class="mini muted" style="margin-top:6px">${t("Tes pronos de la dernière journée sont validés : un rachat ne pourrait se conclure qu'<b>après la résolution</b>, c'est-à-dire une fois le championnat terminé. Le bonus ne serait jamais joué et le capital transféré ne ferait que fausser le classement final.")}</div>
       <div class="mini muted" style="margin-top:8px">${t("Tu peux toujours <b>refuser</b> les offres reçues ci-dessus — les accepter est bloqué pour la même raison.")}</div></div>`;
@@ -11870,7 +11932,7 @@ function viewRules(){
      <ul class="mini muted" style="margin:6px 0 0;padding-left:18px;line-height:1.75">
        <li>${t("Tu affrontes <b>un seul adversaire</b> en <b>duel</b>.")}</li>
        <li>${t("Celui qui <b>reçoit</b> choisit les <b>5 matchs</b>, imposés aux deux.")}</li>
-       <li>${t("Chacun fait ses <b>pronostics et ses mises</b> (au total ≤ <b>{a} %</b> de son capital).",{a:pct(STAKE_CAP)})}</li>
+       <li>${t("Chacun fait ses <b>pronostics et ses mises</b> (au total ≤ <b>{a} %</b> de son capital — 100 % à la <b>dernière journée</b>).",{a:pct(STAKE_CAP)})}</li>
        <li>${t("<b>👑 match favori</b> : gain <b>et</b> perte <b>doublés</b>. Et <b>1 bonus</b> au maximum.")}</li>
      </ul></div>
    <div class="box"><b>${t("🏆 Points et classement")}</b>
@@ -11922,7 +11984,7 @@ function viewRulesFull(){
      ${li(t("Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b>, ou s'ouvre d'un jour ou deux pour aller chercher une <b>plus belle affiche</b> plutôt qu'un match anonyme tout proche.",
        {a:POOL_N, h:FIN_SOIREE_H, f:FORMULAS.fast.bet+FORMULAS.fast.sel+FORMULAS.fast.bet, c:FORMULAS.classique.bet+FORMULAS.classique.sel+FORMULAS.classique.bet}))}
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
-     ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur).",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
+     ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur) — sauf à la <b>dernière journée</b>, où ce plafond saute : tu peux tout miser. Ton <b>match favori</b> reste compté double en cas de perte, donc le maximum réellement atteignable tourne autour de 99 % plutôt que 100 % pile.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
      ${li(t("En <b>📡 données réelles</b>, tu peux <b>modifier tes pronos jusqu'au coup d'envoi du premier de tes 5 matchs</b>. Un pari n'est montré aux autres que lorsqu'il ne peut <b>plus</b> changer — sinon voir le pari d'un adversaire encore modifiable donnerait un avantage, et pas une simple information. En 🎮 simulé, la clôture reste l'échéance de la formule."))}
      ${li(t("Tu désignes un <b>👑 match favori</b> : sur ce pari, ton <b>gain ET ta perte sont doublés</b>."))}
      ${li(t("Tu peux jouer <b>un bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution."))}
