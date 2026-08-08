@@ -245,7 +245,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.118";
+const APP_VERSION = "v8.119";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3290,7 +3290,8 @@ const EN={
   "Tu prends <b>−2 pts</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>−2 pts</b> in the standings and lose <b>{a}%</b> of your balance.",
   "Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.":"Your opponent <b>wins the duel</b> — but only <b>3 pts</b> if their net is positive, <b>1 pt</b> otherwise. They cannot lose money because of your absence.",
   "🃏 Les bonus":"🃏 The bonus bonuses",
-  "Au démarrage, chacun <b>mise en aveugle</b> sur les bonus qu'il veut. Chaque bonus revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>. ⚠️ Un bonus sur lequel <b>personne</b> ne mise reste <b>hors jeu toute la saison</b> : rien n'en remet en circulation, et les rachats ne font que déplacer ceux déjà attribués.":"At the start, everyone <b>bids blindly</b> on the bonuses they want. Each bonus goes to the <b>highest bidder</b> — on a tie, to the <b>first</b> to have bid that amount. <b>Losing bidders pay nothing</b>. ⚠️ A bonus <b>nobody</b> bids on stays <b>out of play for the whole season</b>: nothing puts one back into circulation, and trades only move those already handed out.",
+  "Au démarrage, chacun <b>mise en aveugle</b> sur les bonus qu'il veut. Chaque bonus revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>. ⚠️ Un bonus sur lequel <b>personne</b> ne mise reste <b>hors jeu</b> jusqu'à la fin de la saison — ou jusqu'à la <b>trêve de mi-saison</b> s'il y en a une, où il repasse aux enchères (voir ci-dessous).":"At the start, everyone <b>bids blindly</b> on the bonuses they want. Each bonus goes to the <b>highest bidder</b> — on a tie, to the <b>first</b> to have bid that amount. <b>Losing bidders pay nothing</b>. ⚠️ A bonus <b>nobody</b> bids on stays <b>out of play</b> until the end of the season — or until the <b>mid-season truce</b> if there is one, where it goes back up for auction (see below).",
+  "Avec l'option premium <b>🔄 Trêve de mi-saison</b>, la vente aux enchères se joue en <b>deux temps</b> : au départ, chacun ne peut remporter que la <b>moitié</b> des journées en bonus (pas tout d'un coup) ; à la mi-saison, tous les bonus <b>non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> (hors cagnotte) pour tout racheter parmi <b>tous</b> les bonus, y compris ceux qu'aucun joueur n'avait achetés au départ.":"With the premium <b>🔄 Mid-season truce</b> option, the auction happens in <b>two rounds</b>: at the start, everyone can only win up to <b>half</b> the matchdays in bonuses (not everything at once); half-way through, every <b>unplayed bonus is lost</b> — yours and everyone else's — and each player receives <b>€{a}</b> (outside their balance) to buy again from <b>every</b> bonus, including any nobody had bought at the start.",
   "Total des mises ≤ <b>{a} €</b>, et pas plus de bonus que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.":"Total bids ≤ <b>€{a}</b>, and no more bonuses than there are matchdays. <b>What you win is deducted from your starting €100</b> — what you don't spend stays as your balance.",
   "<b>Un bonus = un seul propriétaire</b> dans la ligue, et <b>un seul bonus joué par journée</b>. Un bonus joué est consommée.":"<b>One bonus = one owner</b> in the league, and <b>only one bonus played per matchday</b>. A played bonus is consumed.",
   "Les bonus <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'un bonus, c'est-à-dire ce qu'il peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'il peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire il ne sert à rien, il ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (il peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les seconds ne sont pas à éviter — ce sont les bonus des joueurs qui assument leurs pronos.":"<b>🎯 Targeted</b> bonuses require you to name a match when betting. <b>💪 x/5</b> shows a bonus's <i>indicative</i> strength.",
@@ -6055,7 +6056,7 @@ async function startLeagueCore(lg){
   const mode=(o.mode==='simple')?'simple':'complet'; const enjeu=o.enjeu||'gage'; const soloAR=o.soloAR?(+o.soloAR):2;
   let ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
   const soloNow=(ps.filter(p=>!p.is_ai).length===1);
-  if(ps.length%2===1){ await q(db.from("players").insert({league_id:lg.id,name:"Joueur IA",emoji:"🤖",is_ai:true,join_order:ps.length}));
+  if(ps.length%2===1){ await q(db.from("players").insert({league_id:lg.id,name:"Joueur IA",emoji:"avimg:7",is_ai:true,join_order:ps.length}));
     ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order")); }
   const n=ps.length; let sched=makeSchedule(n);
   if(soloNow && soloAR===2) sched=sched.concat(sched);
@@ -6731,7 +6732,7 @@ async function doCloseRegistration(){
   const soloNow=(players.filter(p=>!p.is_ai).length===1);
   try{
     let ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
-    if(ps.length%2===1){ await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"🤖",is_ai:true,join_order:ps.length}));
+    if(ps.length%2===1){ await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"avimg:7",is_ai:true,join_order:ps.length}));
       ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order")); }
     const n=ps.length; let sched=makeSchedule(n); const rows=[];
     /* À DEUX (solo contre l'IA, ou deux humains) : `makeSchedule(2)` ne donne qu'un aller-retour,
@@ -12034,8 +12035,9 @@ function viewRulesFull(){
        ? t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>2 pts</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")
        : t("Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.")}`)}
 
-   ${sec(t("🃏 Les bonus"), `${t("Au démarrage, chacun <b>mise en aveugle</b> sur les bonus qu'il veut. Chaque bonus revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>. ⚠️ Un bonus sur lequel <b>personne</b> ne mise reste <b>hors jeu toute la saison</b> : rien n'en remet en circulation, et les rachats ne font que déplacer ceux déjà attribués.")}<br>
+   ${sec(t("🃏 Les bonus"), `${t("Au démarrage, chacun <b>mise en aveugle</b> sur les bonus qu'il veut. Chaque bonus revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>. ⚠️ Un bonus sur lequel <b>personne</b> ne mise reste <b>hors jeu</b> jusqu'à la fin de la saison — ou jusqu'à la <b>trêve de mi-saison</b> s'il y en a une, où il repasse aux enchères (voir ci-dessous).")}<br>
      ${t("Total des mises ≤ <b>{a} €</b>, et pas plus de bonus que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.",{a:SHOP_CAP})}<br>
+     ${t("Avec l'option premium <b>🔄 Trêve de mi-saison</b>, la vente aux enchères se joue en <b>deux temps</b> : au départ, chacun ne peut remporter que la <b>moitié</b> des journées en bonus (pas tout d'un coup) ; à la mi-saison, tous les bonus <b>non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> (hors cagnotte) pour tout racheter parmi <b>tous</b> les bonus, y compris ceux qu'aucun joueur n'avait achetés au départ.",{a:SHOP_CAP})}<br>
      ${t("<b>Un bonus = un seul propriétaire</b> dans la ligue, et <b>un seul bonus joué par journée</b>. Un bonus joué est consommée.")}<br>
      ${t("Les bonus <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'un bonus, c'est-à-dire ce qu'il peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'il peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire il ne sert à rien, il ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (il peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les seconds ne sont pas à éviter — ce sont les bonus des joueurs qui assument leurs pronos.")}<br>
      ${t("⚠️ Le <b>👑 match favori</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 🏷️ Deux pour le prix d'un, 🎁 Chérie c'est cadeau et 🤛 Dans ta face.")}
