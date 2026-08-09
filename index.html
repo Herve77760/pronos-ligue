@@ -245,7 +245,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.130";
+const APP_VERSION = "v8.134";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -428,7 +428,7 @@ const CARDS={
  // serait pire que de ne rien changer : l'étoile guide les mises aux enchères, et une force
  // fausse empêche l'enchère de jouer son rôle de contrepoids — c'est le raisonnement qui avait
  // fait MONTER cette carte à 5/5 en v6.84, il vaut exactement pareil dans l'autre sens.
- assurance:{e:"🛡",n:"Assurance tous risques",t:true, f:4, d:"Un pari choisi : s'il perd, la moitié de la mise est remboursée."},
+ assurance:{e:"🛡",n:"Assurance tous risques",t:true, f:4, d:"Un pari choisi : s'il est perdu, la moitié de la mise est remboursée."},
  double:   {e:"🐗",n:"Double ration Obélix",t:true, f:4, d:"Un pari choisi : s'il gagne, gain doublé."},
  dbl:      {e:"🏷️",n:"Deux pour le prix d'un",t:true, two:true, f:5, d:"Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (ton match favori est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien."},
  miroir:   {e:"❄️",n:"Effet Kiss Cool",t:false, f:3, risk:true, d:"Le meilleur résultat de pari des deux joueurs est échangé — gagnant ou perdant. La question à se poser : ton adversaire va-t-il faire mieux que toi ? ⚠️ Arme à double tranchant : si son meilleur pari vaut moins que le tien, c'est toi qui y perds. Sans effet si l'un des deux n'a pas parié du tout."},
@@ -1964,6 +1964,7 @@ const EN={
   "Match favori et bonus doivent être sur des matchs différents.":"Favourite match and bonus must be on different matches.",
   "👑 Le match favori et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager ton match favori.":"👑 The favourite match and the 🃏 bonus must target different matches. Exception: bonuses that attack the opponent's bet ({a}, {b}) can share the favourite match.",
   "⚠️ Trop risqué — baisse la mise de ton match favori":"⚠️ Too risky — lower your favourite match stake",
+  "⚠️ Trop risqué — baisse la mise de ton match favori 👑 ou de ton {e} {n}":"⚠️ Too risky — lower the stake on your favourite match 👑 or on your {e} {n}",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "Retour à mes stats":"Back to my stats",
   "Pari par pari":"Bet by bet", "Somme des paris :":"Bets total:",
@@ -2138,7 +2139,7 @@ const EN={
   "<b>Match favori</b> : sa mise est doublée — à la perte comme au gain.":"<b>Favourite match</b>: its stake is doubled — on a loss as on a win.",
   "la moitié de la mise du match ciblé t'est remboursée : ce match ne pèse plus que pour moitié dans le risque.":"half the stake on the targeted match is refunded: that match now weighs only half in the risk.",
   "perte doublée sur le match ciblé.":"loss doubled on the targeted match.",
-  "<b>Parachute</b> : il amortira 30 % de ta perte, mais cet effet n'est pas dans ce total.":"<b>Parachute</b>: it will cushion 30% of your loss, but that effect isn't in this figure.",
+  "<b>Parachute</b> : ce total inclut déjà les 30 % de perte amortis.":"<b>Parachute</b>: this total already includes the 30% loss cushion.",
   "⛔ L'app refuse un pari dont le pire cas dépasserait ton capital : tu ne peux jamais finir dans le négatif.":"⛔ The app refuses a bet whose worst case would exceed your capital: you can never end up negative.",
   "N'apparaissent pas ici, ils n'agissent qu'en cas de perte :":"Not shown here, they only act on a loss:",
   "gain doublé sur le match ciblé.":"win doubled on the targeted match.",
@@ -2148,7 +2149,7 @@ const EN={
   // — v7.68 : la menace adverse, calculée sur sa main réelle —
   "ce bonus n'est compté dans aucun des deux montants":"this bonus is counted in neither figure",
   "elle n'augmente pas le gain, mais elle réduit bien le risque affiché.":"it doesn't increase the win, but it does reduce the risk shown.",
-  "il amortit 30 % d'une journée négative — cet effet n'est dans aucun des deux montants.":"it cushions 30% of a losing day — that effect is in neither figure.",
+  "il n'augmente pas le gain, mais il réduit bien le risque affiché (30 % d'une journée négative).":"it doesn't increase the win, but it does reduce the risk shown (30% of a losing day).",
   "Ce que {a} peut encore te prendre":"What {a} can still take from you",
   "✅ {a} n'a plus aucun bonus capable de réduire ce gain.":"✅ {a} has no bonus left that could cut this win.",
   // ⚠️ v7.72 : tournures ACTIVES, l'adversaire en sujet — une voix passive oblige à reconstruire
@@ -2604,7 +2605,7 @@ const EN={
   "🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}€":"🤛 Opponent's In Your Face: gain <b>halved</b> → {a}€",
   "Gain réduit de moitié par « Dans ta face » adverse":"Gain halved by the opponent's In Your Face",
   // — Phase 4c : noms & descriptions des bonus —
-  "Assurance":"Insurance", "Assurance tous risques":"Better Safe Than Sorry", "Un pari choisi : s'il perd, la moitié de la mise est remboursée.":"A chosen bet: if it loses, half the stake is refunded.",
+  "Assurance":"Insurance", "Assurance tous risques":"Better Safe Than Sorry", "Un pari choisi : s'il est perdu, la moitié de la mise est remboursée.":"A chosen bet: if it loses, half the stake is refunded.",
   "Coup Double":"Double Strike", "Deux pour le prix d'un":"Two for One",
   "Aucune mise supplémentaire, aucun risque : tu choisis 2 matchs (ton match favori est autorisé). Si les 2 pronos sont bons, tu gagnes en plus à la cote combinée (cote₁ × cote₂) sur la mise moyenne des 2. Si l'un rate, tu ne perds rien.":"No extra stake, no risk: pick 2 matches (your favourite match is allowed). If both predictions are correct, you also win at the combined odds (odds₁ × odds₂) on the average of the 2 stakes. If one misses, you lose nothing.",
   "touche un 2ᵉ match 💥":"tap a 2nd match 💥", "→ touche les 💥 de tes 2 matchs.":"→ tap the 💥 on your 2 matches.",
@@ -3279,7 +3280,7 @@ const EN={
   "Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement.":"Once the matches are over, the matchday is <b>resolved</b>: winnings, points, standings.",
   "💰 Gains et pertes":"💰 Winnings and losses",
   "<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.":"<b>Bet won</b>: you pocket <b>stake × (odds − 1)</b>. <b>Bet lost</b>: you lose your <b>stake</b>.",
-  "<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton match favori. <b>Ton capital ne descend jamais sous 0.</b>":"<b>🛟 The safety net:</b> the matchday's <b>maximum possible loss</b> can never exceed your balance. The app refuses a bet that could leave you negative — if the button is blocked, lower your favourite match's stake. <b>Your balance never drops below 0.</b>",
+  "<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton match favori (ou, si tu as joué 🔥 Ça passe ou ça casse / 🃏 Joker, celle du match ciblé par ce bonus : les deux comptent double). <b>Ton capital ne descend jamais sous 0.</b>":"<b>🛟 The safety net:</b> the matchday's <b>maximum possible loss</b> can never exceed your balance. The app refuses a bet that could leave you negative — if the button is blocked, lower your favourite match's stake (or, if you played 🔥 All or Nothing / 🃏 Joker, the stake on that bonus's target match: both count double). <b>Your balance never drops below 0.</b>",
   "<b>💸 Recapitalisation :</b> si un joueur finit une journée sous <b>{a} €</b>, il n'a plus de quoi miser vraiment : son capital est <b>remonté à {b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).":"<b>💸 Top-up:</b> if a player ends a matchday below <b>€{a}</b>, they no longer have enough to bet meaningfully: their balance is <b>raised to €{b}</b> to stay in the race, in exchange for <b>−1 championship point</b> (only they are affected).",
   "On <b>remonte à</b> {b} €, on n'ajoute pas {b} € : que tu finisses à {c} € ou à 2 €, tu repars avec {b} €. Perdre davantage ne rapporte donc rien.":"It's a <b>raise to</b> €{b}, not a €{b} bonus: whether you end on €{c} or on €2, you restart with €{b}. So losing more gains you nothing.",
   "<b>{a}</b> étai{e}t sous <b>{c} €</b> — capital remonté à <b>{b} €</b> pour rester dans la course, en échange de <b>−1 pt</b> de championnat. 🤝":"<b>{a}</b> — below <b>€{c}</b>, balance raised to <b>€{b}</b> to stay in the race, in exchange for <b>−1 championship point</b>. 🤝",
@@ -3495,9 +3496,12 @@ const GAIN_MULTIPLIANTS=["double","joker","tout","dbl","chance"];
    pas compté » s'affichait sur 🛟 alors qu'elle RÉDUIT bel et bien le risque affiché — le message
    était faux. Il porte maintenant sur les DEUX montants, et ne s'affiche que si le bonus joué
    n'entre ni dans l'un ni dans l'autre.
-   ⚠️ 🪂 Parachute n'y figure pas, et c'est exact : il amortit 30 % de la perte de la JOURNÉE, pas
-   d'un pari, et `worstLoss` ne le modélise pas (limitation connue, notée dans « à faire plus
-   tard »). Le repère est donc justifié pour lui — il annonce une vraie absence, pas un oubli. */
+   ⚠️ 🪂 Parachute N'Y FIGURE TOUJOURS PAS, mais plus pour l'ancienne raison. Il amortit 30 % de la
+   perte de la JOURNÉE, pas d'un pari : ça ne se laisse pas coder comme un multiplicateur PAR MATCH
+   (`lossMult`), donc pas comme un élément de cette liste. Depuis v8.132, `worstLoss` applique quand
+   même l'effet (après coup, sur le total) — Parachute est donc bien compté, juste pas PAR CETTE
+   voie-là. Le garder hors de la liste tient toujours : le repère « aucun des deux montants », sur
+   l'écran de pari, exclut donc `parachute` EXPLICITEMENT en plus des deux listes (voir son test). */
 const RISQUE_MULTIPLIANTS=["assurance","tout","joker"];
 /* ⚠️ v7.73 — LE PARI ACTUELLEMENT AFFICHÉ, quel que soit l'état de l'écran. Pendant la saisie
    c'est le brouillon (`bet` + `myCard`) ; une fois validé, `bet.picks` est remis à null et le pari
@@ -3584,7 +3588,7 @@ function showRisqueInfo(){
    ${(total>mise+0.001)?`<div style="margin-top:8px">${t("Tu as misé <b>{a} €</b>, mais tu risques <b>{b} €</b> : certains paris comptent double à la perte.",{a:eur(mise),b:eur(total)})}</div>`:''}
    <div style="margin-top:8px">👑 ${t("<b>Match favori</b> : sa mise est doublée — à la perte comme au gain.")}
      ${cRisq?`<br>${CARDS[cRisq].e} <b>${esc(t(CARDS[cRisq].n))}</b> : ${RISQ[cRisq]}`:''}</div>
-   ${(c && c.id==="parachute")?`<div style="margin-top:8px">🪂 ${t("<b>Parachute</b> : il amortira 30 % de ta perte, mais cet effet n'est pas dans ce total.")}</div>`:''}
+   ${(c && c.id==="parachute")?`<div style="margin-top:8px">🪂 ${t("<b>Parachute</b> : ce total inclut déjà les 30 % de perte amortis.")}</div>`:''}
    <div style="margin-top:8px">${t("⛔ L'app refuse un pari dont le pire cas dépasserait ton capital : tu ne peux jamais finir dans le négatif.")}</div></div>`); }
 function showGainInfo(){
   const MIEN={ double:t("gain doublé sur le match ciblé."),
@@ -3592,12 +3596,13 @@ function showGainInfo(){
                tout:t("gain triplé sur le match ciblé."),
                dbl:t("un gain supplémentaire s'ajoute si tes 2 matchs ciblés passent."),
                chance:t("le gain est chiffré à la cote de ton pari principal ; si c'est la 2ᵉ issue qui sort, il sera différent.") };
-  /* ⚠️ Ces deux-là n'augmentent pas le gain, mais ils ne se valent pas pour autant — signalé par
-     Hervé : 🛟 réduit RÉELLEMENT le risque affiché (mise assurée mise à 0 dans `lossMult`),
-     tandis que 🪂 n'entre dans aucun des deux montants (`worstLoss` ne le modélise pas). Les
-     confondre sous « ils n'agissent qu'en cas de perte » était trompeur pour l'Assurance. */
+  /* ⚠️ Ces deux-là n'augmentent pas le gain, mais agissent bien sur le risque affiché — signalé
+     par Hervé : 🛟 met la mise assurée à 0 dans `lossMult` (par pari) ; 🪂 amortit 30 % du total
+     dans `worstLoss` (par journée, depuis v8.132 — avant cette version il n'était modélisé nulle
+     part). Les confondre sous « ils n'agissent qu'en cas de perte » était trompeur pour l'Assurance
+     avant que ça ne le devienne aussi pour Parachute — d'où deux phrases, pas une. */
   const PERTE={ assurance:t("elle n'augmente pas le gain, mais elle réduit bien le risque affiché."),
-                parachute:t("il amortit 30 % d'une journée négative — cet effet n'est dans aucun des deux montants.") };
+                parachute:t("il n'augmente pas le gain, mais il réduit bien le risque affiché (30 % d'une journée négative).") };
   const d=myDuel(); const oid=d?((d.home_id===S.myId)?d.away_id:d.home_id):null;
   const oppNom=oid?esc((pById(oid)||{}).name||"?"):"";
   const menace=bonusAdversesRisque();
@@ -4579,6 +4584,15 @@ async function refresh(){
         try{ await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",lid)); L.gage=JSON.stringify(o); }catch(e){}
       }
     }
+    /* ⚠️ v8.133 (demandé par Hervé) — REPÈRE « VISITÉ », posé dès que la ligue se charge ici, sans
+       attendre le clic sur « La saison reprend » (qui reste requis pour faire disparaître l'écran
+       bloquant DANS la ligue, cf. `treveResultSeen`/`ackTreveResult`). Sert UNIQUEMENT à éteindre le
+       bandeau de l'accueil : ouvrir la ligue et voir l'écran de la trêve une fois a déjà rempli ce
+       que ce bandeau-là promettait ("va voir"). Écrit à CHAQUE refresh tant que l'état tient — sans
+       risque, une même valeur réécrite ne casse rien, et ça couvre le cas d'un premier chargement
+       trop rapide pour que l'utilisateur ait eu le temps de cliquer quoi que ce soit. */
+    { const stt=L.prep_summary&&L.prep_summary.treve_st, clos=stt&&stt.closed_at;
+      if(clos){ try{ localStorage.setItem("pl_treveu_visite_"+lid+"_"+(S.myId||"?")+"_"+clos,"1"); }catch(e){} } }
     /* Fin de TRÊVE automatique — même règle que la préparation : dès que tous les humains ont
        validé, ou à l'échéance de 24 h. ⚠️ Placé AVANT le bloc `prep` : les deux ne peuvent pas
        coexister, mais l'ordre rend la lecture sans ambiguïté. */
@@ -5188,8 +5202,16 @@ async function loadHomeTodo(){
          trêve vient de se clore et n'est pas encore acquittée — avant même le renvoi vers les
          résultats non vus (désormais mis en garde par `treveResultSeen()`, cf. `refresh()`). Le
          bandeau doit donc annoncer CET écran-là, pas les résultats, tant qu'il n'a pas été vu. */
+      /* ⚠️ v8.133 (demandé par Hervé) — CE BANDEAU LIT UN REPÈRE À PART, PAS `pl_treveu_`. Le
+         bandeau d'accueil dit « va voir » ; `pl_treveu_` (posé par le bouton « La saison reprend »
+         dans `viewTreveSummary`) dit « j'ai lu et je valide, je peux reprendre ». Les confondre
+         obligeait à cliquer CE bouton juste pour faire taire l'accueil, alors qu'ouvrir la ligue et
+         voir l'écran une fois avait déjà rempli la promesse du bandeau. `pl_treveu_visite_` est
+         posé par `refresh()` dès que la ligue se charge dans cet état (voir la-bas) — sans clic. Le
+         geste À L'INTÉRIEUR de la ligue (le bouton, l'écran bloquant tant qu'il n'est pas cliqué)
+         reste inchangé : seul CE bandeau-ci s'éteint plus tôt. */
       { const stt=m.lg.prep_summary&&m.lg.prep_summary.treve_st, clos=stt&&stt.closed_at;
-        if(clos && localStorage.getItem("pl_treveu_"+m.lg.id+"_"+m.pid+"_"+clos)!=="1"){
+        if(clos && localStorage.getItem("pl_treveu_visite_"+m.lg.id+"_"+m.pid+"_"+clos)!=="1"){
           homeTodo.push({lg:m.lg, pid:m.pid, kind:"treve"});
           return;
         } }
@@ -7505,7 +7527,33 @@ function lossMult(i,captainIdx,card){ if(i===captainIdx) return 2;
   // le risque, donc celui qui autorise à miser plus gros ailleurs. Le désolidariser du
   // remboursement rendrait la jauge de risque menteuse.
   if(card&&card.target===i){ if(card.id==="assurance") return 1-ASSURANCE_REMB; if(card.id==="tout"||card.id==="joker") return 2; } return 1; }
-function worstLoss(picks,captainIdx,card){ return (picks||[]).reduce((s,b,i)=>s+(+b.stake||0)*lossMult(i,captainIdx,card),0); }
+/* ⚠️ v8.132 (demandé par Hervé) — 🪂 PARACHUTE ENTRE ENFIN DANS CE TOTAL. Jusqu'ici il amortissait
+   bien 30 % d'une journée négative au moteur (`resolveDay`, cf. le même calcul `cur<0 ? cur*0.7 :
+   cur`), mais `worstLoss` — affiché AVANT de parier — ne le modélisait pas : la jauge de risque
+   promettait une perte que Parachute allait ensuite réduire sans le dire. Ce n'était pas un oubli
+   (noté « limitation connue » dès v7.71), juste jamais fait. Parachute n'étant PAS ciblé sur un
+   match (`t:false`), son effet ne peut pas passer par `lossMult` (qui raisonne pari par pari) : on
+   l'applique donc APRÈS coup, sur le total — exactement comme au moteur, où le pire cas (tous les
+   pronos ratés) est TOUJOURS une journée négative, donc où Parachute se déclenche TOUJOURS. */
+function worstLoss(picks,captainIdx,card){
+  const total=(picks||[]).reduce((s,b,i)=>s+(+b.stake||0)*lossMult(i,captainIdx,card),0);
+  return (card&&card.id==="parachute") ? Math.round(total*0.7*100)/100 : total;
+}
+/* ⚠️ v8.134 (demandé par Hervé, cas vécu à la dernière journée où 100 % du capital est misable) —
+   LE MESSAGE « TROP RISQUÉ » NE CITAIT QUE LE MATCH FAVORI, alors que `lossMult` double la perte
+   sur DEUX matchs possibles : le Capitaine (toujours), et le match ciblé par 🔥 Ça passe ou ça casse
+   / 🃏 Joker (si l'un des deux est joué — jamais les deux en même temps, ils sont forcément sur des
+   matchs différents du Capitaine). Baisser la mise du Capitaine ne sert à rien si c'est en fait le
+   match du bonus qui fait déborder le total : le message pointait le mauvais réglage à faire.
+   ⚠️ UNE SEULE FONCTION pour les 3 endroits qui affichaient ce message (bouton, mise à jour live,
+   blocage à la validation) — les recopier aurait fini par en dire deux versions différentes,
+   exactement le défaut que ce fichier traque depuis des mois. */
+function riskyMsg(){
+  const c=myCard;
+  if(c && c.target!=null && (c.id==="tout"||c.id==="joker"))
+    return t("⚠️ Trop risqué — baisse la mise de ton match favori 👑 ou de ton {e} {n}",{e:CARDS[c.id].e,n:t(CARDS[c.id].n)});
+  return t("⚠️ Trop risqué — baisse la mise de ton match favori");
+}
 /* ---- GAIN POTENTIEL (v7.67, demandé par Hervé) --------------------------------------------
    L'écran de pari ne parlait QUE de risque : capital, misé/max, jauge, alerte des 30 €, blocage
    si la perte possible dépasse le capital. Nulle part le joueur ne voyait ce qu'il pouvait
@@ -7649,9 +7697,9 @@ function viewBet(d,dayLbl,opp,iAmHome){
          ce qu'on espère. Le ⓘ est porté par le GAIN, parce que c'est lui qui se calcule (Capitaine,
          bonus, Coup Double) — le risque, lui, est la somme de ce qu'on vient de saisir. */''}
     <div class="row mini" style="margin:10px 2px 4px"><span class="clik" onclick="showRisqueInfo()">⚠️ ${t("Risque")} <b id="risqueBas" class="red">-${eur(worstLoss(bet.picks,bet.captain,myCard))} €</b> ⓘ</span><span class="clik" onclick="showGainInfo()">💰 ${t("Gain")} <b id="gainBas" class="green">${fmt(bestGain(bet.picks,fx,bet.captain,myCard))} €</b> ⓘ</span></div>
-    ${(myCard && GAIN_MULTIPLIANTS.indexOf(myCard.id)<0 && RISQUE_MULTIPLIANTS.indexOf(myCard.id)<0)?`<div class="mini muted" style="margin:0 2px 6px;text-align:right">${CARDS[myCard.id].e} ${t("ce bonus n'est compté dans aucun des deux montants")}</div>`:''}
+    ${(myCard && myCard.id!=="parachute" && GAIN_MULTIPLIANTS.indexOf(myCard.id)<0 && RISQUE_MULTIPLIANTS.indexOf(myCard.id)<0)?`<div class="mini muted" style="margin:0 2px 6px;text-align:right">${CARDS[myCard.id].e} ${t("ce bonus n'est compté dans aucun des deux montants")}</div>`:''}
     ${/* v8.38 — ROUGE quand c'est une FAUTE (dépassement, risque), gris quand c'est une étape. */''}
-    <button class="btn${(over||risky)?' danger':''}" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Désigne ton match favori 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise de ton match favori"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Match favori et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>
+    <button class="btn${(over||risky)?' danger':''}" id="betSubmit" ${ok?'':'disabled'} onclick="submitBet()">${bet.captain<0?t("Désigne ton match favori 👑"):(over?t("Mise trop élevée"):(risky?riskyMsg():(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Match favori et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →")))))))}</button>
     ${oppHandInfo}`;
 }
 function setSel(i,v){ bet.picks[i].sel=v; if(myCard&&myCard.id==="chance"&&myCard.target===i&&myCard.sel2===v) myCard.sel2=null; render(); }
@@ -7685,7 +7733,7 @@ function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0); refreshGains();
   const btn=$("betSubmit");
   if(btn){ const over=depasse; const allMin=bet.picks.every(b=>(+b.stake||0)>=1); const risky=bet.captain>=0&&worstLoss(bet.picks,bet.captain,myCard)>(meP.capital)+0.001; const ok=allMin&&!over&&!risky&&bet.captain>=0&&!needTarget&&!needSel2&&!conflict; btn.disabled=!ok;
     btn.classList.toggle("danger", over||risky);   // v8.38 : rouge quand c'est une FAUTE, pas une étape
-    btn.textContent = bet.captain<0?t("Désigne ton match favori 👑"):(over?t("Mise trop élevée"):(risky?t("⚠️ Trop risqué — baisse la mise de ton match favori"):(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Match favori et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →"))))))); }
+    btn.textContent = bet.captain<0?t("Désigne ton match favori 👑"):(over?t("Mise trop élevée"):(risky?riskyMsg():(needTarget?t("Choisis la cible 🎯"):(needSel2?t("Choisis le 2ᵉ résultat 🎲"):(conflict?t("Match favori et bonus sur des matchs différents"):(!allMin?t("Mise de 1 € min. sur chaque pari"):t("Valider mes pronostics →"))))))); }
 }
 function setCap(i){ const C=(myCard&&CARDS[myCard.id])||{}; const on=bet.captain!==i;
   if(on && myCard && C.t && !C.two && !C.oppT && myCard.target===i){ infoWin(t("👑 Le match favori et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager ton match favori.",{a:CARDS.face.e+' '+t(CARDS.face.n),b:CARDS.cadeau.e+' '+t(CARDS.cadeau.n)}),"⚠️"); return; }
@@ -7706,7 +7754,7 @@ async function submitBet(){
   if(busy)return;
   // Sécurité : si la clôture est tombée pendant la saisie, on refuse le pari (sinon on pourrait miser en retard).
   if(deadlinePassed()){ infoWin(t("⏰ Trop tard — les pronos sont clôturés."),"⏰"); S.editingBet=false; bet={picks:null,captain:-1}; myCard=null; await refresh(); return; }
-  if(bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > ((me()||{}).capital||0)+0.001){ infoWin(t("⚠️ Trop risqué — baisse la mise de ton match favori"),"⚠️"); return; } // règle A (sécurité)
+  if(bet.captain>=0 && worstLoss(bet.picks,bet.captain,myCard) > ((me()||{}).capital||0)+0.001){ infoWin(riskyMsg(),"⚠️"); return; } // règle A (sécurité)
   /* ---- AVERTISSEMENT AVANT VALIDATION (v7.52, demandé par Hervé) ---------------------------
      « Un message à la validation si le montant total de ses mises le ferait potentiellement passer
      sous les 30 € si ses pronos sont faux. »
@@ -12115,7 +12163,7 @@ function viewRulesFull(){
    </ol>`)}
 
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
-     ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton match favori. <b>Ton capital ne descend jamais sous 0.</b>")}<br>
+     ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton match favori (ou, si tu as joué 🔥 Ça passe ou ça casse / 🃏 Joker, celle du match ciblé par ce bonus : les deux comptent double). <b>Ton capital ne descend jamais sous 0.</b>")}<br>
      ${t("<b>💸 Recapitalisation :</b> si un joueur finit une journée sous <b>{a} €</b>, il n'a plus de quoi miser vraiment : son capital est <b>remonté à {b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).",{a:RECAP_THRESHOLD,b:RECAP_TARGET})} ${t("On <b>remonte à</b> {b} €, on n'ajoute pas {b} € : que tu finisses à {c} € ou à 2 €, tu repars avec {b} €. Perdre davantage ne rapporte donc rien.",{b:RECAP_TARGET,c:RECAP_THRESHOLD-1})} ${t("Cela n'arrive <b>pas sur la dernière journée</b> : il n'y a plus rien à miser ensuite.")}<br>
      ${t("🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.",{a:STALE_MATCH_H})}<br>
      ${t("⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.")}`)}
