@@ -750,7 +750,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.187";
+const APP_VERSION = "v8.188";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1315,8 +1315,27 @@ function enjeuOutcome(kind){ const s=(L&&L.prep_summary)||{}; const both=(s.enje
 // l'ancienne était rattachée à une adresse personnelle et n'est plus utilisée.
 // ⚠️ Visible dans le navigateur : c'est une clé de TEST assumée comme telle. La passer côté
 // serveur reste le sujet de la Phase 2 (et la seule vraie protection contre un usage détourné).
-const ODDS_KEY="7be2e48e9638afa4e0f0aad561d56055";
-const ODDS_BASE="https://api.the-odds-api.com/v4";
+/* ⚠️ v8.188 — LA CLE DES COTES N'EST PLUS DANS CETTE PAGE. Elle y etait en clair, donc lisible par
+   quiconque ouvrait le site deploye : il suffisait de la copier pour vider les 500 credits mensuels
+   en une nuit. Aucun reglage d'economie ne protege de ca, et le probleme n'aurait fait que grossir
+   avec le nombre de joueurs.
+   Elle vit desormais dans un secret Supabase, lu par la fonction `odds`
+   (supabase/functions/odds/index.ts). L'app ne parle plus a The Odds API : elle parle a la fonction,
+   qui ajoute la cle cote serveur.
+   ⚠️ SEUL UN JOUEUR CONNECTE passe : la fonction refuse le jeton public de la page (verifie —
+   « jeton illisible », 401). Un abuseur devrait donc creer un compte, que tu peux bloquer.
+   ⚠️ NE JAMAIS REMETTRE DE CLE EN DUR ICI, meme « juste pour tester » : la page est publique. */
+const ODDS_FN=SB_URL+"/functions/v1/odds";
+/* Appelle la fonction Supabase qui detient la cle. `op` vaut "sports", "odds" ou "scores" ;
+   les parametres (region, marche, format) sont FIXES cote serveur — on ne peut pas, depuis le
+   navigateur, demander 5 regions au lieu d'une et multiplier la facture par 5.
+   Le jeton de session du joueur est joint : c'est lui qui prouve qu'on est un joueur connecte. */
+async function oddsFetch(op, sport){
+  let jeton="";
+  try{ const { data:{ session } } = await db.auth.getSession(); jeton=(session&&session.access_token)||""; }catch(e){}
+  const u=ODDS_FN+"?op="+encodeURIComponent(op)+(sport?"&sport="+encodeURIComponent(sport):"");
+  return fetch(u,{ headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jeton } });
+}
 // SPORTS AUTORISÉS EN MODE RÉEL (v6.96, Hervé) — uniquement les sports décrits dans les règles.
 // L'API en propose une douzaine d'autres (cricket, football américain, baseball, rugby, boxe…) ;
 // en ouvrir un sans l'écrire dans les règles surprend le joueur, qui se retrouve à parier sur un
@@ -1521,7 +1540,7 @@ function tourDeRole(list,n,decalage){
 function ligueDecalage(){ const s=((L&&L.id)||"")+":"+((L&&L.current_day)||0);
   let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 async function fetchRealPool(){
-  const sr=await fetch(`${ODDS_BASE}/sports/?apiKey=${ODDS_KEY}`); if(!sr.ok) throw new Error("sports "+sr.status);
+  const sr=await oddsFetch("sports"); if(!sr.ok) throw new Error("sports "+sr.status);
   const sports=await sr.json(); const grp={}; sports.forEach(s=>grp[s.key]=s.group);
   // ⚠️ v7.31 — PLANCHER DE QUALITÉ (règle d'Hervé : « on ne va pas en dessous de 70 »). Ébonus
   // d'un coup la quinzaine de championnats sans note : Suède, Finlande, Irlande, League 2
@@ -1579,7 +1598,7 @@ async function fetchRealPool(){
   for(const k of keys){
     if(memo[k]===true){ memo[k]=false; sautes.push(k); continue; }   // sauté ce coup-ci, retesté au suivant
     appels++;   // c'est CE compteur qui est la facture : 1 crédit par compétition interrogée, vide ou non
-    try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
+    try{ const r=await oddsFetch("odds",k);
     noteQuota(r.headers.get("x-requests-remaining"));   // c'est le poste le plus coûteux : on en profite pour relever le solde
     if(!r.ok) continue; const arr=await r.json();
     const avant=out.length;
@@ -1621,7 +1640,7 @@ async function fetchRealPool(){
   // aller jusqu'à casser le jeu. Dans ce cas seulement, on retente les compétitions sautées.
   if(!out.length && sautes.length){
     for(const k of sautes){
-      try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/odds/?apiKey=${ODDS_KEY}&regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso`);
+      try{ const r=await oddsFetch("odds",k);
         noteQuota(r.headers.get("x-requests-remaining"));
         if(!r.ok) continue; const arr=await r.json(); const avant=out.length;
         arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
@@ -1806,7 +1825,7 @@ function noteQuota(rem){ if(rem==null) return; liveQuota=+rem;
    renvoie l'en-tête du solde, qu'on enregistre au passage. L'écran admin affiche cette valeur et
    la date du relevé. NE PAS remettre d'appel automatique ici. */
 async function refreshQuota(){
-  try{ const r=await fetch(`${ODDS_BASE}/sports/?apiKey=${ODDS_KEY}`); noteQuota(r.headers.get("x-requests-remaining")); }catch(e){}
+  try{ const r=await oddsFetch("sports"); noteQuota(r.headers.get("x-requests-remaining")); }catch(e){}
 }
 // 💰 CACHE DU POOL (mitigation quota, en attendant le stockage serveur de la Phase 2).
 // Construire le pool coûte ~24 crédits (1 par compétition interrogée) et c'était refait à chaque
@@ -1938,7 +1957,7 @@ const LIGUE_FERME_J=14;    // fermée automatiquement, comme une fermeture AVANT
 // permet d'afficher le score du match, pas seulement qui l'a gagné (demandé par Hervé).
 async function fetchRealResults(sportKeys){
   const map={}; let ok=0, ko=0;
-  for(const k of sportKeys){ try{ const r=await fetch(`${ODDS_BASE}/sports/${k}/scores/?apiKey=${ODDS_KEY}&daysFrom=3&dateFormat=iso`);
+  for(const k of sportKeys){ try{ const r=await oddsFetch("scores",k);
     // ⚠️ NE PAS nommer cette variable `q` : elle masquerait la fonction q() des appels Supabase.
     noteQuota(r.headers.get("x-requests-remaining"));   // crédits restants → écran admin
     if(!r.ok){ ko++; continue; } ok++; const arr=await r.json();
