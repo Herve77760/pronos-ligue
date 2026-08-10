@@ -579,7 +579,7 @@
   .tagchip.late{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red);}
   .tagchip.bail{background:color-mix(in srgb,var(--gold) 15%,transparent);color:var(--gold);}
   .tagchip.ia{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue);}
-  .lb-stats{display:flex;align-items:center;gap:9px;flex:none;}
+  .lb-stats{display:flex;align-items:center;gap:9px;flex:0 0 100%;}
   .lb-pts{font-size:15px;font-weight:900;color:var(--ink);background:var(--panel3);border-radius:9px;padding:2px 9px;min-width:34px;text-align:center;font-variant-numeric:tabular-nums;cursor:pointer;}
   .lb-star{font-size:14px;cursor:pointer;}
   .lb-bonus{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;background:var(--panel3);flex:none;}
@@ -750,7 +750,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.186";
+const APP_VERSION = "v8.187";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2446,6 +2446,7 @@ const EN={
   "Identifiant ou mot de passe incorrect.":"Wrong username or password.",
   "Ton accès a été suspendu par l'organisateur.":"Your access has been suspended by the organizer.",
   "Choisis un identifiant (2 caractères minimum).":"Pick a username (2 characters minimum).",
+  "Choisis un identifiant (20 caractères maximum).":"Pick a username (20 characters maximum).",
   "Mot de passe : 8 caractères minimum.":"Password: 8 characters minimum.",
   "Mot de passe trop court (8 caractères minimum).":"Password too short (8 characters minimum).",
   "Cet identifiant est déjà pris.":"This username is already taken.",
@@ -5945,6 +5946,7 @@ async function changeMyUsername(){ if(!AUTH) return;
   const nv=(prompt(t("Nouveau pseudo (2 caractères min.) — c'est le nom affiché partout :"), AUTH.name||"")||"").trim();
   if(!nv) return;
   if(nv.length<2){ showErr(t("Choisis un identifiant (2 caractères minimum).")); return; }
+  if(nv.length>20){ showErr(t("Choisis un identifiant (20 caractères maximum).")); return; }
   if(nv===AUTH.name){ return; }
   try{
     const r=await db.auth.updateUser({ data:{ username:nv } }); if(r&&r.error) throw r.error;   // fusionne les métadonnées (avatar/options conservés)
@@ -11158,7 +11160,7 @@ function viewStandings(){
     ${rankHero}
     <div class="listsec">${t("Classement de la ligue")}</div>
     <div class="lb">
-      ${ord.map((p,i)=>{const bp=p.star||0; const dp=p.points-bp;
+      ${ord.map((p,i)=>{const bp=p.star||0;
         const tags=[]; if(p.id===S.myId) tags.push(`<span class="tagchip me">${t("(toi)")}</span>`);
         if(p.is_ai) tags.push(`<span class="tagchip ia">${t(isReward()?"hors récompense":"hors gage")}</span>`);
         return `<div class="lb-row${p.id===S.myId?' me':''}${i===0?' leader':''}" onclick="showPlayerCards('${p.id}',${shownIdx})">
@@ -11167,7 +11169,7 @@ function viewStandings(){
           <div class="lb-name"><div class="n">${esc(p.name||'?')}</div>${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div>
           ${moveHTML(p.id,i)}
           <div class="lb-stats vert">
-            <span class="lb-substat"><span class="clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})">${dp} ${t("Duel")}</span>${starOn?` · <span class="clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})">⭐×${bp||0}</span>`:''}</span>
+            ${starOn?`<span class="lb-substat clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})">⭐×${bp||0}</span>`:''}
             <span class="lb-pts">${ptsAvecPen(p,shownIdx)} ${t("Pts")}</span>
             <span class="lb-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',${shownIdx})" title="${t("Détail du capital")}">${eur(p.capital)}€</span>
           </div>
@@ -11465,7 +11467,7 @@ function viewEnd(){
        // s'ouvrent pas (les bonus de chacun sont déjà listés en toutes lettres plus bas), donc pas
        // de onclick sur la ligne entière — seuls les chiffres cliquables le restent, à l'identique.
        return `<div class="lb">
-     ${ord.map((p,i)=>{ const bp=scF[p.id]||0; const dp=p.points-bp;
+     ${ord.map((p,i)=>{ const bp=scF[p.id]||0;
        const tags=[]; if(p.id===S.myId) tags.push(`<span class="tagchip me">${t("(toi)")}</span>`);
        if(p.is_ai) tags.push(`<span class="tagchip ia">${t(isReward()?"hors récompense":"hors gage")}</span>`);
        return `<div class="lb-row${p.id===S.myId?' me':''}${i===0?' leader':''}">
@@ -11473,7 +11475,7 @@ function viewEnd(){
          <span class="lb-ava">${avatarHTML(p.emoji,i===0?52:40)}</span>
          <div class="lb-name"><div class="n">${esc(p.name||'?')}</div>${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div>
          <div class="lb-stats vert">
-           <span class="lb-substat"><span class="clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})">${dp} ${t("Duel")}</span>${starOnF?` · <span class="clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})">⭐×${bp||0}</span>`:''}</span>
+           ${starOnF?`<span class="lb-substat clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})">⭐×${bp||0}</span>`:''}
            <span class="lb-pts">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)} ${t("Pts")}</span>
            <span class="lb-cap clik" onclick="showCapInfo('${p.id}',-1)" title="${t("Détail du capital")}">${eur(p.capital)}€</span>
          </div>
