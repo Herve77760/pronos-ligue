@@ -750,7 +750,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.188";
+const APP_VERSION = "v8.190";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1811,19 +1811,49 @@ let liveResErr=false, liveQuota=null;
 // aucune ligue — donc aucun appel (défaut de conception de la v6.87, signalé par Hervé).
 // On le persiste donc dans le cache partagé : mesuré par n'importe quel client, lisible par l'admin.
 function noteQuota(rem){ if(rem==null) return; liveQuota=+rem;
-  try{ cacheWrite("quota",{remaining:+rem, at:new Date().toISOString()}); }catch(e){} }
-/* ⚠️ v8.141 (mesuré le 2026-08-09) — CET APPEL COÛTE 1 CRÉDIT. Ce commentaire affirmait l'inverse :
-   « l'endpoint /sports est gratuit (documenté "does not count against the usage quota") ». C'était
-   peut-être vrai à l'écriture, ça ne l'est plus : 4 appels consécutifs à /sports ont retiré
-   exactement 4 crédits du compteur (226 → 222). La documentation dit une chose, la facturation en
-   dit une autre — c'est la facturation qui fait foi.
-   ⚠️ CONSÉQUENCE : cette fonction n'est PLUS appelée automatiquement à l'ouverture de l'écran admin.
-   Elle y coûtait 1 crédit à chaque visite, uniquement pour rafraîchir un chiffre — soit ~90 crédits
-   par mois sur un quota de 500 pour trois consultations par jour. Elle n'est déclenchée que par le
-   bouton « Relever » de l'écran admin, où le prix est annoncé.
-   ⚠️ Le solde reste tenu à jour GRATUITEMENT par noteQuota() : chaque appel réel (cotes, résultats)
-   renvoie l'en-tête du solde, qu'on enregistre au passage. L'écran admin affiche cette valeur et
-   la date du relevé. NE PAS remettre d'appel automatique ici. */
+  try{ cacheWrite("quota",{remaining:+rem, at:new Date().toISOString()}); }catch(e){}
+  noteQuotaHisto(+rem); }
+/* ⚠️ v8.190 (demandé par Hervé) — MESURER LA CONSOMMATION AU LIEU DE L'ESTIMER.
+   On a passé une matinée à débattre entre deux modèles (« 250 crédits/mois » contre « 893 »), tous
+   deux bâtis sur des hypothèses invérifiables, alors que le solde réel transite dans CHAQUE réponse
+   de l'API et qu'on l'écrasait à chaque fois. On le garde désormais, un point par jour.
+   ⚠️ COÛT NUL : rien n'est demandé à l'API en plus, on ne fait qu'enregistrer ce qui passe déjà.
+   ⚠️ ROBUSTE À LA CONCURRENCE : plusieurs clients écrivent le même historique sans se coordonner.
+   D'où `debut` = le PLUS HAUT solde vu ce jour-là et `fin` = le PLUS BAS : deux clients qui écrivent
+   dans le désordre convergent vers le même résultat. La consommation du jour = debut − fin.
+   ⚠️ LE 1ᵉʳ DU MOIS le quota se recharge : le solde REMONTE en cours de journée. On repart alors du
+   nouveau plafond — la consommation de ce jour-là est donc sous-estimée, une fois par mois. */
+const RECHARGE_MIN=100;   // au-delà de ce bond, c'est le quota mensuel qui repart, pas un désordre d'écriture
+async function noteQuotaHisto(rem){
+  const j=new Date().toISOString().slice(0,10);
+  try{
+    const brut=await cacheRead("quota:histo", Infinity);
+    const arr=Array.isArray(brut)?brut:[];
+    let e=arr.find(x=>x&&x.d===j);
+    if(!e){ arr.push({d:j, debut:rem, fin:rem}); }
+    /* ⚠️ UN SOLDE PLUS HAUT N'EST PAS FORCÉMENT UNE RECHARGE. Deux clients écrivent sans se
+       coordonner : celui qui a lu 300 peut écrire APRÈS celui qui a lu 288 (réponse plus lente).
+       Traiter tout rebond comme une recharge remettait alors le compteur du jour à zéro et perdait
+       la consommation déjà mesurée — vu au test : 12 au lieu de 25. On ne parle de recharge que
+       pour un bond FRANC (le quota mensuel remonte de plusieurs centaines d'un coup) ; en dessous,
+       on prend simplement le plus haut et le plus bas, ce qui converge quel que soit l'ordre. */
+    else if(rem>e.debut+RECHARGE_MIN){ e.debut=rem; e.fin=rem; }
+    else { e.debut=Math.max(e.debut,rem); e.fin=Math.min(e.fin,rem); }
+    arr.sort((a,b)=>a.d<b.d?-1:1);
+    while(arr.length>31) arr.shift();
+    await cacheWrite("quota:histo", arr);
+  }catch(e){}
+}
+/* ⚠️ v8.189 — CET APPEL EST GRATUIT, et le commentaire précédent affirmait le contraire.
+   Le 2026-08-09 j'ai vu le solde passer de 226 à 222 pendant que j'enchaînais des appels à /sports,
+   et j'en ai conclu qu'ils le consommaient. C'était FAUX : je n'avais rien isolé. Le test propre —
+   trois appels consécutifs, en lisant x-requests-used à chaque fois — donne 288, 288, 288 : le
+   compteur ne bouge pas. Les 4 crédits venaient d'autre chose (probablement une récolte déclenchée
+   par un chargement de l'app). La documentation de The Odds API disait vrai depuis le début.
+   ⚠️ LEÇON, si l'envie revient de « corriger » ceci : une mesure prise pendant qu'autre chose tourne
+   ne prouve rien. Isoler, répéter, lire le compteur — sinon on optimise contre un fantôme.
+   L'appel est donc rétabli à l'ouverture de l'écran admin : le chiffre y est à jour sans rien coûter,
+   et le bouton « Relever » reste pour forcer un relevé à la seconde près. */
 async function refreshQuota(){
   try{ const r=await oddsFetch("sports"); noteQuota(r.headers.get("x-requests-remaining")); }catch(e){}
 }
@@ -11893,9 +11923,8 @@ function viewPalmares(){
     ${sec(t("🎯 Plus grosse cote gagnée"), P.bestOdd, r=>({txt:"@"+cote(r.odd),cls:'gold'}), oddDetail, "o")}
     ${sec(t("💀 Pire dégringolade d'une journée"), P.bigLoss, r=>({txt:fmt(r.net)+"€",cls:'red'}), dayDetail, "l")}`;
 }
-/* Relève VOLONTAIRE du solde exact (1 crédit). Le chiffre affiché par défaut vient des appels
-   réels déjà faits — gratuit mais parfois vieux de plusieurs heures ; ce bouton sert quand on veut
-   le solde à la seconde près, par exemple avant d'ouvrir des ligues en données réelles. */
+/* Relève du solde exact. Ne coûte AUCUN crédit (v8.189) : sert quand on veut le chiffre à la
+   seconde près, par exemple avant d'ouvrir des ligues en données réelles. */
 async function majQuota(){
   await refreshQuota();
   try{ const qq=await cacheRead("quota", Infinity); if(adminData && qq) adminData.quota=qq; }catch(e){}
@@ -11905,8 +11934,9 @@ async function loadAdmin(){
   try{
     // Solde de crédits API : lu depuis le cache partagé (relevé par n'importe quel client lors de son
     // dernier appel réel). Sans ça, l'écran admin n'affichait jamais rien — voir noteQuota().
-    // ⚠️ v8.141 : plus d'appel à refreshQuota() ici — il coûtait 1 crédit par ouverture de l'écran.
+    await refreshQuota();                               // gratuit (vérifié en v8.189, cf. la fonction)
     const quota=await cacheRead("quota", Infinity);
+    const quotaHisto=await cacheRead("quota:histo", Infinity);
     // v7.06 : `code,name,num_days,current_day,data_mode` et `league_id` sur les paris servent à la
     // liste « Toutes les ligues » — l'admin ne voyait QUE ses propres ligues, donc rien du terrain.
     const lgs=await q(db.from("leagues").select("id,code,name,status,num_days,current_day,data_mode,gage,prep_summary,created_at"));
@@ -12030,7 +12060,7 @@ async function loadAdmin(){
           try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",l.id)); }catch(e){} }
       }catch(e){}
     }
-    adminData={ allLeagues, fermeesAuto, leagues:lgs.length,
+    adminData={ allLeagues, fermeesAuto, quotaHisto, leagues:lgs.length,
       byStatus:{lobby:lgs.filter(l=>l.status==="lobby").length, prep:lgs.filter(l=>l.status==="prep"||l.status==="starting").length, running:lgs.filter(l=>l.status==="running").length, done:lgs.filter(l=>l.status==="done").length},
       activeAccounts:activeAccounts.size, participations:pls.filter(p=>!p.is_ai&&p.name!=="Joueur IA").length,
       resolvedBets:bts.length, cardsPlayed:withCard, topCards:Object.keys(CARDS).map(id=>[id,cardCount[id]||0]).sort((a,b)=>b[1]-a[1]), topGages, topRewards,
@@ -12079,7 +12109,24 @@ function viewAdmin(){
       if(nb==null) return `<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">📡 Crédits API restants</span><span class="mini muted">jamais relevé — s'affichera au prochain appel réel</span></div>`;
       const qd=(a.quota&&a.quota.at)?a.quota.at:null;
       const age=qd?`relevé ${fmtWhen(new Date(qd).getTime())}`:'relevé à l\'instant';
-      return `<div class="box row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="mini muted" style="flex:1 1 150px;min-width:0">📡 Crédits API restants <span class="mini">(${esc(age)})</span></span><div class="row" style="gap:8px;flex:0 1 auto"><b class="num ${nb<50?'red':(nb<150?'gold':'')}">${nb}</b><button class="btn ghost sm" onclick="majQuota()" title="Interroge l'API pour obtenir le solde exact">🔄 Relever (1 crédit)</button></div></div>`
+      return `<div class="box row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span class="mini muted" style="flex:1 1 150px;min-width:0">📡 Crédits API restants <span class="mini">(${esc(age)})</span></span><div class="row" style="gap:8px;flex:0 1 auto"><b class="num ${nb<50?'red':(nb<150?'gold':'')}">${nb}</b><button class="btn ghost sm" onclick="majQuota()" title="Relève le solde exact — cet appel ne consomme aucun crédit">🔄 Relever</button></div></div>`
+        + (()=>{ /* ⚠️ v8.190 — CONSOMMATION MESURÉE, pas estimée. Chaque ligne = un jour réel.
+             Le « projeté » extrapole la moyenne des 7 derniers jours sur 31 jours : c'est le seul
+             chiffre qui dise si le quota gratuit suffit. ⚠️ Il ne vaut que si les jours mesurés
+             ressemblent aux jours à venir — une semaine de tests intensifs ne prédit pas un mois
+             calme. Regarder les jours un par un avant de conclure. */
+            const h=Array.isArray(a.quotaHisto)?a.quotaHisto.slice().sort((x,y)=>x.d<y.d?1:-1):[];
+            const conso=h.map(e=>({d:e.d, n:Math.max(0,(e.debut||0)-(e.fin||0))}));
+            if(!conso.length) return `<div class="box mini muted">📊 Consommation quotidienne : <b>en cours de mesure</b> — un point par jour, à partir d'aujourd'hui.</div>`;
+            const jours=conso.slice(0,7);
+            const moy=jours.reduce((t,x)=>t+x.n,0)/jours.length;
+            const proj=Math.round(moy*31);
+            const nomJour=d=>new Date(d+"T12:00:00").toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
+            const lignes=jours.map(x=>`<div class="row mini" style="margin:2px 0"><span class="muted">${nomJour(x.d)}</span><b>${x.n}</b></div>`).join("");
+            const verdict = proj>500 ? `<b class="red">${proj} crédits projetés</b> sur le mois — au-dessus des 500 du plan gratuit`
+                                     : `<b class="green">${proj} crédits projetés</b> sur le mois — dans les 500 du plan gratuit`;
+            return `<div class="box"><div class="mini muted" style="margin-bottom:4px">📊 Consommation mesurée <span class="mini">(${jours.length} jour(s))</span></div>${lignes}
+              <div class="mini" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">Moyenne <b>${moy.toFixed(1)}</b>/jour · ${verdict}</div></div>`; })()
         + (nb<50?`<div class="box mini" style="border-color:var(--red);background:rgba(229,105,95,.10)"><b class="red">⚠️ Quota bientôt épuisé</b><div class="mini muted" style="margin-top:3px">Sans crédits, les vrais résultats ne remontent plus : les journées en données réelles restent bloquées et les joueurs ne voient que des horloges. Les ligues en matchs simulés ne sont pas concernées.</div></div>`:''); })()}`;
   const cJeu=`<div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués <span class="mini">(par des humains)</span></div>
       ${a.topCards.length?a.topCards.map(([id,n],i)=>`<div class="row mini" style="margin:5px 0"><span>${i+1}. ${CARDS[id]?CARDS[id].e+' '+esc(CARDS[id].n):esc(id)}</span><b class="num">${n}×</b></div>`).join(""):`<div class="mini muted">Aucun bonus joué pour l'instant.</div>`}</div>
