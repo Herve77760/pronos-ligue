@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Tactizo</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='19' fill='%2314b88a'/%3E%3Ccircle cx='20' cy='20' r='13' fill='%230d3b30'/%3E%3Cline x1='14.5' y1='25.5' x2='26' y2='14' stroke='%235fe3bf' stroke-width='2.4' stroke-linecap='round'/%3E%3Ccircle cx='14' cy='26' r='2.8' fill='%235fe3bf'/%3E%3C/svg%3E">
 <style>
@@ -50,7 +50,12 @@
      lignes (logo+titre, puis sous-titre+icônes en dessous — cf. sa note). Mesuré en conditions
      réelles (375px de large, 5 icônes) : bandeau à 89px de haut, +4px de marge. Si ce padding ne
      suit pas la vraie hauteur du bandeau, le haut de chaque écran passe SOUS le bandeau fixe. */
-  .app{max-width:540px;margin:0 auto;padding:93px 16px 92px;}
+  /* ⚠️ Le décalage doit suivre la barre fixe, zone sûre comprise. Les 93 px suffisent sur le web
+     (barre = 78 px) mais pas sur iPhone, où s'ajoute la hauteur de l'encoche : le contenu passait
+     alors SOUS la barre (constaté dans le simulateur, 2026-08-10). Même chose en bas pour la barre
+     d'accueil. Sur navigateur, env() vaut 0 → aucun changement. */
+  .app{max-width:540px;margin:0 auto;
+    padding:calc(93px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));}
   h1{font-size:21px;margin:0;letter-spacing:-.4px;font-weight:800;}
   h2{font-size:15px;margin:22px 4px 10px;letter-spacing:.01em;}
   .sub{color:var(--muted);font-size:13.5px;}
@@ -74,9 +79,17 @@
      pour gagner de la place sur UNE ligne), mais de lui donner sa PROPRE ligne, prévisible par
      construction : ligne 1 = logo + titre seul ; ligne 2 = sous-titre (gauche) + icônes (droite).
      `.app` (padding-top) est mis à jour en conséquence, cf. sa note. */
+  /* ⚠️ ZONE SÛRE (v8.198). Sur le web la page commence sous la barre d'adresse ; dans l'app
+     native elle commence en haut de l'ÉCRAN, donc sous l'heure, l'encoche et la batterie.
+     `env(safe-area-inset-top)` rend la hauteur à réserver — 0 sur un navigateur de bureau, une
+     cinquantaine de pixels sur un iPhone récent. ⚠️ Cette valeur vaut ZÉRO tant que la balise
+     viewport ne porte pas `viewport-fit=cover` : le `padding-bottom` de #bottomnav était donc
+     inerte depuis toujours. Constaté dans le simulateur iOS le 2026-08-10, en-tête écrasé par
+     l'heure. */
   .bar{display:flex;flex-direction:column;gap:3px;
     position:fixed;left:0;right:0;top:0;z-index:55;background:var(--bg);
-    max-width:540px;margin:0 auto;padding:11px 14px;box-shadow:0 2px 8px rgba(20,29,43,.06);}
+    max-width:540px;margin:0 auto;box-shadow:0 2px 8px rgba(20,29,43,.06);
+    padding:calc(11px + env(safe-area-inset-top)) 14px 11px;}
   /* Rangée du haut : le nom à gauche, les icônes à droite. Depuis que le nom tient en un mot
      (Tactizo), les deux cohabitent sur une seule ligne — le sous-titre gagne la ligne du dessous. */
   /* Rangée du haut, qui S'ENROULE (flex-wrap). Deux comportements en un seul réglage :
@@ -765,7 +778,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.197";
+const APP_VERSION = "v8.198";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
