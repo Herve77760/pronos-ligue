@@ -939,7 +939,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.211";
+const APP_VERSION = "v8.212";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3000,6 +3000,7 @@ const EN={
   "Partage-le pour inviter d'autres joueurs.":"Share it to invite more players.",
   "Joueurs inscrits · {a}/{b}":"Players signed up · {a}/{b}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
   "Joueur IA":"AI player", "ajouté au lancement (nombre impair)":"added at launch (odd number)", "équilibre":"balance",
+  "⏱️ Rythme":"⏱️ Pace",
   "⏱️ Formule de rythme":"⏱️ Pace format", "✓ choisie":"✓ chosen", "choisir":"choose",
   "{a} h pour choisir les matchs, puis {b} h pour parier — soit <b>{c} h</b> au maximum tant que les matchs ne sont pas choisis.":"{a} h to pick the matches, then {b} h to bet — that is <b>{c} h</b> at most while the matches aren't chosen yet.",
   // ── v8.205 : le tutoriel dynamique (onze écrans) ──
@@ -7741,7 +7742,11 @@ function bugContext(kind){
   if(L){
     l.push("Ligue   : "+(L.name||"?")+"  · code "+(L.code||"?"));
     l.push("Statut  : "+(L.status||"?")+"  · journée "+((L.current_day|0)+1)+"/"+(L.num_days||"?"));
-    l.push("Options : mode="+getMode()+" · enjeu="+getEnjeu()+" · données="+(L.data_mode||"sim")+" · formule="+(L.formula||"classique"));
+    /* ⚠️ v8.212 — LE RAPPORT DONNE LES DEUX FORMATS. Il n'annonçait que la colonne, c'est-à-dire
+     le format INITIAL : une ligue passée en Fast en cours de partie était rapportée « classique »,
+     et c'est précisément sur ce genre d'écart qu'on me demande d'enquêter. L'effectif d'abord,
+     l'initial entre parenthèses — les deux, parce que leur DIFFÉRENCE est l'information. */
+  l.push("Options : mode="+getMode()+" · enjeu="+getEnjeu()+" · données="+(L.data_mode||"sim")+" · formule="+formulaKey()+" (initiale="+(L.formula||"classique")+")");
     if(S.myId) l.push("player_id : "+S.myId);
     const d=(typeof myDuel==="function")?myDuel():null;
     if(d){ const o=pById(d.home_id===S.myId?d.away_id:d.home_id); l.push("Duel    : vs "+((o&&o.name)||"?")+"  · "+(d.home_id===S.myId?"à domicile":"à l'extérieur")+"  · "+((d.fixtures&&d.fixtures.length)?d.fixtures.length+" matchs choisis":"matchs pas encore choisis")); }
@@ -12068,7 +12073,19 @@ function closeLeague(){ showFinished=true; backToLeagues(); }
 // Fiche « Caractéristiques de la ligue » depuis l'accueil (format, options, + fermeture pour l'organisateur)
 function showLeagueInfo(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m)return; const lg=m.lg;
-  const f=FORMULAS[lg.formula||'classique']||FORMULAS.classique;
+  /* ⚠️ v8.212 — DEUX DÉFAUTS SUR CETTE SEULE LIGNE, dont un que la v8.204 avait manqué.
+     1. Elle lisait `lg.formula` EN DIRECT, c'est-à-dire le format INITIAL de la ligue. Or
+        l'organisateur peut le changer en cours de partie : le changement est empilé dans
+        `gage.fmtSchedule` et seul `formulaKey()` sait le résoudre. Cette fenêtre annonçait
+        donc « Classique » à une ligue passée en Fast — deux endroits, deux réponses pour la
+        même question, exactement le défaut que la v7.43 avait corrigé ailleurs et dont
+        `formulaKey()` porte l'avertissement : « une règle, une implémentation, un paramètre ».
+     2. La v8.204 a rouvert le rythme en matchs simulés à la création, au salon et dans le
+        panneau de la ligue — mais PAS ici. Signalé par Hervé : « cette info n'est pas
+        disponible dans les caractéristiques de la ligue ». Trois endroits corrigés sur
+        quatre : chercher le quatrième aurait demandé de lister les usages, pas de se fier
+        à ceux que j'avais sous les yeux. */
+  const f=leagueFormula(lg);
   let mode="complet", enjeu="gage"; try{ const o=JSON.parse(lg.gage); if(o){ if(o.mode)mode=o.mode; if(o.enjeu)enjeu=o.enjeu; } }catch(e){}
   if(lg.prep_summary&&lg.prep_summary.enjeu) enjeu=lg.prep_summary.enjeu; const rew=(enjeu==="reward");
   const real=(lg.data_mode==="real");
@@ -12079,7 +12096,7 @@ function showLeagueInfo(lid){
      dans l'app plutôt que d'inventer une troisième formulation pour la même règle. */
   const row=(lab,val,desc)=>`<div class="info-row clik" onclick="this.nextElementSibling.classList.toggle('hide')"><b>${lab}</b><span class="val">${val} ℹ️</span></div><div class="mini muted hide" style="margin:-2px 2px 10px">${desc}</div>`;
   let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
-    ${real?row(t("Format"), t(f.n), t(f.d)):''}
+    ${row(t("⏱️ Rythme"), t(f.n), t(f.d))}
     ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"), t(MODES[mode].d))}
     ${row(t("🎭 Enjeu"), rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)"), rew?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur."))}
     ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"), real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."))}
