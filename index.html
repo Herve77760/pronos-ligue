@@ -939,7 +939,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.210";
+const APP_VERSION = "v8.211";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3001,6 +3001,7 @@ const EN={
   "Joueurs inscrits · {a}/{b}":"Players signed up · {a}/{b}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
   "Joueur IA":"AI player", "ajouté au lancement (nombre impair)":"added at launch (odd number)", "équilibre":"balance",
   "⏱️ Formule de rythme":"⏱️ Pace format", "✓ choisie":"✓ chosen", "choisir":"choose",
+  "{a} h pour choisir les matchs, puis {b} h pour parier — soit <b>{c} h</b> au maximum tant que les matchs ne sont pas choisis.":"{a} h to pick the matches, then {b} h to bet — that is <b>{c} h</b> at most while the matches aren't chosen yet.",
   // ── v8.205 : le tutoriel dynamique (onze écrans) ──
   "— c'est {a}":"— it's {a}",
   "{a} a fait <b>{b}</b>, mieux que tes <b>{c}</b> : le point d'étoile lui revient. Il se joue sur <b>toute la ligue</b>, pas sur ton duel.":"{a} made <b>{b}</b>, better than your <b>{c}</b>: the star point goes to them. It is played across <b>the whole league</b>, not on your duel.",
@@ -11723,7 +11724,19 @@ function viewStandings(){
     <div class="mini muted" style="margin:-2px 2px 8px">${t("👉 Touche un nom ou un chiffre pour savoir d'où il vient.")}</div>
     <div class="mini muted" style="margin:-4px 2px 10px"><span class="green">▲</span> ${t("monte")} · = ${t("stable")} · <span class="red">▼</span> ${t("descend")} — <span class="clik" onclick="showStandingsInfo()">ⓘ ${t("comprendre le classement")}</span></div>
     ${(L.status==="running" && me() && me().is_organizer)?(()=>{ const cur=FORMULAS[formulaKey()]; let pend=null; try{ const o=JSON.parse(L.gage); if(o&&Array.isArray(o.fmtSchedule)) pend=o.fmtSchedule.filter(c=>c&&FORMULAS[c.formula]&&c.from>(L.current_day||0)).sort((a,b)=>a.from-b.from)[0]; }catch(e){}
-      return `<div class="box"><div class="mini muted">⏱️ ${t("Format actuel :")} <b>${cur.n}</b>${pend?` · <span class="gold">${t("passe en {a} à la J{b}",{a:FORMULAS[pend.formula].n,b:pend.from+1})}</span>`:''}</div>
+      /* ⚠️ v8.211 (question d'Hervé sur XXZQ3 : « ma ligue me dit que je suis en Fast alors que
+         je vois que j'ai 24 h pour faire des actions ») — LE NOM DU FORMAT NE SUFFIT PAS À
+         RECONSTITUER LE DÉLAI AFFICHÉ, et les deux se contredisent en apparence. Explication :
+         `dayTimes()` calcule la clôture des paris à `bet_started_at + bet` UNE FOIS les matchs
+         choisis, mais à `day_started_at + (sel + bet)` TANT QU'ILS NE LE SONT PAS — soit
+         12 + 12 = 24 h en Fast. Le compte à rebours couvre alors les DEUX phases. Personne ne
+         peut deviner ça depuis le seul mot « Fast ».
+         ⚠️ LES DEUX DURÉES SONT INJECTÉES depuis FORMULAS, jamais recopiées : une formule dont
+         on changerait les heures mettrait cette phrase à jour toute seule. C'est exactement le
+         piège documenté sur `FORMULAS[].d` — « ce texte est lu par les joueurs et un chiffre qui
+         ment est pire que pas de chiffre ». */
+      return `<div class="box"><div class="mini muted">⏱️ ${t("Format actuel :")} <b>${cur.n}</b>${pend?` · <span class="gold">${t("passe en {a} à la J{b}",{a:FORMULAS[pend.formula].n,b:pend.from+1})}</span>`:''}
+        <div style="margin-top:4px">${t("{a} h pour choisir les matchs, puis {b} h pour parier — soit <b>{c} h</b> au maximum tant que les matchs ne sont pas choisis.",{a:cur.sel,b:cur.bet,c:cur.sel+cur.bet})}</div></div>
         <button class="btn ghost sm" style="margin-top:8px" onclick="setFormulaNext()">${t("🔄 Changer le format (dès la journée suivante)")}</button></div>`; })():''}
     ${ptsChart(shownIdx+1)}
     ${capChart(shownIdx+1)}
