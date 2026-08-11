@@ -159,7 +159,16 @@
   .lgrow:hover{border-color:var(--green);}
   .lgrow.done{opacity:.72;}
   .lgrow .info{flex:1;min-width:0;}
-  .lgrow .nm{font-size:14px;font-weight:800;letter-spacing:-.005em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lgrow .nm{font-size:14px;font-weight:800;letter-spacing:-.005em;
+    /* ⚠️ (vécu par Hervé) — « La vraie partie qui c… » sur téléphone, complet sur ordinateur.
+       Le titre était en `nowrap` + ellipse : sur un écran étroit, la colonne de droite
+       (⚙️ + « ✅ à jour » + « Ouvrir → ») est de largeur FIXE, et tout ce qu'elle prend est
+       retiré au nom. Le nom d'une ligue est ce que le joueur reconnaît en premier — il ne
+       peut pas être la variable d'ajustement. Il passe donc sur DEUX lignes au besoin,
+       comme la ligne « Code … » juste en dessous qui le fait déjà. L'ellipse ne reste
+       qu'au-delà de deux lignes. Aucun changement sur ordinateur : un titre qui tient
+       sur une ligne y reste sur une ligne. */
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .lgrow .mt{font-size:11px;color:var(--muted);margin-top:3px;}
   .lgrow .sd{display:flex;align-items:center;gap:6px;flex:none;}
   .lgrow .sd .chip{font-size:10px;padding:3px 8px;}
@@ -562,6 +571,11 @@
   .pick-row .stk{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--muted);flex:none;}
   .picks-total{display:flex;justify-content:space-between;padding:11px 14px;background:var(--panel2);font-size:12.5px;font-weight:800;}
   .opp-status{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:calc(var(--r) - 4px);padding:11px 13px;font-size:12.5px;color:var(--muted);}
+  /* ⚠️ `.st` n'a plus AUCUN usage (vécu par Hervé : la pastille « pronos non validés »
+     partait seule à droite alors que « ✓ pronos validés » et « attend ses matchs » sont
+     collées au nom). C'était son `margin-left:auto`. Elle est devenue `.chip gold` —
+     même or, mais alignée comme les autres. Règle conservée au cas où un écran la
+     réutiliserait, elle ne coûte rien. */
   .opp-status .st{margin-left:auto;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--gold);}
   .locked-head{text-align:center;margin-bottom:16px;}
   .locked-head .eb{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
@@ -662,6 +676,14 @@
   .vote-table td{padding:7px 0;border-top:1px solid var(--border2);}
   .vote-table .pname{font-weight:700;display:flex;align-items:center;gap:5px;}
   .vote-table .gage{font-weight:700;}
+  /* ⚠️ (signalé par Hervé) — L'ALIGNEMENT À DROITE DE `td:last-child` (juste au-dessus) EST FAUX
+     POUR UN GAGE/RÉCOMPENSE PERSO : ces textes libres vont jusqu'à 80 caractères (`CUSTOM_MAX`),
+     contre une poignée de mots pour une option de la liste — sur mobile ils passent forcément sur
+     plusieurs lignes, et du texte multi-lignes aligné à droite donne un bord GAUCHE en dents de
+     scie, illisible. Les options de la liste, elles, tiennent sur une ligne : l'alignement à
+     droite leur va très bien, on ne le change donc QUE pour le texte perso (`.custom`, posé par
+     `enjeuTableHTML`), jamais pour toute la colonne. */
+  .vote-table td.gage.custom{text-align:left;}
   .vote-table .gage .tag{font-size:9px;font-weight:800;color:var(--faint);background:var(--panel3);padding:1px 5px;border-radius:5px;margin-left:2px;}
   .enjeu-note{font-size:10.5px;color:var(--faint);margin-top:10px;padding-top:10px;border-top:1px solid var(--border2);line-height:1.5;}
   .auc-row{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:9px;}
@@ -751,6 +773,107 @@
   .mbox{background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:22px;max-width:340px;width:100%;max-height:85vh;overflow-y:auto;text-align:center;box-shadow:var(--shadow);}
   .clik{cursor:pointer;}
   .bem{font-size:1.35em;line-height:1;vertical-align:-2px;}
+  /* ============ TUTORIEL DYNAMIQUE (v8.204) ============================================
+     ⚠️ TOUT EST PRÉFIXÉ `tt-` ET PORTÉ PAR `#ttWrap`. La maquette d'origine réutilisait des
+     noms courts (.aff, .odd, .tog, .res, .box, .mise, .bar, .cap, .pop, .flip…) dont DIX-HUIT
+     existent déjà dans l'app avec un autre sens. Un seul de ces noms laissé nu suffirait à
+     déformer un écran de jeu sans qu'on fasse le lien. Ne jamais « simplifier » ce préfixe. */
+  #ttWrap{max-width:420px;margin:0 auto;}
+  #ttWrap .tt-h1{font-size:20px;line-height:1.3;margin:16px 0 4px;font-weight:800;}
+  #ttWrap .tt-sous{color:var(--muted);font-size:13.5px;margin:0 0 10px;}
+  #ttWrap .tt-box{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);
+    padding:13px 14px;margin:9px 0;}
+  #ttWrap .tt-row{display:flex;align-items:center;gap:8px;justify-content:space-between;}
+  #ttWrap .tt-mini{font-size:12.5px;}
+  #ttWrap .tt-muted{color:var(--muted);}
+  #ttWrap .tt-green{color:var(--green);} #ttWrap .tt-red{color:var(--red);} #ttWrap .tt-gold{color:var(--gold);}
+  #ttWrap .tt-jauge{height:6px;background:var(--panel3);border-radius:99px;overflow:hidden;}
+  #ttWrap .tt-jauge>i{display:block;height:100%;background:var(--brand);width:0;
+    transition:width .5s cubic-bezier(.4,0,.2,1);}
+  #ttWrap .tt-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+  #ttWrap .tt-pas{font-size:12px;color:var(--muted);font-weight:700;}
+  #ttWrap .tt-lien{background:none;border:0;color:var(--muted);font:700 12.5px/1 inherit;
+    cursor:pointer;padding:6px 8px;}
+  #ttWrap .tt-lien:active{opacity:.6;}
+  /* Un ± qui ne peut plus rien faire doit se VOIR, sinon on appuie dans le vide. */
+  #ttWrap .tt-mise{display:flex;align-items:center;gap:9px;}
+  #ttWrap .tt-mise button{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);
+    background:var(--panel2);color:var(--ink);font:800 17px/1 inherit;cursor:pointer;}
+  #ttWrap .tt-mise button:disabled{opacity:.3;cursor:default;}
+  #ttWrap .tt-mise b{min-width:46px;text-align:center;font-variant-numeric:tabular-nums;}
+  #ttWrap .tt-gros{font-size:27px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:2px;}
+  #ttWrap .tt-duo{font-size:21px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.2;}
+  /* ⚠️ `touch-action:manipulation` : sans lui, deux appuis rapprochés sur un ± déclenchent le
+     DOUBLE-TAP ZOOM d'iOS — vécu comme « la page fait un zoom arrière toute seule ». */
+  #ttWrap button,#ttWrap .tt-aff,#ttWrap .tt-cote,#ttWrap .tt-tog,#ttWrap .tt-carte{touch-action:manipulation;}
+  #ttWrap .tt-aff{background:var(--panel);border:1px solid var(--border);border-radius:13px;
+    padding:11px 12px;margin:7px 0;position:relative;transition:border-color .18s,transform .18s,background .18s;}
+  #ttWrap .tt-aff.clik{cursor:pointer;}
+  #ttWrap .tt-aff.clik:active{transform:scale(.985);}
+  #ttWrap .tt-aff.on{border-color:var(--green);background:color-mix(in srgb,var(--green) 9%,var(--panel));}
+  #ttWrap .tt-eq{font-weight:700;font-size:14px;}
+  #ttWrap .tt-tick{position:absolute;right:11px;top:13px;transform:scale(0);width:24px;height:24px;
+    border-radius:50%;background:var(--green);color:#fff;display:flex;align-items:center;
+    justify-content:center;font-size:13px;transition:transform .25s cubic-bezier(.2,1.6,.4,1);}
+  #ttWrap .tt-aff.on .tt-tick{transform:scale(1);}
+  #ttWrap .tt-cotes{display:flex;gap:7px;margin-top:9px;}
+  #ttWrap .tt-cote{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:10px;
+    padding:7px 2px;text-align:center;font-size:11.5px;line-height:1.3;color:var(--muted);
+    transition:background .18s,border-color .18s,color .18s;}
+  #ttWrap .tt-cote b{display:block;font-size:13.5px;color:var(--ink);font-variant-numeric:tabular-nums;}
+  #ttWrap .tt-cote.sel{background:color-mix(in srgb,var(--green) 16%,var(--panel2));
+    border-color:var(--green);color:var(--ink);}
+  #ttWrap .tt-tog{width:36px;height:36px;border-radius:11px;border:1px solid var(--border);
+    background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:17px;
+    cursor:pointer;flex:0 0 auto;filter:grayscale(1);opacity:.55;
+    transition:transform .2s,background .2s,border-color .2s;}
+  #ttWrap .tt-tog.on{filter:none;opacity:1;transform:scale(1.12);
+    background:color-mix(in srgb,var(--gold) 22%,var(--panel2));border-color:var(--gold);}
+  #ttWrap .tt-tog.no{opacity:.22;cursor:not-allowed;}
+  #ttWrap .tt-cartes{display:flex;gap:9px;}
+  #ttWrap .tt-carte{flex:1;background:var(--panel);border:1px solid var(--border);border-radius:13px;
+    padding:13px 8px;text-align:center;cursor:pointer;min-height:104px;
+    transition:transform .22s,border-color .22s;}
+  #ttWrap .tt-carte:active{transform:scale(.97);}
+  #ttWrap .tt-carte.on{border-color:var(--gold);transform:translateY(-5px);}
+  #ttWrap .tt-carte .em{font-size:27px;display:block;margin-bottom:5px;}
+  #ttWrap .tt-carte .nm{font-size:11.5px;font-weight:800;line-height:1.25;}
+  #ttWrap .tt-duel{display:flex;align-items:center;justify-content:center;gap:14px;margin:26px 0;}
+  #ttWrap .tt-who{text-align:center;flex:0 0 96px;}
+  #ttWrap .tt-vs{font-weight:900;color:var(--muted);font-size:15px;}
+  #ttWrap .tt-ligne{display:flex;align-items:center;gap:7px;margin:6px 0;font-size:13px;}
+  #ttWrap .tt-ligne .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  #ttWrap .tt-ligne b{font-variant-numeric:tabular-nums;flex:0 0 auto;}
+  #ttWrap .tt-ligne .pt{flex:0 0 46px;text-align:right;font-weight:800;}
+  #ttWrap .tt-moi{background:color-mix(in srgb,var(--green) 11%,transparent);border-radius:9px;
+    margin-left:-6px;margin-right:-6px;padding:5px 6px;}
+  #ttWrap .tt-petit{font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums;}
+  #ttWrap .tt-barre{height:9px;border-radius:8px;background:var(--panel3);overflow:hidden;}
+  #ttWrap .tt-barre>i{display:block;height:100%;width:0;transition:width .9s cubic-bezier(.3,.9,.3,1);}
+  #ttWrap .tt-sc{font-weight:900;font-variant-numeric:tabular-nums;}
+  /* Apparition en cascade. Sans révélation, un retour en arrière donne une page BLANCHE. */
+  #ttWrap .tt-res{opacity:0;transform:translateY(9px);transition:opacity .38s,transform .38s;}
+  #ttWrap .tt-res.vu{opacity:1;transform:none;}
+  #ttWrap .tt-verdict{text-align:center;font-size:23px;font-weight:900;margin:14px 0 4px;
+    opacity:0;transform:scale(.9);transition:opacity .4s,transform .4s;}
+  #ttWrap .tt-verdict.vu{opacity:1;transform:none;}
+  #ttWrap .tt-pop{animation:ttPop .5s cubic-bezier(.2,1.7,.4,1);}
+  @keyframes ttPop{0%{transform:scale(1)}45%{transform:scale(1.45)}100%{transform:scale(1)}}
+  #ttWrap .tt-bump{animation:ttBump .38s cubic-bezier(.2,1.5,.4,1);}
+  @keyframes ttBump{0%{transform:scale(1)}45%{transform:scale(1.09)}100%{transform:scale(1)}}
+  /* ⚠️ Un halo, PAS un agrandissement : grossir un bouton pleine largeur se lit comme un
+     zoom de la page entière (« la page fait un zoom arrière toute seule »). */
+  #ttWrap .tt-attire{animation:ttAttire 1.15s ease-out 2;}
+  @keyframes ttAttire{
+    0%  {box-shadow:0 0 0 0   color-mix(in srgb,var(--green) 55%,transparent)}
+    70% {box-shadow:0 0 0 12px color-mix(in srgb,var(--green) 0%,transparent)}
+    100%{box-shadow:0 0 0 0   color-mix(in srgb,var(--green) 0%,transparent)}}
+  #ttWrap .tt-flip{animation:ttFlip .5s cubic-bezier(.3,.9,.3,1);}
+  @keyframes ttFlip{from{transform:rotateY(78deg)}to{transform:none}}
+  #ttWrap .tt-slideL{animation:ttSlideL .55s cubic-bezier(.2,.8,.3,1) both;}
+  #ttWrap .tt-slideR{animation:ttSlideR .55s cubic-bezier(.2,.8,.3,1) both;}
+  @keyframes ttSlideL{from{opacity:0;transform:translateX(-34px)}to{opacity:1;transform:none}}
+  @keyframes ttSlideR{from{opacity:0;transform:translateX(34px)}to{opacity:1;transform:none}}
 </style>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('pl_theme')||'light');}catch(e){document.documentElement.setAttribute('data-theme','light');}</script>
 </head>
@@ -787,7 +910,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.201";
+const APP_VERSION = "v8.205";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2158,6 +2281,30 @@ async function resolveRealIfReady(){
   if(!allDone) return; // il reste des matchs en cours
   resolveDay();
 }
+/* ⚠️ (demandé par Hervé, ligues 7SMXN/U4ELV) — QUAND UNE LIGUE SE FERME (avant terme, manuelle
+   ou par abandon après LIGUE_FERME_J jours), ses matchs réels encore sans résultat restaient
+   indéfiniment « en attente » en base. Inoffensif une fois `status:"done"` — `resolveRealIfReady`
+   refuse tout ce qui n'est pas `running` — mais deux défauts : (1) donnée fausse, un match qui ne
+   se jouera jamais reste marqué comme si un score pouvait encore tomber ; (2) coûteux PENDANT la
+   fenêtre avant la fermeture, où le seuil `STALE_MATCH_H` n'a peut-être pas encore eu l'occasion
+   de s'appliquer (il vit dans `resolveRealIfReady`, qui n'a besoin QUE d'un joueur qui rouvre la
+   ligue — la fermeture, elle, peut arriver avant ce passage-là).
+   MÊME FORME que l'auto-annulation ci-dessus (`canceled:true, res:null`), mais SANS le délai
+   `STALE_MATCH_H` : la ligue ferme MAINTENANT, inutile d'attendre — plus personne ne réclamera ce
+   résultat. Appelée à la fermeture (manuelle : `closeLeagueFromHome` ; automatique : le balayage
+   des ligues à l'abandon dans `loadAdminData`), jamais depuis `resolveRealIfReady` lui-même. */
+async function cancelUnresolvedRealFixtures(leagueId){
+  try{
+    const dls=await q(db.from("duels").select("id,fixtures").eq("league_id",leagueId));
+    for(const d of (dls||[])){
+      if(!Array.isArray(d.fixtures) || !d.fixtures.length) continue;
+      let touched=false;
+      const nf=d.fixtures.map(f=>{ if(!f||!f.evId||f.canceled||f.res) return f;
+        touched=true; return Object.assign({},f,{canceled:true,res:null}); });
+      if(touched){ try{ await q(db.from("duels").update({fixtures:nf}).eq("id",d.id)); }catch(e){} }
+    }
+  }catch(e){}
+}
 // Échéances du jour courant. sel = fin sélection ; bet = clôture des paris.
 // Dès que tous les matchs sont choisis (bet_started_at), la clôture des paris = bet_started_at + delai (max 24h / 12h fast).
 function dayTimes(lg){ const g=lg||L; const f=leagueFormula(g); const t0=(g&&g.day_started_at)?new Date(g.day_started_at).getTime():0;
@@ -2825,6 +2972,126 @@ const EN={
   "Joueurs inscrits · {a}/{b}":"Players signed up · {a}/{b}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
   "Joueur IA":"AI player", "ajouté au lancement (nombre impair)":"added at launch (odd number)", "équilibre":"balance",
   "⏱️ Formule de rythme":"⏱️ Pace format", "✓ choisie":"✓ chosen", "choisir":"choose",
+  // ── v8.205 : le tutoriel dynamique (onze écrans) ──
+  "— c'est {a}":"— it's {a}",
+  "{a} a fait <b>{b}</b>, mieux que tes <b>{c}</b> : le point d'étoile lui revient. Il se joue sur <b>toute la ligue</b>, pas sur ton duel.":"{a} made <b>{b}</b>, better than your <b>{c}</b>: the star point goes to them. It is played across <b>the whole league</b>, not on your duel.",
+  "{a} pts":"{a} pts",
+  "{a} pt":"{a} pt",
+  "+{a} pt":"+{a} pt",
+  "+{a} pts":"+{a} pts",
+  "<b>{a} €</b> de mieux que Léa":"<b>€{a}</b> better than Léa",
+  "<b>{a} €</b> de moins que Léa":"<b>€{a}</b> less than Léa",
+  "<b>{a}</b> est gagné : il n'y avait <b>rien à rembourser</b>.":"<b>{a}</b> was won: there was <b>nothing to refund</b>.",
+  "<b>{a}</b> est perdu : il n'y avait <b>aucun gain à doubler</b>.":"<b>{a}</b> was lost: there was <b>no gain to double</b>.",
+  "<b>{a}</b> finit à <b>{b}</b> et marque pourtant <b>{c} pts</b> : le duel était contre <b>{d}</b>, à <b>{e}</b> — donc <b>duel gagné</b>.":"<b>{a}</b> ends at <b>{b}</b> and still scores <b>{c} pts</b>: the duel was against <b>{d}</b>, at <b>{e}</b> — so <b>duel won</b>.",
+  "<b>{a}</b> finit à <b>{b}</b> et n'en marque qu'<b>1</b> : le duel était contre <b>{c}</b>, à <b>{d}</b> — donc <b>duel perdu</b>.":"<b>{a}</b> ends at <b>{b}</b> and scores only <b>1</b>: the duel was against <b>{c}</b>, at <b>{d}</b> — so <b>duel lost</b>.",
+  "<b>Miser est facultatif.</b> C'est ici que démarre la stratégie : <b>garder du capital</b> pour parier gros, ou <b>prendre des bonus</b> pour renverser une journée. À toi de choisir tes armes.":"<b>Bidding is optional.</b> This is where strategy starts: <b>keep your balance</b> to bet big, or <b>take bonuses</b> to turn a matchday around. Choose your weapons.",
+  "<b>Rien ne t'oblige à en jouer un.</b> Tu peux garder tes cartes pour une journée plus décisive — elles ne se perdent pas.":"<b>Nothing forces you to play one.</b> You can keep your cards for a more decisive matchday — they aren't lost.",
+  "− bonus remportés":"− bonuses won",
+  "⚔️ Tu affrontes quelqu'un.":"⚔️ You face someone.",
+  "⚠️ <b>N'oublie pas de valider.</b> Des pronos saisis mais <b>non validés</b> à la clôture ne comptent pas — c'est comme n'avoir rien joué : <b>duel perdu d'office</b>, <b>{a} point</b> et <b>−{b} %</b> de ton capital.":"⚠️ <b>Don't forget to confirm.</b> Picks entered but <b>not confirmed</b> by the close don't count — it's as if you played nothing: <b>duel lost outright</b>, <b>{a} point</b> and <b>−{b}%</b> of your balance.",
+  "⚠️ Ici, la démo t'impose <b>au moins une enchère</b> : sans bonus, il n'y aurait rien à te montrer ensuite.":"⚠️ Here the demo requires <b>at least one bid</b>: with no bonus, there would be nothing to show you next.",
+  "⚠️ La carte est <b>consommée quand même</b> : un bonus mal placé est un bonus perdu.":"⚠️ The card is <b>used up all the same</b>: a badly placed bonus is a wasted bonus.",
+  "⭐ Meilleur net de la ligue":"⭐ Best net in the league",
+  "🃏 <b>{a} bonus</b> au lieu des trois de la démo, 🤝 le <b>rachat</b> entre joueurs, 🕵️ les <b>pronos de l'adversaire</b> après la clôture, ⏱️ les <b>résultats en direct</b>…":"🃏 <b>{a} bonuses</b> instead of the demo's three, 🤝 <b>buying</b> between players, 🕵️ your <b>opponent's picks</b> after the close, ⏱️ <b>live results</b>…",
+  "🃏 Tu as des bonus.":"🃏 You have bonuses.",
+  "🎓 Découvrir le jeu en 2 min":"🎓 Discover the game in 2 min",
+  "🎓 Jouer le tutoriel (2 min) →":"🎓 Play the tutorial (2 min) →",
+  "🎯 Tu paries.":"🎯 You bet.",
+  "🏆 <b>Un gage et une récompense</b> — le dernier paie son gage, le premier reçoit sa récompense. Choisis à la préparation, <b>avant</b> de savoir où tu finiras.":"🏆 <b>A forfeit and a reward</b> — the last pays their forfeit, the first receives their reward. Chosen at the preparation step, <b>before</b> you know where you'll finish.",
+  "🏠 <b>Tu reçois à domicile</b> : c'est toi qui composes la journée, et ces {a} affiches <b>s'imposeront aussi à Léa</b>. La prochaine journée, tu joueras à l'extérieur : c'est toi qui <b>subiras les choix</b> de ton adversaire.":"🏠 <b>You're playing at home</b>: you compose the matchday, and these {a} matches <b>will be imposed on Léa too</b>. Next matchday you'll be away: you will <b>take on your opponent's choices</b>.",
+  "🔄 <b>Une trêve</b> — une seconde vente aux enchères à mi-parcours, pour ceux qui ont mal joué leurs cartes.":"🔄 <b>A truce</b> — a second auction at half-way, for those who played their cards badly.",
+  "🔥 <b>Et rien ne le sera avant la fin.</b> À la <b>dernière journée</b>, les points de duel comptent <b>double</b> — et le plafond de mise saute : tu peux engager <b>tout ton capital</b>.":"🔥 <b>And nothing will be until the end.</b> On the <b>final matchday</b>, duel points count <b>double</b> — and the stake cap is lifted: you can commit <b>your whole balance</b>.",
+  "🤖 <b>Un joueur IA</b> — pour jouer en solo, ou pour compléter un effectif impair.":"🤖 <b>An AI player</b> — to play solo, or to even out an odd number of players.",
+  "🛟 <b>{a}</b> finit à <b>{b}</b>. Si le capital tombe sous <b>{c} €</b>, il est <b>remonté à {d} €</b> — de quoi continuer à miser — en échange de <b>−1 point</b> au classement.":"🛟 <b>{a}</b> ends at <b>{b}</b>. If the balance drops below <b>€{c}</b>, it is <b>topped up to €{d}</b> — enough to keep betting — in exchange for <b>−1 point</b> in the standings.",
+  "À l'arrivée, ce n'est pas qu'une affaire de fierté : le <b>premier</b> remporte une <b>🏆 récompense</b>, et le <b>dernier</b> paie son <b>gage</b>.":"At the finish it isn't only about pride: the <b>first</b> wins a <b>🏆 reward</b>, and the <b>last</b> pays their <b>forfeit</b>.",
+  "aucun effet":"no effect",
+  "Avant tout : la vente aux enchères.":"First of all: the auction.",
+  "C'est le <b>duel</b> qui rapporte, pas le montant.":"It's the <b>duel</b> that pays, not the amount.",
+  "Capital disponible":"Available balance",
+  "Ce que cette démo ne t'a pas montré :":"What this demo didn't show you:",
+  "Chaque journée, tu affrontes <b>en duel</b> un joueur de ta ligue sur des <b>paris sportifs</b>. Celui des deux qui finit avec le <b>plus gros gain net</b> marque les points. À la fin de tous les duels, <b>le joueur qui a le plus de points remporte la compétition</b>.":"Each matchday you face a player from your league <b>in a duel</b> on <b>sports bets</b>. Whichever of the two ends with the <b>biggest net gain</b> scores the points. After all the duels, <b>the player with the most points wins the competition</b>.",
+  "Chaque journée, un match favori.":"One favourite match every matchday.",
+  "Choisis {a} affiches.":"Pick {a} matches.",
+  "Composer la journée →":"Compose the matchday →",
+  "Concrètement :":"In practice:",
+  "Deux journées plus tard…":"Two matchdays later…",
+  "Duel : <b>gagné 2</b> · <b>nul 1</b> · <b>perdu 0</b>. <b>+1</b> si ton net est <b>positif</b>. <b>+1</b> au ⭐ meilleur net de toute la ligue.":"Duel: <b>won 2</b> · <b>draw 1</b> · <b>lost 0</b>. <b>+1</b> if your net is <b>positive</b>. <b>+1</b> to the ⭐ best net in the whole league.",
+  "Duel {a}":"Duel {a}",
+  "Enchérir →":"Bid →",
+  "Encore disponible":"Still available",
+  "Et pour contrarier les plans de chacun, il y a les <b>🃏 bonus</b> : tout l'art est de savoir <b>quand</b> les jouer.":"And to upset everyone's plans there are the <b>🃏 bonuses</b>: the whole art is knowing <b>when</b> to play them.",
+  "gagne <b>{a} €</b> · perd <b>{b} €</b>":"wins <b>€{a}</b> · loses <b>€{b}</b>",
+  "gagne <b>{a} €</b> si tu as raison":"wins <b>€{a}</b> if you're right",
+  "Ici, on en joue un pour te montrer comment ça se passe.":"Here we play one to show you how it works.",
+  "Il t'en reste <b>{a}</b> pour les journées suivantes.":"You still have <b>{a}</b> left for later matchdays.",
+  "J'ai compris, terminer":"Got it, finish",
+  "Joue un bonus.":"Play a bonus.",
+  "Journée <b>3</b> sur <b>10</b>. Karim t'est passé devant : <b>rien n'est joué</b>.":"Matchday <b>3</b> of <b>10</b>. Karim has moved ahead of you: <b>nothing is settled</b>.",
+  "Journée 1 : tu affrontes Léa.":"Matchday 1: you face Léa.",
+  "Journée finie en <b>{a}</b> ({b})":"Matchday ended <b>{a}</b> ({b})",
+  "Le <b>capital</b> est indiqué à titre indicatif : il ne donne pas de points, mais c'est lui qui <b>départage</b> à points égaux.":"The <b>balance</b> is shown for information: it gives no points, but it <b>breaks ties</b> when points are equal.",
+  "Le but du jeu.":"The point of the game.",
+  "Le pari de Léa sur <b>{a}</b> n'a pas pu être inversé.":"Léa's bet on <b>{a}</b> could not be reversed.",
+  "Le plus rapide pour comprendre : jouer une journée. Le détail complet reste juste en dessous.":"The fastest way to understand: play one matchday. The full detail stays just below.",
+  "Léa (ton adversaire) — duel {a}, net {b}":"Léa (your opponent) — duel {a}, net {b}",
+  "Léa a joué de son côté.":"Léa has played on her side.",
+  "Léa gagne le duel.":"Léa wins the duel.",
+  "Les <b>{a} €</b> misés sans obtenir la carte ne te coûtent <b>rien</b>.":"The <b>€{a}</b> bid without getting the card cost you <b>nothing</b>.",
+  "Les autres ont tout emporté. On te prête <b>{a}</b> pour la suite de la démo — dans le vrai jeu, tu repartirais sans bonus.":"The others took everything. We lend you <b>{a}</b> for the rest of the demo — in the real game you'd leave with no bonus.",
+  "Les autres restent en main pour les journées suivantes.":"The others stay in hand for later matchdays.",
+  "Les enchères sont closes.":"The auction is closed.",
+  "Les résultats.":"The results.",
+  "Majoritairement du football, comme le veut la règle.":"Mostly football, as the rule requires.",
+  "Match nul.":"Draw.",
+  "Match par match, comme dans le vrai jeu.":"Match by match, as in the real game.",
+  "Misé <b>{a} €</b> sur un plafond de <b>{b} €</b> — au maximum <b>{c} %</b> du capital par journée.":"Staked <b>€{a}</b> of a <b>€{b}</b> cap — at most <b>{c}%</b> of your balance per matchday.",
+  "négatif":"negative",
+  "On ne sort jamais du jeu faute d'argent. Mais ça se paie.":"You never drop out of the game for lack of money. But it has a price.",
+  "Personne ne voit les pronos de l'autre avant la clôture.":"Nobody sees the other's picks before the close.",
+  "posé sur {a}":"placed on {a}",
+  "pour {a}":"to {a}",
+  "Prête":"Ready",
+  "prêté pour la démo":"lent for the demo",
+  "Quitter":"Quit",
+  "Rejouer la démo":"Replay the demo",
+  "remporté ✓":"won ✓",
+  "Remportés aux enchères avant la saison — un seul par journée.":"Won at auction before the season — one per matchday only.",
+  "Revoir le tutoriel":"Replay the tutorial",
+  "Sauf à la <b>dernière journée</b> : là, tu peux tout miser.":"Except on the <b>final matchday</b>: there you can stake everything.",
+  "Sélectionne la <b>👑</b> sur le match dont tu es le plus sûr : le <b>gain</b> y est doublé… et la <b>perte</b> aussi.":"Tap the <b>👑</b> on the match you're surest of: the <b>gain</b> is doubled there… and so is the <b>loss</b>.",
+  "sur {a} — touche les matchs qui t'inspirent.":"of {a} — tap the matches you fancy.",
+  "sur {a} € — tu ne paies que ce que tu <b>remportes</b>, déduit de ton capital de départ de 100 € (argent fictif)":"of €{a} — you only pay for what you <b>win</b>, deducted from your €100 starting balance (play money)",
+  "Sur chaque affiche, l'issue que tu joues et ce que tu risques.":"On each match, the outcome you back and what you risk.",
+  "Ta journée":"Your matchday",
+  "toi <b>{a} €</b> · meilleure autre offre : <b>{b} {c} €</b>":"you <b>€{a}</b> · best other bid: <b>{b} €{c}</b>",
+  "Ton <b>capital de départ</b> est donc de <b>{a} €</b> sur 100 €.":"Your <b>starting balance</b> is therefore <b>€{a}</b> out of €100.",
+  "ton 👑 match favori — interdit comme cible":"your 👑 favourite match — not allowed as a target",
+  "Ton adversaire change à chaque journée. Le meilleur résultat du jour marque les points.":"Your opponent changes every matchday. The best result of the day scores the points.",
+  "ton prono : <b>{a}</b>":"your pick: <b>{a}</b>",
+  "Ton prono et ta mise.":"Your pick and your stake.",
+  "Touche une carte pour voir ce qu'elle fait.":"Tap a card to see what it does.",
+  "Tout se règle à la création de la ligue.":"Everything is set when the league is created.",
+  "Toute la ligue — le <b>⭐</b> va au meilleur net de <b>tous</b>, pas du duel.":"The whole league — the <b>⭐</b> goes to the best net of <b>everyone</b>, not of the duel.",
+  "Trois cartes ici pour la démo — le vrai jeu en compte <b>{a}</b>. <b>Tous les joueurs</b> de la ligue enchérissent aussi, en secret : la plus grosse mise emporte la carte.":"Three cards here for the demo — the real game has <b>{a}</b>. <b>Every player</b> in the league bids too, in secret: the highest bid takes the card.",
+  "Tu démarres avec <b>100 €</b> d'<b>argent fictif</b>. Chaque journée, tu en répartis une partie en mises de pronostic sur <b>{a} matchs</b>, choisis parmi les affiches du jour.":"You start with <b>€100</b> of <b>play money</b>. Each matchday you spread part of it across bets on <b>{a} matches</b>, chosen from the day's fixtures.",
+  "Tu en as remporté {a}. <b>Un seul par journée</b>.":"You won {a}. <b>One per matchday only</b>.",
+  "Tu en as remporté un.":"You won one.",
+  "Tu gagnes le duel.":"You win the duel.",
+  "Tu ne paies que ce que tu <b>remportes</b> : <b>{a} €</b>.":"You only pay for what you <b>win</b>: <b>€{a}</b>.",
+  "Tu repars avec <b>{a} bonus</b> pour toute la saison.":"You leave with <b>{a} bonuses</b> for the whole season.",
+  "Un bonus joué ne revient pas.":"A bonus once played never comes back.",
+  "Un joueur différent chaque journée. Le meilleur net marque les points.":"A different player each matchday. The best net scores the points.",
+  "Un retard se rattrape jusqu'au dernier jour.":"A gap can be closed right up to the last day.",
+  "Une journée entière, en cliquant. Sans compte.":"A whole matchday, just by tapping. No account needed.",
+  "Une seule vente, <b>avant la première journée</b>. Les bonus remportés te suivent toute la saison — ça ne recommence pas chaque jour.":"A single sale, <b>before matchday one</b>. The bonuses you win stay with you all season — it doesn't start over each day.",
+  "utilisé":"used",
+  "Voir les résultats →":"See the results →",
+  "Voir une saison →":"See a season →",
+  "vs {a}":"vs {a}",
+  "Cette carte se pose sur un match. <b>Choisis lequel :</b>":"This card is placed on a match. <b>Pick which one:</b>",
+  "Chacun avait misé en secret.":"Everyone had bid in secret.",
+  "En 🎮 simulé, la journée se résout <b>dès que tout le monde a validé</b> : ce délai ne sert que si quelqu'un <b>tarde</b>. Le raccourcir accélère les parties où l'on n'attend qu'une personne.":"In 🎮 simulated mode, the matchday resolves <b>as soon as everyone has confirmed</b>: this delay only matters if someone <b>is late</b>. Shortening it speeds up games where you are waiting on one person.",
   "Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.":"<b>Maximum</b> delay: if everyone confirms sooner, we move on; otherwise the game advances <b>on its own</b> at the deadline.",
   "Clôturer les inscriptions":"Close sign-ups", "Il faut au moins 2 joueurs":"At least 2 players needed",
   "Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : choix du gage + enchères, puis le championnat démarre.":"You're the organizer: <b>remove</b> a player above, or <b>add</b> some by sharing the code <b>{a}</b>. Close when the count suits you — then: forfeit vote + auction, then the championship starts.",
@@ -3108,6 +3375,11 @@ const EN={
   // v8.98 — bandeau « trêve terminée » sur l'accueil, aligné sur ce que l'app affiche réellement.
   "découvre qui a remporté quoi à la mi-saison, avant de reprendre.":"see who won what at the mid-season point, before play resumes.",
   "Voir les enchères de la trêve":"See the truce auction",
+  // (signalé par Hervé sur XXZQ3) — bandeau « Coulisses jamais vues » sur l'accueil, même principe
+  // que le bandeau de la trêve ci-dessus mais pour le tour du départ.
+  "La saison a démarré":"The season has started",
+  "découvre le gage et le résultat des enchères avant de continuer.":"see the forfeit and the auction results before you carry on.",
+  "Voir les Coulisses":"See backstage",
   // v8.103 — bandeau « préparation à faire » sur l'accueil (ligue pas encore lancée).
   "la préparation de la saison t'attend :":"the season's prep is waiting for you:",
   "Aller à la préparation":"Go to prep",
@@ -3456,7 +3728,7 @@ const EN={
   "Tu finis dernier… à toi le gage !":"You finish last… the forfeit is yours!",
   "Tu finis dernier — à toi d'offrir la récompense au champion !":"You finish last — you give the reward to the champion!",
   "Ni champion ni dernier cette fois — rien perdu, rien gagné. À la prochaine ! 😎":"Neither champion nor last this time — nothing lost, nothing gained. Until next time! 😎",
-  "✓ pronos validés":"✓ picks confirmed", "attend ses matchs":"waiting for their matches", "Paris clos · en attente des résultats":"Bets closed · awaiting results",
+  "✓ pronos validés":"✓ picks confirmed", "attend ses matchs":"waiting for their matches", "doit choisir ses matchs":"must pick their matches", "⏳ pronos non validés":"⏳ picks not confirmed", "Paris clos · en attente des résultats":"Bets closed · awaiting results",
   "Autres duels du jour":"Other duels of the day",
   "Modifie une enchère (ou ton choix) pour la re-valider.":"Change a bid (or your choice) to re-confirm it.",
   "pas de prono":"no pick", "n'a pas parié":"placed no bet", "tu n'as pas parié":"you placed no bet",
@@ -5673,8 +5945,12 @@ function viewAuth(){
          ⚠️ Ne PAS rajouter un troisième bouton « version ultra-courte » : essayé en v8.64,
          supprimé en v8.66 (cf. `essaiMode`). */''}
     <div class="pathdiv"><span>${t("Découvrir sans compte")}</span></div>
-    <button class="pathbtn hi" onclick="startEssai('court')"><div class="t">${t("🚀 La saison en accéléré")}</div><div class="s">${t("Tous les écrans du jeu, sans les explications.")}</div></button>
-    <button class="pathbtn" onclick="startEssai('complet')"><div class="t">${t("🎓 Le tuto complet (2 min)")}</div><div class="s">${t("La même saison, mais tout est expliqué.")}</div></button>
+    ${/* ⚠️ v8.205 — UNE SEULE PORTE. Il y en avait DEUX (« la saison en accéléré » et « le
+         tuto complet »), et le choix lui-même était un obstacle : on demandait à quelqu'un
+         qui ne connaît rien au jeu d'arbitrer entre deux parcours qu'il ne peut pas
+         comparer. Le tutoriel dynamique règle la question — il est court PARCE QU'il
+         montre au lieu d'expliquer, donc il n'y a plus d'arbitrage à rendre. */''}
+    <button class="pathbtn hi" onclick="openTuto()"><div class="t">${t("🎓 Découvrir le jeu en 2 min")}</div><div class="s">${t("Une journée entière, en cliquant. Sans compte.")}</div></button>
     <button class="pathbtn" onclick="openRules()"><div class="t">${t("📖 Lire les règles")}</div></button>`;
 }
 async function doLogin(){
@@ -5988,10 +6264,33 @@ async function loadHomeTodo(){
       if(b && Array.isArray(b.picks) && b.picks.length) return;
       homeTodo.push({lg:m.lg, pid:m.pid, kind:"pronos", deadline:t});
     });
+    /* ⚠️ (signalé par Hervé sur XXZQ3 : ouverte après coup, sans avoir vu la résolution des
+       enchères, la ligue emmenait direct sur les pronos) — LES COULISSES DE L'OUVERTURE N'AVAIENT
+       AUCUN RAPPEL. `viewGame()` ne renvoie dessus qu'EN DIRECT, pendant que la transition
+       prépa→running a lieu sous les yeux du joueur (`prevLeagueStatus`, cf. `refresh()`) — un
+       retour après coup n'affiche donc jamais rien. Même défaut que celui corrigé pour la trêve
+       en v8.93 (`viewPrepSummary`/`prepSeen` existaient déjà pour ce cas, mais n'étaient jamais
+       appelés — cf. leur définition, juste au-dessus de `viewPrepSummary`).
+       ⚠️ BOUCLE À PART, APRÈS COUP — PAS DANS LA BOUCLE `act.forEach` CI-DESSUS : celle-ci pousse
+       AU PLUS UN bandeau par ligue et sort dès qu'un cas matche (`return`). Si « coulisses » y
+       entrait au même rang, il gagnerait pour toute ligue où le joueur l'ignore, et masquerait
+       pour de bon les bandeaux réellement actionnables (choisir ses matchs, valider ses pronos).
+       On le rajoute donc SEULEMENT pour les ligues qui n'ont rien poussé d'autre — `doitJouer`
+       (posé plus bas dans `viewHome`) n'existe pas encore ici, on le réécrit donc par l'absence
+       d'une entrée déjà présente pour cette ligue.
+       ⚠️ `current_day===0` UNIQUEMENT : passé la première journée, on cesse de le rappeler — la
+       fenêtre se referme d'elle-même, comme le plafond de 3 jours pour une ligue terminée
+       (v8.110) plus haut. Coulisses reste consultable en tout temps, juste plus poussé ici. */
+    act.forEach(m=>{
+      if((m.lg.current_day|0)!==0 || !m.lg.prep_summary) return;
+      if(homeTodo.some(x=>x.lg.id===m.lg.id)) return;
+      if(localStorage.getItem("pl_preps_"+m.lg.id+"_"+m.pid)==="1") return;
+      homeTodo.push({lg:m.lg, pid:m.pid, kind:"coulisses"});
+    });
     // La trêve d'abord (c'est ce que `viewGame()` affiche en premier), puis les résultats à
     // découvrir, puis une préparation à démarrer, puis « choisir ses matchs », puis les pronos
-    // par urgence.
-    const rang={treve:0, resultats:1, prep:2, trevebid:2, choix:3, pronos:4};
+    // par urgence, puis un rappel discret pour les Coulisses jamais visitées.
+    const rang={treve:0, resultats:1, prep:2, trevebid:2, choix:3, pronos:4, coulisses:5};
     homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
   }catch(e){ homeTodo=[]; homePhase={}; }
   homeTodoLoaded=true; render();
@@ -6118,6 +6417,10 @@ function viewHome(){
     ? `<div class="alert-card good"><div class="ttl">🔄 ${t("La trêve est terminée")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("découvre qui a remporté quoi à la mi-saison, avant de reprendre.")}</div>
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Voir les enchères de la trêve")}</button></div>`
+    : x.kind==="coulisses"
+    ? `<div class="alert-card good"><div class="ttl">🎬 ${t("La saison a démarré")}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("découvre le gage et le résultat des enchères avant de continuer.")}</div>
+      <button class="cta" onclick="openLeagueCoulisses('${x.lg.id}','${x.pid}')">🎬 ${t("Voir les Coulisses")}</button></div>`
     : x.kind==="resultats"
     ? `<div class="alert-card good"><div class="ttl">🎁 ${t("Résultats à découvrir")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("la journée {a} est jouée, tu n'as pas encore vu le verdict.",{a:x.jour})}</div>
@@ -6163,8 +6466,8 @@ function viewHome(){
        <div style="height:8px"></div><button class="btn ghost" onclick="backToLeagues()">🔑 ${t("Rejoindre avec un code")}</button>`;
 
   const tuto=(myLeagues&&myLeagues.length)
-    ? `<div style="height:8px"></div><button class="btn ghost sm" style="width:100%" onclick="startEssai()">${t("🎓 Revoir le tuto")}</button>`
-    : `<div style="height:8px"></div><button class="btn ghost" onclick="startEssai()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`;
+    ? `<div style="height:8px"></div><button class="btn ghost sm" style="width:100%" onclick="openTuto()">${t("🎓 Revoir le tuto")}</button>`
+    : `<div style="height:8px"></div><button class="btn ghost" onclick="openTuto()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`;
   return salut+alerte+bloc+tuto;
   // v7.04 (Hervé) : le bouton « 🛠 Admin » a été RETIRÉ de l'accueil. Il faisait doublon avec
   // « ⚙️ Espace admin » de l'écran Profil, seul point d'entrée conservé. Motif : l'accueil de
@@ -6750,7 +7053,7 @@ function viewEssai(){
          ⚠️ `showErr('')` : une erreur laissée par un essai de connexion précédent traînerait en
          haut de l'écran d'inscription, sans rapport avec ce qu'on y fait. */''}
     ${AUTH?`<button class="btn" onclick="openCreate()">🎉 ${t("Créer une ligue entre amis")}</button>`:`<button class="btn" onclick="showErr('');S.view='signup';render()">🎉 ${t("S'inscrire pour jouer")}</button>`}
-    <div style="height:8px"></div><button class="btn ghost" onclick="startEssai()">🔁 ${t("Refaire une partie d'essai")}</button>
+    <div style="height:8px"></div><button class="btn ghost" onclick="openTuto()">🎓 ${t("Revoir le tutoriel")}</button>
     <div style="height:8px"></div><button class="btn ghost" onclick="exitEssai()">${AUTH?t("← Retour à l'accueil"):t("← Retour à la connexion")}</button>`;
 }
 function exitEssai(){ if(AUTH){ S.view="leagues"; render(); loadMyLeagues(); } else { S.view="auth"; render(); } }
@@ -6769,6 +7072,13 @@ function openLeague(lid,pid,fresh,consultation){
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
 }
+// Variante appelée depuis le bandeau « Coulisses jamais vues » de l'accueil (v.next, Hervé,
+// XXZQ3) : ouvre la ligue puis pointe directement sur l'onglet Coulisses, plutôt que sur les
+// pronos par défaut. `refresh()` (appelé par `openLeague`) est async mais ne touche `S.view` que
+// via son propre renvoi (`prevLeagueStatus`, cf. `refresh()`), qui ne s'exécute qu'après un
+// premier `await` — on peut donc écraser `S.view` juste après, en toute sécurité, avant que ce
+// renvoi n'ait la moindre chance de s'exécuter.
+function openLeagueCoulisses(lid,pid){ openLeague(lid,pid); S.view="coulisses"; }
 /* ---- Consultation d'une ligue depuis l'écran Admin (v7.11) --------------------------------
    On regarde la ligue avec les yeux d'un de SES joueurs — l'organisateur de préférence, sinon
    le premier humain. Sans quoi `me()` renverrait undefined et la moitié des écrans planterait.
@@ -6871,10 +7181,20 @@ function viewCreate(){
        + choice('data','real',g.data==='real',"setNew('data','real')",t("📡 Données réelles (test)"),t("Vrais matchs"),premBadge('direct')))}
    ${info('data','sim',t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."))}
    ${info('data','real',t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."))}
-   ${g.data==='real'?`<div class="listsec">${t("⏱️ Formule de rythme")}</div>
+   ${/* ⚠️ v8.204 (redemandé par Hervé) — LE RYTHME REDEVIENT RÉGLABLE EN MATCHS SIMULÉS.
+        Il avait été masqué là au motif que « la journée se résout dès que tout le monde a
+        validé, le délai n'a aucune valeur ajoutée ». C'EST FAUX DÈS QU'UN JOUEUR TARDE :
+        `shouldAutoResolve()` retombe alors sur `allDuelsClosed()`, c'est-à-dire l'échéance
+        de la formule — 24 h en Classique, plus 24 h pour le choix des matchs. Le réglage
+        n'était donc pas inutile : il était invisible précisément dans le cas où il compte.
+        La phrase d'explication change selon le mode, parce que le délai n'y joue pas le
+        même rôle : borne du déroulé en réel, garde-fou anti-retardataire en simulé. */''}
+   <div class="listsec">${t("⏱️ Formule de rythme")}</div>
    ${row(['classique','fast'].map(k=>choice('formule',k,g.formula===k,"setNew('formula','"+k+"')",t(FORMULAS[k].n),t(k==='classique'?"24h par étape":"12h par étape"))).join(""))}
    ${['classique','fast'].map(k=>info('formule',k,t(FORMULAS[k].d))).join("")}
-   <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}<br>🔄 ${t("Le rythme est modifiable en cours de partie (par l'organisateur).")}</div>`:``}
+   <div class="mini muted" style="text-align:center;margin-bottom:4px">${g.data==='sim'
+     ? t("En 🎮 simulé, la journée se résout <b>dès que tout le monde a validé</b> : ce délai ne sert que si quelqu'un <b>tarde</b>. Le raccourcir accélère les parties où l'on n'attend qu'une personne.")
+     : t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}<br>🔄 ${t("Le rythme est modifiable en cours de partie (par l'organisateur).")}</div>
    <div class="listsec">${t("🎛️ Mode de jeu")}</div>
    ${row(['simple','complet'].map(k=>choice('mode',k,g.mode===k,"setNew('mode','"+k+"')",t(MODES[k].n),t(k==='simple'?"Moins de bonus":"Tout le jeu"),k==='complet'?premBadge('bonuscomplets'):'')).join(""))}
    ${['simple','complet'].map(k=>info('mode',k,t(MODES[k].d))).join("")}
@@ -7141,7 +7461,7 @@ function enjeuTableHTML(r){
   // maintenir : la variante « blocs » n'était de fait jamais relue ni testée.
   const corps = `<div style="overflow-x:auto"><table class="vote-table">
         <tr><th>${rew?t("Si… finit dernier"):t("Si… gagne")}</th><th>${rew?t("Récompense qu'il offre au champion"):t("Gage infligé au dernier")}</th></tr>
-        ${hs.map(p=>`<tr><td class="pname">${avaName(p)}</td><td class="gage">${lbl(gOf(p))}</td></tr>`).join("")}</table></div>`;
+        ${hs.map(p=>{ const g=gOf(p); return `<tr><td class="pname">${avaName(p)}</td><td class="gage${g.perso?' custom':''}">${lbl(g)}</td></tr>`; }).join("")}</table></div>`;
   return `<div class="enjeu-votes" style="margin-bottom:8px"><div class="lead">${rew?t("La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :"):t("Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :")}</div>
      ${corps}
      <div class="enjeu-note">${rew?t("🏆 <b>Motivation express :</b> le champion repart avec la récompense votée par le dernier — une excellente raison de viser la <b>première</b> place !"):t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`;
@@ -7248,6 +7568,11 @@ function viewPrepSummary(){
    <button class="btn" onclick="ackPrep()">${t("C'est parti ! →")}</button>`;
 }
 function viewCoulisses(){
+  // Repère « vu » pour le bandeau d'accueil (cf. `loadHomeTodo`, kind:"coulisses") — posé dès que
+  // cet écran s'affiche réellement, quel que soit le chemin emprunté pour y arriver (onglet,
+  // bandeau, ou l'ancien renvoi automatique de `refresh()`). Réécrire la même valeur à chaque
+  // rendu ne casse rien (même principe que `pl_treveu_visite_`, v8.133).
+  if(L && L.prep_summary){ try{ localStorage.setItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"),"1"); }catch(e){} }
   /* CODE DE LA LIGUE (v7.59, demandé par Hervé : « il est parfois difficile de retrouver le code
      d'une ligue une fois créée, je dois ressortir sur la liste de toutes les ligues »). Le code
      n'était visible QUE dans le salon d'attente et dans « Mes ligues » — donc plus du tout une
@@ -7318,9 +7643,13 @@ function viewLobby(){
       <b class="blue">${t("👥 Vous êtes deux")}</b> — ${t("tu peux clôturer maintenant. Au moment de clôturer, tu choisiras entre <b>2 journées</b> (un aller-retour) et <b>4 journées</b> (deux allers-retours).")}
       </div>`:""}
     ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${solo?t("Ton adversaire <b>si tu clôtures maintenant</b>, à toi seul"):t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${solo?t("si solo"):t("équilibre")}</span></div>`:""}
-    ${(L.data_mode||'sim')==='real'?`<h2>${t("⏱️ Formule de rythme")}</h2>
+    ${/* ⚠️ v8.204 — plus de condition sur le mode de données : voir la note de l'écran de
+         création. Le délai sert de garde-fou anti-retardataire, y compris en simulé. */''}
+    <h2>${t("⏱️ Formule de rythme")}</h2>
     ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setFormula('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):(org?t("choisir"):'')}</span></div>`;}).join("")}
-    <div class="mini muted" style="text-align:center;margin-bottom:4px">${t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>`:''}
+    <div class="mini muted" style="text-align:center;margin-bottom:4px">${(L.data_mode||'sim')==='sim'
+      ? t("En 🎮 simulé, la journée se résout <b>dès que tout le monde a validé</b> : ce délai ne sert que si quelqu'un <b>tarde</b>. Le raccourcir accélère les parties où l'on n'attend qu'une personne.")
+      : t("Délai <b>maximum</b> : si tout le monde valide avant, on passe à la suite ; sinon le jeu avance <b>tout seul</b> à l'échéance.")}</div>
     <h2>${t("🎛️ Mode de jeu")}</h2>
     ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     ${/* ⚠️ v8.85 — RAPPELÉ AUSSI DANS LE SALON. C'est là que les invités arrivent avec un code ;
@@ -7912,9 +8241,11 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
   const extra=(o.soloAR!=null)
     ? kv("🤖 "+t("Format"), o.soloAR===1?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"), 'solo')
     : kv("🎭 "+t("Enjeu"), isBoth()?t("Gage + récompense"):(isReward()?t("Récompense"):t("Gage")), 'enjeu');
-  // Rythme masqué en données SIMULÉES : la journée se résout dès que tout le monde a validé, le délai
-  // classique/fast n'a aucune valeur ajoutée là (Hervé, cohérent avec création + salon v6.76/v6.78).
-  return ((L.data_mode==='real') ? kv("⏱️ "+t("Rythme"), t(leagueFormula().n), 'formula') : '')
+  /* ⚠️ v8.204 — LE RYTHME N'EST PLUS MASQUÉ EN SIMULÉ. Le motif d'origine (« la journée se
+     résout dès que tout le monde a validé, le délai n'a aucune valeur ajoutée ») ne tient
+     pas dès qu'un joueur tarde : `shouldAutoResolve()` retombe sur l'échéance de la formule.
+     Cacher le réglage le rendait invisible dans le seul cas où il décide de quelque chose. */
+  return kv("⏱️ "+t("Rythme"), t(leagueFormula().n), 'formula')
    + kv("🎛️ "+t("Mode"), t(MODES[getMode()].n), 'mode')
    + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"), 'data')
    + kv("🃏 "+t("Enchères"), hasTreve()?t("Départ + trêve"):t("Au départ"), 'treve')
@@ -8846,7 +9177,23 @@ function viewWait(dayLbl){
       : ' · '+t("clôture dans {a}",{a:fmtLeft(dlRoster)}));
     const pronosRoster = humansN>1 ? `<h2 class="mini" style="margin:10px 2px 4px">${t("Pronos des joueurs · {a}/{b}",{a:doneN,b:humansN})}${clotureRoster}</h2>`
       + players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id); const dd=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const noFx=!!(dd&&!dd.fixtures);
-        const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`:(noFx?`<span class="chip">${t("attend ses matchs")}</span>`:`<span class="st">${t("⏳ pas encore")}</span>`);
+        /* ⚠️ (signalé par Hervé sur XXZQ3) — « attend ses matchs » NE DISTINGUAIT PAS les deux
+           rôles d'un duel sans matchs choisis : le joueur À DOMICILE, qui bloque tout le monde
+           tant qu'il n'a pas choisi ses 5 matchs, et celui À L'EXTÉRIEUR, qui attend réellement
+           quelqu'un d'autre. Les deux affichaient la même pastille passive — on ne pouvait pas
+           voir, dans la liste, QUI retient la journée. */
+        /* ⚠️ (signalé par Hervé) — « ⏳ pas encore » NE DISAIT PAS quoi. Ce n'est PAS le même
+           « pas encore » que celui de la préparation (t. ligne ~2863, ready/pas prêt) : ici, si on
+           atteint cette branche, `noFx` est déjà faux — les 5 matchs de ce joueur SONT connus (cf.
+           les deux cas juste au-dessus), il ne manque que sa validation. Le libellé le dit
+           maintenant explicitement, sur le même mot que le chip vert qu'il précède
+           (« ✓ pronos validés » → « pronos non validés »), plutôt qu'un « pas encore » qui pouvait
+           se lire comme « n'a même pas encore ses matchs ». Chaîne dédiée, PAS de réemploi de
+           `t("⏳ pas encore")` : cette clé sert aussi à la préparation (prêt/pas prêt), un autre
+           sens — la retoucher aurait changé cet autre écran par ricochet. */
+        const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`
+          :(noFx?(dd.home_id===p.id?`<span class="chip">${t("doit choisir ses matchs")}</span>`:`<span class="chip">${t("attend ses matchs")}</span>`)
+          :`<span class="chip gold">${t("⏳ pronos non validés")}</span>`);
         return `<div class="opp-status" style="margin-bottom:8px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}${chip}</div>`; }).join('') : '';
     return `${head}${missingFx}
       ${picksCard}${bonusLine}${bilanPariHTML(mine)}
@@ -11683,7 +12030,7 @@ function showLeagueInfo(lid){
 async function closeLeagueFromHome(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m||!m.org)return;
   if(!await confirmTxt("📦",t("Fermer la ligue"),t("Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible."),t("Fermer"))) return;
-  try{ await q(db.from("leagues").update({status:"done"}).eq("id",lid)); try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",lid)); }catch(e){} closeCardInfo(); infoWin(t("Ligue fermée.")); await loadMyLeagues(); }
+  try{ await q(db.from("leagues").update({status:"done"}).eq("id",lid)); try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",lid)); }catch(e){} cancelUnresolvedRealFixtures(lid); closeCardInfo(); infoWin(t("Ligue fermée.")); await loadMyLeagues(); }
   catch(e){ showErr("Fermeture : "+e.message); } }
 
 /* ============ COULISSES / PALMARÈS / ADMIN ============ */
@@ -12147,7 +12494,8 @@ async function loadAdmin(){
         const r=await q(db.from("leagues").update({status:"done"}).eq("id",l.id).neq("status","done").select("id"));
         if(r && r.length){ fermeesAuto++; l.status="done"; l.fermeeAuto=true;
           // Colonne absente sur une base pas encore migrée → on n'échoue pas pour autant.
-          try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",l.id)); }catch(e){} }
+          try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",l.id)); }catch(e){}
+          cancelUnresolvedRealFixtures(l.id); }
       }catch(e){}
     }
     adminData={ allLeagues, fermeesAuto, quotaHisto, leagues:lgs.length,
@@ -12403,6 +12751,7 @@ function render(){
   else if(S.view==="signup") html=viewSignup();   // v8.31 : écran de création à part entière
   else if(S.view==="home") html=viewHome();
   else if(S.view==="leagues") html=viewLeagues();
+  else if(S.view==="tuto") html=viewTuto();
   else if(S.view==="rules") html=viewRules();
   else if(S.view==="rulesfull") html=viewRulesFull();
   else if(S.view==="standings") html=viewStandings();
@@ -13124,49 +13473,646 @@ async function acceptTrade(id){
 }
 async function refuseTrade(id){ const reply=tradeReply(id); await markTrade(id,"refused",reply); infoWin(t("Offre refusée.")); await refresh(); }
 async function cancelTrade(id){ await markTrade(id,"cancelled",null); infoWin(t("Offre annulée.")); await refresh(); }
+/* ============ TUTORIEL DYNAMIQUE (v8.205) ==========================================
+ * Remplace les DEUX anciens parcours d'essai sur l'écran de connexion et l'aperçu
+ * « règles simples ». On n'y LIT plus une règle : on la voit se produire.
+ *
+ * ⚠️ TOUT EST PRÉFIXÉ `tt`. Six identifiants de la maquette d'origine (`sel`, `picks`,
+ *    `cible`, `cote`, `eur`, `maj`) existent DÉJÀ dans l'app avec un autre sens, et
+ *    dix-huit de ses classes CSS aussi. Ne jamais retirer ce préfixe.
+ *
+ * ⚠️ CHAQUE RÈGLE ÉNONCÉE ICI A ÉTÉ VÉRIFIÉE DANS CE FICHIER. Cinq erreurs ont été
+ *    trouvées pendant la mise au point de la maquette — la perte du 👑 favori qui ne
+ *    doublait pas, les enchères perdues facturées, un barème amputé de deux lignes sur
+ *    trois, 3 pronos au lieu de 5, 6 matchs de foot au lieu de 7 — toutes en relisant le
+ *    code, aucune à l'œil. Une règle qui change ici se vérifie là où elle est CALCULÉE.
+ *    Les chiffres sensibles sont d'ailleurs injectés : STAKE_CAP, SHOP_CAP, NB_PRONOS,
+ *    RECAP_THRESHOLD/TARGET, FORGOT_*, et le nombre de bonus vient de CARD_IDS.
+ */
+let ttStep=0, ttSel=[], ttPicks={}, ttMises={}, ttFav=null, ttBonus=null, ttCible=null;
+let ttEnch={}, ttGagnes=[], ttOffert=null;
+let ttT=[], ttManuel=false, ttEnAuto=false, ttAutoCourant=null, ttSeq=false;
+
+const TT_NB=5;              // le joueur pioche 5 matchs
+const TT_MISE_BASE=2;       // les mises PARTENT de là et montent sous les yeux
+const TT_POT=SHOP_CAP;      // cagnotte d'enchères — même constante que le jeu
+const TT_AV_MOI="avimg:0", TT_AV_LEA="avimg:3";
+
+/* Le vivier : 9 affiches dont 7 de football, comme POOL_N / POOL_FOOT. Le nul n'existe
+   QUE là où le sport en a un — même test que le jeu (`f.draw ? "N" : ""`). */
+const TT_MATCHS=[
+ {i:0,s:"⚽",h:"Lyon",     a:"Nantes",      dr:1,o:{"1":1.85,"N":3.40,"2":4.10},r:"1",sc:"2–1"},
+ {i:1,s:"⚽",h:"Marseille",a:"Lens",        dr:1,o:{"1":2.40,"N":3.20,"2":2.95},r:"2",sc:"0–1"},
+ {i:2,s:"🏀",h:"ASVEL",    a:"Monaco",      dr:0,o:{"1":1.60,"2":2.35},         r:"1",sc:"88–79"},
+ {i:3,s:"⚽",h:"Rennes",   a:"Toulouse",    dr:1,o:{"1":2.10,"N":3.30,"2":3.55},r:"1",sc:"3–0"},
+ {i:4,s:"🎾",h:"Humbert",  a:"Rune",        dr:0,o:{"1":2.75,"2":1.45},         r:"2",sc:"1–2"},
+ {i:5,s:"⚽",h:"Lille",    a:"Brest",       dr:1,o:{"1":1.72,"N":3.60,"2":4.60},r:"N",sc:"1–1"},
+ {i:6,s:"⚽",h:"Nice",     a:"Strasbourg",  dr:1,o:{"1":1.95,"N":3.35,"2":3.90},r:"2",sc:"1–2"},
+ {i:7,s:"⚽",h:"PSG",      a:"Monaco",      dr:1,o:{"1":1.40,"N":4.80,"2":7.20},r:"1",sc:"3–1"},
+ {i:8,s:"⚽",h:"Auxerre",  a:"Le Havre",    dr:1,o:{"1":2.05,"N":3.25,"2":3.70},r:"1",sc:"2–0"}];
+
+/* Le scénario. Choisi POUR enseigner : 4 foot sur 5, des issues variées (deux « 1 », un
+   nul, deux extérieurs), cinq mises TOUTES DIFFÉRENTES qui s'arrêtent SOUS le plafond,
+   et un pari perdu sur cinq — sans défaite on n'apprend rien. */
+const TT_PLAN=[{i:0,v:"1",m:10},{i:3,v:"1",m:7},{i:5,v:"N",m:5},{i:6,v:"2",m:4},{i:2,v:"2",m:3}];
+
+/* Trois cartes du jeu. La plus forte part au plus offrant de la ligue : le joueur la
+   perd, et apprend que la meilleure carte est la plus disputée.
+   ⚠️ 🎁 vise le pari de l'ADVERSAIRE (oppT dans CARDS) : son effet se lit sur le net de
+   Léa, pas sur le sien. C'est la seule des trois dans ce cas. */
+const TT_CARTES=[
+ {id:"cadeau",   best:{n:"Karim",v:17}, vise:1, adv:1},
+ {id:"double",   best:{n:"Sofia",v:13}, vise:1, adv:0},
+ {id:"assurance",best:{n:"Marc", v:6 }, vise:1, adv:0}];
+const TT_CADEAU=9.30;       // ce que l'inversion coûterait à Léa — valeur d'illustration
+
+/* Trois duels : Toi–Léa, Karim–Sofia, Marc–Inès. L'issue n'est jamais DÉCLARÉE mais
+   calculée en comparant les deux nets — le tableau ne peut pas se contredire.
+   ⚠️ Marc gagne son duel avec un net NÉGATIF et marque 2 pts quand Sofia finit très haut
+   et n'en marque qu'1 : sans ce contraste, le barème reste une abstraction. */
+const TT_AUTRES=[
+ {n:"Karim",av:"avimg:4",net: 61.50,adv:"Sofia"},
+ {n:"Sofia",av:"avimg:9",net: 38.90,adv:"Karim"},
+ {n:"Léa",  av:TT_AV_LEA,net: 24.60,adv:"Toi"},
+ {n:"Marc", av:"avimg:5",net: -7.40,adv:"Inès"},
+ {n:"Inès", av:"avimg:1",net:-13.20,adv:"Marc"}];
+/* Le dernier écran est un CUMUL après trois journées : sinon il répéterait le tableau
+   de la journée. Le capital l'accompagne — c'est lui qui départage à points égaux. */
+const TT_CUMUL=[
+ {n:"Karim",av:"avimg:4",pts:9,cap:187},
+ {n:"Toi",  av:TT_AV_MOI,pts:8,cap:214,moi:1},
+ {n:"Sofia",av:"avimg:9",pts:6,cap:163},
+ {n:"Léa",  av:TT_AV_LEA,pts:5,cap:141},
+ {n:"Marc", av:"avimg:5",pts:4,cap: 96},
+ {n:"Inès", av:"avimg:1",pts:2,cap: 74}];
+
+const ttEur=n=>(Math.round(n*100)/100).toFixed(2).replace(".",",").replace("-","−");
+const ttSg=n=>(n>=0?"+":"−")+ttEur(Math.abs(n))+" €";
+const ttCo=x=>(typeof x==="number"?x:0).toFixed(2).replace(".",",");
+const ttM=i=>TT_MATCHS[i];
+const ttIssues=m=>["1",m.dr?"N":"","2"].filter(Boolean);
+const ttNomIssue=(m,v)=>v==="1"?m.h:v==="2"?m.a:t("Nul");
+const ttCarte=id=>CARDS[id];                      // les vraies fiches du jeu
+const ttPlanM=i=>{const p=TT_PLAN.filter(x=>x.i===i)[0];return p?p.m:TT_MISE_BASE;};
+
+const ttMise=i=>ttMises[i]==null?TT_MISE_BASE:ttMises[i];
+const ttTotMise=()=>ttSel.reduce((a,i)=>a+ttMise(i),0);
+const ttEnchTot=()=>Object.keys(ttEnch).reduce((a,k)=>a+ttEnch[k],0);
+/* ⚠️ « Tu ne paies que ce que tu REMPORTES (déduit de tes 100 €) » : les 40 € sont un
+   PLAFOND, pas un porte-monnaie. Une enchère perdue ne coûte rien. */
+const ttPaye=()=>ttGagnes.filter(id=>id!==ttOffert).reduce((a,id)=>a+(ttEnch[id]||0),0);
+const ttCap=()=>100-ttPaye();
+const ttPlafond=()=>Math.floor(ttCap()*STAKE_CAP);
+const ttGain=i=>ttMise(i)*((ttM(i).o[ttPicks[i]]||1)-1)*(ttFav===i?2:1);
+const ttPerte=i=>ttMise(i)*(ttFav===i?2:1);       // le 👑 double AUSSI la perte
+const ttJuste=i=>ttM(i).r===ttPicks[i];
+const ttNetBrut=()=>ttSel.reduce((s,i)=>s+(ttJuste(i)?ttGain(i):-ttPerte(i)),0);
+function ttEffet(){
+  if(ttBonus==="double")    return (ttCible!=null&&ttJuste(ttCible))?ttGain(ttCible):0;
+  if(ttBonus==="assurance") return (ttCible!=null&&!ttJuste(ttCible))?ttPerte(ttCible)/2:0;
+  return 0;                                        // 🎁 agit sur le net de Léa
+}
+const ttNet=()=>ttNetBrut()+ttEffet();
+const ttNetLea=()=>TT_AUTRES.filter(p=>p.n==="Léa")[0].net-((ttBonus==="cadeau"&&ttCible!=null)?TT_CADEAU:0);
+/* Pourquoi la carte n'a rien donné — avec le match sous les yeux, sinon la phrase reste
+   abstraite et le joueur ne saura pas mieux la placer la fois d'après. */
+function ttMotif(){
+  if(ttCible==null) return "";
+  const nom=ttM(ttCible).h+" – "+ttM(ttCible).a;
+  if(ttBonus==="double")    return t("<b>{a}</b> est perdu : il n'y avait <b>aucun gain à doubler</b>.",{a:nom});
+  if(ttBonus==="assurance") return t("<b>{a}</b> est gagné : il n'y avait <b>rien à rembourser</b>.",{a:nom});
+  return t("Le pari de Léa sur <b>{a}</b> n'a pas pu être inversé.",{a:nom});
+}
+/* Barème réel : duel gagné 2 · nul 1 · perdu 0, +1 si le net est POSITIF,
+   +1 au ⭐ meilleur net de TOUTE la ligue. */
+const ttPtsDuel=x=>x==="g"?2:x==="n"?1:0;
+function ttJournee(){
+  const moi={n:"Toi",av:TT_AV_MOI,net:ttNet(),adv:"Léa",moi:1};
+  const tous=[moi].concat(TT_AUTRES.map(p=>p.n==="Léa"?Object.assign({},p,{net:ttNetLea()}):p));
+  const par={}; tous.forEach(p=>par[p.n]=p);
+  return tous.map(p=>{const o=par[p.adv];
+      const d=!o?"n":p.net>o.net?"g":p.net<o.net?"p":"n";
+      return Object.assign({},p,{duel:d});})
+    .sort((a,b)=>b.net-a.net)
+    .map((p,k)=>Object.assign({},p,{et:k===0,pts:ttPtsDuel(p.duel)+(p.net>0?1:0)+(k===0?1:0)}));
+}
+const ttNomDuel=d=>d==="g"?t("gagné"):d==="p"?t("perdu"):t("nul");
+const ttPts=v=>v>1?ttPts(v):t("{a} pt",{a:v});   // « 1 pts » et « 0 pts » sont fautifs
+
+/* ⚠️ JETON OBLIGATOIRE : aux enchères une mise monte toutes les 150 ms alors qu'une
+   animation dure plus longtemps. Sans lui, le filet de l'animation PRÉCÉDENTE se
+   déclenche APRÈS la suivante et réécrit un montant périmé — le compteur redescend
+   tout seul. Le `setTimeout` final, lui, couvre l'onglet masqué : requestAnimationFrame
+   y est SUSPENDU, et un joueur revenu d'une autre app trouverait un chiffre figé. */
+function ttAnime(el,de,vers,suf,ms){
+  if(!el) return;
+  const jeton=(el._tta=(el._tta||0)+1), vivant=()=>el._tta===jeton, t0=performance.now();
+  const fin=()=>{ if(vivant()) el.textContent=ttEur(vers)+suf; };
+  (function pas(x){ if(!vivant()) return;
+    const k=Math.min(1,(x-t0)/ms), v=de+(vers-de)*(1-Math.pow(1-k,3));
+    el.textContent=ttEur(v)+suf;
+    if(k<1) requestAnimationFrame(pas); else fin(); })(t0);
+  setTimeout(fin,ms+80);
+}
+/* Les écrans de saisie se remplissent seuls ; les gestes qui ENSEIGNENT restent au
+   joueur. Dès qu'il touche quelque chose, la machine s'arrête. */
+function ttApres(ms,f){ ttT.push(setTimeout(()=>{ if(ttManuel) return;
+  ttEnAuto=true; try{ f(); } finally { ttEnAuto=false; } },ms)); }
+function ttStop(){ ttT.forEach(clearTimeout); ttT=[]; }
+function ttTouche(){ if(!ttEnAuto){ ttManuel=true; ttStop(); } }
+const ttQ=s=>document.querySelector("#ttWrap "+s);
+const ttQQ=s=>Array.prototype.slice.call(document.querySelectorAll("#ttWrap "+s));
+/* Sans révélation, revenir sur un écran donne une page BLANCHE : les blocs `.tt-res`
+   restent invisibles tant qu'on ne les révèle pas. */
+function ttReveler(){ ttQQ(".tt-res").forEach((b,k)=>ttApres(110+k*140,()=>b.classList.add("vu"))); }
+function ttMaj(){ render(); ttQQ(".tt-res").forEach(x=>x.classList.add("vu")); }
+function ttLancer(){ if(!ttSeq) ttReveler(); if(ttAutoCourant) ttAutoCourant(); }
+/* ⚠️ NAVIGATION RELATIVE, jamais par numéro d'écran : dans la maquette, un « aller à
+   l'écran 2 » posé SUR l'écran 2 bloquait tout le tutoriel, et insérer un écran
+   décalait la suite. La démonstration se rejoue à chaque arrivée, en avant comme en
+   arrière — chaque saisie automatique remet donc sa propre donnée à zéro. */
+function ttGo(n){ ttStop(); ttManuel=false; ttStep=n; render();
+  try{window.scrollTo(0,0);}catch(e){} ttLancer(); }
+function ttSuivant(){ ttGo(ttStep+1); }
+function ttPrecedent(){ if(ttStep>0) ttGo(ttStep-1); }
+function ttReset(){ ttStep=0; ttSel=[]; ttPicks={}; ttMises={}; ttFav=null; ttBonus=null;
+  ttCible=null; ttEnch={}; ttGagnes=[]; ttOffert=null; ttManuel=false; ttStop(); }
+function openTuto(){ ttReset(); navOpen("tuto"); ttLancer(); }
+function closeTuto(){ ttStop(); navBack(); }
+
+/* ── interactions ────────────────────────────────────────────────────────────── */
+function ttChoisir(i){ ttTouche();
+  if(ttSel.indexOf(i)>=0){ ttSel=ttSel.filter(x=>x!==i); delete ttPicks[i]; delete ttMises[i];
+    if(ttFav===i) ttFav=null; if(ttCible===i) ttCible=null; }
+  else if(ttSel.length<TT_NB) ttSel.push(i);
+  ttMaj(); }
+function ttIssue(i,v){ ttTouche(); ttPicks[i]=v; ttMaj(); }
+function ttDm(i,d){ ttTouche();
+  const av=ttMise(i);
+  const libre=Math.min(ttCap(),ttPlafond())-ttTotMise()+av;
+  const neuf=Math.max(1,Math.min(libre,av+d));
+  if(neuf===av){ ttBoutonsMise(); return; }   // plafond atteint : muet, pas d'animation à vide
+  ttMises[i]=neuf;
+  const em=ttQ("#ttM"+i); if(em) em.textContent=neuf+" €";
+  const g=ttQ("#ttG"+i); if(g) g.textContent=ttEur(ttGain(i));      // le « € » est dans le gabarit
+  const mt=ttQ("#ttTot"); if(mt) mt.textContent=ttEur(ttTotMise());  // idem
+  const jm=ttQ("#ttJm");
+  if(jm){ const k=Math.min(100,ttTotMise()/Math.max(1,ttPlafond())*100);
+    jm.style.width=k+"%"; jm.style.background=k>=99?"var(--gold)":"var(--brand)"; }
+  ttBoutonsMise(); }
+function ttBoutonsMise(){ const plein=ttTotMise()>=ttPlafond();
+  ttSel.forEach(j=>{ const mo=ttQ("#ttMo"+j), pl=ttQ("#ttPl"+j);
+    if(mo) mo.disabled=ttMise(j)<=1; if(pl) pl.disabled=plein; }); }
+function ttCouronne(i){ ttTouche();
+  const aG={}, aP={}; ttSel.forEach(j=>{aG[j]=ttGain(j);aP[j]=ttPerte(j);});
+  ttFav=(ttFav===i)?null:i;
+  if(ttCible===ttFav) ttCible=null;           // la cible ne peut pas être le favori
+  ttMaj();
+  ttSel.forEach(j=>{ const g=ttQ("#ttG"+j), p=ttQ("#ttP"+j);
+    if(g&&aG[j]!==ttGain(j)){ ttAnime(g,aG[j],ttGain(j),"",620); g.parentElement.classList.add("tt-pop"); }
+    if(p&&aP[j]!==ttPerte(j)) ttAnime(p,aP[j],ttPerte(j),"",620); }); }
+function ttPrendre(id){ ttTouche(); ttBonus=(ttBonus===id)?null:id; ttCible=null; ttMaj(); }
+function ttViser(i){ ttTouche(); ttCible=(ttCible===i)?null:i; ttMaj(); }
+
+function ttEnchere(id,d){ ttTouche();
+  const av=ttEnch[id]||0, avant=TT_POT-ttEnchTot();
+  const neuf=Math.max(0,Math.min(avant+av,av+d));
+  /* ⚠️ NE RIEN JOUER SI RIEN NE CHANGE : au plafond, le montant se réécrivait à
+     l'identique en jouant son animation — vu de l'écran, « ça zoome et ça revient
+     comme avant ». Un plafond doit être MUET, ou visible. Il est les deux. */
+  if(neuf===av){ ttBoutonsEnch(); return; }
+  ttEnch[id]=neuf;
+  const apr=TT_POT-ttEnchTot();
+  const e=ttQ("#ttE_"+id); if(e) e.textContent=neuf+" €";
+  const c=ttQ("#ttPot");
+  if(c){ ttAnime(c,avant,apr," €",240); c.classList.remove("tt-bump"); void c.offsetWidth; c.classList.add("tt-bump"); }
+  const j=ttQ("#ttJe");
+  if(j){ j.style.width=(apr/TT_POT*100)+"%"; j.style.background=apr<=8?"var(--gold)":"var(--brand)"; }
+  ttBoutonsEnch(); }
+function ttBoutonsEnch(){ const reste=TT_POT-ttEnchTot();
+  TT_CARTES.forEach(x=>{ const mo=ttQ("#ttEmo_"+x.id), pl=ttQ("#ttEpl_"+x.id);
+    if(mo) mo.disabled=(ttEnch[x.id]||0)<=0; if(pl) pl.disabled=reste<=0; });
+  const b=ttQ("#ttBtnE"); if(b) b.disabled=ttEnchTot()===0; }
+/* Le dépouillement ne calcule QUE l'état : l'écran suivant l'affiche.
+   ⚠️ Le tutoriel doit montrer un bonus en action — si la ligue rafle tout, on en prête
+   un. Mais une carte PRÊTÉE n'est pas REMPORTÉE : la maquette l'annonçait « remporté ✓ »
+   tout en écrivant « tu as tout perdu » deux lignes plus bas. */
+function ttResoudre(){
+  ttGagnes=TT_CARTES.filter(b=>(ttEnch[b.id]||0)>b.best.v).map(b=>b.id);
+  ttOffert=null;
+  if(!ttGagnes.length){ ttOffert="double"; ttGagnes=["double"]; } }
+function ttRevelerEnch(){ const dt=700;
+  TT_CARTES.forEach((b,k)=>ttApres(dt*(k+1),()=>{
+    const c=ttQ("#ttEn"+k); if(!c) return; c.classList.add("vu");
+    ttQ("#ttV"+k).innerHTML=(b.id===ttOffert)?'<span class="tt-gold">'+t("prêté pour la démo")+'</span>'
+      :(ttGagnes.indexOf(b.id)>=0)?'<span class="tt-green">'+t("remporté ✓")+'</span>'
+      :'<span class="tt-muted">'+t("pour {a}",{a:b.best.n})+'</span>'; }));
+  ttApres(dt*(TT_CARTES.length+1),()=>{
+    const f=ttQ("#ttFin"); if(!f) return; f.classList.add("vu");
+    const perdu=ttEnchTot()-ttPaye();
+    f.innerHTML='<div class="tt-mini">'+(ttOffert
+      ? t("Les autres ont tout emporté. On te prête <b>{a}</b> pour la suite de la démo — dans le vrai jeu, tu repartirais sans bonus.",{a:CARDS.double.e+" "+t(CARDS.double.n)})
+      : t("Tu repars avec <b>{a} bonus</b> pour toute la saison.",{a:ttGagnes.length}))
+      +'<div style="margin-top:7px;border-top:1px dashed var(--border);padding-top:7px">'
+      + t("Tu ne paies que ce que tu <b>remportes</b> : <b>{a} €</b>.",{a:ttEur(ttPaye())})
+      + (perdu>0?" "+t("Les <b>{a} €</b> misés sans obtenir la carte ne te coûtent <b>rien</b>.",{a:ttEur(perdu)}):"")
+      + '<div style="margin-top:5px">'+t("Ton <b>capital de départ</b> est donc de <b>{a} €</b> sur 100 €.",{a:ttEur(ttCap())})
+      + '</div></div></div>';
+    const b=ttQ("#ttBs"); if(b) b.classList.add("vu"); }); }
+
+/* ── LES ONZE ÉCRANS ─────────────────────────────────────────────────────────────
+   Un seul enseignement par écran, et chacun se MONTRE. Ne pas y ajouter de règle
+   « pour être complet » : c'est exactement comme ça que l'aperçu des règles avait
+   dérivé en doublon des règles détaillées (vidé en v8.44). Ce qui manque se met
+   dans viewRulesFull(), pas ici. */
+const TT_ECRANS=[
+
+// 1 ─ LE BUT DU JEU, PUIS COMMENT ON JOUE
+()=>({html:`
+  <div class="tt-h1">${t("Le but du jeu.")}</div>
+  <div class="tt-box tt-res" style="border-color:var(--brand)"><div class="tt-mini" style="line-height:1.75">
+    ${t("Chaque journée, tu affrontes <b>en duel</b> un joueur de ta ligue sur des <b>paris sportifs</b>. Celui des deux qui finit avec le <b>plus gros gain net</b> marque les points. À la fin de tous les duels, <b>le joueur qui a le plus de points remporte la compétition</b>.")}
+    <div style="margin-top:9px">${t("Et pour contrarier les plans de chacun, il y a les <b>🃏 bonus</b> : tout l'art est de savoir <b>quand</b> les jouer.")}</div>
+    <div style="margin-top:9px">${t("À l'arrivée, ce n'est pas qu'une affaire de fierté : le <b>premier</b> remporte une <b>🏆 récompense</b>, et le <b>dernier</b> paie son <b>gage</b>.")}</div>
+  </div></div>
+  <p class="tt-sous" style="margin-top:18px">${t("Concrètement :")}</p>
+  <div class="tt-box tt-res"><b>${t("🎯 Tu paries.")}</b><div class="tt-mini tt-muted">
+    ${t("Tu démarres avec <b>100 €</b> d'<b>argent fictif</b>. Chaque journée, tu en répartis une partie en mises de pronostic sur <b>{a} matchs</b>, choisis parmi les affiches du jour.",{a:TT_NB})}</div></div>
+  <div class="tt-box tt-res"><b>${t("⚔️ Tu affrontes quelqu'un.")}</b><div class="tt-mini tt-muted">
+    ${t("Un joueur différent chaque journée. Le meilleur net marque les points.")}</div></div>
+  <div class="tt-box tt-res"><b>${t("🃏 Tu as des bonus.")}</b><div class="tt-mini tt-muted">
+    ${t("Remportés aux enchères avant la saison — un seul par journée.")}</div></div>
+  <button class="btn" onclick="ttSuivant()">${t("Voir une saison →")}</button>`}),
+
+// 2 ─ LES ENCHÈRES (⚠️ AVANT le duel : la vente précède la 1re journée)
+()=>({
+  auto:()=>{ ttEnch={};
+    TT_CARTES.forEach(b=>{const el=ttQ("#ttE_"+b.id); if(el) el.textContent="0 €";});
+    const c=ttQ("#ttPot"); if(c) c.textContent=ttEur(TT_POT)+" €";
+    const g=ttQ("#ttJe"); if(g){ g.style.width="100%"; g.style.background="var(--brand)"; }
+    const bt=ttQ("#ttBtnE"); if(bt) bt.classList.remove("tt-attire");
+    ttBoutonsEnch();
+    let x=620;
+    [["cadeau",14],["double",16],["assurance",8]].forEach(p=>{
+      for(let v=2;v<=p[1];v+=2){ ttApres(x,()=>ttEnchere(p[0],2)); x+=150; }
+      x+=300; });
+    ttApres(x,()=>{ const b=ttQ("#ttBtnE"); if(b) b.classList.add("tt-attire"); }); },
+  html:`
+  <div class="tt-h1">${t("Avant tout : la vente aux enchères.")}</div>
+  <p class="tt-sous">${t("Une seule vente, <b>avant la première journée</b>. Les bonus remportés te suivent toute la saison — ça ne recommence pas chaque jour.")}</p>
+  <div class="tt-box tt-res" style="text-align:center;padding:14px 14px 15px">
+    <div class="tt-mini tt-muted">${t("Encore disponible")}</div>
+    <div id="ttPot" class="tt-gros">${ttEur(TT_POT-ttEnchTot())} €</div>
+    <div class="tt-jauge" style="margin-top:9px"><i id="ttJe" style="width:${(TT_POT-ttEnchTot())/TT_POT*100}%"></i></div>
+    <div class="tt-mini tt-muted" style="margin-top:7px">${t("sur {a} € — tu ne paies que ce que tu <b>remportes</b>, déduit de ton capital de départ de 100 € (argent fictif)",{a:TT_POT})}</div>
+  </div>
+  <div class="tt-box tt-res" style="border-style:dashed"><div class="tt-mini">
+    ${t("<b>Miser est facultatif.</b> C'est ici que démarre la stratégie : <b>garder du capital</b> pour parier gros, ou <b>prendre des bonus</b> pour renverser une journée. À toi de choisir tes armes.")}</div></div>
+  ${TT_CARTES.map(b=>{const C=ttCarte(b.id);return `
+    <div class="tt-box tt-res"><div class="tt-row">
+      <div><span style="font-size:21px;margin-right:7px">${C.e}</span><b>${esc(t(C.n))}</b>
+        <div class="tt-mini tt-muted" style="max-width:190px">${esc(t(C.d)).slice(0,120)}…</div></div>
+      <div class="tt-mise">
+        <button id="ttEmo_${b.id}" ${(ttEnch[b.id]||0)<=0?'disabled':''} onclick="ttEnchere('${b.id}',-2)">−</button><b id="ttE_${b.id}">${ttEnch[b.id]||0} €</b><button id="ttEpl_${b.id}" ${(TT_POT-ttEnchTot())<=0?'disabled':''} onclick="ttEnchere('${b.id}',2)">+</button>
+      </div></div></div>`;}).join("")}
+  <p class="tt-mini tt-muted tt-res" style="text-align:center">${t("Trois cartes ici pour la démo — le vrai jeu en compte <b>{a}</b>. <b>Tous les joueurs</b> de la ligue enchérissent aussi, en secret : la plus grosse mise emporte la carte.",{a:CARD_IDS.length})}</p>
+  <p class="tt-mini tt-res tt-gold" style="text-align:center">${t("⚠️ Ici, la démo t'impose <b>au moins une enchère</b> : sans bonus, il n'y aurait rien à te montrer ensuite.")}</p>
+  <button class="btn" id="ttBtnE" ${ttEnchTot()>0?'':'disabled'} onclick="ttResoudre();ttSuivant()">${t("Enchérir →")}</button>`}),
+
+// 3 ─ LES ENCHÈRES SONT CLOSES
+/* ⚠️ C'EST UN VRAI ÉCRAN. Dans la maquette il réécrivait le contenu à la volée sans
+   passer par le rendu : la note de l'écran précédent restait affichée, elle
+   apparaissait AVANT le contenu, et le compteur annonçait deux fois le même numéro. */
+()=>({seq:1, auto:()=>ttRevelerEnch(), html:`
+  <div class="tt-h1">${t("Les enchères sont closes.")}</div>
+  <p class="tt-sous">${t("Chacun avait misé en secret.")}</p>
+  ${TT_CARTES.map((b,k)=>{const C=ttCarte(b.id);return `
+    <div class="tt-box tt-res" id="ttEn${k}"><div class="tt-row">
+      <div><span style="font-size:20px;margin-right:7px">${C.e}</span><b>${esc(t(C.n))}</b>
+        <div class="tt-mini tt-muted">${t("toi <b>{a} €</b> · meilleure autre offre : <b>{b} {c} €</b>",{a:ttEnch[b.id]||0,b:b.best.n,c:b.best.v})}</div></div>
+      <div style="text-align:right" class="tt-mini"><b id="ttV${k}"></b></div></div></div>`;}).join("")}
+  <div class="tt-box tt-res" id="ttFin"></div>
+  <button class="btn tt-res" id="ttBs" onclick="ttSuivant()">${t("Continuer →")}</button>`}),
+
+// 4 ─ LA JOURNÉE 1 ET SON ADVERSAIRE
+()=>({html:`
+  <div class="tt-h1">${t("Journée 1 : tu affrontes Léa.")}</div>
+  <p class="tt-sous">${t("Ton adversaire change à chaque journée. Le meilleur résultat du jour marque les points.")}</p>
+  <div class="tt-duel">
+    <div class="tt-who tt-slideL">${avatarHTML(TT_AV_MOI,70)}<div><b>${t("Toi")}</b></div></div>
+    <div class="tt-vs">${t("VS")}</div>
+    <div class="tt-who tt-slideR">${avatarHTML(TT_AV_LEA,70)}<div><b>Léa</b></div></div>
+  </div>
+  <button class="btn" onclick="ttSuivant()">${t("Composer la journée →")}</button>`}),
+
+// 5 ─ CHOISIR LES AFFICHES
+()=>({
+  auto:()=>{ ttSel=[]; ttPicks={}; ttMises={}; ttFav=null; ttCible=null; ttMaj();
+    TT_PLAN.forEach((p,k)=>ttApres(620+k*520,()=>ttChoisir(p.i))); },
+  html:`
+  <div class="tt-h1">${t("Choisis {a} affiches.",{a:TT_NB})}</div>
+  <p class="tt-sous"><b id="ttCpt">${ttSel.length}</b> ${t("sur {a} — touche les matchs qui t'inspirent.",{a:TT_NB})}</p>
+  ${/* ⚠️ La règle la plus lourde de conséquences du jeu, et elle n'était nulle part :
+       c'est le joueur À DOMICILE qui compose la journée, POUR LES DEUX. */''}
+  <div class="tt-box tt-res" style="border-color:var(--gold)"><div class="tt-mini">
+    ${t("🏠 <b>Tu reçois à domicile</b> : c'est toi qui composes la journée, et ces {a} affiches <b>s'imposeront aussi à Léa</b>. La prochaine journée, tu joueras à l'extérieur : c'est toi qui <b>subiras les choix</b> de ton adversaire.",{a:TT_NB})}
+    <div class="tt-muted" style="margin-top:6px">${t("Majoritairement du football, comme le veut la règle.")}</div></div></div>
+  ${TT_MATCHS.map(m=>`
+    <div class="tt-aff clik tt-res ${ttSel.indexOf(m.i)>=0?'on':''}" onclick="ttChoisir(${m.i})">
+      <div class="tt-row"><div><span style="margin-right:6px">${m.s}</span><span class="tt-eq">${m.h} – ${m.a}</span></div></div>
+      <div class="tt-cotes">${ttIssues(m).map(v=>`<div class="tt-cote">${ttNomIssue(m,v)}<b>${ttCo(m.o[v])}</b></div>`).join("")}</div>
+      <div class="tt-tick">✓</div></div>`).join("")}
+  <button class="btn" ${ttSel.length===TT_NB?'':'disabled'} onclick="ttSuivant()">${t("Continuer →")}</button>`}),
+
+// 6 ─ PRONOS ET MISES
+()=>({
+  /* Chaque prono se pose, PUIS sa mise grimpe euro par euro : le total et la jauge
+     bougent à chaque pas. Les mises partent toutes de TT_MISE_BASE et divergent —
+     c'est le dosage qu'on donne à voir. */
+  auto:()=>{ ttPicks={}; ttMises={}; ttMaj();
+    let x=520;
+    TT_PLAN.forEach(p=>{ ttApres(x,()=>ttIssue(p.i,p.v)); x+=430;
+      for(let k=TT_MISE_BASE;k<p.m;k++){ ttApres(x,()=>ttDm(p.i,1)); x+=95; }
+      x+=220; }); },
+  html:`
+  <div class="tt-h1">${t("Ton prono et ta mise.")}</div>
+  <p class="tt-sous">${t("Sur chaque affiche, l'issue que tu joues et ce que tu risques.")}</p>
+  <div class="tt-box tt-res" style="padding:12px 13px">
+    <div class="tt-row tt-mini"><span class="tt-muted">${t("Capital")}</span><b>100,00 €</b></div>
+    <div class="tt-row tt-mini"><span class="tt-muted">${t("− bonus remportés")}</span><b>${ttEur(ttPaye())} €</b></div>
+    <div class="tt-row" style="border-top:1px dashed var(--border);margin-top:6px;padding-top:7px">
+      <span class="tt-mini">${t("Capital disponible")}</span><b class="tt-green">${ttEur(ttCap())} €</b></div>
+    <div class="tt-mini tt-muted" style="margin-top:10px">${t("Misé <b>{a} €</b> sur un plafond de <b>{b} €</b> — au maximum <b>{c} %</b> du capital par journée.",{a:'<span id="ttTot">'+ttEur(ttTotMise())+'</span>',b:ttEur(ttPlafond()),c:pct(STAKE_CAP)})}
+      <span class="tt-gold">${t("Sauf à la <b>dernière journée</b> : là, tu peux tout miser.")}</span></div>
+    <div class="tt-jauge" style="margin-top:6px"><i id="ttJm" style="width:${Math.min(100,ttTotMise()/Math.max(1,ttPlafond())*100)}%"></i></div>
+  </div>
+  ${ttSel.map(i=>`
+    <div class="tt-box tt-res">
+      <div class="tt-row">
+        <div><span style="margin-right:6px">${ttM(i).s}</span><b>${ttM(i).h} – ${ttM(i).a}</b></div>
+        <div class="tt-mise">
+          <button id="ttMo${i}" ${ttMise(i)<=1?'disabled':''} onclick="ttDm(${i},-1)">−</button><b id="ttM${i}">${ttMise(i)} €</b><button id="ttPl${i}" ${ttTotMise()>=ttPlafond()?'disabled':''} onclick="ttDm(${i},1)">+</button>
+        </div></div>
+      <div class="tt-cotes">${ttIssues(ttM(i)).map(v=>`
+        <div class="tt-cote clik ${ttPicks[i]===v?'sel':''}" onclick="ttIssue(${i},'${v}')">${ttNomIssue(ttM(i),v)}<b>${ttCo(ttM(i).o[v])}</b></div>`).join("")}</div>
+      <div class="tt-mini tt-muted" style="margin-top:8px">${t("gagne <b>{a} €</b> si tu as raison",{a:'<span class="tt-green" id="ttG'+i+'">'+ttEur(ttGain(i))+'</span>'})}</div>
+    </div>`).join("")}
+  <button class="btn" ${ttSel.every(i=>ttPicks[i])?'':'disabled'} onclick="ttSuivant()">${t("Continuer →")}</button>`}),
+
+// 7 ─ LE MATCH FAVORI
+()=>({
+  auto:()=>{ ttFav=null; ttMaj(); ttApres(1300,()=>ttCouronne(TT_PLAN[0].i)); },
+  html:`
+  <div class="tt-h1">${t("Chaque journée, un match favori.")}</div>
+  <p class="tt-sous">${t("Sélectionne la <b>👑</b> sur le match dont tu es le plus sûr : le <b>gain</b> y est doublé… et la <b>perte</b> aussi.")}</p>
+  ${ttSel.filter(i=>ttPicks[i]).map(i=>`
+    <div class="tt-box tt-res"><div class="tt-row">
+      <div><span style="margin-right:6px">${ttM(i).s}</span><b>${ttM(i).h} – ${ttM(i).a}</b>
+        <div class="tt-mini" style="margin-top:2px">${t("ton prono : <b>{a}</b>",{a:ttNomIssue(ttM(i),ttPicks[i])})}
+          <span class="tt-muted">(${ttCo(ttM(i).o[ttPicks[i]])}) · ${ttMise(i)} €</span></div>
+        <div class="tt-mini tt-muted">${t("gagne <b>{a} €</b> · perd <b>{b} €</b>",{a:'<span class="tt-green" id="ttG'+i+'">'+ttEur(ttGain(i))+'</span>',b:'<span class="tt-red" id="ttP'+i+'">'+ttEur(ttPerte(i))+'</span>'})}</div></div>
+      <div class="tt-tog ${ttFav===i?'on':''}" onclick="ttCouronne(${i})">👑</div>
+    </div></div>`).join("")}
+  <button class="btn" ${ttFav!=null?'':'disabled'} onclick="ttSuivant()">${t("Continuer →")}</button>`}),
+
+// 8 ─ JOUER UN BONUS, ET LE POSER SUR UN MATCH
+()=>({html:`
+  <div class="tt-h1">${t("Joue un bonus.")}</div>
+  <p class="tt-sous">${ttGagnes.length>1?t("Tu en as remporté {a}. <b>Un seul par journée</b>.",{a:ttGagnes.length}):t("Tu en as remporté un.")}</p>
+  <div class="tt-box tt-res" style="border-style:dashed"><div class="tt-mini">
+    ${t("<b>Rien ne t'oblige à en jouer un.</b> Tu peux garder tes cartes pour une journée plus décisive — elles ne se perdent pas.")}
+    <div class="tt-muted" style="margin-top:5px">${t("Ici, on en joue un pour te montrer comment ça se passe.")}</div></div></div>
+  <div class="tt-cartes">${ttGagnes.map(id=>{const C=ttCarte(id);return `
+    <div class="tt-carte ${ttBonus===id?'on':''}" onclick="ttPrendre('${id}')">
+      <span class="em">${C.e}</span><span class="nm">${esc(t(C.n))}</span></div>`;}).join("")}</div>
+  <div class="tt-box ${ttBonus?'tt-flip':''}" style="min-height:52px"><div class="tt-mini">
+    ${ttBonus?esc(t(ttCarte(ttBonus).d)):'<span class="tt-muted">'+t("Touche une carte pour voir ce qu'elle fait.")+'</span>'}</div></div>
+  ${ttBonus?`
+    <p class="tt-sous" style="margin-top:16px">${t("Cette carte se pose sur un match. <b>Choisis lequel :</b>")}</p>
+    ${ttSel.map(i=>{const no=(i===ttFav);return `
+      <div class="tt-aff ${ttCible===i?'on':''} ${no?'':'clik'}" ${no?'':`onclick="ttViser(${i})"`} style="${no?'opacity:.5':''}">
+        <div class="tt-row"><div><span style="margin-right:6px">${ttM(i).s}</span><span class="tt-eq">${ttM(i).h} – ${ttM(i).a}</span>
+          <div class="tt-mini tt-muted">${no?t("ton 👑 match favori — interdit comme cible"):ttNomIssue(ttM(i),ttPicks[i])+" · "+ttMise(i)+" €"}</div></div>
+        <div class="tt-tog ${ttCible===i?'on':''} ${no?'no':''}">${ttCarte(ttBonus).e}</div></div></div>`;}).join("")}`:''}
+  ${ttGagnes.length>1?`<p class="tt-mini tt-muted" style="text-align:center;margin-top:14px">${t("Les autres restent en main pour les journées suivantes.")}</p>`:''}
+  <button class="btn" ${(ttBonus&&ttCible!=null)?'':'disabled'} onclick="ttSuivant()">${t("Continuer →")}</button>`}),
+
+// 9 ─ VERROUILLER — et le seul avertissement du tutoriel
+/* ⚠️ LE FORFAIT est la seule chose qu'on AVERTIT au lieu de la montrer : on ne peut pas
+   la faire vivre au joueur sans le punir. D'où sa place ici, à l'instant de la
+   validation. Et il ne sanctionne pas l'absence de pronos mais l'absence de VALIDATION —
+   des pronos saisis et laissés en plan tombent à zéro. */
+()=>({html:`
+  <div class="tt-h1">${t("Léa a joué de son côté.")}</div>
+  <p class="tt-sous">${t("Personne ne voit les pronos de l'autre avant la clôture.")}</p>
+  <div class="tt-duel">
+    <div class="tt-who">${avatarHTML(TT_AV_MOI,70)}<div><b class="tt-green">${t("Prêt")}</b></div></div>
+    <div class="tt-vs">${t("VS")}</div>
+    <div class="tt-who">${avatarHTML(TT_AV_LEA,70)}<div><b class="tt-green">${t("Prête")}</b></div></div>
+  </div>
+  <div class="tt-box tt-res" style="border-color:var(--red)"><div class="tt-mini">
+    ${t("⚠️ <b>N'oublie pas de valider.</b> Des pronos saisis mais <b>non validés</b> à la clôture ne comptent pas — c'est comme n'avoir rien joué : <b>duel perdu d'office</b>, <b>{a} point</b> et <b>−{b} %</b> de ton capital.",{a:forgotPtsShown(),b:pct(forgotPenShown())})}</div></div>
+  <button class="btn" onclick="ttSuivant()">${t("Voir les résultats →")}</button>`}),
+
+// 10 ─ LES RÉSULTATS (cet écran gère lui-même sa séquence)
+()=>({seq:1, auto:()=>ttResultats(), html:`
+  <div class="tt-h1">${t("Les résultats.")}</div>
+  <p class="tt-sous">${t("Match par match, comme dans le vrai jeu.")}</p>
+  ${ttSel.filter(i=>ttPicks[i]).map((i,k)=>`
+    <div class="tt-box tt-res" id="ttR${k}"><div class="tt-row">
+      <div><span style="margin-right:6px">${ttM(i).s}</span><b>${ttM(i).h} – ${ttM(i).a}</b>
+        ${ttFav===i?' <span class="tt-gold">👑</span>':''}${(ttCible===i&&ttBonus)?' <span class="tt-gold">'+ttCarte(ttBonus).e+'</span>':''}
+        <div class="tt-mini tt-muted">${ttMise(i)} € ${t("sur")} <b>${ttNomIssue(ttM(i),ttPicks[i])}</b> (${ttCo(ttM(i).o[ttPicks[i]])})</div></div>
+      <div style="text-align:right"><div class="tt-sc" id="ttSc${k}"></div><div class="tt-mini" id="ttVd${k}"></div></div>
+    </div></div>`).join("")}
+  <div class="tt-box tt-res" id="ttNetBox">
+    <div class="tt-row" style="align-items:flex-start">
+      <div style="flex:1;text-align:center"><div class="tt-mini tt-muted">${t("Toi")}</div><div class="tt-duo" id="ttNm">0,00 €</div></div>
+      <div style="flex:1;text-align:center"><div class="tt-mini tt-muted">Léa</div><div class="tt-duo" id="ttNl">0,00 €</div></div>
+    </div>
+    <div class="tt-mini" id="ttCmp" style="text-align:center;margin-top:9px"></div></div>
+  <div class="tt-box tt-res" id="ttEff"></div>
+  <div class="tt-verdict" id="ttVerdict"></div>
+  <div class="tt-box tt-res" id="ttLigue"></div>
+  <div class="tt-box tt-res" id="ttRecap"></div>
+  <div class="tt-box tt-res" id="ttPts"></div>
+  <div class="tt-box tt-res" id="ttConso"></div>
+  <button class="btn tt-res" id="ttBtnF" onclick="ttSuivant()">${t("Continuer →")}</button>`}),
+
+// 11 ─ LA SAISON CONTINUE
+/* ⚠️ CUMUL après trois journées, pas le tableau de la journée : sinon il répéterait
+   l'écran précédent. Et il enseigne mieux — celui qui menait s'est fait doubler. */
+()=>({
+  auto:()=>TT_CUMUL.forEach((p,k)=>ttApres(160+k*150,()=>{const el=ttQ("#ttLb"+k); if(el) el.classList.add("vu");})),
+  html:`
+  <div class="tt-h1">${t("Deux journées plus tard…")}</div>
+  <p class="tt-sous">${t("Journée <b>3</b> sur <b>10</b>. Karim t'est passé devant : <b>rien n'est joué</b>.")}</p>
+  <div class="tt-box tt-res" style="border-color:var(--gold)"><div class="tt-mini">
+    ${t("🔥 <b>Et rien ne le sera avant la fin.</b> À la <b>dernière journée</b>, les points de duel comptent <b>double</b> — et le plafond de mise saute : tu peux engager <b>tout ton capital</b>.")}
+    <div class="tt-muted" style="margin-top:5px">${t("Un retard se rattrape jusqu'au dernier jour.")}</div></div></div>
+  <div class="tt-box" style="padding:12px 13px">
+    ${TT_CUMUL.map((p,k)=>`
+      <div class="tt-res" id="ttLb${k}" style="margin:${k?10:0}px 0 0">
+        <div class="tt-row" style="margin-bottom:5px">
+          <span class="${p.moi?'':'tt-muted'}" style="font-weight:${p.moi?800:600}">${k+1}. ${avatarHTML(p.av,22)} ${p.moi?t("Toi"):p.n}</span>
+          <span style="text-align:right"><b class="${p.moi?'tt-green':'tt-muted'}">${ttPts(p.pts)}</b><span class="tt-petit"> · ${p.cap} €</span></span></div>
+        <div class="tt-barre"><i style="background:var(--${p.moi?'green':'muted'});width:${Math.max(6,p.pts/TT_CUMUL[0].pts*100)}%"></i></div>
+      </div>`).join("")}
+    <div class="tt-mini tt-muted tt-res" style="margin-top:11px;border-top:1px dashed var(--border);padding-top:8px">
+      ${t("Le <b>capital</b> est indiqué à titre indicatif : il ne donne pas de points, mais c'est lui qui <b>départage</b> à points égaux.")}</div>
+  </div>
+  <p class="tt-sous tt-res" style="margin-top:20px">${t("Ce que cette démo ne t'a pas montré :")}</p>
+  <div class="tt-box tt-res"><div class="tt-mini" style="line-height:1.75">
+    <div>${t("🏆 <b>Un gage et une récompense</b> — le dernier paie son gage, le premier reçoit sa récompense. Choisis à la préparation, <b>avant</b> de savoir où tu finiras.")}</div>
+    <div style="margin-top:9px">${t("🔄 <b>Une trêve</b> — une seconde vente aux enchères à mi-parcours, pour ceux qui ont mal joué leurs cartes.")}</div>
+    <div style="margin-top:9px">${t("🤖 <b>Un joueur IA</b> — pour jouer en solo, ou pour compléter un effectif impair.")}</div>
+    <div style="margin-top:9px">${t("🃏 <b>{a} bonus</b> au lieu des trois de la démo, 🤝 le <b>rachat</b> entre joueurs, 🕵️ les <b>pronos de l'adversaire</b> après la clôture, ⏱️ les <b>résultats en direct</b>…",{a:CARD_IDS.length})}</div>
+    <div class="tt-muted" style="margin-top:10px">${t("Tout se règle à la création de la ligue.")}</div>
+  </div></div>
+  <button class="btn" onclick="ttReset();ttGo(0)">${t("Rejouer la démo")}</button>
+  <div style="height:8px"></div>
+  <button class="btn ghost" onclick="closeTuto()">${t("J'ai compris, terminer")}</button>`})
+];
+
+/* ── L'ANIMATION DES RÉSULTATS ────────────────────────────────────────────────── */
+function ttResultats(){
+  const d=420;
+  ttSel.forEach((i,k)=>ttApres(d*(k+1),()=>{
+    const c=ttQ("#ttR"+k); if(!c) return; c.classList.add("vu");
+    ttQ("#ttSc"+k).textContent=ttM(i).sc;
+    ttQ("#ttVd"+k).innerHTML=ttJuste(i)
+      ? '<b class="tt-green">+'+ttEur(ttGain(i))+' €</b>'
+      : '<b class="tt-red">−'+ttEur(ttPerte(i))+' €</b>'; }));
+  const t0=d*(ttSel.length+1), nl=ttNetLea();
+
+  /* 1. LES DEUX NETS montent côte à côte : le duel se joue au chiffre. */
+  ttApres(t0,()=>{ const brut=ttNetBrut();
+    ttQ("#ttNetBox").classList.add("vu");
+    const a=ttQ("#ttNm"), b=ttQ("#ttNl");
+    a.className="tt-duo "+(brut>=0?"tt-green":"tt-red");
+    b.className="tt-duo "+(nl>=0?"tt-green":"tt-red");
+    ttAnime(a,0,brut," €",950); ttAnime(b,0,nl," €",950); });
+
+  /* 2. l'effet du bonus. ⚠️ S'il n'a RIEN donné, on le DIT : un tiret muet passerait
+        pour un défaut d'affichage, et la leçon la plus chère du jeu est là. */
+  ttApres(t0+1050,()=>{
+    const C=ttCarte(ttBonus); if(!C) return;
+    const surAdv=TT_CARTES.filter(x=>x.id===ttBonus)[0].adv;
+    const delta=surAdv?-(TT_AUTRES.filter(p=>p.n==="Léa")[0].net-nl):(ttNet()-ttNetBrut());
+    const nul=Math.abs(delta)<0.005;
+    ttQ("#ttEff").classList.add("vu");
+    ttQ("#ttEff").innerHTML='<div class="tt-row"><div><span style="font-size:19px;margin-right:6px">'+C.e+'</span><b>'+esc(t(C.n))+'</b>'
+      +'<div class="tt-mini tt-muted">'+(ttCible!=null?t("posé sur {a}",{a:ttM(ttCible).h+" – "+ttM(ttCible).a}):"")+'</div></div>'
+      +'<b class="'+(nul?'tt-muted':'tt-gold')+'" id="ttDb">'+(nul?t("aucun effet"):"—")+'</b></div>'
+      +(nul?'<div class="tt-mini tt-muted" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">'
+        +ttMotif()+" "+t("⚠️ La carte est <b>consommée quand même</b> : un bonus mal placé est un bonus perdu.")+'</div>':'');
+    if(nul) return;
+    ttAnime(ttQ("#ttDb"),0,delta," €",750);
+    if(surAdv) ttAnime(ttQ("#ttNl"),TT_AUTRES.filter(p=>p.n==="Léa")[0].net,nl," €",750);
+    else       ttAnime(ttQ("#ttNm"),ttNetBrut(),ttNet()," €",750); });
+
+  /* 3. la comparaison, puis le duel */
+  ttApres(t0+1900,()=>{ const ec=ttNet()-nl;
+    ttQ("#ttCmp").innerHTML=ec>=0
+      ? '<span class="tt-green">'+t("<b>{a} €</b> de mieux que Léa",{a:ttEur(ec)})+'</span>'
+      : '<span class="tt-red">'+t("<b>{a} €</b> de moins que Léa",{a:ttEur(-ec)})+'</span>';
+    ttQ("#ttVerdict").innerHTML=ec>0?'🏆 <span class="tt-green">'+t("Tu gagnes le duel.")+'</span>'
+      :ec<0?'<span class="tt-red">'+t("Léa gagne le duel.")+'</span>'
+      :'<span class="tt-muted">'+t("Match nul.")+'</span>';
+    ttQ("#ttVerdict").classList.add("vu"); });
+
+  /* 4. TOUTE LA LIGUE, nets ET points — sans elle le ⭐ tombe du ciel, et on ne
+        comprend pas qu'un duel gagné vaille plus qu'un gros net. */
+  ttApres(t0+2600,()=>{
+    const j=ttJournee();
+    const neg=j.filter(p=>p.duel==="g"&&p.net<0)[0];
+    const pos=j.filter(p=>p.duel==="p"&&p.net>0).sort((a,b)=>b.net-a.net)[0];
+    const advN=x=>{const o=j.filter(y=>y.n===x)[0];return o?ttSg(o.net):"";};
+    ttQ("#ttLigue").classList.add("vu");
+    ttQ("#ttLigue").innerHTML='<div class="tt-mini tt-muted" style="margin-bottom:8px">'
+      +t("Toute la ligue — le <b>⭐</b> va au meilleur net de <b>tous</b>, pas du duel.")+'</div>'
+      +j.map(p=>'<div class="tt-ligne '+(p.moi?'tt-moi':'')+'">'+avatarHTML(p.av,22)
+        +'<span class="nm '+(p.moi?'':'tt-muted')+'" style="font-weight:'+(p.moi?800:600)+'">'
+        +(p.moi?t("Toi"):p.n)+'<span class="tt-muted" style="font-weight:400"> '+t("vs {a}",{a:p.adv==="Toi"?t("Toi"):p.adv})+'</span></span>'
+        +(p.et?'<span class="tt-gold">⭐</span>':'')
+        +'<b class="'+(p.net>=0?'tt-green':'tt-red')+'">'+ttSg(p.net)+'</b>'
+        +'<span class="pt '+(p.pts>=2?'tt-green':'tt-muted')+'">'+ttPts(p.pts)+'</span></div>').join("")
+      +((neg&&pos)?'<div class="tt-mini tt-muted" style="margin-top:10px;border-top:1px dashed var(--border);padding-top:8px">'
+        +t("<b>{a}</b> finit à <b>{b}</b> et marque pourtant <b>{c} pts</b> : le duel était contre <b>{d}</b>, à <b>{e}</b> — donc <b>duel gagné</b>.",
+           {a:neg.n,b:ttSg(neg.net),c:neg.pts,d:neg.adv,e:advN(neg.adv)})
+        +'<div style="margin-top:5px">'+t("<b>{a}</b> finit à <b>{b}</b> et n'en marque qu'<b>1</b> : le duel était contre <b>{c}</b>, à <b>{d}</b> — donc <b>duel perdu</b>.",
+           {a:pos.n,b:ttSg(pos.net),c:pos.adv,d:advN(pos.adv)})+'</div>'
+        +'<div style="margin-top:5px">'+t("C'est le <b>duel</b> qui rapporte, pas le montant.")+'</div></div>':''); });
+
+  /* 4 bis. LA RECAPITALISATION — elle ne peut pas s'énoncer dans le vide : le net du
+     joueur est positif, la règle serait abstraite. Elle s'accroche au dernier du
+     tableau, qui vient de s'afficher. */
+  ttApres(t0+3000,()=>{
+    const j=ttJournee(), pire=j[j.length-1];
+    if(!pire||pire.net>=0) return;
+    ttQ("#ttRecap").classList.add("vu");
+    ttQ("#ttRecap").innerHTML='<div class="tt-mini">'
+      +t("🛟 <b>{a}</b> finit à <b>{b}</b>. Si le capital tombe sous <b>{c} €</b>, il est <b>remonté à {d} €</b> — de quoi continuer à miser — en échange de <b>−1 point</b> au classement.",
+         {a:pire.n,b:ttSg(pire.net),c:RECAP_THRESHOLD,d:RECAP_TARGET})
+      +'<div class="tt-muted" style="margin-top:5px">'+t("On ne sort jamais du jeu faute d'argent. Mais ça se paie.")+'</div></div>'; });
+
+  /* 5. mes points. ⚠️ Tout est CALCULÉ — le libellé du duel, ses points, le signe du
+        net, qui a pris l'étoile : ces valeurs étaient écrites en dur dans la maquette
+        et mentaient dès qu'on changeait une mise. */
+  ttApres(t0+3400,()=>{
+    const j=ttJournee(), moi=j.filter(p=>p.moi)[0], star=j.filter(p=>p.et)[0], lea=j.filter(p=>p.n==="Léa")[0];
+    const pd=ttPtsDuel(moi.duel), po=moi.net>0;
+    ttQ("#ttPts").innerHTML='<div class="tt-mini" style="line-height:1.75">'
+      +'<div class="tt-row"><span>'+t("Duel {a}",{a:ttNomDuel(moi.duel)})+'</span><b class="'+(pd?'tt-green':'tt-muted')+'">'+t("+{a} pts",{a:pd})+'</b></div>'
+      +'<div class="tt-row"><span>'+t("Journée finie en <b>{a}</b> ({b})",{a:po?t("positif"):t("négatif"),b:ttSg(moi.net)})+'</span><b class="'+(po?'tt-green':'tt-muted')+'">'+t("+{a} pt",{a:po?1:0})+'</b></div>'
+      +'<div class="tt-row"><span>'+t("⭐ Meilleur net de la ligue")+(moi.et?'':' <span class="tt-muted">'+t("— c'est {a}",{a:star.n})+'</span>')+'</span><b class="'+(moi.et?'tt-green':'tt-muted')+'">'+t("+{a} pt",{a:moi.et?1:0})+'</b></div>'
+      +(moi.et?'':'<div class="tt-mini tt-muted" style="margin-top:-2px">'+t("{a} a fait <b>{b}</b>, mieux que tes <b>{c}</b> : le point d'étoile lui revient. Il se joue sur <b>toute la ligue</b>, pas sur ton duel.",{a:star.n,b:ttSg(star.net),c:ttSg(moi.net)})+'</div>')
+      +'<div class="tt-row" style="border-top:1px dashed var(--border);margin-top:7px;padding-top:7px"><b>'+t("Ta journée")+'</b><b class="'+(moi.pts?'tt-green':'tt-muted')+'" style="font-size:15px">'+ttPts(moi.pts)+'</b></div>'
+      +'<div class="tt-row" style="margin-top:7px"><span class="tt-muted">'+t("Léa (ton adversaire) — duel {a}, net {b}",{a:ttNomDuel(lea.duel),b:lea.net>0?t("positif"):t("négatif")})+'</span><b class="tt-muted">'+ttPts(lea.pts)+'</b></div>'
+      +'<div class="tt-mini tt-muted" style="margin-top:9px;border-top:1px dashed var(--border);padding-top:8px">'
+      +t("Duel : <b>gagné 2</b> · <b>nul 1</b> · <b>perdu 0</b>. <b>+1</b> si ton net est <b>positif</b>. <b>+1</b> au ⭐ meilleur net de toute la ligue.")+'</div></div>';
+    ttQ("#ttPts").classList.add("vu");
+    /* « il ne revient pas » : la carte se grise. Rien à lire, on la voit s'éteindre. */
+    const C=ttCarte(ttBonus);
+    if(C){ ttQ("#ttConso").innerHTML='<div class="tt-row" style="opacity:.45;filter:grayscale(1)">'
+        +'<div><span style="font-size:19px;margin-right:6px">'+C.e+'</span><b>'+esc(t(C.n))+'</b></div>'
+        +'<b class="tt-mini">'+t("utilisé")+'</b></div>'
+        +'<div class="tt-mini tt-muted" style="margin-top:6px">'+t("Un bonus joué ne revient pas.")
+        +(ttGagnes.length>1?" "+t("Il t'en reste <b>{a}</b> pour les journées suivantes.",{a:ttGagnes.length-1}):"")+'</div>';
+      ttQ("#ttConso").classList.add("vu"); }
+    ttQ("#ttBtnF").classList.add("vu"); });
+}
+
+function viewTuto(){
+  const o=TT_ECRANS[ttStep]();
+  ttAutoCourant=o.auto||null; ttSeq=!!o.seq;
+  const n=TT_ECRANS.length;
+  return `<div id="ttWrap">
+    <div class="tt-head">
+      <button class="tt-lien" style="visibility:${ttStep>0?'visible':'hidden'}" onclick="ttPrecedent()">${t("← Précédent")}</button>
+      <span class="tt-pas">${ttStep+1} / ${n}</span>
+      <button class="tt-lien" onclick="closeTuto()">${t("Quitter")}</button>
+    </div>
+    <div class="tt-jauge" style="margin-bottom:6px"><i style="width:${(ttStep+1)/n*100}%"></i></div>
+    ${o.html}</div>`;
+}
+
 function viewRules(){
-  /* ⚠️ v8.44 (arbitré avec Hervé sur maquette) — CETTE PAGE EST UN APERÇU, PAS LA RÉFÉRENCE.
-     Elle avait dérivé en doublon des 📚 Règles détaillées : NEUF pavés ET les fiches des bonus au
-     complet, au point qu'on ne savait plus laquelle des deux lire — celui qui voulait « comprendre
-     vite » abandonnait. On garde ici le strict nécessaire : but, déroulé d'une journée, points et
-     classement, bonus, enjeu. TOUT le reste vit dans viewRulesFull() et y figure déjà (filet de
-     sécurité, match annulé à 24 h, départage complet, flèche ▲ de mouvement, oubli, ligue
-     abandonnée, rachat premium, fiches des bonus, format à deux, options de ligue).
-     ⚠️ NE PAS Y REMETTRE DE DÉTAIL « pour être complet » : c'est exactement comme ça qu'elle a
-     grossi. Une règle qui manque se rajoute dans les règles DÉTAILLÉES, pas ici.
-     ⚠️ LE CLASSEMENT EST MENTIONNÉ EXPRÈS (relevé par Hervé sur la maquette) : la page disait
-     comment on marque des points sans jamais dire qu'ils s'ADDITIONNENT pour faire le classement.
-     ⚠️ Les chiffres restent INJECTÉS (STAKE_CAP, SHOP_CAP) et le barème reste CALCULÉ
-     (scoringShown) : une ligue en ancien barème ne doit pas lire le nouveau.
-     ⚠️ L'ENJEU EST DIT AU CONDITIONNEL (« selon ce que la ligue a choisi ») : cette page se lit
-     aussi HORS ligue, et affirmer « le dernier fait un gage » serait faux en mode récompense. */
+  /* ⚠️ v8.205 — CET ÉCRAN N'EST PLUS UN APERÇU, C'EST UN AIGUILLAGE.
+     Il portait un résumé en cinq pavés qui doublonnait les 📚 règles détaillées — c'est
+     exactement le reproche qui lui avait déjà valu d'être vidé une première fois en
+     v8.44, et il avait recommencé à grossir. Le tutoriel dynamique fait ce travail mieux
+     qu'un résumé : on n'y LIT pas les règles, on les voit se produire, et chaque chiffre
+     y est injecté depuis les constantes du moteur.
+     ⚠️ NE PAS Y REMETTRE DE RÉSUMÉ « pour dépanner celui qui est pressé » : c'est la
+     phrase exacte qui a fait grossir la page les deux fois. Une règle qui manque se
+     rajoute dans viewRulesFull(), jamais ici. */
   return `<button class="btn ghost sm" onclick="closeRules()">${t("← Retour")}</button>
    <div class="box"><div class="boxttl">${t("📖 Règles du jeu")}</div>
-     <div class="mini muted">${t("L'essentiel en une page. Le détail complet est dans <b>📚 Règles détaillées</b>.")}</div></div>
-   <div class="box"><div class="boxttl">${t("🎯 Le but")}</div>
-     <div class="mini muted" style="line-height:1.75">${t("Un championnat de pronostics entre amis, en <b>argent fictif</b> (100 € au départ). Le champion est celui qui a le plus de <b>points</b> — pas le plus d'argent.")}</div></div>
-   <div class="box"><div class="boxttl">${t("⚽ Une journée")}</div>
-     <ul class="mini muted" style="margin:0;padding-left:18px;line-height:1.75">
-       <li>${t("Tu affrontes <b>un seul adversaire</b> en <b>duel</b>.")}</li>
-       <li>${t("Celui qui <b>reçoit</b> choisit les <b>5 matchs</b>, imposés aux deux.")}</li>
-       <li>${t("Chacun fait ses <b>pronostics et ses mises</b> (au total ≤ <b>{a} %</b> de son capital — 100 % à la <b>dernière journée</b>).",{a:pct(STAKE_CAP)})}</li>
-       <li>${t("<b>👑 match favori</b> : gain <b>et</b> perte <b>doublés</b>. Et <b>1 bonus</b> au maximum.")}</li>
-     </ul></div>
-   <div class="box"><div class="boxttl">${t("🏆 Points et classement")}</div>
-     <ul class="mini muted" style="margin:0;padding-left:18px;line-height:1.75">
-       ${scoringShown()
-         ? `<li>${t("Le duel revient à celui qui a <b>gagné le plus d'argent</b> : <b>2 pts</b> (nul <b>1</b>, perdu <b>0</b>).")}</li>
-       <li>${t("<b>+1</b> si ton net est <b>positif</b>, <b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour.")}</li>`
-         : `<li>${t("Le duel revient à celui qui a <b>gagné le plus d'argent</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> sinon. Le perdant : <b>1 pt</b> si son net est positif, <b>0</b> sinon (<b>1 partout</b> en cas de nul).")}</li>
-       <li>${t("<b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour.")}</li>`}
-       <li class="gold">${t("🔥 <b>Dernière journée</b> : les points de duel <b>comptent double</b>.")}</li>
-       <li>${t("Les points <b>s'additionnent sur toute la saison</b> : c'est le <b>classement</b>. À égalité, on départage au <b>capital</b>.")}</li>
-     </ul></div>
-   <div class="box"><div class="boxttl">${t("🃏 Les bonus")}</div>
-     <div class="mini muted" style="line-height:1.75">${t("Des pouvoirs à <b>usage unique</b>, achetés aux <b>enchères</b> avant la saison (≤ <b>{a} €</b> au total). <b>Un seul par journée.</b> En cours de saison, on peut s'en <b>racheter</b> entre joueurs.",{a:SHOP_CAP})}</div></div>
-   <div class="box"><div class="boxttl">${t("🎭 L'enjeu")}</div>
-     <div class="mini muted" style="line-height:1.75">${t("Selon ce que la ligue a choisi : une <b>récompense</b> 🏆 pour le champion, un <b>gage</b> 🎭 pour le dernier — ou les deux. Ils sont proposés par les joueurs à la préparation.")}</div></div>
-   <button class="cta-primary" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
+     <div class="mini muted">${t("Le plus rapide pour comprendre : jouer une journée. Le détail complet reste juste en dessous.")}</div></div>
+   <button class="cta-primary" onclick="openTuto()">${t("🎓 Jouer le tutoriel (2 min) →")}</button>
+   <div style="height:10px"></div>
+   <button class="btn ghost" onclick="openRulesFull()">${t("📚 Voir les règles détaillées →")}</button>`;
 }
 
 /* ============ RÈGLES DÉTAILLÉES ============
@@ -13356,7 +14302,45 @@ async function mesureConnexionDebut(){
 }
 /* ⏳ FIN DU BLOC — la suite (écran admin) porte le même repère ⏳ dans viewAdmin(). */
 
+/* ⚠️ v8.202 — LE BOUTON RETOUR D'ANDROID, constaté dans l'émulateur : un appui pendant le
+   tutoriel FERMAIT l'application, à l'étape 1 sur 11. Sur Android, revenir en arrière est un
+   geste réflexe présent sur TOUS les téléphones — matériel, tactile ou par balayage. Sans ce
+   branchement, Capacitor le laisse remonter l'historique du navigateur ; comme l'app est une
+   page unique sans historique, il quitte.
+   ⚠️ N'EXISTE QUE DANS L'APP NATIVE : sur le web `window.Capacitor` est absent, ce bloc ne
+   s'exécute pas, et rien ne change. Aucune régression possible côté navigateur.
+   ⚠️ ON NE FERME JAMAIS L'APPLICATION : quand il n'y a plus rien à remonter, on la met en
+   ARRIÈRE-PLAN. Le joueur la retrouve où il l'avait laissée, comme n'importe quelle app
+   Android — alors qu'une fermeture lui ferait tout reprendre. */
+function brancherRetourAndroid(){
+  const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if(!P || !P.addListener) return;
+  P.addListener('backButton', () => {
+    if(document.getElementById("cardModal")){ closeCardInfo(); return; }   // 1. fermer la fenêtre ouverte
+    /* 2. LE TUTORIEL A SA PROPRE NAVIGATION. `startEssai()` appelle `navRoot()`, qui VIDE
+       `S.nav` : les 11 étapes vivent dans `essaiStep`, pas dans la pile. Sans ce cas, le
+       retour sautait les onze d'un coup et mettait l'app en arrière-plan — constaté dans
+       l'émulateur à l'étape 1/11. On reproduit exactement les deux boutons de l'écran :
+       « ← Précédent » tant qu'il reste une étape, « ← Connexion » à la première. */
+    /* ⚠️ v8.205 — LE TUTORIEL DYNAMIQUE A SA PROPRE NAVIGATION, pour la même raison :
+       ses onze écrans vivent dans `ttStep`. Sans ce cas, un « retour » à l'écran 7
+       quitterait le tutoriel entier d'un coup. */
+    if(S && S.view==="tuto"){
+      if(typeof ttStep==="number" && ttStep>0){ ttPrecedent(); return; }
+      closeTuto(); return;
+    }
+    if(S && S.view==="essai"){
+      if(typeof essaiStep==="number" && essaiStep>0){ essaiGo(essaiStep-1); return; }
+      if(typeof exitEssai==="function"){ exitEssai(); return; }
+    }
+    if(S && Array.isArray(S.nav) && S.nav.length){ navBack(); return; }    // 3. remonter d'un écran
+    if(P.minimizeApp) P.minimizeApp();                                     // 4. arrière-plan, jamais quitter
+  });
+}
+
+
 (async function boot(){
+  brancherRetourAndroid();
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
   // (v7.92 : `initSwipeNav()` retiré ici — voir la note à l'endroit de la définition supprimée.)
   checkForUpdate();
