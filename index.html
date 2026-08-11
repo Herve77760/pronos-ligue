@@ -468,7 +468,7 @@
     border:none;border-radius:999px;padding:5px 12px 5px 10px;margin:0 0 10px;cursor:pointer;}
   .hero.win .hero-back,.hero.loss .hero-back{background:rgba(0,0,0,.16);}
   /* v8.160 — suspense en 4 temps (Hervé, précisé après v8.153-159) : 1) avatars neutres et de même
-     taille ; 2) mon gain net défile de 0 au résultat en 2 s ; 3) le gain de l'adversaire apparaît ;
+     taille ; 2) les DEUX gains nets défilent de 0 à leur résultat ENSEMBLE (v8.220 — même départ, même arrivée) ; 3) un temps d'arrêt, les deux chiffres côte à côte ;
      4) juste après, l'avatar du vainqueur grossit ET le fond se teinte vert/rouge — orchestré en JS
      (seul moyen de chaîner ces étapes dans l'ordre, cf. le bloc `if(heroFresh)` en bas de
      recapBody()), les CSS ci-dessous ne posent que les TRANSITIONS que ce JS déclenche en ajoutant
@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.214";
+const APP_VERSION = "v8.220";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2801,9 +2801,12 @@ const EN={
   "cote combinée {a}":"combined odds {a}", "mise moyenne":"average stake",
   "Versé une seule fois, si les <b>deux</b> pronos ciblés passent.":"Paid once, if <b>both</b> targeted picks come in.",
   "couvre aussi <b>{a}</b> @{b} → <b>{c} €</b> si c'est cette issue qui sort.":"also covers <b>{a}</b> @{b} → <b>€{c}</b> if that's the result.",
-  // — v7.96 : le temps réglementaire fait foi (prolongation / tirs au but ignorés) —
-  "⏱️ <b>Les tirs au but ne départagent pas un pari.</b> Un match à égalité à l'issue du temps de jeu reste un <b>match nul</b>, même si une équipe se qualifie ensuite aux tirs au but.":"⏱️ <b>A penalty shootout doesn't settle a bet.</b> A match level at the end of play stays a <b>draw</b>, even if one team then goes through on penalties.",
-  "Sur un match nul : s'il y a eu prolongation ou tirs au but, ils <b>ne comptent pas</b>. Seul le score à la fin du <b>temps réglementaire</b> décide du pari.":"On a drawn match: if there was extra time or a penalty shootout, it <b>doesn't count</b>. Only the score at the end of <b>regulation time</b> settles the bet.",
+  /* — v8.217 : la PROLONGATION COMPTE, les tirs au but non (mesuré le 11/08 sur Bodø/Glimt –
+       Union Saint-Gilloise : 2-2 à la 90ᵉ, 3-2 remonté par l'API). La v7.96 affirmait l'inverse
+       à partir d'un match de Coupe de la Ligue joué SANS prolongation — le relevé était juste,
+       la généralisation non. — */
+  "⏱️ <b>Le score retenu est celui que la compétition enregistre comme définitif.</b> En <b>football</b> : prolongation <b>comprise</b>, tirs au but <b>exclus</b>. Un but marqué en prolongation change donc le résultat du pari ; à l'inverse, un match encore à égalité après la prolongation reste un <b>match nul</b>, même si une équipe se qualifie ensuite aux tirs au but.":"⏱️ <b>The score used is the one the competition records as final.</b> In <b>football</b>: extra time <b>included</b>, penalty shootout <b>excluded</b>. A goal scored in extra time therefore changes the result of the bet; conversely, a match still level after extra time stays a <b>draw</b>, even if one team then goes through on penalties.",
+  "Sur un match nul : le score retenu est celui de la <b>fin du match, prolongation comprise</b>. Seuls les <b>tirs au but</b> ne comptent pas — une équipe qualifiée aux tirs au but n'a pas gagné le match.":"On a drawn match: the score used is the one at the <b>end of the match, extra time included</b>. Only the <b>penalty shootout</b> doesn't count — a team going through on penalties did not win the match.",
   "Créer mon compte":"Create my account", "Mot de passe":"Password",
   "Confirme ton mot de passe":"Confirm your password",
   "Les deux mots de passe ne sont pas identiques.":"The two passwords don't match.",
@@ -3009,6 +3012,16 @@ const EN={
   "Joueurs inscrits · {a}/{b}":"Players signed up · {a}/{b}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
   "Joueur IA":"AI player", "ajouté au lancement (nombre impair)":"added at launch (odd number)", "équilibre":"balance",
   "⏱️ Rythme":"⏱️ Pace",
+  // ── v8.216 : le détail chiffré d'un bonus joué (temps forts) ──
+  "Ce que le bonus a changé":"What the bonus changed",
+  "Joué par {a}":"Played by {a}",
+  "sur {a}":"on {a}",
+  "Pour {a}":"For {a}",
+  "l'adversaire":"the opponent",
+  "Écart créé dans le duel":"Gap created in the duel",
+  "C'est cet <b>écart</b> qui décide du duel, pas le gain brut : un bonus qui rapporte plus à l'adversaire qu'à toi t'a fait perdre du terrain.":"It is this <b>gap</b> that settles the duel, not the raw gain: a bonus that earns your opponent more than it earns you has cost you ground.",
+  "La règle de ce bonus":"What this bonus does",
+  "Voir le détail de ce coup":"See the detail of this move",
   "⏱️ Formule de rythme":"⏱️ Pace format", "✓ choisie":"✓ chosen", "choisir":"choose",
   "{a} h pour choisir les matchs, puis {b} h pour parier — soit <b>{c} h</b> au maximum tant que les matchs ne sont pas choisis.":"{a} h to pick the matches, then {b} h to bet — that is <b>{c} h</b> at most while the matches aren't chosen yet.",
   // ── v8.205 : le tutoriel dynamique (onze écrans) ──
@@ -4388,6 +4401,16 @@ const eur=n=>r2(n).toFixed(2);                                 // montant non si
 // À n'utiliser que pour l'affichage : les comparaisons doivent rester sur le nombre.
 const cote=o=>(+o||0).toFixed(2);
 function esc(s){return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+/* ⚠️ v8.218 — `esc2` DEVIENT GLOBALE. Elle échappe un texte destiné à un attribut `onclick`,
+   entre apostrophes : `esc()` seul laisse passer l'apostrophe d'un « L'Aigle », qui referme la
+   chaîne JavaScript et casse le bouton.
+   ⚠️ Elle vivait en `const` LOCAL dans un `.map()` du classement. Une deuxième fonction s'en est
+   servie (v8.216, le libellé chiffré des temps forts) et la page Résultats est tombée sur
+   « can't find variable: esc2 » — attrapé par Hervé sur son serveur d'essai AVANT la mise en
+   ligne. Un utilitaire visible d'un seul bloc invite exactement cette erreur : il a l'air
+   disponible et ne l'est pas. Ne pas le redescendre dans une portée locale. */
+const esc2=n=>esc((n||'?').replace(/'/g,"\\'"));
+
 // `lecture_seule` : message technique lancé par `q()` quand une écriture est tentée en mode
 // consultation (v7.11). Il remonte par les `catch` de tout l'app — on le traduit ici, en un
 // seul endroit, plutôt que d'aller modifier chaque appelant.
@@ -4410,6 +4433,38 @@ function infoModal(emoji,title,bodyHTML,sansOk){ closeCardInfo();
   const ok=sansOk?"":`<button class="btn" style="margin-top:16px" onclick="closeCardInfo()">OK 👍</button>`;
   o.innerHTML=`<div class="mbox"><div style="font-size:34px">${emoji}</div><h2 style="margin:6px 0 4px">${esc(title)}</h2>${bodyHTML}${ok}</div>`;
   document.body.appendChild(o); }
+/* ⚠️ v8.216 (signalé par Hervé) — UN TEMPS FORT OUVRE DÉSORMAIS LE DÉTAIL CHIFFRÉ, pas la
+   fiche générique du bonus. Cliquer sur « 🎯 X a réussi 🐗 Double ration : +12 € » donnait la
+   RÈGLE de la carte — ce qu'elle fait en théorie — alors que la question qu'on se pose à cet
+   instant est « qu'est-ce qu'elle a fait, LÀ, dans ce duel ». La règle reste affichée, mais
+   après les chiffres, et non à leur place.
+   ⚠️ L'ÉCART EST LA GRANDEUR QUI DÉCIDE, pas le gain brut : un bonus qui rapporte 8 € à celui
+   qui le joue et 10 € à son adversaire lui a coûté le duel. C'est le raisonnement posé en
+   v7.62 (`self − opp`) après un cas vécu sur HR98Z ; la fiche le montre au lieu de le laisser
+   déduire. Les trois lignes sont donc données ensemble, jamais l'une sans les autres. */
+function showBonusJoue(id, qui, adv, cible, self, opp){
+  const c=CARDS[id]; if(!c) return;
+  const ecart=(+self||0)-(+opp||0);
+  /* `fmt()` : le formateur SIGNÉ déjà utilisé partout pour les gains. Refaire le signe à la
+     main aurait donné un « +0.00 » là où le reste de l'app écrit « 0.00 ». */
+  const mnt=v=>`<b class="${v>0?'green':(v<0?'red':'muted')}">${fmt(v)} €</b>`;
+  const ligne=(lab,val)=>`<div class="row" style="margin:3px 0"><span class="mini">${lab}</span>${mnt(val)}</div>`;
+  infoModal(c.e, t(c.n),
+    `<div class="mini" style="text-align:left;line-height:1.6">
+       <b>⚡ ${t("Ce que le bonus a changé")}</b>
+       <div class="muted" style="margin-top:2px">${t("Joué par {a}",{a:qui})}${cible?' · '+t("sur {a}",{a:cible}):''}</div>
+       <div style="margin-top:8px">
+         ${ligne(t("Pour {a}",{a:qui}), +self||0)}
+         ${ligne(t("Pour {a}",{a:adv||t("l'adversaire")}), +opp||0)}
+         <div class="row" style="margin-top:5px;border-top:1px dashed var(--border);padding-top:5px">
+           <span class="mini"><b>${t("Écart créé dans le duel")}</b></span>${mnt(ecart)}</div>
+       </div>
+       <div class="muted" style="margin-top:8px">${t("C'est cet <b>écart</b> qui décide du duel, pas le gain brut : un bonus qui rapporte plus à l'adversaire qu'à toi t'a fait perdre du terrain.")}</div>
+       <div style="margin-top:10px;border-top:1px dashed var(--border);padding-top:8px">
+         <b>${t("La règle de ce bonus")}</b>
+         <div class="muted" style="margin-top:3px">${esc(t(c.d))}</div></div>
+     </div>`);
+}
 function showCardInfo(id){ const c=CARDS[id]; if(!c)return;
   // La pastille seule ne suffit pas : ici on explique ce que le niveau engage concrètement.
   const risque = c.risk
@@ -6828,6 +6883,70 @@ async function joinLeague(code){
 }
 
 /* ============ GAME dispatch ============ */
+/* ⚠️ v8.215 (signalé par Hervé) — LA LISTE DES DUELS EST SORTIE EN FONCTION, parce qu'elle
+   manquait là où elle sert le plus. Tant que le joueur à domicile n'a pas composé la journée,
+   l'écran de son adversaire n'affichait QUE « en attente que X choisisse les 5 matchs » : ni le
+   statut des autres, ni qui affronte qui. C'est pourtant le moment où l'on veut savoir si les
+   autres duels avancent — et voir la paire du sien rend le nom de celui qu'on attend beaucoup
+   moins abstrait.
+   ⚠️ UNE SEULE IMPLÉMENTATION, appelée aux DEUX endroits. La recopier aurait produit deux listes
+   qui finissent par diverger — c'est le défaut que ce dépôt corrige partout ailleurs.
+   ⚠️ Elle recalcule ses compteurs et son échéance : elle ne dépend d'aucune variable de la
+   branche appelante, donc reste appelable depuis n'importe quel état de l'écran. */
+function rosterDuelsHTML(){
+  const humansN=players.filter(p=>!p.is_ai).length;
+  const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
+  const dt=dayTimes();
+  const dlRoster=duelDeadline(myDuel())||dt.bet;
+    const clotureRoster = !dlRoster ? '' : (Date.now()>=dlRoster
+      ? ' · '+t("Paris clôturés 🔒")
+      : ' · '+t("clôture dans {a}",{a:fmtLeft(dlRoster)}));
+    return humansN>1 ? `<h2 class="mini" style="margin:10px 2px 4px">${t("Pronos des joueurs · {a}/{b}",{a:doneN,b:humansN})}${clotureRoster}</h2>`
+      + (()=>{
+        /* ⚠️ v8.210 (demandé par Hervé) — LA LISTE EST GROUPÉE PAR DUEL, ET LE SIEN VIENT EN
+           TÊTE. Elle énumérait les joueurs à plat : on lisait huit statuts sans savoir QUI
+           affronte QUI, alors que c'est la seule information qui donne un sens aux autres —
+           « attend ses matchs » n'a de valeur que si l'on voit en face de qui.
+           ⚠️ On part des DUELS, pas des joueurs : un joueur appartient à un seul duel, mais
+           c'est le duel qui porte la paire. Partir des joueurs obligeait à deviner l'autre.
+           ⚠️ « dès le départ, on doit voir qui va jouer contre qui » (Hervé) : la paire
+           s'affiche même quand les matchs ne sont PAS encore choisis. C'est justement là
+           qu'elle est la plus utile — elle montre qui l'on attend.
+           ⚠️ FILET : tout joueur qui ne serait dans aucun duel est affiché à la fin plutôt
+           qu'escamoté. Ça n'arrive pas, mais une liste qui perd quelqu'un en silence est
+           pire qu'une liste imparfaite. */
+        const ligne = p => { const done=!!bets.find(b=>b.player_id===p.id); const dd=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const noFx=!!(dd&&!dd.fixtures);
+        /* ⚠️ (signalé par Hervé sur XXZQ3) — « attend ses matchs » NE DISTINGUAIT PAS les deux
+           rôles d'un duel sans matchs choisis : le joueur À DOMICILE, qui bloque tout le monde
+           tant qu'il n'a pas choisi ses 5 matchs, et celui À L'EXTÉRIEUR, qui attend réellement
+           quelqu'un d'autre. Les deux affichaient la même pastille passive — on ne pouvait pas
+           voir, dans la liste, QUI retient la journée. */
+        /* ⚠️ (signalé par Hervé) — « ⏳ pas encore » NE DISAIT PAS quoi. Ce n'est PAS le même
+           « pas encore » que celui de la préparation (t. ligne ~2863, ready/pas prêt) : ici, si on
+           atteint cette branche, `noFx` est déjà faux — les 5 matchs de ce joueur SONT connus (cf.
+           les deux cas juste au-dessus), il ne manque que sa validation. Le libellé le dit
+           maintenant explicitement, sur le même mot que le chip vert qu'il précède
+           (« ✓ pronos validés » → « pronos non validés »), plutôt qu'un « pas encore » qui pouvait
+           se lire comme « n'a même pas encore ses matchs ». Chaîne dédiée, PAS de réemploi de
+           `t("⏳ pas encore")` : cette clé sert aussi à la préparation (prêt/pas prêt), un autre
+           sens — la retoucher aurait changé cet autre écran par ricochet. */
+        const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`
+          :(noFx?(dd.home_id===p.id?`<span class="chip">${t("doit choisir ses matchs")}</span>`:`<span class="chip">${t("attend ses matchs")}</span>`)
+          :`<span class="chip gold">${t("⏳ pronos non validés")}</span>`);
+        return `<div class="opp-status">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}${chip}</div>`; };
+        const mien = d => d.home_id===S.myId || d.away_id===S.myId;
+        const ordre = (duels||[]).slice().sort((a,b)=>(mien(b)?1:0)-(mien(a)?1:0));   // le mien d'abord
+        const vus = new Set();
+        const groupes = ordre.map(d=>{
+          const h=pById(d.home_id), a=pById(d.away_id);
+          if(!h||!a) return '';
+          vus.add(h.id); vus.add(a.id);
+          return `<div class="duelgrp${mien(d)?' moi':''}">${ligne(h)}<div class="vsmini">${t("VS")}</div>${ligne(a)}</div>`;
+        }).join('');
+        const orphelins = players.filter(p=>!vus.has(p.id)).map(p=>`<div class="duelgrp">${ligne(p)}</div>`).join('');
+        return groupes + orphelins;
+      })() : '';
+}
 function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
   if(L.status==="lobby"||L.status==="prep") return viewPrepTabs();
@@ -7981,7 +8100,8 @@ function viewDay(){
   if(!d.fixtures){ if(iAmHome) return viewSelect(d,dayLbl,opp);
     return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("En attente que {a} (à domicile) choisisse les 5 matchs…",{a:'<b>'+esc(opp.name)+'</b>'})}</div>${selLineHTML()}
       <div class="mini muted" style="margin-top:8px">${t("💡 Pas d'inquiétude : s'il ne choisit pas à temps, les matchs seront tirés automatiquement — et ta fenêtre de paris démarrera seulement à ce moment-là.")}</div>
-      ${(me()&&me().is_organizer)?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button>`:''}</div>`; }
+      ${(me()&&me().is_organizer)?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button>`:''}</div>
+      ${rosterDuelsHTML()}`; }
   // Après la clôture, plus AUCUN accès à la saisie — même pour qui n'a jamais parié (sinon il pourrait miser en retard).
   // v8.15 : l'onglet Pronos ne montre QUE la journée en cours — la question est donc « ai-je
   // parié aujourd'hui », et `myBet()` y répondait avec la journée qu'on venait de consulter.
@@ -8681,55 +8801,7 @@ function viewWait(dayLbl){
           si les paris sont ENCORE ouverts. On garde quand même la garde : elle couvre le repli
           sur `dt.bet` quand le duel n'a pas encore ses matchs, seul chemin qui puisse repasser
           une date dépassée. ⚠️ Ne pas composer « dans {a} » avec `fmtLeft` sans cette garde. */
-    const dlRoster=duelDeadline(myDuel())||dt.bet;
-    const clotureRoster = !dlRoster ? '' : (Date.now()>=dlRoster
-      ? ' · '+t("Paris clôturés 🔒")
-      : ' · '+t("clôture dans {a}",{a:fmtLeft(dlRoster)}));
-    const pronosRoster = humansN>1 ? `<h2 class="mini" style="margin:10px 2px 4px">${t("Pronos des joueurs · {a}/{b}",{a:doneN,b:humansN})}${clotureRoster}</h2>`
-      + (()=>{
-        /* ⚠️ v8.210 (demandé par Hervé) — LA LISTE EST GROUPÉE PAR DUEL, ET LE SIEN VIENT EN
-           TÊTE. Elle énumérait les joueurs à plat : on lisait huit statuts sans savoir QUI
-           affronte QUI, alors que c'est la seule information qui donne un sens aux autres —
-           « attend ses matchs » n'a de valeur que si l'on voit en face de qui.
-           ⚠️ On part des DUELS, pas des joueurs : un joueur appartient à un seul duel, mais
-           c'est le duel qui porte la paire. Partir des joueurs obligeait à deviner l'autre.
-           ⚠️ « dès le départ, on doit voir qui va jouer contre qui » (Hervé) : la paire
-           s'affiche même quand les matchs ne sont PAS encore choisis. C'est justement là
-           qu'elle est la plus utile — elle montre qui l'on attend.
-           ⚠️ FILET : tout joueur qui ne serait dans aucun duel est affiché à la fin plutôt
-           qu'escamoté. Ça n'arrive pas, mais une liste qui perd quelqu'un en silence est
-           pire qu'une liste imparfaite. */
-        const ligne = p => { const done=!!bets.find(b=>b.player_id===p.id); const dd=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const noFx=!!(dd&&!dd.fixtures);
-        /* ⚠️ (signalé par Hervé sur XXZQ3) — « attend ses matchs » NE DISTINGUAIT PAS les deux
-           rôles d'un duel sans matchs choisis : le joueur À DOMICILE, qui bloque tout le monde
-           tant qu'il n'a pas choisi ses 5 matchs, et celui À L'EXTÉRIEUR, qui attend réellement
-           quelqu'un d'autre. Les deux affichaient la même pastille passive — on ne pouvait pas
-           voir, dans la liste, QUI retient la journée. */
-        /* ⚠️ (signalé par Hervé) — « ⏳ pas encore » NE DISAIT PAS quoi. Ce n'est PAS le même
-           « pas encore » que celui de la préparation (t. ligne ~2863, ready/pas prêt) : ici, si on
-           atteint cette branche, `noFx` est déjà faux — les 5 matchs de ce joueur SONT connus (cf.
-           les deux cas juste au-dessus), il ne manque que sa validation. Le libellé le dit
-           maintenant explicitement, sur le même mot que le chip vert qu'il précède
-           (« ✓ pronos validés » → « pronos non validés »), plutôt qu'un « pas encore » qui pouvait
-           se lire comme « n'a même pas encore ses matchs ». Chaîne dédiée, PAS de réemploi de
-           `t("⏳ pas encore")` : cette clé sert aussi à la préparation (prêt/pas prêt), un autre
-           sens — la retoucher aurait changé cet autre écran par ricochet. */
-        const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`
-          :(noFx?(dd.home_id===p.id?`<span class="chip">${t("doit choisir ses matchs")}</span>`:`<span class="chip">${t("attend ses matchs")}</span>`)
-          :`<span class="chip gold">${t("⏳ pronos non validés")}</span>`);
-        return `<div class="opp-status">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}${chip}</div>`; };
-        const mien = d => d.home_id===S.myId || d.away_id===S.myId;
-        const ordre = (duels||[]).slice().sort((a,b)=>(mien(b)?1:0)-(mien(a)?1:0));   // le mien d'abord
-        const vus = new Set();
-        const groupes = ordre.map(d=>{
-          const h=pById(d.home_id), a=pById(d.away_id);
-          if(!h||!a) return '';
-          vus.add(h.id); vus.add(a.id);
-          return `<div class="duelgrp${mien(d)?' moi':''}">${ligne(h)}<div class="vsmini">${t("VS")}</div>${ligne(a)}</div>`;
-        }).join('');
-        const orphelins = players.filter(p=>!vus.has(p.id)).map(p=>`<div class="duelgrp">${ligne(p)}</div>`).join('');
-        return groupes + orphelins;
-      })() : '';
+    const pronosRoster = rosterDuelsHTML();
     return `${head}${missingFx}
       ${picksCard}${bonusLine}${bilanPariHTML(mine)}
       <div style="height:6px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier (jusqu'à la clôture)")}</button>
@@ -9418,6 +9490,10 @@ function recapBody(D){
      souvent le premier endroit où l'on découvre un bonus qu'on ne possède pas — sans sa
      description, la phrase raconte un effet dont on ignore la règle. */
   const cardLbl=id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${t("Voir la description du bonus")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`;
+    /* ⚠️ Variante du libellé pour les TEMPS FORTS : elle emporte les chiffres du coup joué.
+       `cardLbl` (au-dessus) reste utilisé partout où l'on parle d'un bonus SANS l'avoir joué —
+       la boutique, une main, une enchère : là, seule la règle a un sens. */
+    const cardLblJoue=(id,qui,adv,cible,self,opp)=>`<span class="clik" onclick="showBonusJoue('${id}','${esc2(qui)}','${esc2(adv)}','${esc2(cible)}',${+self||0},${+opp||0})" title="${t("Voir le détail de ce coup")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`;
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
     const self=+im.self||0, opp=+im.opp||0;
     // ⚠️ `wp` SERT ENCORE PLUS BAS, en COMPLÉMENT (« contre toi », « pour toi ») — emplois
@@ -9425,6 +9501,13 @@ function recapBody(D){
     // provoqué un `wp is not defined` que le test a rattrapé sur-le-champ.
     const wp=pById(b.player_id)||{}; const whoNm=nomSujet(b.player_id);
     const dd=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const oid=dd?(dd.home_id===b.player_id?dd.away_id:dd.home_id):null; const op=oid!=null?(pById(oid)||{}):{}; const oppNm=avatarHTML(op.emoji)+' '+esc(op.name||'?');
+    /* Noms EN CLAIR (sans avatar ni balise) et libellé du match visé : ils partent dans un
+       `onclick`, où du HTML n'aurait aucun sens et casserait l'attribut. */
+    const quiTxt=(wp.name||'?'), advTxt=(op.name||'?');
+    const fxD=(dd&&Array.isArray(dd.fixtures))?dd.fixtures:[];
+    const fCib=(c.target!=null&&fxD[c.target])?fxD[c.target]:null;
+    const cibTxt=fCib?(fCib.home+' – '+fCib.away):'';
+    const lbl=cardLblJoue(c.id,quiTxt,advTxt,cibTxt,self,opp);
     /* ⚠️ v7.62 — ON JUGE SUR L'EFFET DANS LE DUEL (`self − opp`), plus sur `self` seul.
        Signalé par Hervé sur HR98Z J3 : une ✂️ Demi-portion du joueur IA s'était retournée contre
        lui et n'apparaissait NULLE PART. Normal — ce bonus ne touche pas le net de celui qui le
@@ -9436,13 +9519,13 @@ function recapBody(D){
     const effet=self-opp;
     if(effet<=-FAIT_MIN){
       // Trois formulations selon OÙ l'effet s'est produit : sur lui, sur l'adversaire, ou les deux.
-      if(self<=-FAIT_MIN && opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.",{a:cardLbl(c.id),b:fmt(self),b2:fmt(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
-      else if(self<=-FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.",{a:cardLbl(c.id),b:fmt(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
-      else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}€</b> à {c}.",{a:cardLbl(c.id),b:fmt(opp),c:oppNm})}`);
+      if(self<=-FAIT_MIN && opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.",{a:lbl,b:fmt(self),b2:fmt(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+      else if(self<=-FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.",{a:lbl,b:fmt(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+      else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}€</b> à {c}.",{a:lbl,b:fmt(opp),c:oppNm})}`);
     }
     else if(effet>=FAIT_MIN){
-      if(self>=FAIT_MIN) reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:cardLbl(c.id),b:fmt(self)})}`);
-      else reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"red\">{b}€</b> pour {c}.",{a:cardLbl(c.id),b:fmt(opp),c:oppNm})}`);
+      if(self>=FAIT_MIN) reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:lbl,b:fmt(self)})}`);
+      else reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"red\">{b}€</b> pour {c}.",{a:lbl,b:fmt(opp),c:oppNm})}`);
     }
     else if(c.stole) reussis.push(`🥷 <b>${whoNm}</b> ${t("a volé le bonus de {c}.",{c:oppNm})}`);
   });
@@ -9563,9 +9646,17 @@ function recapBody(D){
   const oppPtsTarget=oppId!=null?((dpts[oppId]||0)-(oppId===starId?1:0)):0;
   const wonTxt=t("Gagné"), tieTxt=t("Match nul"), lostTxt=t("Perdu"), calcTxt=t("Calcul du duel");
   const resultTxt=won?wonTxt:(tie?tieTxt:lostTxt);
-  // Minutage calé sur playSuspense() de la maquette : 900 (mon gain seul) + 400 (pause) puis le
-  // verdict d'un coup (fond/avatars/texte), avec points et gain adverse qui défilent sur 450 ms en
-  // parallèle, + 500 (infos annexes) + 200 (flou levé) = 2000 ms pile.
+  // Minutage : 900 (LES DEUX gains nets défilent ENSEMBLE) + 400 (les deux chiffres côte à côte,
+  // figés : le temps de lire soi-même qui devance l'autre) puis le verdict d'un coup
+  // (fond/avatars/texte) avec les points de duel qui défilent sur 450 ms, + 500 (infos annexes)
+  // + 200 (flou levé) = 2000 ms pile.
+  // ⚠️ v8.220 (Hervé) — LES DEUX NETS PARTAGENT UNE SEULE COURBE `e` : même instant de départ,
+  // même durée, même arrivée. Avant, le mien défilait seul de 0 à 900 ms et celui de l'adversaire
+  // ne partait qu'à 1300 — c'est-à-dire À L'INSTANT MÊME où le verdict tombait : son chiffre
+  // n'était plus qu'une formalité, la réponse était déjà donnée. Le suspense est dans la COURSE
+  // entre les deux nombres, pas dans leur succession. Le tutoriel a toujours fait ainsi
+  // (`ttAnime(a,…,950)` et `ttAnime(b,…,950)` lancés ensemble) : c'est la prod qui divergeait.
+  // Si un jour on redonne des durées distinctes aux deux, il faut le vouloir : tools/test-recap-suspense.ps1 échoue.
   const heroSettled=!heroFresh||oppId==null;   // déjà vu avant, ou rien à suspendre (pas d'adversaire)
   if(heroFresh && oppId!=null && heroStartTimes[heroKey]==null) heroStartTimes[heroKey]=performance.now();
   const heroElapsed=heroSettled?Infinity:(performance.now()-heroStartTimes[heroKey]);
@@ -9573,9 +9664,10 @@ function recapBody(D){
   function heroState(el){
     if(el>=2000) return {amt:myNet,pts:fpDuelPts,oppAmt:oppNet,oppPts:oppPtsTarget,resultText:resultTxt,revealed:true,extra:true,veil:true};
     if(el>=1300){ const e=easeOut(Math.min(1,(el-1300)/450));
-      return {amt:myNet,pts:fpDuelPts*e,oppAmt:oppNet*e,oppPts:oppPtsTarget*e,resultText:resultTxt,revealed:true,extra:(el>=1800),veil:false}; }
-    if(el>=900) return {amt:myNet,pts:0,oppAmt:0,oppPts:0,resultText:null,revealed:false,extra:false,veil:false};
-    return {amt:myNet*easeOut(Math.max(0,el)/900),pts:0,oppAmt:0,oppPts:0,resultText:null,revealed:false,extra:false,veil:false};
+      return {amt:myNet,pts:fpDuelPts*e,oppAmt:oppNet,oppPts:oppPtsTarget*e,resultText:resultTxt,revealed:true,extra:(el>=1800),veil:false}; }
+    if(el>=900) return {amt:myNet,pts:0,oppAmt:oppNet,oppPts:0,resultText:null,revealed:false,extra:false,veil:false};
+    const e=easeOut(Math.max(0,el)/900);   // UNE seule courbe pour les deux nets (cf. ⚠️ ci-dessus)
+    return {amt:myNet*e,pts:0,oppAmt:oppNet*e,oppPts:0,resultText:null,revealed:false,extra:false,veil:false};
   }
   const st0=heroState(heroElapsed);
   const fmtOppPts=v=>{const n=Math.round(v); return n+' pt'+(Math.abs(n)>1?'s':'');};
@@ -9644,7 +9736,6 @@ function recapBody(D){
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un nom ou un chiffre pour savoir d'où il vient.")}</div>
     <div class="lb">
       ${ord.map((p,i)=>{ const dp=dpts[p.id]||0; const isStar=p.id===starId; const duelP=dp-(isStar?1:0); const net=netMap[p.id]||0;
-        const esc2=n=>esc((n||'?').replace(/'/g,"\\'"));
         const tags=[]; if(p.id===S.myId) tags.push(`<span class="tagchip me">${t("(toi)")}</span>`);
         if(p.is_ai) tags.push(`<span class="tagchip ia">${t("IA")}</span>`);
         if(forgot(p.id)) tags.push(`<span class="tagchip late clik" onclick="event.stopPropagation();showOubliInfo('${esc2(p.name)}')">⏰ ${forgotPtsShown()}</span>`);
@@ -9688,11 +9779,20 @@ function showGainDetail(pid){
       sumG+=g; const selD=isDC?`${labelSel(f,b.sel)}/${labelSel(f,c.sel2)}`:labelSel(f,b.sel);
       return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b>${scoreHTML(f)} <span class="muted">(${esc(labelSel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}</div>`;
     }).join('');
-    /* ⚠️ v7.96 (relevé par Hervé sur DRDJ3 — Tranmere 2-2 Rochdale, Coupe de la Ligue anglaise).
-       L'API des scores S'ARRÊTE AU TEMPS RÉGLEMENTAIRE : elle a rendu 2-2 sur un match à
-       élimination directe, donc forcément décidé aux tirs au but. Le pari se règle sur 90 minutes,
-       comme Hervé l'a tranché le 31/07 — mais rien ne le disait au joueur, qui lit « Rochdale
-       qualifié » dans la presse et voit son pari perdu.
+    /* ⚠️ v8.217 — CETTE NOTE DISAIT LE CONTRAIRE PENDANT CINQ MOIS, ET C'ÉTAIT FAUX.
+       Elle concluait de Tranmere 2-2 Rochdale (DRDJ3, 01/08, Coupe de la Ligue) que « l'API
+       s'arrête au temps réglementaire ». Le relevé était bon, la GÉNÉRALISATION ne l'était pas :
+       cette compétition ne joue plus de prolongation depuis 2018, le match ne prouvait donc rien
+       d'autre que l'exclusion des TIRS AU BUT.
+       ⚠️ MESURE DU 2026-08-11 (Hervé) : Bodø/Glimt – Royale Union Saint-Gilloise, retour de
+       qualification de Ligue des champions — 2-2 à la 90ᵉ, but en prolongation, API = 3-2.
+       LA PROLONGATION EST DONC INCLUSE. Les deux relevés se complètent : le score retenu est
+       celui de la FIN DU MATCH, prolongation comprise, et un tir au but n'est pas un but.
+       ⚠️ LE MOTEUR N'A JAMAIS CHANGÉ — il prend le score de l'API tel quel. Il n'y avait rien à
+       corriger dans le calcul : c'est la PROSE qui mentait, et rien ne pouvait le révéler, un
+       score ayant toujours l'air d'un résultat. Un joueur qui lit « qualifié aux tirs au but »
+       dans la presse doit toujours comprendre pourquoi son pari est perdu — c'est ce que dit
+       la phrase affichée sous un match nul.
        ⚠️ AUCUNE DÉTECTION FIABLE N'EXISTE — deux pistes essayées, toutes deux écartées par Hervé :
          • par la COMPÉTITION (clés `_cup`, `coupe`, `pokal`…) : un barrage, un match retour ou une
            finale de play-off se prolongent sans appartenir à une « coupe », et l'API ne donne
@@ -9706,7 +9806,7 @@ function showGainDetail(pid){
        fausses pistes. La règle générale, elle, vit dans les règles du jeu.
        ⚠️ Formulation CONDITIONNELLE (« s'il y a eu ») : sur un nul de championnat ordinaire, la
        phrase reste vraie au lieu d'évoquer une prolongation qui n'a pas eu lieu. */
-    if(d.fixtures.some(f=>f.res==="N")) rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">⏱️ ${t("Sur un match nul : s'il y a eu prolongation ou tirs au but, ils <b>ne comptent pas</b>. Seul le score à la fin du <b>temps réglementaire</b> décide du pari.")}</div>`;
+    if(d.fixtures.some(f=>f.res==="N")) rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">⏱️ ${t("Sur un match nul : le score retenu est celui de la <b>fin du match, prolongation comprise</b>. Seuls les <b>tirs au but</b> ne comptent pas — une équipe qualifiée aux tirs au but n'a pas gagné le match.")}</div>`;
     /* ⚠️ v8.00 (demandé par Hervé) — LE DÉTAIL DOIT S'ADDITIONNER, TOUJOURS.
        Le montant net était déjà cliquable, mais la ligne d'ajustement n'apparaissait qu'AU-DESSUS
        DE 1 € : en dessous, les lignes affichées ne faisaient plus le total, sans un mot. Le
@@ -13772,20 +13872,25 @@ function viewRulesFull(){
      ${li(t("Tu peux jouer <b>un bonus</b> (une seule par journée). Elle reste <b>secrète</b> jusqu'à la résolution."))}
      ${li(t("À la <b>clôture</b>, les pronos de tout le monde peuvent être révélés — <b>uniquement en matchs réels</b> et si l'option premium <b>Voir l'adversaire</b> a été souscrite. En <b>matchs simulés</b>, la journée se résout aussitôt, sans phase de découverte. Les bonus, elles, restent cachées jusqu'aux résultats."))}
      ${li(t("Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement."))}
-     ${/* ⚠️ v7.96 (relevé par Hervé) — RÈGLE JAMAIS ÉCRITE, ET POURTANT APPLIQUÉE DEPUIS TOUJOURS.
-          Vérifié sur Tranmere 2-2 Rochdale (Coupe de la Ligue anglaise, 01/08) : l'API des scores
-          rend le score du TEMPS RÉGLEMENTAIRE, jamais celui d'après prolongation ou tirs au but —
-          sur un match à élimination directe, elle a bien rendu un nul. Le pari se règle donc à
-          sur un match à élimination directe, elle a bien rendu un nul. Sans cette ligne, un joueur
-          qui lit « qualifié aux tirs au but » dans la presse voit son pari perdu sans comprendre.
-          ⚠️ CE QUI EST PROUVÉ, ET CE QUI NE L'EST PAS (relevé par Hervé). Tranmere–Rochdale s'est
-          joué au premier tour de la Coupe de la Ligue, SANS prolongation (supprimée depuis 2018) :
-          il démontre que les TIRS AU BUT sont ignorés, rien d'autre. Le cas « 1-1 à la 90ᵉ, 2-1 à
-          la 120ᵉ » reste OUVERT — l'API rend-elle 1-1 ou 2-1 ? Non mesuré. La phrase ci-dessous
-          n'affirme donc QUE les tirs au but. ⚠️ NE PAS y ajouter la prolongation avant de l'avoir
-          vérifiée : `tools/verifie-coupes.ps1` sur les retours de qualification de Ligue des
-          champions (prolongation possible avec buts) tranchera. */''}
-     ${li(t("⏱️ <b>Les tirs au but ne départagent pas un pari.</b> Un match à égalité à l'issue du temps de jeu reste un <b>match nul</b>, même si une équipe se qualifie ensuite aux tirs au but."))}
+     ${/* ⚠️ RÈGLE JAMAIS ÉCRITE, ET POURTANT APPLIQUÉE DEPUIS TOUJOURS : le moteur prend le score
+          que l'API lui donne, sans jamais rien retrancher. Reste à savoir CE QUE ce score
+          contient — deux relevés l'ont établi, et le premier avait été mal généralisé.
+          ⚠️ LA QUESTION EST TRANCHÉE — MESURÉE LE 2026-08-11 PAR HERVÉ. Bodø/Glimt – Royale Union
+         Saint-Gilloise, retour de qualification de Ligue des champions : 2-2 à la 90ᵉ, but en
+         prolongation, et l'API a remonté **3-2**. LA PROLONGATION COMPTE DONC. C'est exactement
+         l'expérience que ce commentaire réclamait, et elle infirme ce qu'on croyait ici depuis
+         le 31/07.
+         ⚠️ LES DEUX RELEVÉS SE COMPLÈTENT, ILS NE SE CONTREDISENT PAS. Tranmere 2-2 Rochdale
+         (01/08, Coupe de la Ligue, sans prolongation depuis 2018) prouvait que les TIRS AU BUT
+         sont ignorés ; Bodø prouve que la PROLONGATION, elle, est incluse. La règle qui rend
+         compte des deux : le score retenu est celui de la fin du match, prolongation comprise,
+         et un tir au but n'est pas un but.
+         ⚠️ CE QUI AVAIT ÉTÉ ÉCRIT AUX JOUEURS ÉTAIT DONC FAUX pendant cinq mois — « seul le
+         score à la fin du temps réglementaire décide du pari ». Personne ne pouvait s'en
+         apercevoir : un score a toujours l'air d'un résultat. Corrigé en v8.217.
+         ⚠️ Ce que le MOTEUR fait n'a jamais changé : il prend le score de l'API tel quel. Il
+         n'y a rien à corriger dans le calcul — c'est la PROSE qui mentait. */''}
+     ${li(t("⏱️ <b>Le score retenu est celui que la compétition enregistre comme définitif.</b> En <b>football</b> : prolongation <b>comprise</b>, tirs au but <b>exclus</b>. Un but marqué en prolongation change donc le résultat du pari ; à l'inverse, un match encore à égalité après la prolongation reste un <b>match nul</b>, même si une équipe se qualifie ensuite aux tirs au but."))}
    </ol>`)}
 
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
