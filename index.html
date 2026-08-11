@@ -607,8 +607,17 @@
   .tagchip.late{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red);}
   .tagchip.bail{background:color-mix(in srgb,var(--gold) 15%,transparent);color:var(--gold);}
   .tagchip.ia{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue);}
-  .lb-stats{display:flex;align-items:center;gap:9px;flex:0 0 100%;}
-  .lb-pts{font-size:15px;font-weight:900;color:var(--ink);background:var(--panel3);border-radius:9px;padding:2px 9px;min-width:34px;text-align:center;font-variant-numeric:tabular-nums;cursor:pointer;}
+  .lb-stats{display:flex;align-items:center;gap:12px;flex:0 0 100%;margin-top:2px;}
+  /* ⚠️ v8.200 — LA CIBLE VISUELLE N'ÉTAIT PAS LA CIBLE RÉELLE. `ptsAvecPen` pose le `onclick` sur
+     le <b> INTÉRIEUR (le chiffre), pas sur cette pastille. La v8.199 avait agrandi le rembourrage
+     de la pastille pour faciliter le tap : cette marge nouvelle était ZONE MORTE — plus grande à
+     l'œil, inerte au doigt. La cagnotte, elle, porte son clic sur le cadre lui-même, d'où
+     l'asymétrie constatée par Hervé (« la cagnotte marche, les points non »).
+     Corrigé en posant le même appel sur la pastille, + `stopPropagation` sur le <b> pour que le
+     clic sur le chiffre n'ouvre pas la fenêtre deux fois.
+     ⚠️ LEÇON GÉNÉRALE : agrandir un conteneur n'agrandit une cible tactile que si le conteneur
+     PORTE le gestionnaire. Vérifier où vit le `onclick` avant de toucher au CSS. */
+  .lb-pts{font-size:15px;font-weight:900;color:var(--ink);background:var(--panel3);border-radius:9px;padding:5px 10px;min-width:34px;text-align:center;font-variant-numeric:tabular-nums;cursor:pointer;}
   .lb-star{font-size:14px;cursor:pointer;}
   .lb-bonus{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;background:var(--panel3);flex:none;}
   .lb-bonus.none{opacity:.3;font-size:11px;font-weight:800;color:var(--faint);}
@@ -700,8 +709,8 @@
   .lb-trend.up{color:var(--green);}
   .lb-trend.down{color:var(--red);}
   .lb-trend.flat{color:var(--faint);}
-  .lb-cap{font-size:11px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;border-bottom:1px dashed transparent;cursor:pointer;}
-  .lb-cap:hover{border-bottom-color:currentColor;color:var(--ink);}
+  .lb-cap{font-size:11px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;cursor:pointer;padding:5px 8px;border-radius:8px;background:var(--panel3);}
+  .lb-cap:hover{color:var(--ink);}
   .lb-substat{font-size:10.5px;font-weight:700;color:var(--faint);}
   /* Fin de saison (viewEnd, v8.164) */
   .end-hero{text-align:center;margin:10px 0 14px;}
@@ -778,7 +787,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.198";
+const APP_VERSION = "v8.201";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5092,9 +5101,22 @@ function liveVerdict(f, sel){
   const r = (f && f.res) ? {completed:true, res:f.res} : liveRes[f.evId];
   if(!(r && r.completed && r.res)) return null;
   const w = r.res==='1' ? f.home : (r.res==='2' ? f.away : t("Nul"));
-  if(sel==null) return {txt:esc(w), ok:null};
+  /* ⚠️ v8.201 — LE SCORE, demandé par Hervé, et RÉSERVÉ AUX PAYEURS.
+     Il est ajouté ici, dans le texte du verdict, et nulle part ailleurs. C'est ce qui garantit la
+     restriction sans avoir à la répéter : les TROIS affichages qui utilisent ce texte sont déjà
+     derrière l'option ⏱️ — `liveOn` dans `liveTag`, `liveShow` dans `resPart` et dans la cellule
+     du duel. Le quatrième appel (`!liveVerdict(f,null)`) ne sert qu'à détecter un match fini, il
+     n'affiche rien. Un joueur sans l'option ne voit donc strictement rien de plus qu'avant.
+     ⚠️ DEUX SOURCES POUR LE SCORE, et il faut les deux : `liveRes` pendant la journée (relevé de
+     l'API), puis `f` lui-même une fois la journée résolue — `r` est alors fabriqué à la volée
+     sans `hs`/`as`. Ne lire que `r` ferait disparaître le score APRÈS la résolution alors qu'il
+     s'affichait avant, ce qui serait le contraire de ce qu'on attend. */
+  const hs = (r.hs!=null) ? r.hs : (f ? f.hs : null);
+  const as = (r.as!=null) ? r.as : (f ? f.as : null);
+  const sc = (hs!=null && as!=null) ? ` ${hs}–${as}` : '';
+  if(sel==null) return {txt:esc(w)+sc, ok:null};
   const ok=(r.res===sel);
-  return {txt:(ok?"✓ ":"✗ ")+esc(w), ok};
+  return {txt:(ok?"✓ ":"✗ ")+esc(w)+sc, ok};
 }
 // Double Chance : on gagne à la cote INITIALE du résultat qui sort (pas de cote combinée pondérée).
 function dcWinOdd(f,sel,sel2){ return (f.res===sel||f.res===sel2) ? oddOf(f,f.res) : oddOf(f,sel); }
@@ -11110,7 +11132,7 @@ function starCumul(nbJours){
    détail complet, journée par journée. Le rouge et le ⚠️ restent réservés aux pénalités. */
 function ptsAvecPen(p,idx){
   const nb=(p.penOubli||0)+(p.penRecap||0);
-  return `<b class="${nb?'red ':''}clik" onclick="showPenInfo('${p.id}',${idx==null?-1:idx},${+p.points||0})" title="${nb?t("Points de pénalité"):t("Détail des points")}">${p.points}${nb?' ⚠️':''}</b>`;
+  return `<b class="${nb?'red ':''}clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${idx==null?-1:idx},${+p.points||0})" title="${nb?t("Points de pénalité"):t("Détail des points")}">${p.points}${nb?' ⚠️':''}</b>`;
 }
 /* `idx` = rang de l'instantané à lire (-1 = le dernier, donc le total de la saison). On relit le
    rejeu plutôt que de faire transiter des tableaux par un `onclick` — plus simple, et surtout une
@@ -11287,7 +11309,7 @@ function viewStandings(){
           ${moveHTML(p.id,i)}
           <div class="lb-stats vert">
             ${starOn?`<span class="lb-substat clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})">⭐×${bp||0}</span>`:''}
-            <span class="lb-pts">${ptsAvecPen(p,shownIdx)} ${t("Pts")}</span>
+            <span class="lb-pts clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen(p,shownIdx)} ${t("Pts")}</span>
             <span class="lb-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',${shownIdx})" title="${t("Détail du capital")}">${eur(p.capital)}€</span>
           </div>
         </div>`;}).join("")}
@@ -11593,7 +11615,7 @@ function viewEnd(){
          <div class="lb-name"><div class="n">${esc(p.name||'?')}</div>${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div>
          <div class="lb-stats vert">
            ${starOnF?`<span class="lb-substat clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})">⭐×${bp||0}</span>`:''}
-           <span class="lb-pts">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)} ${t("Pts")}</span>
+           <span class="lb-pts clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)} ${t("Pts")}</span>
            <span class="lb-cap clik" onclick="showCapInfo('${p.id}',-1)" title="${t("Détail du capital")}">${eur(p.capital)}€</span>
          </div>
        </div>`;}).join("")}</div>
