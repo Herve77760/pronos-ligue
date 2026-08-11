@@ -172,6 +172,24 @@
   .lgrow .mt{font-size:11px;color:var(--muted);margin-top:3px;}
   .lgrow .sd{display:flex;align-items:center;gap:6px;flex:none;}
   .lgrow .sd .chip{font-size:10px;padding:3px 8px;}
+  /* ⚠️ v8.207 (demandé par Hervé, captures à l'appui) — SUR TÉLÉPHONE, LE TITRE PREND TOUTE
+     LA LARGEUR et les boutons passent DESSOUS. En v8.203 le titre cessait d'être tronqué mais
+     partait sur deux lignes, coincé à côté d'une colonne de droite de largeur fixe : lisible,
+     mais laid. Lui donner la ligne entière règle les deux — plus de troncature ET plus de
+     retour à la ligne pour un titre de longueur normale.
+     ⚠️ EN CSS SEUL, VOLONTAIREMENT : `.lgrow` sert à QUATRE gabarits (accueil, liste des
+     ligues, bascule « Ligues terminées », liste des stats) et deux d'entre eux posent leur
+     pastille en ENFANT DIRECT, sans `.sd`. Toucher au HTML de l'un aurait décalé les autres ;
+     `margin-left:auto` sur les deux formes les couvre tous les quatre.
+     ⚠️ Le `-webkit-line-clamp:2` du titre RESTE : c'est le filet pour un nom très long. Il ne
+     se déclenche simplement plus pour un nom ordinaire, qui tient désormais sur une ligne.
+     Rien ne change au-dessus de 480 px : la disposition côte à côte y est confortable. */
+  @media (max-width:480px){
+    .lgrow{flex-wrap:wrap;}
+    .lgrow .info{flex:1 1 100%;}
+    .lgrow .sd{margin-left:auto;}
+    .lgrow>.chip{margin-left:auto;}
+  }
   .ticon{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;flex:none;padding:0;}
   .ticon:hover{border-color:var(--green);}
   /* En-tête de liste (façon maquette : h2.sec) — distinct de .boxttl/.smalllbl : ceux-ci titrent
@@ -576,6 +594,17 @@
      collées au nom). C'était son `margin-left:auto`. Elle est devenue `.chip gold` —
      même or, mais alignée comme les autres. Règle conservée au cas où un écran la
      réutiliserait, elle ne coûte rien. */
+  /* ⚠️ v8.210 — UN DUEL EST UN BLOC, pas deux lignes qui se suivent. Sans l'encadré, le « VS »
+     ne dit pas où s'arrête la paire : à huit joueurs on ne sait plus si le VS appartient aux
+     lignes du dessus ou du dessous. Le duel du joueur connecté est teinté — il est déjà en
+     tête, mais l'ordre seul ne se remarque pas quand on revient sur l'écran. */
+  .duelgrp{border:1px solid var(--border);border-radius:calc(var(--r) - 2px);padding:7px;
+    margin-bottom:10px;background:var(--panel2);}
+  .duelgrp.moi{border-color:color-mix(in srgb,var(--blue) 45%,var(--border));
+    background:color-mix(in srgb,var(--blue) 7%,var(--panel2));}
+  .duelgrp .opp-status{margin:0;}
+  .vsmini{text-align:center;font-size:10px;font-weight:800;color:var(--muted);
+    letter-spacing:.09em;padding:3px 0;}
   .opp-status .st{margin-left:auto;font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:999px;background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--gold);}
   .locked-head{text-align:center;margin-bottom:16px;}
   .locked-head .eb{font-size:10.5px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);}
@@ -910,7 +939,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.205";
+const APP_VERSION = "v8.210";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9176,7 +9205,20 @@ function viewWait(dayLbl){
       ? ' · '+t("Paris clôturés 🔒")
       : ' · '+t("clôture dans {a}",{a:fmtLeft(dlRoster)}));
     const pronosRoster = humansN>1 ? `<h2 class="mini" style="margin:10px 2px 4px">${t("Pronos des joueurs · {a}/{b}",{a:doneN,b:humansN})}${clotureRoster}</h2>`
-      + players.map(p=>{ const done=!!bets.find(b=>b.player_id===p.id); const dd=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const noFx=!!(dd&&!dd.fixtures);
+      + (()=>{
+        /* ⚠️ v8.210 (demandé par Hervé) — LA LISTE EST GROUPÉE PAR DUEL, ET LE SIEN VIENT EN
+           TÊTE. Elle énumérait les joueurs à plat : on lisait huit statuts sans savoir QUI
+           affronte QUI, alors que c'est la seule information qui donne un sens aux autres —
+           « attend ses matchs » n'a de valeur que si l'on voit en face de qui.
+           ⚠️ On part des DUELS, pas des joueurs : un joueur appartient à un seul duel, mais
+           c'est le duel qui porte la paire. Partir des joueurs obligeait à deviner l'autre.
+           ⚠️ « dès le départ, on doit voir qui va jouer contre qui » (Hervé) : la paire
+           s'affiche même quand les matchs ne sont PAS encore choisis. C'est justement là
+           qu'elle est la plus utile — elle montre qui l'on attend.
+           ⚠️ FILET : tout joueur qui ne serait dans aucun duel est affiché à la fin plutôt
+           qu'escamoté. Ça n'arrive pas, mais une liste qui perd quelqu'un en silence est
+           pire qu'une liste imparfaite. */
+        const ligne = p => { const done=!!bets.find(b=>b.player_id===p.id); const dd=duels.find(x=>x.home_id===p.id||x.away_id===p.id); const noFx=!!(dd&&!dd.fixtures);
         /* ⚠️ (signalé par Hervé sur XXZQ3) — « attend ses matchs » NE DISTINGUAIT PAS les deux
            rôles d'un duel sans matchs choisis : le joueur À DOMICILE, qui bloque tout le monde
            tant qu'il n'a pas choisi ses 5 matchs, et celui À L'EXTÉRIEUR, qui attend réellement
@@ -9194,7 +9236,19 @@ function viewWait(dayLbl){
         const chip = done?`<span class="chip g">${t("✓ pronos validés")}</span>`
           :(noFx?(dd.home_id===p.id?`<span class="chip">${t("doit choisir ses matchs")}</span>`:`<span class="chip">${t("attend ses matchs")}</span>`)
           :`<span class="chip gold">${t("⏳ pronos non validés")}</span>`);
-        return `<div class="opp-status" style="margin-bottom:8px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}${chip}</div>`; }).join('') : '';
+        return `<div class="opp-status">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}${chip}</div>`; };
+        const mien = d => d.home_id===S.myId || d.away_id===S.myId;
+        const ordre = (duels||[]).slice().sort((a,b)=>(mien(b)?1:0)-(mien(a)?1:0));   // le mien d'abord
+        const vus = new Set();
+        const groupes = ordre.map(d=>{
+          const h=pById(d.home_id), a=pById(d.away_id);
+          if(!h||!a) return '';
+          vus.add(h.id); vus.add(a.id);
+          return `<div class="duelgrp${mien(d)?' moi':''}">${ligne(h)}<div class="vsmini">${t("VS")}</div>${ligne(a)}</div>`;
+        }).join('');
+        const orphelins = players.filter(p=>!vus.has(p.id)).map(p=>`<div class="duelgrp">${ligne(p)}</div>`).join('');
+        return groupes + orphelins;
+      })() : '';
     return `${head}${missingFx}
       ${picksCard}${bonusLine}${bilanPariHTML(mine)}
       <div style="height:6px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier (jusqu'à la clôture)")}</button>
@@ -12715,6 +12769,7 @@ function viewAdmin(){
 }
 
 /* ============ render / poll ============ */
+let rootAffiche=null;   // dernier HTML réellement posé dans #root (cf. la note dans render)
 function render(){
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
@@ -12770,7 +12825,25 @@ function render(){
   else html=viewGame();
   // Bandeau de consultation en TÊTE DE CHAQUE ÉCRAN (v7.11) : quel que soit l'onglet où l'admin
   // navigue dans la ligue d'un autre, il voit qu'il n'est pas chez lui et peut sortir d'un clic.
-  $("root").innerHTML=bandeauConsultation()+html;
+  /* ⚠️ v8.206 (vécu par Hervé sur XXZQ3 : « on voit le rafraîchissement sur les avatars
+     toutes les 4 secondes », sur Pronos ET sur Classement) — LE RENDU EST DÉSORMAIS
+     IDEMPOTENT. `startPoll()` appelle `refresh()` toutes les 4 s sur les vues game /
+     standings / results, et chaque passage réaffectait `innerHTML` MÊME QUAND RIEN
+     N'AVAIT CHANGÉ. Réaffecter détruit puis recrée tout le sous-arbre : les <img> des
+     avatars repartent de zéro et le navigateur doit les repeindre. Sur ordinateur ça ne
+     se voit pas (l'image est déjà décodée), sur téléphone le cache d'images DÉCODÉES est
+     bien plus petit — les premières lignes tiennent, les suivantes clignotent. D'où
+     l'asymétrie signalée : « les 4 premières normales, les 4 suivantes qui scintillent ».
+     ⚠️ Ce n'est PAS un cache réseau : mesuré, 10 réaffichages ne déclenchent que 6
+     requêtes. L'en-tête `no-cache` de Supabase Storage n'y est pour rien.
+     ⚠️ Comparer la CHAÎNE est sûr ici parce que `render()` est la SEULE écriture de
+     `#root` (vérifié : les autres innerHTML visent foot, tradeBtn, bottomnav). Si un jour
+     un autre code écrit dans `#root`, ce repère devient faux et il faudra le remettre à
+     null en même temps.
+     Effet de bord voulu : les animations en cours (classes ajoutées après le rendu) ne
+     sont plus réinitialisées toutes les 4 s. */
+  const rootNeuf = bandeauConsultation()+html;
+  if(rootNeuf !== rootAffiche){ $("root").innerHTML = rootNeuf; rootAffiche = rootNeuf; }
   { const bn=$("bottomnav"); if(bn){ const bh=bottomBar(); bn.innerHTML=bh; bn.classList.toggle("hide", !bh); } }
   // Remonter en haut à chaque changement d'écran, y compris les sous-étapes d'une journée (choix des matchs → saisie → attente → résultats) — pas sur les simples rafraîchissements de polling.
   let gsub="";
@@ -13467,6 +13540,22 @@ async function acceptTrade(id){
     await q(db.from("players").update({hand:oHand, capital:tr2((owner.capital||0)+price)}).eq("id",ownerId));
     await q(db.from("players").update({hand:bHand, capital:tr2((buyer.capital||0)-price)}).eq("id",buyerId));
     await markTrade(id,"accepted",reply,(L&&L.current_day)||0);
+    /* ⚠️ v8.208 — LES OFFRES CONCURRENTES TOMBENT AVEC LE BONUS, ICI AUSSI. La règle écrite en
+       tête de ce chemin de repli est « il doit dire exactement la même chose que le chemin
+       normal, sinon le joueur verrait un message selon que sa base a été migrée ou non ». La
+       fonction serveur annule désormais les autres offres en attente sur ce bonus (étape 7 bis
+       de MIGRATION-echange-offres-concurrentes.sql) : sans ces lignes, une base non migrée
+       laisserait ces offres vivantes et les deux comportements divergeraient.
+       ⚠️ Le sens de `kind` est repris tel quel : à la VENTE le détenteur est `from_player`,
+       à l'ACHAT c'est `to_player`. Tester un seul champ laisserait passer la moitié des cas.
+       ⚠️ Non atomique, comme tout ce chemin de repli — c'est précisément pourquoi la fonction
+       serveur existe. En cas d'échec ici, les offres mortes seront rattrapées au clic suivant
+       par le contrôle « le bonus est-il encore en main ? ». */
+    try{
+      const soeurs=(trades||[]).filter(x=> x.status==="pending" && x.id!==id && x.card_id===o.card_id
+        && ((x.kind==="sell" && x.from_player===ownerId) || (x.kind!=="sell" && x.to_player===ownerId)));
+      for(const x of soeurs) await markTrade(x.id,"cancelled",null,null,"bonus_parti");
+    }catch(e){}
     infoWin(o.kind==="sell" ? t("Acheté ! {c} est à toi (−{b} €).",{c:t(CARDS[o.card_id]?CARDS[o.card_id].n:o.card_id),b:price}) : t("Vendu ! +{b} € reçus.",{b:price}), "🤝");
     await refresh();
   }catch(e){ infoWin(t("⚠️ Une erreur est survenue")+" : "+esc(e.message),"⚠️"); }
@@ -13597,7 +13686,12 @@ function ttJournee(){
     .map((p,k)=>Object.assign({},p,{et:k===0,pts:ttPtsDuel(p.duel)+(p.net>0?1:0)+(k===0?1:0)}));
 }
 const ttNomDuel=d=>d==="g"?t("gagné"):d==="p"?t("perdu"):t("nul");
-const ttPts=v=>v>1?ttPts(v):t("{a} pt",{a:v});   // « 1 pts » et « 0 pts » sont fautifs
+/* ⚠️ NE JAMAIS APPLIQUER DE REMPLACEMENT GLOBAL `t("{a} pts",…)` → `ttPts(…)` SUR CE FICHIER :
+   il réécrit CE CORPS-CI et la fonction s'appelle elle-même (RangeError, écran des résultats vide
+   au milieu de l'animation). Vécu en v8.208, trouvé en rejouant le tutoriel — aucun garde-fou ne
+   pouvait l'attraper : le code reste syntaxiquement valide et toutes les clés de traduction sont
+   présentes. */
+const ttPts=v=>v>1?t("{a} pts",{a:v}):t("{a} pt",{a:v});
 
 /* ⚠️ JETON OBLIGATOIRE : aux enchères une mise monte toutes les 150 ms alors qu'une
    animation dure plus longtemps. Sans lui, le filet de l'animation PRÉCÉDENTE se
