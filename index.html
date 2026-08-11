@@ -443,9 +443,11 @@
   .recaphero{border-radius:var(--r);padding:18px;border:1px solid var(--border);background:var(--panel);box-shadow:var(--shadow);margin:12px 0;}
   .recaphero.win{background:color-mix(in srgb,var(--green) 9%,var(--panel));border-color:color-mix(in srgb,var(--green) 45%,var(--border));}
   .recaphero.loss{background:color-mix(in srgb,var(--red) 9%,var(--panel));border-color:color-mix(in srgb,var(--red) 45%,var(--border));}
-  /* Écran Résultats (recapBody, v8.153) — hero du duel. Distinct de .recaphero ci-dessus, qui reste
-     utilisé tel quel par la partie d'essai (startEssai) : ce n'est pas un renommage, c'est un
-     composant à part pour ne pas changer l'écran de démo hors-scope de ce passage. */
+  /* ⚠️ Écran Résultats (recapBody, v8.153) — hero du duel. `.recaphero` (ci-dessus) N'A PLUS
+     AUCUN UTILISATEUR depuis la suppression de la partie d'essai en v8.213 : c'est elle
+     seule qui s'en servait. Règles conservées, pas supprimées — les retirer dans le même
+     commit que 63 000 caractères de code mort mêlerait deux gestes, et une régression
+     d'affichage deviendrait impossible à imputer. À faire ensuite, seul. */
   .hero{position:relative;overflow:hidden;border-radius:var(--r);padding:20px 18px 18px;border:1px solid var(--border);
     background:linear-gradient(155deg,var(--panel2) -10%,var(--panel) 65%,var(--bg) 120%);color:var(--ink);
     box-shadow:var(--shadow);margin:12px 0;}
@@ -939,7 +941,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.212";
+const APP_VERSION = "v8.213";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5973,8 +5975,8 @@ function viewAuth(){
     ${/* ⚠️ v8.66 — DEUX PORTES, RANGÉES PAR QUANTITÉ DE LECTURE. L'accéléré passe en premier et
          en vert : c'est le parcours par défaut pour qui ne connaît pas le jeu — il montre la
          saison entière sans le mode d'emploi. Le complet reste juste dessous, sans mise en avant.
-         ⚠️ Ne PAS rajouter un troisième bouton « version ultra-courte » : essayé en v8.64,
-         supprimé en v8.66 (cf. `essaiMode`). */''}
+         ⚠️ Ne PAS rajouter de second parcours « version courte » : essayé en v8.64, supprimé en
+         v8.66, et les deux portes qui restaient ont fusionné en v8.205. */''}
     <div class="pathdiv"><span>${t("Découvrir sans compte")}</span></div>
     ${/* ⚠️ v8.205 — UNE SEULE PORTE. Il y en avait DEUX (« la saison en accéléré » et « le
          tuto complet »), et le choix lui-même était un obstacle : on demandait à quelqu'un
@@ -5982,7 +5984,14 @@ function viewAuth(){
          comparer. Le tutoriel dynamique règle la question — il est court PARCE QU'il
          montre au lieu d'expliquer, donc il n'y a plus d'arbitrage à rendre. */''}
     <button class="pathbtn hi" onclick="openTuto()"><div class="t">${t("🎓 Découvrir le jeu en 2 min")}</div><div class="s">${t("Une journée entière, en cliquant. Sans compte.")}</div></button>
-    <button class="pathbtn" onclick="openRules()"><div class="t">${t("📖 Lire les règles")}</div></button>`;
+    ${/* ⚠️ v8.213 (demandé par Hervé) — LE BOUTON « 📖 Lire les règles » EST RETIRÉ D'ICI : il
+         menait à un écran dont la première action est… le tutoriel, déjà proposé juste au-dessus.
+         Deux portes pour la même chose, à trois centimètres l'une de l'autre.
+         ⚠️ IL ÉTAIT LA SEULE VOIE VERS LES RÈGLES AVANT CONNEXION — le 📖 de la barre du haut est
+         masqué ici depuis la v8.31, PRÉCISÉMENT parce que ce bouton existait. J'ai d'abord voulu
+         lever ce masquage ; Hervé a tranché l'inverse : « juste le tuto suffit ». C'est un choix
+         de PRODUIT, pas un oubli — à quelqu'un qui hésite encore on montre le JEU, pas un
+         règlement, et les règles complètes l'attendent une fois entré. */''}`;
 }
 async function doLogin(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
@@ -6537,557 +6546,17 @@ function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim();
   if(c.length!==CODE_LEN){ showErr(t("Un code de ligue fait {a} caractères.",{a:CODE_LEN})); return; }
   joinLeague(c); }
 
-/* ============ PARTIE D'ESSAI — mini-saison LOCALE de 2 journées, résultats immédiats ============
-   Ordre RÉEL du jeu : prépa (gage + enchères bonus) → paris J1 → résultats → sélection matchs J2 →
-   paris J2 → résultats → classement final + gage. 100 % local (aucune base, aucune IA payante).
-   Des annotations « ℹ️ Dans le vrai jeu » signalent les simplifications (3 matchs vs 5, etc.). */
-let essaiStep=0, essaiGage=0, essaiBids={}, essaiPicks=[[],[]], essaiStakes=[[],[]], essaiCap=[-1,-1], essaiCard=[null,null], essaiCardTgt=[-1,-1], essaiSel=[];
-/* ─── DEUX PARCOURS DE TUTO (v8.66) ──────────────────────────────────────────────────────────
-   « court » = les 11 écrans du tuto classique, sans les explications. « complet » = tout.
-   ⚠️ CE N'EST PAS UN 2ᵉ JEU D'ÉCRANS : le court emprunte les MÊMES branches que le complet, seuls
-   les blocs de commentaire se taisent, via `ann()` et `dtl()` (voir `viewEssai`). Écrire un écran
-   « spécial court » ferait diverger deux versions du même écran — la faute que le tuto passe son
-   temps à éviter avec le vrai jeu.
-   ⚠️ UN TROISIÈME MODE « express » A EXISTÉ (v8.64), SUPPRIMÉ EN v8.66 — ne pas le réintroduire.
-   Il tenait en 4 écrans : le principe, un duel, son verdict, fin. Verdict d'Hervé après essai :
-   « ça ne donne pas l'image du jeu ». Sauter les enchères, la 2ᵉ journée et le classement ne
-   simplifiait pas le jeu, ça en montrait un AUTRE — un pari isolé, là où Tactizo est
-   un championnat. Un tuto qui vend la mauvaise image coûte plus cher qu'un tuto trop long. */
-let essaiMode="complet";   // "court" (11 écrans, texte réduit) · "complet"
-// Bonus de FORCES DIFFÉRENTES (4/3/2). Pré-remplissage : tout 9>6 (gagné), parachute 8=8 (égalité →
-// rapidité), sangsue non misé (Léa l'emporte). Le joueur remporte donc 🔥 Tout ou Rien et 🪂 Parachute.
-const ESSAI_STAKE=10, ESSAI_CARDS=["tout","parachute","sangsue"];
-// Ligue de DÉMO à 4 joueurs : chaque journée tu affrontes un adversaire DIFFÉRENT (comme en vrai).
-const ESSAI_PLAYERS=[{id:"me",n:"Toi",e:"👑"},{id:"lea",n:"Léa",e:"🦊"},{id:"marco",n:"Marco",e:"🐼"},{id:"nina",n:"Nina",e:"🦉"}];
-function essaiOpp(d){ return d===0?{id:"lea",n:"Léa",e:"🦊"}:{id:"marco",n:"Marco",e:"🐼"}; }
-// Enchères des 3 AUTRES joueurs sur les 3 bonus (montants FIXES). Miser est FACULTATIF. Cas illustrés :
-// tout → Marco 8 (forte, dure à battre) · parachute → Léa 5 = Marco 5 (ÉGALITÉ) · sangsue → Nina 7.
-// À égalité, le plus RAPIDE gagne : ordre de rapidité ci-dessous (toi le plus rapide).
-const ESSAI_ORDER=["me","lea","marco","nina"];
-// Nombre de miseurs VARIABLE : « tout » convoité par tous (4), « parachute » par 2 adversaires (égalité
-// Léa=Marco), « sangsue » par la seule Nina → montre que certains bonus intéressent plus que d'autres.
-const ESSAI_AUCTION={tout:{lea:6,marco:8,nina:3},parachute:{lea:5,marco:5,nina:0},sangsue:{lea:0,marco:0,nina:7}};
-function essaiBotBid(id){ const a=ESSAI_AUCTION[id]||{}; return Math.max(a.lea||0,a.marco||0,a.nina||0); }
-// Qui remporte l'enchère d'un bonus (toi inclus) : plus haute mise, égalité au plus rapide (ESSAI_ORDER).
-function essaiAuctionResult(id){ const a=ESSAI_AUCTION[id]||{}; const bids={me:essaiBids[id]||0,lea:a.lea||0,marco:a.marco||0,nina:a.nina||0};
-  let win=null,best=-1; ESSAI_ORDER.forEach(k=>{ if(bids[k]>best){ best=bids[k]; win=k; } });
-  if(best<=0) win=null; const tie=win!=null && ESSAI_ORDER.filter(k=>bids[k]===best).length>1;
-  return {bids,win,best,tie}; }
-// Résultat de l'AUTRE duel de la journée (celui que tu ne joues pas) — nets fixes, classement réaliste.
-// La plus forte valeur sert de « barre » pour l'⭐ meilleur pronostiqueur : ~20 € en J1, ~40 € en J2.
-// J1 : Marco 20 bat Nina −3 · J2 : Léa 40 bat Nina 2.
-const ESSAI_SHADOW=[{marco:20,nina:-3},{lea:40,nina:2}];
-// Classement FINAL fictif « comme après une vraie saison de 6 journées » (points & cagnottes réalistes).
-const ESSAI_FINAL=[{id:"me",pts:14,cap:212.50},{id:"lea",pts:12,cap:168.00},{id:"marco",pts:9,cap:143.75},{id:"nina",pts:6,cap:96.25}];
-const ESSAI_REWARDS=["Le trophée tournant 🥇","Servi comme un roi 🍽️","Cagnotte d'honneur 💰"];
-/* ⚠️ v8.38 (retour de testeur, via Hervé) — « IL FAUDRAIT QUE POUR LE PREMIER TOUR CE SOIT LE
-   JOUEUR QUI SÉLECTIONNE LES MATCHS À JOUER, PLUTÔT QU'AU TOUR SUIVANT ». Le tuto imposait les
-   matchs de la J1 et ne faisait choisir qu'à la J2 : on découvrait le geste le plus caractéristique
-   du jeu — être à domicile et composer la journée — après avoir déjà parié une fois.
-   Les deux jeux de matchs ont donc ÉCHANGÉ leur rôle : on choisit 3 affiches dans ESSAI_POOL pour
-   la J1 (tu reçois), et la J2 arrive toute faite (Marco reçoit à son tour). C'est aussi plus
-   fidèle : dans une vraie ligue on alterne domicile et extérieur d'une journée à l'autre. */
-const ESSAI_J2=[
- {home:"PSG",away:"OM",sport:"⚽",oh:1.85,od:3.4,oa:4.0,draw:true,res:"1",botSel:"1"},
- {home:"Real Madrid",away:"Barça",sport:"⚽",oh:2.3,od:3.3,oa:2.9,draw:true,res:"1",botSel:"2"},
- {home:"Nadal",away:"Federer",sport:"🎾",oh:1.7,oa:2.1,draw:false,res:"1",botSel:"1"}];   // J2 : imposés par Marco, à domicile
-const ESSAI_POOL=[
- {home:"Man City",away:"Chelsea",sport:"⚽",oh:1.55,od:4.2,oa:6.0,draw:true,res:"1",botSel:"1"},
- {home:"Bayern",away:"Dortmund",sport:"⚽",oh:1.6,od:4.0,oa:5.0,draw:true,res:"1",botSel:"2"},
- {home:"Djokovic",away:"Alcaraz",sport:"🎾",oh:1.95,oa:1.85,draw:false,res:"2",botSel:"1"},
- {home:"Lakers",away:"Celtics",sport:"🏀",oh:2.0,oa:1.8,draw:false,res:"2",botSel:"2"},
- {home:"Juve",away:"Milan",sport:"⚽",oh:2.2,od:3.1,oa:3.3,draw:true,res:"1",botSel:"1"}];
-function essaiFav(f){ return oddOf(f,"1")<=oddOf(f,"2")?"1":"2"; }
-// Enchères PRÉ-REMPLIES pour l'exemple (éditables) : tout 9 → tu bats Marco (8) ; parachute 5 → ÉGALITÉ
-// avec Léa & Marco (tu gagnes par la rapidité) ; sangsue 3 → Nina (7) l'emporte. → les 3 cas de figure.
-/* `mode` = "court" | "complet" (cf. `essaiMode`). Toute autre valeur — y compris AUCUN argument —
-   retombe sur "complet" : les appels existants (accueil, « revoir le tuto », fin de partie)
-   gardent le comportement d'avant, c'est voulu. Seule la page de connexion propose le choix. */
-function startEssai(mode){ essaiMode=(mode==="court")?"court":"complet";
-  essaiStep=0; essaiGage=0; essaiBids={tout:9,parachute:5,sangsue:3}; essaiSel=[];   // accessible AVANT connexion (100 % local)
-  // ⚠️ v8.38 : plus de pronos pré-remplis pour la J1 — ses matchs n'existent qu'après la sélection.
-  essaiPicks=[[],[]]; essaiStakes=[[],[]]; essaiCap=[-1,-1]; essaiCard=[null,null]; essaiCardTgt=[-1,-1];
-  navRoot(); S.view="essai"; render(); }
-function essaiGo(n){ essaiStep=n; render(); try{window.scrollTo(0,0);}catch(e){} }
-function essaiSetBid(id,v){ const x=Math.max(0,Math.min(40,Math.round(+v||0))); if(x>0) essaiBids[id]=x; else delete essaiBids[id];
-  const tot=Object.values(essaiBids).reduce((a,b)=>a+(+b||0),0); const over=tot>40;   // miser est FACULTATIF
-  const bt=document.getElementById("essaibt"); if(bt){ bt.textContent=tot; bt.parentNode.className=over?'red':''; }
-  const b2=document.getElementById("essaibidbtn"); if(b2){ b2.disabled=over; b2.textContent= over? t("Dépasse 40 € — réduis tes mises") : t("Valider ma prépa →"); } }
-// Bonus REMPORTÉS par toi (plus haute enchère, égalité au plus rapide) → dépense = leur total.
-function essaiWon(){ return ESSAI_CARDS.filter(id=>essaiAuctionResult(id).win==="me"); }
-function essaiSpent(){ return essaiWon().reduce((a,id)=>a+(essaiBids[id]||0),0); }
-// Capital dispo pour parier : 100 − enchères gagnées, + le net de la J1 quand on aborde la J2.
-function essaiCapital(d){ let c=100-essaiSpent(); if(d>=1) c+=essaiMeNet(0,essaiFx(0)); return Math.round(c*100)/100; }
-// Dépense d'enchères de CHAQUE joueur (le gagnant paie sa mise) → pour afficher les cagnottes.
-function essaiSpendBy(){ const sp={me:0,lea:0,marco:0,nina:0}; ESSAI_CARDS.forEach(id=>{ const r=essaiAuctionResult(id); if(r.win) sp[r.win]+=r.best; }); return sp; }
-// Cagnotte des 4 joueurs après la journée `upto` : 100 − enchères + nets cumulés.
-function essaiCapitals(upto){ const sp=essaiSpendBy(); const cap={}; ESSAI_ORDER.forEach(k=>cap[k]=100-sp[k]);
-  for(let d=0;d<=upto;d++){ const nets=essaiDayNets(d,essaiFx(d)); ESSAI_ORDER.forEach(k=>cap[k]+=(nets[k]||0)); }
-  ESSAI_ORDER.forEach(k=>cap[k]=Math.round(cap[k]*100)/100); return cap; }
-function essaiSetPick(d,i,v){ essaiPicks[d][i]=v; render(); }
-function essaiSetCap(d,i){ essaiCap[d]=(essaiCap[d]===i?-1:i); if(essaiCap[d]===i&&essaiCardTgt[d]===i) essaiCardTgt[d]=-1; render(); }
-function essaiSetCard(d,id){ essaiCard[d]=(essaiCard[d]===id?null:id); if(essaiCard[d]!=="tout") essaiCardTgt[d]=-1; render(); }
-function essaiSetTgt(d,i){ if(essaiCard[d]!=="tout") return; essaiCardTgt[d]=(essaiCardTgt[d]===i?-1:i); if(essaiCardTgt[d]===i&&essaiCap[d]===i) essaiCap[d]=-1; render(); }
-function essaiSetStake(d,i,v){ essaiStakes[d][i]=Math.max(0,Math.round(+v||0));
-  const tot=(essaiStakes[d]||[]).reduce((a,b)=>a+(+b||0),0), max=Math.floor(essaiCapital(d)*0.5), over=tot>max;
-  const fx=essaiFx(d); const allMin=fx.every((f,i2)=>(+essaiStakes[d][i2]||0)>=1);
-  const pickOk=fx.every((f,i2)=>essaiPicks[d][i2]!=null);
-  const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&pickOk&&!over&&capOk&&tgtOk;
-  const el=document.getElementById("essaist"); if(el){ el.textContent=tot; el.parentNode.className=over?'red':''; }
-  const g=document.getElementById("essaigauge"); if(g){ g.querySelector("i").style.width=(max>0?Math.min(100,Math.round(tot/max*100)):0)+"%"; g.classList.toggle("over",over); }
-  // v8.38 : le bandeau rouge et le bouton rouge suivent la frappe, comme dans le vrai jeu.
-  const ov=document.getElementById("essaiover");
-  if(ov){ ov.style.display=over?"":"none";
-    const tx=document.getElementById("essaiovertxt"); if(tx&&over) tx.innerHTML=t("— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.",{a:tot,b:max,c:Math.max(0,tot-max)}); }
-  const b=document.getElementById("essaibetbtn"); if(b){ b.disabled=!ok; b.classList.toggle("danger",over); b.textContent= over? t("Mise trop élevée") : (!pickOk? t("Choisis ton pronostic sur chaque match") : (!allMin? t("Mise de 1 € min. par pari") : (!capOk? t("Désigne ton match favori 👑") : (!tgtOk? t("Choisis la cible 🎯 du bonus") : t("Valider mes pronos →"))))); } }
-function essaiToggleSel(k){ const j=essaiSel.indexOf(k); if(j>=0) essaiSel.splice(j,1); else if(essaiSel.length<3) essaiSel.push(k); render(); }
-// Les matchs d'une journée : la J1 est CHOISIE par le joueur, la J2 lui est imposée (v8.38).
-function essaiFx(d){ return d===0 ? essaiSel.map(k=>ESSAI_POOL[k]) : ESSAI_J2; }
-// L'adversaire a ses PROPRES mises (fixes, indépendantes des tiennes — avant il copiait les tiennes, ce
-// qui faisait faux, signalé par Hervé). Il a aussi un Capitaine (match essaiBotCap) doublé.
-const ESSAI_BOTSTAKE=[12,8,10];   // mise de l'IA par match (indépendante du joueur)
-function essaiBotStk(i){ return ESSAI_BOTSTAKE[i]!=null?ESSAI_BOTSTAKE[i]:ESSAI_STAKE; }
-function essaiBotCap(d){ return d===0?2:0; }   // match du capitaine adverse (J1 : Nadal gagnant · J2 : 1er match)
-function essaiBotNet(fx,stakes,capIdx){ if(capIdx==null) capIdx=-1; let n=0; fx.forEach((f,i)=>{ const st=essaiBotStk(i); const win=f.botSel===f.res; let g=win?st*(oddOf(f,f.botSel)-1):-st; if(i===capIdx) g*=2; n+=g; }); return Math.round(n*100)/100; }
-function essaiMeNet(d,fx){ const picks=essaiPicks[d]||[], stakes=essaiStakes[d]||[], cap=essaiCap[d], card=essaiCard[d], tgt=essaiCardTgt[d];
-  let n=0; fx.forEach((f,i)=>{ if(picks[i]==null) return; const st=+stakes[i]||0; const win=picks[i]===f.res; const base= win? st*(oddOf(f,picks[i])-1) : -st;
-    let g=base; if(card==="tout"&&i===tgt){ g= win? base*3 : base*2; } else if(i===cap){ g=base*2; } n+=g; });
-  n=Math.round(n*100)/100; const bn=essaiBotNet(fx,stakes,essaiBotCap(d));
-  if(card==="parachute"&&n<0) n=Math.round(n*0.7*100)/100;          // 30 % de la perte amortie
-  if(card==="sangsue"&&bn>0) n=Math.round((n+0.15*bn)*100)/100;     // 15 % du bénéfice de Léa siphonné
-  return n; }
-function essaiDuel(d,fx){ const me=essaiMeNet(d,fx), bot=essaiBotNet(fx,essaiStakes[d]); const won=me>bot, tie=me===bot;
-  const pts=tie?1:(won?(me>0?3:2):(me>0?1:0)), bpts=tie?1:(!won?(bot>0?3:2):(bot>0?1:0)); return {me,bot,won,tie,pts,bpts}; }
-// Nets des 4 joueurs pour la journée d : toi (réel), ton adversaire du jour (réel), les 2 autres (fixes).
-function essaiDayNets(d,fx){ const nets={me:essaiMeNet(d,fx)}; nets[essaiOpp(d).id]=essaiBotNet(fx,essaiStakes[d],essaiBotCap(d));
-  const sh=ESSAI_SHADOW[d]; for(const k in sh) if(!(k in nets)) nets[k]=sh[k]; return nets; }
-// Barème RÉEL (v2) : duel gagné 2 / nul 1 / perdu 0, +1 si net positif, +1 au ⭐ meilleur prono du jour.
-function essaiDayPts(d,fx){ const nets=essaiDayNets(d,fx); const pairs=d===0?[["me","lea"],["marco","nina"]]:[["me","marco"],["lea","nina"]];
-  const pts={me:0,lea:0,marco:0,nina:0};
-  pairs.forEach(([a,b])=>{ const na=nets[a],nb=nets[b], ba=na>0?1:0, bb=nb>0?1:0;
-    if(na>nb){ pts[a]+=2+ba; pts[b]+=bb; } else if(na<nb){ pts[a]+=ba; pts[b]+=2+bb; } else { pts[a]+=1+ba; pts[b]+=1+bb; } });
-  let star=null,best=-1e9; ["me","lea","marco","nina"].forEach(k=>{ if(nets[k]>best){best=nets[k];star=k;} }); if(star) pts[star]+=1;
-  return {nets,pts,star}; }
-function essaiTotals(upto){ const T={me:0,lea:0,marco:0,nina:0}; for(let d=0;d<=upto;d++){ const p=essaiDayPts(d,essaiFx(d)).pts; for(const k in T) T[k]+=p[k]; } return T; }
-// Classement : plus de POINTS d'abord, puis plus grosse CAGNOTTE (si fournie), puis « toi » devant.
-function essaiRank(T,caps){ return ESSAI_PLAYERS.map(p=>({...p,pts:T[p.id]})).sort((a,b)=>(b.pts-a.pts)||((caps?caps[b.id]:0)-(caps?caps[a.id]:0))||(a.id==="me"?-1:(b.id==="me"?1:0))); }
-function viewEssai(){
-  const court=(essaiMode==="court");
-  const N=11, head=step=>`<div class="row" style="justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div class="row" style="gap:6px"><button class="btn ghost sm" onclick="exitEssai()">${AUTH?'🏠 '+t("Accueil"):'← '+t("Connexion")}</button>${step>0?`<button class="btn ghost sm" onclick="essaiGo(${step-1})">${t("← Précédent")}</button>`:''}</div>
-      <span class="mini muted"><b>${t("étape {a}/{b}",{a:step+1,b:N})}</b></span></div>
-    <div class="gauge" style="margin-bottom:12px"><i style="width:${Math.round((step+1)/N*100)}%"></i></div>`;
-  /* ⚠️ v8.65 — EN MODE COURT, `ann` ET `dtl` SE TAISENT. `ann` = les encarts « ℹ️ Dans le vrai
-     jeu » (ce que la démo simplifie) ; `dtl` = les blocs d'explication facultatifs. Tout ce qui
-     reste est ce qu'on ne peut PAS deviner en regardant l'écran : le barème, les montants, la
-     consigne du geste en cours.
-     ⚠️ Passer par ces deux fonctions plutôt que par un `if` dans chaque étape a une raison : un
-     bloc oublié reste visible (donc trop de texte, défaut visible), là où un `if` mal fermé
-     casserait l'écran. La panne est du bon côté. */
-  const ann=txt=>court?'':`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">ℹ️ <b>${t("Dans le vrai jeu")}</b> : ${txt}</div>`;
-  const dtl=html=>court?'':html;
-  const betCard=(d,f,i)=>{ const showTgt=(essaiCard[d]==="tout"), isTgt=essaiCardTgt[d]===i;
-    return `<div class="box"><div class="row"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div>
-      <div class="row" style="gap:6px;flex:0 0 auto"><span class="tog cap ${essaiCap[d]===i?'on':''} clik" onclick="essaiSetCap(${d},${i})" title="${t("Match favori")}">👑</span>${showTgt?`<span class="tog tgt ${isTgt?'on':''} clik" onclick="essaiSetTgt(${d},${i})" title="${t("Cible du bonus")}">${(essaiCard[d]&&CARDS[essaiCard[d]])?CARDS[essaiCard[d]].e:'🎯'}</span>`:''}</div></div>
-      <div class="odds" style="margin-top:8px">${["1",f.draw?"N":"","2"].filter(Boolean).map(v=>`<div class="odd ${essaiPicks[d][i]===v?'sel':''}" onclick="essaiSetPick(${d},${i},'${v}')">${esc(v==="1"?f.home:v==="2"?f.away:"Nul")}<b>${cote(oddOf(f,v))}</b></div>`).join("")}</div>
-      <div class="row" style="margin-top:8px"><span class="mini muted">${t("Mise (€)")}</span><input type="number" inputmode="numeric" min="1" step="1" value="${essaiStakes[d][i]||''}" style="width:74px" oninput="essaiSetStake(${d},${i},this.value)"></div></div>`; };
-  const betScreen=(d,fx,goNext,showGuide)=>{ const won=essaiWon(); const usedBefore=essaiCard.slice(0,d).filter(Boolean); const avail=won.filter(id=>usedBefore.indexOf(id)<0);
-    const cap=essaiCapital(d); const max=Math.floor(cap*0.5);
-    const tot=(essaiStakes[d]||[]).reduce((a,b)=>a+(+b||0),0), over=tot>max, allMin=fx.every((f,i)=>(+essaiStakes[d][i]||0)>=1);
-    // ⚠️ v8.43 (bug signalé par Hervé, vu à l'étape 8/11) — ON POUVAIT VALIDER SANS AVOIR CHOISI UN
-    // SEUL PRONOSTIC. La validation ne regardait que les mises, la 👑 et la cible du bonus : jamais
-    // le pronostic lui-même. En J1 ça ne se voyait pas (l'écran « choisis les matchs » pré-remplit
-    // essaiPicks[0] avec les favoris), mais depuis la v8.38 — qui a déplacé ce choix de la J2 vers la
-    // J1 — PLUS RIEN n'initialisait essaiPicks[1] : à la J2, aucune cote n'était surlignée, et le
-    // joueur validait avec des pronostics `undefined`. Les résultats affichaient alors « Nul » sur
-    // les 3 matchs (le libellé de repli) et TOUS les paris perdus. On verrouille donc le bouton tant
-    // qu'un match n'a pas son pronostic — filet qui vaut pour les deux journées.
-    const pickOk=fx.every((f,i)=>essaiPicks[d][i]!=null);
-    const capOk=essaiCap[d]>=0, tgtOk=essaiCard[d]!=="tout"||essaiCardTgt[d]>=0, ok=allMin&&pickOk&&!over&&capOk&&tgtOk;
-    const lbl= over?t("Mise trop élevée"):(!pickOk?t("Choisis ton pronostic sur chaque match"):(!allMin?t("Mise de 1 € min. par pari"):(!capOk?t("Désigne ton match favori 👑"):(!tgtOk?t("Choisis la cible 🎯 du bonus"):t("Valider mes pronos →")))));
-    /* ⚠️ v8.62 (2ᵉ doublon relevé par Hervé sur la même capture) — LE « ×2 » N'EST EXPLIQUÉ QU'UNE
-       FOIS. Le 3️⃣ disait « (obligatoire : il compte ×2, en gain comme en perte) » et le rappel bleu
-       de l'encadré doré, quinze lignes plus bas, « son gain et sa perte comptent double. C'est
-       obligatoire pour valider » — la même règle, dans les mêmes mots, tous les deux à l'écran
-       tant que la 👑 n'est pas posée. Le guide garde donc le GESTE (« touche la 👑… (obligatoire) »),
-       le rappel garde l'EXPLICATION.
-       ⚠️ C'EST LE GUIDE QUI MAIGRIT, PAS LE RAPPEL : le rappel bleu est la copie mot pour mot de
-       l'écran du VRAI jeu (cf. v8.37, quinze lignes plus bas) — le raccourcir ferait diverger le
-       tuto de ce qu'on apprend à reconnaître, et on réapprendrait deux fois. Le guide, lui,
-       n'existe que dans le tuto : il peut se contenter d'énumérer les quatre gestes.
-       ⚠️ Le rappel disparaît une fois la 👑 posée. C'est voulu, et c'est déjà le cas dans le vrai
-       jeu : à ce moment-là le geste est fait, et le barème ×2 est réexpliqué à l'étape 7 avec les
-       résultats — là où il devient enfin visible sur des chiffres. */
-    return `${showGuide?`<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>${t("Comment parier :")}</b></div>
-        <div class="mini muted" style="margin-top:3px;line-height:1.8">${t("1️⃣ choisis le <b>résultat</b> de chaque match · 2️⃣ saisis ta <b>mise</b> · 3️⃣ touche la <b>👑</b> de ton <b>match favori</b> (obligatoire) · 4️⃣ un <b>bonus</b> si tu veux, puis valide.")}</div></div>`:''}
-      <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><div class="row"><span class="muted">${t("Ton capital")}</span><b>${cap} €</b></div>
-        <div class="row" style="margin-top:4px"><span class="muted">${t("Misé")}</span><b class="${over?'red':''}"><span id="essaist">${tot}</span> € / ${max} € max</b></div>
-        <div class="gauge ${over?'over':''}" id="essaigauge" style="margin-top:6px"><i style="width:${max>0?Math.min(100,Math.round(tot/max*100)):0}%"></i></div>
-        <div class="mini muted" style="margin-top:3px">${t("Total des mises ≤ <b>50 %</b> de ton capital.")}</div>
-        ${/* v8.38 — le MÊME bandeau que dans le vrai jeu, au même endroit : c'est ici qu'on
-             apprend à quoi ressemble un dépassement. Rendu en permanence et masqué, pour pouvoir
-             apparaître sans redessiner l'écran (le champ de saisie perdrait le focus). */''}
-        <div id="essaiover" class="mini" style="${over?'':'display:none;'}margin-top:8px;color:var(--red);background:rgba(248,113,113,.12);border:1px solid #8a3b3b;border-radius:8px;padding:7px 9px">
-          <b>⚠️ ${t("Mise trop élevée")}</b> <span id="essaiovertxt">${t("— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.",{a:tot,b:max,c:Math.max(0,tot-max)})}</span></div>
-        ${/* v8.37 — LA MÊME CONSIGNE QUE DANS LE VRAI JEU, au même endroit et disparaissant pareil.
-             C'est ici qu'on apprend le geste : un tuto qui montre autre chose que l'écran réel fait
-             réapprendre deux fois.
-             ⚠️ v8.63 (arbitré par Hervé sur maquette) — CETTE CONSIGNE DIT MAINTENANT **OÙ**, ET
-             SEULEMENT DANS LE TUTO. « sur ton match favori » nommait la cible sans jamais désigner
-             l'endroit : c'est exactement ce qui avait bloqué le testeur de la v8.37, qui savait
-             qu'il devait poser une 👑 et ne trouvait pas sur quoi appuyer. « sur l'un des matchs
-             ci-dessous » pointe la liste qui suit immédiatement. Et « obligatoire » passe devant,
-             en un mot, au lieu de la phrase entière rejetée en fin de bulle : deux lignes au lieu
-             de trois, sans rien perdre.
-             ⚠️ LE VRAI JEU GARDE L'ANCIENNE FORMULATION (ligne ~6500) — décision d'Hervé, prise en
-             connaissance de la divergence. Les deux écrans ne sont donc plus mot pour mot
-             identiques sur cette bulle ; le geste et l'emplacement, eux, restent les mêmes, c'est
-             ce qui fait que le tuto continue d'apprendre le bon réflexe. Si l'on revient un jour
-             sur ce point, la formulation à propager est CELLE-CI, pas l'inverse. */''}
-        ${essaiCap[d]<0?`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:7px 9px">${t("<b>Touche la 👑 sur l'un des matchs ci-dessous</b> — <b>obligatoire</b> ; son gain <b>et</b> sa perte comptent double.")}</div>`:''}
-        ${/* ⚠️ LA RÈGLE DE L'OUBLI EST DITE UNE FOIS, EN HAUT DE L'ÉCRAN — PAS ICI (v8.61, relevé
-             par Hervé sur capture). Elle a été ajoutée en v7.94 dans cet encadré, « à l'endroit où
-             l'on valide » ; la v8.54 l'a réécrite dans le bandeau bleu « ℹ️ Dans le vrai jeu » de
-             l'étape 6 — mais SANS retirer celle-ci. Les deux se sont retrouvées sur le même écran,
-             à quarante mots d'intervalle, avec les mêmes chiffres : le joueur lit deux fois la
-             même menace et se demande si ce sont deux pénalités qui s'ajoutent.
-             ⚠️ C'EST LE BANDEAU BLEU QUI RESTE, et pas l'inverse : le tuto n'a AUCUNE heure limite
-             (la journée se résout à la seconde). « Valide avant l'heure limite » y était un ordre
-             impossible à suivre — on cherchait un compte à rebours qui n'existe pas. « Dans le
-             vrai jeu, tu as une heure limite » dit la même règle sans la fausse consigne.
-             ⚠️ La règle elle-même ne doit PAS disparaître du tuto : c'est la seule faute qu'un
-             débutant peut subir dès sa première vraie journée sans rien avoir fait de travers, et
-             la plus chère du jeu. Si le bandeau de l'étape 6 saute un jour, la remettre ici. */''}
-        </div>
-      ${fx.map((f,i)=>betCard(d,f,i)).join("")}
-      ${(avail.length||usedBefore.length)?`<div class="box"><div class="mini muted">${t("Pimente ton duel en activant un bonus (facultatif) :")}</div><div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">
-        ${avail.map(id=>`<span class="chip ${essaiCard[d]===id?'g':''} clik" onclick="essaiSetCard(${d},'${id}')">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}
-        ${usedBefore.map(id=>`<span class="chip" style="opacity:.4;text-decoration:line-through" title="${t("Déjà joué — un bonus ne sert qu'une fois")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`).join("")}</div>
-        ${essaiCard[d]?`<div class="mini muted" style="margin-top:6px">${esc(t(CARDS[essaiCard[d]].d))}${essaiCard[d]==="tout"?' <b class="blue">'+t("→ touche {e} sur le match visé",{e:CARDS[essaiCard[d]].e})+'</b>':''}</div>`:''}
-        ${essaiCard[d]==="tout"?`<div class="mini" style="margin-top:6px;color:var(--gold)">${t("⚠️ <b>Règle d'or</b> : tu ne peux pas poser 🎯 sur ton 👑 <b>match favori</b> — ils doivent être sur des <b>matchs différents</b> ! (Une petite exception existe dans le vrai jeu, mais restons simples ici.)")}</div>`:''}</div>`:''}
-      <button class="btn${over?' danger':''}" id="essaibetbtn" ${ok?'':'disabled'} onclick="${goNext}">${lbl}</button>`; };
-  // Une LIGNE alignée (label à gauche, montant à droite) — même colonne que les lignes de pari,
-  // pour que le net se lise comme la SOMME de toutes les lignes.
-  const ligne=(label,amt)=>`<div class="row" style="margin:3px 0"><span class="mini">${label}</span><b class="mini ${amt>=0?'green':'red'}">${fmt(amt)}€</b></div>`;
-  const sousLigne=txt=>`<div class="mini muted" style="margin:-2px 0 3px 8px">${txt}</div>`;
-  // Ligne « Capitaine » : le doublement AJOUTE une fois la mise de base (le gain simple est déjà au-dessus).
-  const capLine=(d,fx,forBot)=>{ const c=forBot?essaiBotCap(d):essaiCap[d]; if(c<0||c==null) return '';
-    const f=fx[c]; if(!f) return ''; const sel=forBot?f.botSel:essaiPicks[d][c]; if(sel==null) return '';
-    if(!forBot&&essaiCard[d]==="tout"&&essaiCardTgt[d]===c) return '';   // exclusivité 🎯/👑
-    const st=forBot?essaiBotStk(c):(+essaiStakes[d][c]||0), win=sel===f.res, add=win?st*(oddOf(f,sel)-1):-st; if(!add) return '';
-    return ligne(`👑 ${t("Match favori")} ×2 · ${esc(labelSel(f,sel))}`,add)+sousLigne(win?t("gain doublé"):t("perte doublée"));
-  };
-  // Ligne « Bonus » : effet MARGINAL (capitaine déjà compté à part), montant aligné + explication dessous.
-  const impactLine=(d,fx)=>{ const card=essaiCard[d]; if(!card) return '';
-    let raw=0; fx.forEach((f,i)=>{ const p=essaiPicks[d][i]; if(p==null) return; const st=+essaiStakes[d][i]||0; const win=p===f.res; let b=win?st*(oddOf(f,p)-1):-st; if(i===essaiCap[d]) b*=2; raw+=b; }); raw=Math.round(raw*100)/100;
-    const net=essaiMeNet(d,fx); const diff=Math.round((net-raw)*100)/100; const nm=CARDS[card].e+' '+t(CARDS[card].n); let sub, lab='🃏 '+esc(nm);
-    // On affiche TOUJOURS la ligne du bonus joué — même sans effet — pour qu'on voie qu'il a été utilisé.
-    if(card==="tout"){ const i=essaiCardTgt[d]; if(i<0){ sub=t("aucune cible choisie — sans effet aujourd'hui."); } else { const f=fx[i]; const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; lab+=' ×'+(win?'3':'2');
-        sub= win? t("×3 sur {m} : {st} × ({o} − 1) × 2 (le gain simple est déjà au-dessus).",{m:esc(labelSel(f,p)),st:st,o:cote(oddOf(f,p))}) : t("×2 sur {m} : une mise de plus perdue.",{m:esc(labelSel(f,p))}); } }
-    else if(card==="parachute"){ sub= raw<0? t("perte amortie de 30 %.") : t("filet non déclenché (journée non négative) — sans effet aujourd'hui."); }
-    else if(card==="sangsue"){ sub= diff>0? t("+15 % du gain de ton adversaire.") : t("l'adversaire n'était pas bénéficiaire — sans effet aujourd'hui."); }
-    else sub='';
-    return ligne(lab,diff)+sousLigne(sub); };
-  const dayResults=(d,fx)=>{ const opp=essaiOpp(d); const dn=essaiDayPts(d,fx); const me=dn.nets.me, oppNet=dn.nets[opp.id];
-    const won=me>oppNet, tie=me===oppNet; const duelB=won?2:(tie?1:0), netB=me>0?1:0, starB=(dn.star==="me")?1:0, myPts=duelB+netB+starB;
-    const card=essaiCard[d], tgt=essaiCardTgt[d]; const bcap=essaiBotCap(d);
-    // Ligne de pari = GAIN SIMPLE (mise × (cote−1)), sans capitaine ni bonus → détaillés en dessous.
-    const lignesMe=()=>fx.map((f,i)=>{ const st=+essaiStakes[d][i]||0; const p=essaiPicks[d][i]; const win=p===f.res; const base=win?st*(oddOf(f,p)-1):-st;
-      let tag=''; if(i===essaiCap[d]) tag+=' 👑'; if(card==="tout"&&i===tgt) tag+=' 🔥';
-      // ⚠️ v8.42 (retour de testeur rapporté par Hervé, 2026-08-05) : « quelqu'un qui n'a jamais fait
-      // de pronos sportifs ne comprenait pas comment étaient calculés les gains ». La ligne affiche
-      // « 10€ @1.55 → +5.50€ » ; un débutant attend 15,50 € et ne voit pas d'où sort le 5,50, car on
-      // montre le gain NET (mise × (cote−1)) et non la somme rendue. On pose donc le calcul SOUS
-      // chaque pari — sur SES propres chiffres, sans une ligne de théorie.
-      // ⚠️ JOURNÉE 1 SEULEMENT (arbitré avec Hervé sur maquette) : on explique une fois, quand c'est
-      // nouveau ; en J2 les lignes redeviennent nues pour ne pas alourdir. D'où le test `d===0`.
-      // Le détail suit `base`, donc le gain SIMPLE : ni 👑 capitaine ni bonus, qui sont détaillés
-      // dans les lignes du dessous — le calcul montré colle toujours au montant affiché à droite.
-      const detail = d===0 ? `<div class="mini" style="color:var(--faint);font-size:11.5px;margin:1px 0 5px 0">${win
-        ? t("{a} € × {b} = {c} € rendus − {a} € misés",{a:st,b:cote(oddOf(f,p)),c:r2(st*oddOf(f,p)).toFixed(2)})
-        : t("perdu → tu perds ta mise")}</div>` : '';
-      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(labelSel(f,p))}${tag} · ${st}€ @${cote(oddOf(f,p))}</span><b class="mini ${base>=0?'green':'red'}">${fmt(base)}€ ${win?'✓':'✗'}</b></div>${detail}`; }).join("");
-    const lignesBot=()=>fx.map((f,i)=>{ const st=essaiBotStk(i); const win=f.botSel===f.res; const g=win?st*(oddOf(f,f.botSel)-1):-st;
-      return `<div class="row" style="margin:3px 0"><span class="mini">${f.sport} ${esc(labelSel(f,f.botSel))}${i===bcap?' 👑':''} · ${st}€ @${cote(oddOf(f,f.botSel))}</span><b class="mini ${g>=0?'green':'red'}">${fmt(g)}€ ${win?'✓':'✗'}</b></div>`; }).join("");
-    const bd=[t("duel {a}",{a:duelB})].concat(netB?['+1 '+t("net positif")]:[]).concat(starB?['+1 ⭐']:[]).join(' · ');
-    return {won,tie,myPts,html:`<div class="recaphero ${won?'win':(tie?'':'loss')}"><div class="row">
-        <div><div class="mini muted">${t("DUEL vs")} ${opp.e} ${esc(opp.n)}</div><div class="big ${won?'green':(tie?'muted':'red')}" style="font-size:20px">${tie?t("Match nul"):(won?t("Duel gagné"):t("Duel perdu"))} · +${myPts} pt${myPts>1?'s':''}</div></div>
-        <div style="text-align:right"><div class="mini muted">${t("TON NET")}</div><div class="big num ${me>=0?'green':'red'}" style="font-size:20px">${fmt(me)} €</div></div></div></div>
-      <div class="mini muted" style="margin:5px 0;text-align:center">${bd}</div>
-      <div class="box"><div class="mini muted">👑 ${t("Tes pronos")}</div>${lignesMe()}${capLine(d,fx,false)}${impactLine(d,fx)}<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><b>${t("Ton net")}</b><b class="${me>=0?'green':'red'}">${fmt(me)} €</b></div>
-        <div class="mini muted" style="margin-top:4px;text-align:center">${t("(net = somme de toutes les lignes ci-dessus)")}</div></div>
-      <div class="box"><div class="mini muted">${opp.e} ${esc(opp.n)}</div>${lignesBot()}${capLine(d,fx,true)}<div class="row" style="border-top:1px solid var(--border);margin-top:5px;padding-top:5px"><b>${t("Net de {a}",{a:esc(opp.n)})}</b><b class="${oppNet>=0?'green':'red'}">${fmt(oppNet)} €</b></div></div>`}; };
-
-  // 0 — intro (principe du jeu + ligue à 4)
-  /* ⚠️ v8.36 (retours des testeurs, rapportés par Hervé) — CET ÉCRAN DISAIT CE QUE LE JEU N'EST
-     PAS AVANT DE DIRE COMMENT ON GAGNE. Il ouvrait sur « ce n'est pas qu'un jeu de pronos
-     sportifs » ; le retour est tombé sur la toute première page : « on ne sait pas vraiment le
-     vrai but du jeu, il faudrait que le joueur puisse savoir ce qu'il devra faire pour gagner ».
-     ⚠️ LE BARÈME EST DONC CHIFFRÉ ICI (arbitré avec Hervé). L'ancienne formule « le meilleur
-     résultat marque des points » — signalée comme peu claire — ne disait ni QUI remporte le duel,
-     ni COMBIEN ça rapporte. On l'a remplacée par le critère (gagner le plus d'argent) et les
-     points. Les chiffres suivent le barème v2, celui de toute ligue créée aujourd'hui.
-     ⚠️ LE ⭐ MEILLEUR PRONOSTIQUEUR N'EST PAS MENTIONNÉ ICI, et c'est délibéré : il est expliqué à
-     l'étape 5, au moment où il se voit sur le classement. Une règle de moins sur l'accueil.
-     ⚠️ v8.39 (Hervé) — MÊME LOGIQUE POUR LE +1 SI NET POSITIF : il ne figure PLUS dans « comment on
-     marque des points ». La page 1 s'en tient au cœur (gagner le duel = 2 pts / 0, 1 partout à
-     égalité) ; le point bonus du net positif est détaillé plus loin, quand le barème complet est vu.
-     ⚠️ « ARGENT FICTIF » DIT TÔT ET EN CLAIR : un testeur a buté sur les euros et la cagnotte.
-     C'est aussi la question qui sera posée au dépôt sur les stores — autant y répondre page 1.
-     ⚠️ v8.39 — le bloc « Ton argent » ne dit plus « rien à payer, rien à gagner en vrai » (arbitré
-     avec Hervé) : « argent fictif » suffit pour les stores, sans se répéter. On y renvoie plutôt
-     vers l'explication des bonus, qui vient juste après (étape 2).
-     ⚠️ v8.40 (variante A, choisie par Hervé sur maquette) — PAGE 1 ALLÉGÉE, « le moins de choses à
-     lire ». Le bloc « Ce qui fait la différence » (le dosage des mises, la stratégie) est SUPPRIMÉ :
-     le tuto la fait vivre écran par écran, pas besoin de l'annoncer ici. Les autres blocs sont
-     resserrés (phrases plus courtes), la récompense du champion n'est plus détaillée sur le but (elle
-     arrive à l'étape 1), et la parenthèse « en vrai, une ligue à 4 se joue en 6 journées » est coupée
-     de l'encadré. On garde le cœur : quel jeu / le but / comment on gagne / l'argent fictif. C'est un
-     PREMIER palier — on ira plus loin (variante B/C) selon les retours des testeurs. */
-  if(essaiStep===0){ return `${head(0)}
-    ${/* ⚠️ v8.48 — PAGE 1 RÉÉCRITE (proposition d'un testeur, retravaillée avec Hervé sur maquette).
-          CE QUI VENAIT DU TESTEUR : le ton (« Prêt à en découdre ? », « un bon vieux gage bien
-          mérité »), et surtout la STRUCTURE — l'argent et le duel fondus dans un seul « Comment ça
-          marche ? » à puces, au lieu de deux titres séparés qui disaient la même mécanique.
-          ⚠️ CE QU'ON N'A PAS REPRIS, ET POURQUOI (objection d'Hervé, la plus importante) : sa version
-          « faisait trop appli de paris sportifs ». Son lexique était celui du pari — « ton pactole »,
-          « placer tes paris », « faire fructifier son argent » — et le BONUS n'y était qu'une ligne
-          de dépense (« enchérir sur tes bonus au début »), sans qu'on sache ce qu'il fait.
-          D'où trois règles à tenir sur cet écran :
-            1. le duel se gagne au MEILLEUR RÉSULTAT, jamais « en faisant fructifier son argent » ;
-            2. le BONUS a sa propre puce, avec ce qu'il fait (doubler, amortir, siphonner) — c'est lui
-               qui porte la promesse de stratégie, pas un adjectif ;
-            3. on dit « argent fictif » (question posée au dépôt sur les stores) et « récompense »
-               (le vrai mot du jeu ; il n'y a pas de trophée), et « entre amis » comme partout ailleurs.
-          ⚠️ Le titre « 👋 Bienvenue ! » a sauté : l'accroche fait le travail, et les deux ensemble
-          faisaient doublon.
-          ⚠️ Le ⭐ meilleur pronostiqueur et le +1 net positif ne sont TOUJOURS pas ici (v8.36/v8.39) :
-          ils sont expliqués plus loin, au moment où ils se voient. */''}
-    <div class="box">
-      ${dtl(`<div class="mini muted" style="line-height:1.75">${t("Prêt à en découdre ? <b>Tactizo</b>, ce n'est <b>pas qu'un jeu de pronos</b> : c'est un <b>championnat de stratégie entre amis</b> 🎮")}</div>`)}
-      <div class="mini" style="margin-top:11px"><b>${t("🏆 Le grand objectif")}</b></div>
-      <div class="mini muted" style="line-height:1.75;margin-top:3px">${t("Finir la saison avec un max de points pour être <b>champion</b> et empocher la <b>récompense</b> 🏆… et laisser le <b>dernier</b> repartir avec un bon vieux <b>gage</b> bien mérité 🎭")}</div>
-      <div class="mini" style="margin-top:11px"><b>${t("⚡ Comment ça marche ?")}</b></div>
-      <ul class="mini muted" style="margin:5px 0 0;padding-left:17px;line-height:1.75">
-        ${/* ⚠️ v8.66 (relevé par Hervé) — ON NE DISAIT NULLE PART QU'IL FALLAIT PRONOSTIQUER.
-              « Comment ça marche ? » ouvrait sur le DUEL (« tu affrontes un adversaire sur les
-              mêmes matchs ») puis sur le capital (« 100 € pour miser ») : on parlait d'adversaire,
-              de points et d'argent sans jamais nommer le geste qui produit tout le reste — prédire
-              le résultat d'un match. Le mot « pronostic » n'apparaissait qu'à l'étape 6, une fois
-              le joueur déjà devant l'écran de paris.
-              ⚠️ CETTE PUCE PASSE EN PREMIER : c'est l'action, les autres n'en sont que les
-              conséquences (qui gagne le duel, avec quel argent, avec quels bonus). La lire après
-              le duel obligeait à reconstruire l'ordre à l'envers.
-              ⚠️ v8.67 (relevé par Hervé) — NE PAS ÉCRIRE « DE VRAIS MATCHS ». Une ligue se joue en
-              📡 données réelles OU en 🎮 simulé (cf. `L.data_mode`), et le tuto lui-même tourne sur
-              des matchs fictifs. Promettre du vrai en page 1 serait faux pour une moitié des
-              parties — et pour l'écran qu'on est en train de lire. « les matchs » couvre les deux
-              sans rien perdre : ce qui compte ici, c'est le geste, pas la source des rencontres. */''}
-        <li style="margin:6px 0">${t("<b>Tes pronostics</b> : chaque journée, tu prédis le <b>résultat des matchs</b> — qui gagne — et tu <b>mises</b> sur chacun. Prono juste, tu gagnes selon la <b>cote</b> ; raté, tu perds ta mise.")}</li>
-        <li style="margin:6px 0">${t("<b>Le duel de la journée</b> : tu affrontes <b>un adversaire</b> sur <b>les mêmes matchs</b>. Le <b>meilleur résultat</b> du jour prend <b>2 points</b> (<b>0</b> pour l'autre, <b>1 partout</b> à égalité).")}</li>
-        <li style="margin:6px 0">${t("<b>Ton capital</b> : <b>100 €</b> d'<b>argent fictif</b> pour miser. <b>Miser gros peut tout rapporter… ou tout coûter.</b>")}</li>
-        <li style="margin:6px 0">${t("<b>🃏 Tes bonus</b> : des pouvoirs à <b>usage unique</b> — doubler un gain, amortir une perte, <b>siphonner</b> l'adversaire. Tu les remportes aux <b>enchères</b> au départ et tu en joues <b>un par journée</b> au maximum.")}</li>
-      </ul>
-      ${dtl(`<div class="mini" style="margin-top:10px;color:var(--gold);background:rgba(231,184,75,.10);border-radius:8px;padding:8px 10px;line-height:1.65">${t("🧠 <b>C'est là que tout se joue</b> : le bon bonus, au bon moment. <b>Un seul coup peut tout renverser.</b>")}</div>`)}
-      <div class="mini" style="margin-top:11px"><b>${t("🦊 La partie test")}</b></div>
-      <div class="mini muted" style="line-height:1.75;margin-top:3px">${t("Pour te faire la main : une <b>saison éclair de 2 journées</b> à <b>4 joueurs</b> — 🦊 Léa, 🐼 Marco, 🦉 Nina et toi.")}</div>
-      ${dtl(`<div class="mini" style="margin-top:11px;color:var(--green);background:rgba(37,192,125,.10);border-radius:8px;padding:8px 10px">${t("👉 Les résultats tombent en un clin d'œil — suis le guide !")}</div>`)}</div>
-    <button class="btn" onclick="essaiGo(1)">${t("C'est parti →")}</button>`; }
-  // 1 — gage
-  if(essaiStep===1){ return `${head(1)}
-    ${/* ⚠️ v8.36 — « VOTE » A ÉTÉ REMPLACÉ PAR « PROPOSE » (retour de testeur, arbitré avec Hervé).
-          « Voter » laissait entendre un scrutin où l'on départage une liste commune, alors que
-          chacun apporte SA récompense et qu'aucune n'est éliminée : celle du dernier revient au
-          champion, un point c'est tout. Le même mot est corrigé sur les écrans de préparation. */''}
-    <div class="box"><h2 style="margin-top:0">${t("🏆 Propose ta récompense")}</h2><div class="mini muted">${t("Chacun propose <b>sa récompense</b>. À la fin, c'est le <b>dernier</b> du classement qui offre <b>la sienne</b> au <b>champion</b> 🏆.")}</div>
-    ${ann(t("tu peux aussi <b>imaginer un gage</b> pour le dernier, ou une récompense <b>sur-mesure</b>. Ici, on va droit au but !"))}</div>
-    ${ESSAI_REWARDS.map((g,i)=>`<div class="box row clik" onclick="essaiGage=${i};render()" style="${essaiGage===i?'border-color:var(--green)':''}"><div style="flex:1 1 auto;min-width:0"><b>${esc(g)}</b>${gageDescOf(g)?`<div class="mini muted" style="margin-top:2px">${esc(gageDescOf(g))}</div>`:''}</div><span class="chip ${essaiGage===i?'g':''}" style="flex:0 0 auto;white-space:nowrap">${essaiGage===i?t("✓ choisi"):t("choisir")}</span></div>`).join("")}
-    <button class="btn" onclick="essaiGo(2)">${t("Suivant : les bonus →")}</button>`; }
-  // 2 — enchères bonus (plafond 40 €, fiche au clic, FACULTATIF — choix stratège vs prudent)
-  if(essaiStep===2){ const tot=Object.values(essaiBids).reduce((a,b)=>a+(+b||0),0), over=tot>40;
-    return `${head(2)}
-    ${/* ⚠️ v8.36 (retour de testeur) — « LA PAGE BONUS ET MISES N'EST PAS CLAIRE AU PREMIER COUP
-          D'ŒIL, À QUOI SERVENT LES ENCHÈRES ». L'écran ouvrait sur la MÉCANIQUE (« revient au plus
-          offrant ») sans avoir dit une seule fois ce qu'est un bonus ni pourquoi on en achète : on
-          demandait de miser sur des objets encore inconnus. On dit donc, dans cet ordre : ce qu'est
-          un bonus, quand on les achète, puis comment se règle l'enchère.
-          ⚠️ « RETIRÉ DE TES 100 € » ÉTAIT AMBIGU (même retour) : on pouvait comprendre que le TOTAL
-          misé était prélevé. C'est faux — seules les enchères GAGNÉES se paient. La phrase le dit
-          maintenant dans les deux sens : ce qu'on paie, et ce qui ne coûte rien.
-          ⚠️ v8.41 — ÉCRAN ALLÉGÉ (maquette validée par Hervé) : 6 paragraphes → 3. La mécanique de
-          l'enchère et ce qu'on paie sont FUSIONNÉS en un bloc, et l'avertissement « une seule fois /
-          rachat-revente » est retiré d'ici (il est déjà dit à l'étape 9). ⚠️ « CE QUE TU AS MISÉ SANS
-          L'OBTENIR REVIENT DANS TON CAPITAL » A ÉTÉ RETIRÉE en v8.58 (retour d'un testeur, arbitré
-          par Hervé). Ajoutée en v8.41 contre la peur que les mises perdantes soient encaissées, elle
-          répétait la même idée à deux mots d'intervalle depuis que « tu ne paies que ce que tu
-          remportes » la précède dans la MÊME puce (v8.52). L'inquiétude d'origine reste couverte —
-          par la phrase qui précède, pas par une phrase de plus. */''}
-    <div class="box"><h2 style="margin-top:0">${t("🃏 L'heure des enchères !")}</h2>
-      ${/* ⚠️ v8.52 — TROIS PUCES TITRÉES (idée d'un testeur, retenue par Hervé). C'étaient trois
-            paragraphes sans étiquette : on ne pouvait pas survoler l'écran pour retrouver « et si je
-            ne remporte rien ? ». Les titres — principe / comment les remporter / le piège — donnent
-            des points d'accroche. ⚠️ « À ÉGALITÉ, LE PLUS RAPIDE » DOIT RESTER ICI : l'étape suivante
-            MONTRE une égalité départagée à la rapidité ; sans cette ligne, elle sort de nulle part.
-            ⚠️ La formulation du PIÈGE est celle du testeur, choisie telle quelle par Hervé. */''}
-      <ul class="mini muted" style="margin:6px 0 0;padding-left:17px;line-height:1.75">
-        <li style="margin:6px 0">${t("<b>Le principe</b> : un bonus est un pouvoir à <b>usage unique</b> (doubler un gain, amortir une perte…). Tu en joues <b>un par journée</b> au maximum — et c'est souvent lui qui renverse un duel.")}</li>
-        <li style="margin:6px 0">${t("<b>Comment les remporter</b> : tout s'achète <b>ici, avant la saison</b>. Chacun mise <b>en secret</b> ; le <b>plus offrant</b> l'emporte (à égalité, le plus rapide). Tu ne paies que ce que tu <b>remportes</b> (déduit de tes 100 €). Miser reste <b>facultatif</b>.")}</li>
-        ${dtl(`<li style="margin:6px 0">${t("<b>Le piège stratégique</b> : ne vide pas ton capital ici… Tout est dans le <b>dosage</b> : t'armer de bonus… sans vider ton capital qui te servira pour <b>parier gros</b> ensuite.")}</li>`)}
-      </ul>
-      ${dtl(`<div class="mini muted" style="margin-top:6px">${t("👉 On t'a pré-rempli des mises — <b>ajuste-les</b>, ou mets 0.")}</div>`)}
-      <div class="row" style="margin-top:6px"><span class="muted">${t("Total misé")}</span><b class="${over?'red':''}"><span id="essaibt">${tot}</span> € / 40 € max</b></div>
-      ${/* ⚠️ v7.13 (Hervé) : ce texte affirmait que « l'organisateur peut créer des bonus
-            personnalisés ». C'est FAUX — seuls le GAGE et la RÉCOMPENSE sont personnalisables
-            (option ✏️ Gage & récompense sur mesure). La liste des bonus est fixe.
-            Le nombre vient de CARD_IDS : il ne peut pas se démoder si on ajoute un bonus. */
-        ann(t("il existe <b>bien plus de bonus</b> : <b>{a}</b> dans une vraie ligue, contre 3 ici pour aller vite.",{a:CARD_IDS.length}))}</div>
-    ${dtl(`<div class="mini muted" style="margin-bottom:6px">👉 ${t("Touche un bonus pour découvrir ses super-pouvoirs.")}</div>`)}
-    ${/* Mise en page ALIGNÉE SUR LE VRAI JEU (v7.14, signalé par Hervé : « pas terrible » dans le
-          tuto, « plus lisible » dans le jeu). Le défaut venait d'une SEULE ligne flex contenant
-          emoji + nom + pastilles avec `flex-wrap` : `.row` étant en `space-between`, les éléments
-          s'écartaient et se repliaient différemment d'un bonus à l'autre — d'où l'impression de
-          désordre. Structure du jeu : emoji en colonne FIXE, puis un bloc où le nom et ses
-          pastilles ont leur propre ligne calée à gauche. */
-      ESSAI_CARDS.map(id=>`<div class="box row" style="align-items:center;gap:10px">
-      <div class="row" style="gap:10px;min-width:0;flex:1 1 auto;justify-content:flex-start">
-        <span class="sport clik" style="flex:0 0 auto" onclick="showCardInfo('${id}')">${CARDS[id].e}</span>
-        <div style="min-width:0;flex:1 1 auto"><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b class="clik" onclick="showCardInfo('${id}')">${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div></div>
-      </div>
-      <input type="number" inputmode="numeric" min="1" step="1" value="${essaiBids[id]||''}" placeholder="€" style="width:74px;flex:0 0 auto" oninput="essaiSetBid('${id}',this.value)"></div>`).join("")}
-    <button class="btn" id="essaibidbtn" ${over?'disabled':''} onclick="essaiGo(3)">${over?t("Dépasse 40 € — réduis tes mises"):t("Valider ma prépa →")}</button>`; }
-  // 3 — RÉVÉLATION des enchères : les 4 joueurs ont misé (dont une ÉGALITÉ à départager par la rapidité)
-  if(essaiStep===3){ const won=essaiWon(); const spent=essaiSpent();
-    const pOf=k=>ESSAI_PLAYERS.find(x=>x.id===k)||{n:"?",e:""}; const nmK=k=>k==="me"?t("Toi"):esc(pOf(k).n);
-    return `${head(3)}
-    <div class="box"><h2 style="margin-top:0">${t("🃏 Résultat des enchères")}</h2>${dtl(`<div class="mini muted">${t("Les 4 joueurs ont misé en secret. Le <b>plus offrant</b> remporte le bonus ; à <b>égalité</b>, le plus <b>rapide</b> l'emporte.")}</div>`)}</div>
-    ${ESSAI_CARDS.map(id=>{ const R=essaiAuctionResult(id); const mine=essaiBids[id]||0; const mineWon=R.win==="me"; const w=pOf(R.win);
-      const chip=mineWon?t("✓ à toi · {a} €",{a:R.best}):t("{a} · {b} €",{a:w.e+' '+esc(w.n),b:R.best});
-      const bidsL=ESSAI_ORDER.map(k=>`<span${k===R.win?' style="color:var(--green);font-weight:700"':(R.bids[k]<=0?' class="muted"':'')}>${pOf(k).e} ${nmK(k)} ${R.bids[k]>0?R.bids[k]+'€':'—'}${k===R.win?' ✅':''}</span>`).join('&nbsp;·&nbsp;');
-      const expl=mineWon
-        ?(R.tie?'⚡ '+t("<b>Égalité</b> à {a} € — tu avais misé <b>en premier</b>, le bonus est pour toi.",{a:R.best}):t("Meilleure enchère ({a} €) → il est pour toi.",{a:R.best}))
-        :(mine>0?t("{w} a misé plus ({a} €) → ta mise de {b} € t'est <b>remboursée</b>.",{w:w.e+' '+esc(w.n),a:R.best,b:mine})
-        :(R.tie?'⚡ '+t("<b>Égalité</b> à {a} € → {w} l'emporte par la <b>rapidité</b>. Tu n'avais pas misé.",{a:R.best,w:w.e+' '+esc(w.n)})
-        :t("{w} l'emporte ({a} €). Tu n'avais pas misé → tu <b>gardes ton capital</b>.",{w:w.e+' '+esc(w.n),a:R.best})));
-      // Même structure que l'écran précédent et que le vrai jeu (v7.14) : emoji en colonne fixe,
-      // puis nom + pastilles sur leur propre ligne calée à gauche, et le verdict de l'enchère
-      // aligné à droite sans jamais être coupé.
-      return `<div class="box"><div class="row" style="align-items:center;gap:10px">
-        <div class="row" style="gap:10px;min-width:0;flex:1 1 auto;justify-content:flex-start">
-          <span class="sport clik" style="flex:0 0 auto" onclick="showCardInfo('${id}')">${CARDS[id].e}</span>
-          <div style="min-width:0;flex:1 1 auto"><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b class="clik" onclick="showCardInfo('${id}')">${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div></div>
-        </div>
-        <span class="chip ${mineWon?(R.tie?'gold':'g'):'red'}" style="flex:0 0 auto;white-space:nowrap">${chip}</span></div>${dtl(`<div class="mini" style="margin-top:6px">${bidsL}</div><div class="mini muted" style="margin-top:5px">${expl}</div>`)}</div>`; }).join("")}
-    <div class="box" style="border:2px solid var(--green);background:rgba(37,192,125,.10)">
-      <div class="mini"><b>${t("🃏 Bonus remportés")} :</b> ${won.length?won.map(id=>CARDS[id].e+' '+esc(t(CARDS[id].n))).join(' · '):t("aucun")}</div>
-      <div class="mini" style="margin-top:5px">${t("Dépensé : <b>{a} €</b> → il te reste <b>{b} €</b> de capital pour parier toute la saison.",{a:spent,b:100-spent})}</div></div>
-    <button class="btn" onclick="essaiGo(4)">${t("Commencer la journée 1 →")}</button>`; }
-  // 4 — CHOIX des matchs de la J1 (v8.38 : c'était la J2, et la J1 était imposée)
-  if(essaiStep===4){ return `${head(4)}
-    <div class="box"><h2 style="margin-top:0">${t("🏠 Journée 1 — À toi de composer !")}</h2>
-      <div class="mini muted">${t("Tu reçois <b>à domicile</b> : c'est toi le <b>chef d'orchestre</b> ! Choisis <b>3 matchs</b> — ce sont eux qui décideront du sort des deux duellistes.")}</div>
-    ${ann(t("dans une vraie ligue, celui qui reçoit choisit 5 matchs, et on alterne à chaque journée."))}</div>
-    ${ESSAI_POOL.map((f,k)=>{ const on=essaiSel.indexOf(k)>=0; return `<div class="box row clik" onclick="essaiToggleSel(${k})" style="${on?'border-color:var(--green)':''}"><div class="row" style="gap:8px"><span class="sport">${f.sport}</span><b>${esc(f.home)} – ${esc(f.away)}</b></div><span class="chip ${on?'g':''}" style="flex:0 0 auto">${on?'✓':'+'}</span></div>`; }).join("")}
-    <button class="btn" ${essaiSel.length===3?'':'disabled'} onclick="essaiPicks[0]=essaiFx(0).map(essaiFav);essaiStakes[0]=[];essaiCap[0]=-1;essaiCard[0]=null;essaiCardTgt[0]=-1;essaiGo(5)">${essaiSel.length===3?t("Valider les 3 matchs →"):t("Choisis {a} match(s) de plus",{a:3-essaiSel.length})}</button>`; }
-  // 5 — paris J1 (mises éditables + bonus jouable)
-  if(essaiStep===5){ return `${head(5)}
-    <div class="box"><h2 style="margin-top:0">${t("📅 Journée 1 — À vos pronos !")}</h2><div class="mini muted">${t("C'est parti pour ton duel du jour face à 🦊 <b>Léa</b> — vous pariez sur <b>les mêmes matchs</b>.")}</div>
-    ${/* ⚠️ v8.54 — LE CHRONO EST DIT ICI, ET SEULEMENT DANS LE BANDEAU « DANS LE VRAI JEU ».
-          La proposition du testeur le mettait dans le corps de l'écran (« Attention au chrono !
-          Valide avant l'heure limite ») : ce serait faux dans le TUTO, qui n'a aucune heure limite
-          et résout la journée à la seconde. Le joueur chercherait un compte à rebours inexistant.
-          ⚠️ LES CHIFFRES SONT INJECTÉS (forgotPtsShown / forgotPenShown) et pas écrits en dur :
-          ils suivent le barème de la ligue, ancien comme nouveau. */''}
-    ${ann(t("⏰ tu as une <b>heure limite</b> pour valider. Sans pronos validés, le duel est <b>perdu d'avance</b> — quel que soit le résultat d'en face — et tu prends <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Aïe 😬",{a:pct(forgotPenShown()),b:forgotPtsShown()}))}</div>
-    ${betScreen(0,essaiFx(0),"essaiGo(6)",!court)}`; }
-  // 6 — résultats J1 (barème expliqué + classement à 4)
-  if(essaiStep===6){ const R=dayResults(0,essaiFx(0));
-    return `${head(6)}
-    <div class="box"><h2 style="margin-top:0">${t("📅 Résultats — Journée 1")}</h2></div>
-    ${R.html}
-    <div class="box" style="border-left:3px solid var(--gold)"><div class="mini"><b>${t("💯 Comment on marque les points")}</b></div>
-      <ul class="mini muted" style="margin:5px 0 0;padding-left:18px;line-height:1.7">
-        <li>${t("Duel : <b>gagné 2</b> · <b>nul 1</b> · <b>perdu 0</b>")}</li>
-        <li>${t("<b>+1</b> si ton <b>net est positif</b>")}</li>
-        <li>${t("<b>+1</b> au <b>⭐ meilleur pronostiqueur</b> du jour (plus gros net de la ligue)")}</li></ul></div>
-    ${dtl(`<div class="mini" style="margin-top:8px;color:var(--blue);background:rgba(90,166,224,.10);border-radius:8px;padding:8px 10px;line-height:1.6">💡 <b>${t("Ne pas confondre")}</b> : ${t("le <b>gain en €</b> nourrit ton <b>capital</b> (pour miser ensuite), les <b>points</b> font le <b>classement</b>. On peut gagner de l'argent et perdre le duel.")}</div>`)}
-    <div class="box"><div class="mini muted">${t("Classement — après 1 journée sur 6")}</div>
-      <div style="overflow-x:auto;margin-top:6px"><table style="width:100%;font-variant-numeric:tabular-nums">
-      ${(()=>{ const caps=essaiCapitals(0); return essaiRank(essaiTotals(0),caps).map((p,i)=>`<tr><td style="width:1%">${["🥇","🥈","🥉"][i]||(i+1)+'.'}</td><td>${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num" style="white-space:nowrap"><b>${p.pts} pt${p.pts>1?'s':''}</b></td><td class="num muted" style="white-space:nowrap">${caps[p.id].toFixed(2)} €</td></tr>`).join(""); })()}</table></div></div>
-    ${/* ⚠️ v8.43 — ON PRÉ-REMPLIT LES PRONOSTICS DE LA J2 (les favoris), exactement comme l'écran
-          « choisis les matchs » le fait pour la J1. Sans ça, la J2 s'ouvrait avec AUCUNE cote
-          surlignée — d'où le bug ci-dessus. Le joueur reste libre de changer chaque pronostic ;
-          on lui évite juste de partir d'un écran vide qui se validait en silence. */''}
-    <button class="btn" onclick="essaiPicks[1]=essaiFx(1).map(essaiFav);essaiStakes[1]=[];essaiCap[1]=-1;essaiCard[1]=null;essaiCardTgt[1]=-1;essaiGo(7)">${t("Journée 2 →")}</button>`; }
-  // 7 — paris J2 : nouvel adversaire, et cette fois les matchs sont IMPOSÉS (v8.38)
-  if(essaiStep===7){ const rk=essaiRank(essaiTotals(0),essaiCapitals(0)); const mr=rk.findIndex(p=>p.id==="marco")+1;
-    return `${head(7)}
-    ${dtl(`<div class="box" style="border:2px solid var(--blue);background:rgba(90,166,224,.10)"><div class="mini"><b>${t("🆕 Nouvelle journée, nouvel adversaire")}</b></div>
-      <div class="mini muted" style="margin-top:3px">${t("En J1 tu affrontais 🦊 Léa. Cette journée, tu défies 🐼 <b>Marco</b> — actuellement <b>{a}{b} au classement</b>. Chaque journée oppose de nouveaux duels.",{a:mr,b:mr===1?"er":"e"})}</div></div>`)}
-    <div class="box"><h2 style="margin-top:0">${t("📅 Journée 2 — tes pronos")}</h2>
-      ${dtl(`<div class="mini muted">${t("Cette fois tu joues ✈️ <b>à l'extérieur</b> : c'est 🐼 <b>Marco</b> qui reçoit, donc <b>lui</b> qui a choisi les 3 matchs. Mêmes règles : résultat, mise, 👑 match favori (obligatoire), bonus.")}</div>`)}</div>
-    ${betScreen(1,essaiFx(1),"essaiGo(8)",false)}`; }
-  // 8 — résultats J2 (classement à 4)
-  if(essaiStep===8){ const R2c=dayResults(1,essaiFx(1));
-    return `${head(8)}
-    <div class="box"><h2 style="margin-top:0">${t("📅 Résultats — Journée 2")}</h2></div>
-    ${R2c.html}
-    <div class="box"><div class="mini muted">${t("Classement — après 2 journées sur 6")}</div>
-      <div style="overflow-x:auto;margin-top:6px"><table style="width:100%;font-variant-numeric:tabular-nums">
-      ${(()=>{ const caps=essaiCapitals(1); return essaiRank(essaiTotals(1),caps).map((p,i)=>`<tr><td style="width:1%">${["🥇","🥈","🥉"][i]||(i+1)+'.'}</td><td>${p.e} ${esc(p.n)}${p.id==="me"?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num" style="white-space:nowrap"><b>${p.pts} pt${p.pts>1?'s':''}</b></td><td class="num muted" style="white-space:nowrap">${caps[p.id].toFixed(2)} €</td></tr>`).join(""); })()}</table></div></div>
-    <button class="btn" onclick="essaiGo(9)">${t("Suivant →")}</button>`; }
-  // 9 — page « les journées s'enchaînent » (avant le classement final)
-  if(essaiStep===9){ return `${head(9)}
-    <div class="box" style="text-align:center"><div style="font-size:38px">📅➡️🏁</div><h2 style="margin:8px 0 4px">${t("Une vraie saison continue…")}</h2>
-      <div class="mini muted" style="text-align:left;line-height:1.7">${t("On s'arrête à <b>2 journées</b> pour la démo. Une vraie ligue en enchaîne <b>bien plus</b> : selon le nombre de joueurs, <b>chacun affronte tous les autres</b>.")}</div>
-      ${dtl(`<div class="mini" style="margin-top:8px;color:var(--green);background:rgba(37,192,125,.10);border-radius:8px;padding:7px 9px;text-align:left">🔁 ${t("En cours de saison, tu peux aussi <b>acheter / vendre</b> tes bonus non utilisés à tes adversaires.")}</div>`)}
-      </div>
-    ${dtl(`<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)"><b class="gold">🔥 ${t("Suspense jusqu'au bout")}</b>
-      <div class="mini" style="margin-top:4px">${t("À la <b>dernière journée</b>, les points de <b>duel comptent double</b> : même dernier, on peut renverser la table. <b>Rien n'est jamais joué.</b>")}</div></div>`)}
-    <button class="btn" onclick="essaiGo(10)">${t("Voir le classement final 🏆 →")}</button>`; }
-  // 10 — classement final à 4 + gage + options du vrai jeu
-  const nmOf=id=>ESSAI_PLAYERS.find(x=>x.id===id)||{n:"?",e:""};
-  const rows=ESSAI_FINAL.map(r=>{ const p=nmOf(r.id); return {n:p.n,e:p.e,pts:r.pts,cap:r.cap,me:r.id==="me"}; });
-  const champ=rows[0], last=rows[rows.length-1], champMe=champ.me;
-  return `${head(10)}
-    <div style="text-align:center;margin:6px 0"><div style="font-size:44px">🏆</div>
-      <div style="font-size:22px;font-weight:800" class="gold">${champMe?t("Toi, Champion !"):t("{a}, Champion",{a:champ.e+' '+esc(champ.n)})}</div></div>
-    <div class="box"><div class="mini muted">${t("Classement final — après les 6 journées")}</div>
-      <div style="padding:2px 0;overflow-x:auto;margin-top:6px"><table style="font-variant-numeric:tabular-nums"><tr><th>#</th><th>${t("Joueur")}</th><th style="text-align:right">${t("Pts")}</th><th style="text-align:right">${t("Capital")}</th></tr>
-      ${rows.map((p,i)=>`<tr><td>${["🥇","🥈","🥉"][i]||i+1}</td><td>${p.e} ${esc(p.n)}${p.me?' <span class="tag">'+t("(toi)")+'</span>':''}</td><td class="num"><b>${p.pts}</b></td><td class="num muted">${p.cap.toFixed(2)} €</td></tr>`).join("")}</table></div></div>
-    ${dtl(`<div class="mini muted" style="margin-top:-2px">${t("Exemple d'un classement en fin de saison. Le rang se fait aux <b>points</b> ; le <b>capital</b> (argent fictif) montre qui a le mieux géré son argent.")}</div>`)}
-    <div class="box" style="border:2px solid var(--gold);background:rgba(224,182,79,.12);text-align:center">
-      <div class="gold" style="font-size:13px;font-weight:800;letter-spacing:.4px">${t("🏆 LA RÉCOMPENSE")}</div>
-      <div class="mini muted" style="margin-top:2px">${t("pour le champion — {a}",{a:champ.e+' '+esc(champ.n)})}</div>
-      <div style="font-size:17px;font-weight:700;margin-top:3px">${esc(ESSAI_REWARDS[essaiGage])}</div>
-      <div class="mini muted" style="margin-top:3px">${last.me?t("choisi par toi 🏆"):t("choisi par le dernier 🏆")}</div></div>
-    <div class="box" style="border-color:var(--blue);background:rgba(90,166,224,.08)"><b class="mini">${t("📌 Points importants à retenir")}</b>
-      <ul class="mini muted" style="margin:6px 0 0;padding-left:18px;line-height:1.7">
-        <li>${t("<b>Dose bien tes mises</b> : une grosse mise peut <b>rapporter gros</b> et emporter le duel… mais sur un prono <b>raté</b>, elle te fait perdre le duel <b>et</b> ampute ton capital pour la suite du championnat.")}</li>
-        <li>${t("Un <b>bonus</b> bien placé peut <b>tout renverser</b> à n'importe quelle journée — garde-en sous le coude.")}</li>
-        <li>${t("Le <b>⭐ meilleur pronostiqueur</b> d'une journée marque un <b>point bonus</b> au classement.")}</li>
-        <li>${t("Tu peux <b>racheter</b> ou <b>vendre</b> des bonus aux autres joueurs pour te refaire du capital.")}</li>
-        <li>${t("Chaque journée garde son <b>détail complet</b> et ses <b>statistiques</b> pour suivre ta forme.")}</li>
-        ${/* ⚠️ v7.94 (arbitrage d'Hervé) — DEUX RÈGLES QUI EXISTENT MAIS QUE LE TUTO NE MONTRE PAS.
-             Elles n'ont pas leur place dans le déroulé : la partie d'essai dure deux journées, on
-             n'y tombe jamais sous 30 € et les trois bonus proposés trouvent tous preneur. Les taire
-             complètement serait pire — on les découvrirait en les subissant. Cette liste est
-             l'endroit juste : elle annonce ce que la partie d'essai n'a PAS pu montrer.
-             ⚠️ Chiffres SUBSTITUÉS depuis les constantes, jamais écrits en dur. */''}
-        <li>${t("Si ta cagnotte tombe sous <b>{a} €</b>, elle est <b>remontée à {b} €</b> pour que tu puisses continuer à miser — au prix d'<b>un point</b> au classement.",{a:RECAP_THRESHOLD,b:RECAP_TARGET})}</li>
-        <li>${t("Aux enchères, un bonus que <b>personne</b> n'achète reste <b>hors jeu toute la saison</b> : réfléchis à ce que tu laisses passer.")}</li></ul></div>
-    <div class="box" style="border-color:var(--green);background:rgba(37,192,125,.10)"><div class="mini">${t("🎉 Voilà une saison complète ! Tu connais tout l'enchaînement. Prêt pour une vraie ligue entre amis ?")}</div></div>
-    ${/* ⚠️ v8.32 (relevé par Hervé) — « S'inscrire pour jouer » MÈNE À L'ÉCRAN D'INSCRIPTION, pas
-         à la connexion. Le bouton promettait une inscription et déposait sur un formulaire de
-         CONNEXION : il fallait ensuite trouver « Créer un compte » par soi-même. C'est le moment
-         le plus favorable de tout le parcours — quelqu'un vient de jouer une saison entière et
-         décide de s'inscrire — et on lui demandait une étape de plus.
-         ⚠️ `showErr('')` : une erreur laissée par un essai de connexion précédent traînerait en
-         haut de l'écran d'inscription, sans rapport avec ce qu'on y fait. */''}
-    ${AUTH?`<button class="btn" onclick="openCreate()">🎉 ${t("Créer une ligue entre amis")}</button>`:`<button class="btn" onclick="showErr('');S.view='signup';render()">🎉 ${t("S'inscrire pour jouer")}</button>`}
-    <div style="height:8px"></div><button class="btn ghost" onclick="openTuto()">🎓 ${t("Revoir le tutoriel")}</button>
-    <div style="height:8px"></div><button class="btn ghost" onclick="exitEssai()">${AUTH?t("← Retour à l'accueil"):t("← Retour à la connexion")}</button>`;
-}
-function exitEssai(){ if(AUTH){ S.view="leagues"; render(); loadMyLeagues(); } else { S.view="auth"; render(); } }
+/* ⚠️ v8.213 — L'ANCIENNE PARTIE D'ESSAI A ÉTÉ SUPPRIMÉE ICI (63 495 caractères, 30 fonctions
+   `essai*`). Elle était devenue INATTEIGNABLE en v8.205 : le tutoriel dynamique (`viewTuto`,
+   plus haut) a repris ses deux portes sur l'écran de connexion, le bouton de l'accueil et
+   celui de fin de partie. Du code mort qu'on garde « au cas où » finit par être maintenu par
+   erreur — et celui-ci portait une SECONDE description des règles, qui pouvait diverger de la
+   première sans que rien ne le signale. C'est exactement ce dont ce dépôt se protège partout
+   ailleurs : une règle, une implémentation.
+   ⚠️ Son histoire n'est pas perdue : `git log` la conserve, et les décisions qu'elle portait
+   (11 étapes, mode court abandonné en v8.66, verdict d'Hervé « ça ne donne pas l'image du
+   jeu ») sont reprises dans le tutoriel actuel. Ne pas la restaurer : la remettre créerait
+   deux tutoriels à tenir à jour. */
 // ⚠️ `consultation` EXPLICITE à chaque entrée dans une ligue (corrigé en v7.12, bug signalé par
 // Hervé). Avant, le mode consultation n'était levé que par le bouton « Quitter » : en sortant par
 // 🏠 Accueil ou l'onglet Ligues, le drapeau restait armé et l'admin se retrouvait en LECTURE SEULE
@@ -12815,7 +12284,13 @@ function render(){
   if(fo) fo.innerHTML="Tactizo · "+esc(t("prototype de test · données sportives simulées"))+" · "+esc(APP_VERSION)
     +'<br><a href="confidentialite.html" target="_blank" rel="noopener">'+esc(t("Confidentialité"))+'</a>'
     +' · <a href="cgu.html" target="_blank" rel="noopener">'+esc(t("Conditions d'utilisation"))+'</a>';
-  $("rulesBtn").classList.toggle("hide", S.view==="auth"||S.view==="signup"); // 📖 visible partout sauf connexion / création de compte (v8.31)
+  /* ⚠️ v8.213 — LE 📖 RESTE MASQUÉ SUR LA CONNEXION (arbitrage d'Hervé : « pas besoin de voir
+     les règles totales depuis cette page, juste le tuto suffit »). J'avais commencé par l'y
+     afficher en retirant le bouton « Lire les règles », de peur que les règles deviennent
+     inatteignables sans compte. C'est un choix de PRODUIT, pas un oubli : à quelqu'un qui
+     hésite encore, on montre le jeu, on ne lui tend pas un règlement. Les règles complètes
+     l'attendent une fois entré. Ne pas « rétablir » ce 📖 en croyant réparer un manque. */
+  $("rulesBtn").classList.toggle("hide", S.view==="auth"||S.view==="signup");
   // 🛒 et 🐛 : conditionnés à la SESSION, pas à l'écran affiché. Tester `S.view==="auth"` ne
   // suffisait pas — un visiteur non connecté ouvrant les 📖 règles depuis l'écran de connexion
   // quittait la vue "auth" et voyait donc réapparaître la boutique (signalé par Hervé).
@@ -12848,7 +12323,6 @@ function render(){
   else if(S.view==="trade") html=viewTrade();
   else if(S.view==="stats") html=viewStats();
   else if(S.view==="leaguestats") html=viewLeagueStats();
-  else if(S.view==="essai") html=viewEssai();
   else if(S.view==="shop") html=viewShop();
   else if(S.view==="profil") html=viewProfil();
   else if(S.view==="create") html=viewCreate();
@@ -14093,9 +13567,20 @@ const TT_ECRANS=[
     <div style="margin-top:9px">${t("🃏 <b>{a} bonus</b> au lieu des trois de la démo, 🤝 le <b>rachat</b> entre joueurs, 🕵️ les <b>pronos de l'adversaire</b> après la clôture, ⏱️ les <b>résultats en direct</b>…",{a:CARD_IDS.length})}</div>
     <div class="tt-muted" style="margin-top:10px">${t("Tout se règle à la création de la ligue.")}</div>
   </div></div>
-  <button class="btn" onclick="ttReset();ttGo(0)">${t("Rejouer la démo")}</button>
+  ${/* ⚠️ v8.213 — LE TUTORIEL SE TERMINE SUR UN APPEL À L'ACTION, et il mène DIRECTEMENT à
+       l'inscription. C'est le moment le plus favorable du parcours : quelqu'un vient de jouer
+       une journée entière et décide de sauter le pas. L'ancien tuto déposait sur le formulaire
+       de CONNEXION — il fallait ensuite trouver « Créer un compte » soi-même (corrigé en v8.32).
+       En portant le nouveau tutoriel j'avais purement et simplement PERDU ce bouton : l'écran
+       s'achevait sur « Rejouer » et « Terminer », sans rien proposer. C'est `test-mot-de-passe`
+       qui l'a rattrapé — le seul test de la suite à surveiller cette porte.
+       ⚠️ MÊME FORMULATION QU'AILLEURS DANS L'APP (accueil, fin de partie) : connecté on crée une
+       ligue, sinon on s'inscrit. Deux libellés différents pour la même intention créeraient deux
+       parcours à tenir. */''}
+  ${AUTH?`<button class="btn" onclick="openCreate()">🎉 ${t("Créer une ligue entre amis")}</button>`
+        :`<button class="btn" onclick="showErr('');S.view='signup';render()">🎉 ${t("S'inscrire pour jouer")}</button>`}
   <div style="height:8px"></div>
-  <button class="btn ghost" onclick="closeTuto()">${t("J'ai compris, terminer")}</button>`})
+  <button class="btn ghost" onclick="ttReset();ttGo(0)">${t("Rejouer la démo")}</button>`})
 ];
 
 /* ── L'ANIMATION DES RÉSULTATS ────────────────────────────────────────────────── */
@@ -14441,21 +13926,16 @@ function brancherRetourAndroid(){
   if(!P || !P.addListener) return;
   P.addListener('backButton', () => {
     if(document.getElementById("cardModal")){ closeCardInfo(); return; }   // 1. fermer la fenêtre ouverte
-    /* 2. LE TUTORIEL A SA PROPRE NAVIGATION. `startEssai()` appelle `navRoot()`, qui VIDE
-       `S.nav` : les 11 étapes vivent dans `essaiStep`, pas dans la pile. Sans ce cas, le
-       retour sautait les onze d'un coup et mettait l'app en arrière-plan — constaté dans
-       l'émulateur à l'étape 1/11. On reproduit exactement les deux boutons de l'écran :
-       « ← Précédent » tant qu'il reste une étape, « ← Connexion » à la première. */
+    /* 2. LE TUTORIEL A SA PROPRE NAVIGATION. `openTuto()` passe par `navOpen`, mais ses
+       onze écrans vivent dans `ttStep`, pas dans la pile `S.nav` : sans ce cas, un appui
+       « retour » à l'écran 7 quitterait le tutoriel entier d'un coup. Constaté dans
+       l'émulateur Android sur l'ancienne partie d'essai, qui avait le même besoin. */
     /* ⚠️ v8.205 — LE TUTORIEL DYNAMIQUE A SA PROPRE NAVIGATION, pour la même raison :
        ses onze écrans vivent dans `ttStep`. Sans ce cas, un « retour » à l'écran 7
        quitterait le tutoriel entier d'un coup. */
     if(S && S.view==="tuto"){
       if(typeof ttStep==="number" && ttStep>0){ ttPrecedent(); return; }
       closeTuto(); return;
-    }
-    if(S && S.view==="essai"){
-      if(typeof essaiStep==="number" && essaiStep>0){ essaiGo(essaiStep-1); return; }
-      if(typeof exitEssai==="function"){ exitEssai(); return; }
     }
     if(S && Array.isArray(S.nav) && S.nav.length){ navBack(); return; }    // 3. remonter d'un écran
     if(P.minimizeApp) P.minimizeApp();                                     // 4. arrière-plan, jamais quitter
