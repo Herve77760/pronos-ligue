@@ -468,7 +468,7 @@
     border:none;border-radius:999px;padding:5px 12px 5px 10px;margin:0 0 10px;cursor:pointer;}
   .hero.win .hero-back,.hero.loss .hero-back{background:rgba(0,0,0,.16);}
   /* v8.160 — suspense en 4 temps (Hervé, précisé après v8.153-159) : 1) avatars neutres et de même
-     taille ; 2) les DEUX gains nets défilent de 0 à leur résultat ENSEMBLE (v8.221 — même départ, même arrivée) ; 3) un temps d'arrêt, les deux chiffres côte à côte ;
+     taille ; 2) les DEUX gains nets défilent de 0 à leur résultat ENSEMBLE (v8.222 — même départ, même arrivée) ; 3) un temps d'arrêt, les deux chiffres côte à côte ;
      4) juste après, l'avatar du vainqueur grossit ET le fond se teinte vert/rouge — orchestré en JS
      (seul moyen de chaîner ces étapes dans l'ordre, cf. le bloc `if(heroFresh)` en bas de
      recapBody()), les CSS ci-dessous ne posent que les TRANSITIONS que ce JS déclenche en ajoutant
@@ -3524,7 +3524,7 @@ const EN={
   // Textes de calcul & d'effet (phase 4b)
   "son gain":"their gain", "gain adverse":"opponent's gain", "effet :":"effect:",
   "Toucher pour le détail : gain avec le bonus vs sans le bonus":"Tap for details: gain with the bonus vs without",
-  "Points du duel":"Duel points", "Total de la journée : {a}":"Day total: {a}", "Pas de duel trouvé pour cette journée.":"No duel found for that matchday.",
+  "Points du duel":"Duel points", "le délai pour choisir est passé : les 5 matchs seront tirés automatiquement. Tu peux encore valider tes pronos.":"the deadline to pick has passed: the 5 matches will be drawn automatically. You can still confirm your bets.", "Total de la journée : {a}":"Day total: {a}", "Pas de duel trouvé pour cette journée.":"No duel found for that matchday.",
   "fait match nul":"drew", "gagné son duel":"won their duel", "perdu son duel":"lost their duel",
   "« Ça passe ou ça casse » en action":"“Make or Break” in action",
   "Tu poses ce bonus sur <b>un seul pari</b>. Voici l'effet sur un pari <b>gagné</b> de 10 € à la cote 1.90 :":"You place this bonus on <b>a single bet</b>. Here's the effect on a <b>winning</b> €10 bet at odds of 1.90:",
@@ -6367,7 +6367,26 @@ async function loadHomeTodo(){
               ligne de la ligue suffit à le dire. */
       if(!duel) return;
       if(!Array.isArray(duel.fixtures) || !duel.fixtures.length){
-        if(duel.home_id===m.pid) homeTodo.push({lg:m.lg, pid:m.pid, kind:"choix"});
+        /* ⚠️ v8.222 (Polo, ligue 2R5E7, journée 1 — dossier reconstitué en base) — CETTE CARTE ÉTAIT
+           LA SEULE DES SIX À N'AVOIR NI HORLOGE NI DATE DE PÉREMPTION. Elle était poussée AVANT que
+           le code ne regarde la moindre échéance, et disait donc « choisis les 5 matchs » du premier
+           au dernier jour, du même ton — puis CONTINUAIT de le dire une fois la journée perdue.
+           Ce que Polo a vécu : ligue créée le 08/08 à 16:04, clôture le 10/08 à 16:04, il rouvre
+           l'app le 11/08 à 21:05 et lit encore « À toi de jouer ». Il touche le bouton et, en une
+           seconde, l'app tire les 5 matchs à sa place, fait jouer l'IA, résout la journée et le
+           sanctionne (−1 pt, −10 % de capital) — sans qu'il ait vu un seul match.
+           DEUX ÉCHÉANCES ICI, ET ELLES NE DISENT PAS LA MÊME CHOSE :
+           • `duelDeadline` = la clôture des PARIS. Au-delà, plus rien n'est jouable : on se tait,
+             exactement comme le fait déjà la carte des pronos deux lignes plus bas.
+           • `dayTimes().sel` = la clôture de la SÉLECTION. Au-delà, le choix m'échappe (ensureFixtures
+             tire à ma place dès que `selPassed`) MAIS LA JOURNÉE N'EST PAS PERDUE : je peux encore
+             parier. Se taire là serait aussi faux que d'inviter à choisir. On change donc de phrase
+             et on montre l'échéance qui compte encore — celle des paris. */
+        const tbet=duelDeadline(duel,m.lg);
+        if(tbet && Date.now()>=tbet) return;                // journée perdue : plus rien à proposer
+        const dts=dayTimes(m.lg), tsel=dts.ok?dts.sel:0;
+        const auto=!!(tsel && Date.now()>=tsel);            // les matchs seront tirés d'office
+        if(duel.home_id===m.pid) homeTodo.push({lg:m.lg, pid:m.pid, kind:"choix", deadline:(auto?tbet:tsel)||0, auto});
         return;
       }
       const t=duelDeadline(duel,m.lg);
@@ -6548,8 +6567,11 @@ function viewHome(){
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Faire mes enchères de la trêve")}</button></div>`
     : x.kind==="choix"
     ? `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
-      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("c'est toi qui reçois : choisis les 5 matchs de la journée.")}</div>
-      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🎯 ${t("Choisir les matchs")}</button></div>`
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${x.auto
+        ? t("le délai pour choisir est passé : les 5 matchs seront tirés automatiquement. Tu peux encore valider tes pronos.")
+        : t("c'est toi qui reçois : choisis les 5 matchs de la journée.")}</div>
+      ${x.deadline?`<div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>`:''}
+      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">${x.auto?'⚽ '+t("Faire mes pronos"):'🎯 '+t("Choisir les matchs")}</button></div>`
     : `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tes pronos ne sont pas validés.")}</div>
       <div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>
