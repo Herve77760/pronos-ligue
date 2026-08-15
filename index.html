@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.238";
+const APP_VERSION = "v8.239";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4098,7 +4098,7 @@ const EN={
   "Archive la ligue dans « Ligues terminées ». Action irréversible.":"Archives the league under “Finished leagues”. This cannot be undone.",
   "Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.":"Fictional matches and odds, results drawn from their probabilities (a bit of randomness). No real match to wait for — made for playing among friends, even a whole game in a single evening.",
   "Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results: to prove who's the best forecaster for real. ⚠️ A matchday only resolves once the matches are actually played.",
-  "⏳ Chargement des vrais matchs à venir…":"⏳ Loading upcoming real matches…", "🔄 Réessayer":"🔄 Retry",
+  "⏳ Chargement des vrais matchs à venir…":"⏳ Loading upcoming real matches…", "⏳ Chargement des matchs…":"⏳ Loading matches…", "🔄 Réessayer":"🔄 Retry",
   "Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.":"Not enough upcoming real matches right now (off-season?). Try again later, or the organizer can switch the league back to simulated.",
   "Tous les bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus bonuses and a wide choice of forfeits — the full-featured game.",
   "Moins de bonus et de gages — parfait pour débuter ou jouer vite.":"Fewer bonus bonuses and forfeits — perfect to start or play fast.",
@@ -8349,7 +8349,14 @@ function viewSelect(d,dayLbl,opp){
   const selKey=L.id+":"+(L.current_day||0);
   if(selFor!==selKey){ selFor=selKey; selPool=null; selChosen=[]; selLoading=false; }
   if(!selPool && !selLoading){ if(real){ loadRealPool(); } else { loadDayPool(); } }
-  if(real && (selLoading || !selPool)) return `${quickBar('')}<div class="box">${t("⏳ Chargement des vrais matchs à venir…")}</div>`;
+  /* ⚠️ v8.239 (bug vécu par Hervé : « Connexion : null is not an object (evaluating
+     'selPool.map') » sur l'écran de choix) — CE GARDE-FOU NE COUVRAIT QUE `real`. `loadDayPool()`
+     (v8.235) est devenue ASYNCHRONE comme `loadRealPool()` — entre l'appel ci-dessus et la fin de
+     son chargement, `selPool` reste `null`. Avant, le chemin fictif était SYNCHRONE
+     (`selPool=genPool(...)` s'exécutait dans la même frappe), donc `selPool` était déjà rempli à
+     la ligne `selPool.map` plus bas : aucun garde n'y était nécessaire. Maintenant que les DEUX
+     chemins chargent en tâche de fond, les DEUX doivent attendre avant de lire `selPool`. */
+  if(selLoading || !selPool) return `${quickBar('')}<div class="box">${t(real?"⏳ Chargement des vrais matchs à venir…":"⏳ Chargement des matchs…")}</div>`;
   if(real && selPool.length<5) return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
      <div class="mini muted" style="margin-top:8px">${t("Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.")}</div>
      <button class="btn ghost sm" style="margin-top:8px" onclick="selPool=null;render()">${t("🔄 Réessayer")}</button></div>`;
