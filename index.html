@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.245";
+const APP_VERSION = "v8.246";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -11227,7 +11227,7 @@ function drawSeasonCard(cv,d){
     value:e.title, tone:e.rew?"gold":"red" }));
   if(rows.length<2 && d.highlight) rows.push({label:d.highlight.label, value:d.highlight.value, tone:"green"});
   const shown=rows.slice(0,2);
-  const tH=280, tY=H-tH-72, tX=80, tW=W-160;
+  const tH=250, tY=H-tH-64, tX=80, tW=W-160;
   const zTop=y+ch*2+gp+34, zBot=tY-34, rh=104, rgap=16;
   let ry=zTop+Math.max(0,(zBot-zTop-(shown.length*rh+(shown.length-1)*rgap))/2);
   const TONE={ gold:["rgba(231,184,75,.14)","rgba(231,184,75,.38)",CD_GOLD,"#f6ecd4"],
@@ -11241,41 +11241,40 @@ function drawSeasonCard(cv,d){
     cdFit(c,r.value,CD_SANS,36,23,W-230,700);
     c.fillStyle=T[3]; c.fillText(cdEll(c,r.value,W-230),W/2,ry+83); ry+=rh+rgap; });
 
-  /* ⚠️ v8.243-244 (demandé par Hervé) — TICKET REFAIT EN DEUX COLONNES : logo à gauche, QR code
-     vers tactizo.com à droite. Remplace l'ancien lockup centré d'une seule ligne, qui n'avait pas
-     de place pour le QR sans agrandir toute la carte (format story figé à 1080×1920).
+  /* v8.246 (demandé par Hervé) — TOUT SUR LA MÊME LIGNE, alignés : logo (gauche) — "TACTIZO"
+     + slogan empilés (centre) — QR code (droite), même taille pour le logo et le QR.
      ⚠️ LE DÉGRADÉ VERT/VIOLET DU MOT-CLÉ (façon logo, TZ_GREEN/TZ_PURPLE) A ÉTÉ ESSAYÉ PUIS
-     ÉCARTÉ : Hervé l'a trouvé moins lisible que le noir uni sur le fond crème — revenu à un seul
-     `fillStyle`. Le cadrage du badge a aussi changé (v8.244) : plus large (tête + cartes + « 1N2 »
-     visibles, pas juste le visage), choisi parmi 3 options soumises en maquette.
+     ÉCARTÉ : Hervé l'a trouvé moins lisible que le noir uni sur le fond crème.
      ⚠️ LE QR EST STATIQUE (`QR_CODE_B64`), PAS GÉNÉRÉ EN JS : la destination (tactizo.com) est la
      même pour tout le monde, et coder un générateur QR dans ce fichier unique pour UNE seule URL
      fixe aurait pesé plus lourd que l'image elle-même (~4 Ko). Le jour où il faudra pointer vers
      les stores plutôt que le site, ce sera un nouveau PNG à régénérer, pas une ligne de code. */
   cdRR(c,tX,tY,tW,tH,34); c.fillStyle=CD_CREAM; c.fill();
-  const midY=tY+tH/2, colLx=tX+tW*0.28, colRx=tX+tW*0.76;
+  c.textAlign="center";
 
-  // — colonne gauche : badge du logo + "TACTIZO" en noir uni (demandé par Hervé — le dégradé
-  // vert/violet façon logo, essayé en premier, est finalement écarté au profit du noir simple)
-  const badgeD=118, bgap=20;
-  c.font=cdF(CD_DISP,54); c.letterSpacing="-0.5px";
-  const wmTxt="TACTIZO", wmW=c.measureText(wmTxt).width;
-  const groupW=(d.logo?badgeD+bgap:0)+wmW, gx=colLx-groupW/2;
-  if(d.logo){ const bcx=gx+badgeD/2;
-    c.save(); c.beginPath(); c.arc(bcx,midY,badgeD/2,0,7); c.clip();
-    c.drawImage(d.logo,bcx-badgeD/2,midY-badgeD/2,badgeD,badgeD); c.restore();
+  const sz=180, padLR=26, gap=22, rowY=tY+tH/2;
+  const logoCx=tX+padLR+sz/2, qrCx=tX+tW-padLR-sz/2, midW=tW-2*padLR-2*sz-2*gap;
+
+  if(d.logo){
+    c.save(); c.beginPath(); c.arc(logoCx,rowY,sz/2,0,7); c.clip();
+    c.drawImage(d.logo,logoCx-sz/2,rowY-sz/2,sz,sz); c.restore();
     c.strokeStyle="rgba(20,16,10,.18)"; c.lineWidth=3;
-    c.beginPath(); c.arc(bcx,midY,badgeD/2,0,7); c.stroke(); }
-  c.textAlign="left";
-  c.fillStyle="#12100a"; c.fillText(wmTxt,gx+(d.logo?badgeD+bgap:0),midY+18);
-  c.letterSpacing="0px"; c.textAlign="center";
+    c.beginPath(); c.arc(logoCx,rowY,sz/2,0,7); c.stroke(); }
+  if(d.qr){
+    c.save(); cdRR(c,qrCx-sz/2,rowY-sz/2,sz,sz,16); c.clip();
+    c.drawImage(d.qr,qrCx-sz/2,rowY-sz/2,sz,sz); c.restore();
+  } else { c.font=cdF(CD_SANS,22,700); c.fillStyle="#5c564a"; c.fillText(SHARE_URL,qrCx,rowY+10); }
 
-  // — colonne droite : QR code (repli : juste l'URL en texte si l'image ne charge pas)
-  if(d.qr){ const qs=150, qy=midY-qs/2-16;
-    c.save(); cdRR(c,colRx-qs/2,qy,qs,qs,14); c.clip();
-    c.drawImage(d.qr,colRx-qs/2,qy,qs,qs); c.restore();
-    c.font=cdF(CD_SANS,26,700); c.fillStyle="#5c564a"; c.fillText(SHARE_URL,colRx,qy+qs+38);
-  } else { c.font=cdF(CD_SANS,32,700); c.fillStyle="#5c564a"; c.fillText(SHARE_URL,colRx,midY+12); }
+  // — "TACTIZO" en gras + slogan, empilés et centrés entre le logo et le QR, sur la même ligne
+  const s1=t("Les pronostics font gagner les matchs,"), s2=t("la stratégie fait gagner le championnat.");
+  const tsz=cdFit(c,"TACTIZO",CD_DISP,40,24,midW);
+  const ssz=Math.min(cdFit(c,s1,CD_SERIF,22,13,midW,600),cdFit(c,s2,CD_SERIF,22,13,midW,600));
+  c.font=cdF(CD_DISP,tsz); c.letterSpacing="0.5px";
+  c.fillStyle="#12100a"; c.fillText("TACTIZO",W/2,rowY-24);
+  c.letterSpacing="0px";
+  c.font=cdF(CD_SERIF,ssz,600); c.fillStyle="#6b6152";
+  c.fillText(s1,W/2,rowY+ssz*1.15);
+  c.fillText(s2,W/2,rowY+ssz*1.15+ssz*1.35);
 }
 const SHARE_URL="tactizo.com";
 
