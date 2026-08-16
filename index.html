@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.244";
+const APP_VERSION = "v8.245";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2259,14 +2259,26 @@ async function resolveRealIfReady(){
   // Garde-fou LOCAL : évite de re-solliciter Supabase à chaque rafraîchissement de cette page.
   // La vraie économie de crédits vient du cache PARTAGÉ ci-dessous (fetchRealResultsCached).
   if(Date.now()-lastRealCheck < 1200000) return; lastRealCheck=Date.now();
-  const keys=[...new Set(realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.evId).map(f=>f.sportKey))];
+  /* ⚠️ v8.245 (bug vécu par Hervé, ligue 66NW7 : 8 crédits consommés pour UN SEUL match encore en
+     attente) — `keys` LISTAIT TOUS LES CHAMPIONNATS DE LA LIGUE, PAS SEULEMENT CEUX AVEC UN MATCH
+     ENCORE EN ATTENTE. Elle se construisait sur TOUTES les fixtures (`filter(f=>f&&f.evId)`), sans
+     regarder `f.res` — alors que `enCours`, juste en dessous, filtrait déjà correctement sur les
+     matchs SANS résultat (`!f.res`). Deux filtres différents sur la même question (« quels
+     championnats nous restent à surveiller ? »), l'un des deux faux : un championnat dont TOUS les
+     matchs de la ligue ont déjà leur résultat continuait à être interrogé simplement parce que sa
+     copie en cache partagé était vieille de plusieurs jours (gelée par le bug CORS) — 4 championnats
+     déjà entièrement résolus réinterrogés en même temps que le seul qui comptait encore.
+     ⚠️ UNE SEULE SOURCE MAINTENANT : `pendingFx`, la même liste (fixtures sans résultat, non
+     annulées) sert à construire `keys` ET `enCours` — les deux ne peuvent plus diverger. */
+  const pendingFx=realDuels.flatMap(d=>d.fixtures).filter(f=>f&&f.evId&&!f.canceled&&!f.res);
+  const keys=[...new Set(pendingFx.map(f=>f.sportKey))];
   // Pour chaque championnat, le coup d'envoi le plus ANCIEN parmi ses matchs pas encore résolus :
   // tant qu'il n'est pas assez loin, inutile de payer pour un résultat qui n'existe pas encore.
   const enCours={};
-  realDuels.flatMap(d=>d.fixtures).forEach(f=>{ if(!f||!f.evId||f.canceled||f.res) return;
-    const t=f.commence?new Date(f.commence).getTime():NaN; if(isNaN(t)) return;
+  pendingFx.forEach(f=>{ const t=f.commence?new Date(f.commence).getTime():NaN; if(isNaN(t)) return;
     if(enCours[f.sportKey]==null || t<enCours[f.sportKey]) enCours[f.sportKey]=t; });
-  const results=await fetchRealResultsCached(keys, enCours); liveRes=results||{};   // 📡 dispo pour l'affichage « direct » (Résultats)
+  // Rien en attente → tout est déjà connu, aucun appel à faire (économise le quota).
+  const results=keys.length?await fetchRealResultsCached(keys, enCours):{}; liveRes=results||{};   // 📡 dispo pour l'affichage « direct » (Résultats)
   // ⏱️ AUTO-ANNULATION (v4.46) : un match toujours pas terminé plus de STALE_MATCH_H heures après son
   // coup d'envoi PRÉVU est réputé ANNULÉ (reporté / abandonné / jamais joué). Seuil très au-delà de la
   // durée d'un match (foot 2 h, tennis ≤ 5 h) et de tout retard de flux → aucun risque d'annuler un
