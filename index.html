@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.246";
+const APP_VERSION = "v8.247";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1228,8 +1228,8 @@ const FORMULAS={
      v7.33 : ils s'affichaient tels quels, en clair, au milieu de la phrase (signalé par Hervé).
      Si une mise en gras devient nécessaire ici, c'est l'échappement qu'il faut revoir aux trois
      endroits — pas ajouter une balise en espérant que ça passe. */
-  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 12h et 36h. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."},
-  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 24h et 72h. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."}
+  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 24h et 48h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."},
+  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 48h et 72h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."}
 };
 // Format EFFECTIF de la journée courante. `L.formula` = format initial (colonne). L'organisateur peut
 // le changer EN COURS, effectif à la journée suivante : chaque changement est empilé dans le JSON `gage`
@@ -1855,15 +1855,21 @@ async function fetchRealPool(){
 // joués. La réserve est mutualisée (3 jours), le filtrage est propre à chaque ligue.
 function selectPool(all){
   const _f=leagueFormula();
-  /* ⚠️ v7.32 — ON NE RÉSERVE PLUS QUE LE TEMPS DE PARI, pas « sélection + pari ».
-     Avant : `sel+bet`, soit 24 h en fast. Or on est ICI au moment où le joueur à domicile choisit :
-     la phase de sélection est en train d'être consommée, la compter une seconde fois repoussait
-     tous les matchs d'une demi-journée pour rien. Depuis que la clôture des paris est le premier
-     coup d'envoi (v7.32), le seul besoin est de laisser à l'adversaire son temps de pari complet.
-     ⚠️ ET PAS MOINS. Règle d'Hervé : « imagine qu'on réduise à 6 h — la personne qui choisit les
-     matchs à minuit, son adversaire doit valider avant 6 h du matin alors qu'il dort. » On garde
-     donc les 12 h (fast) et 24 h (classique) de la formule, jamais un chiffre plus court. */
-  const cutoffMin=Date.now()+(_f.bet||24)*3600000;
+  /* ⚠️ v8.247 (demandé par Hervé) — LA FENÊTRE PART DU DÉBUT DE JOURNÉE (`day_started_at`), PLUS
+     DE « MAINTENANT ». Avant (v7.32→v8.246) : `cutoffMin = maintenant + bet`. Chaque joueur qui
+     ouvrait cet écran calculait donc SA PROPRE fenêtre, décalée selon l'heure de SON ouverture —
+     le joueur A à 8 h et le joueur B à 20 h, dans la MÊME ligue et la MÊME journée, pouvaient
+     recevoir deux listes de 9 matchs sans un seul match en commun. Le partage introduit en v8.235
+     (`day_pool`) pour les matchs fictifs ne pouvait pas marcher ici tant que le calcul dépendait
+     de l'heure d'appel — il fallait ancrer la fenêtre sur quelque chose de commun à toute la
+     ligue, `day_started_at` exactement comme `dayTimes()`.
+     ⚠️ `sel+bet`, PAS `bet` SEUL. Le pire cas est un joueur qui choisit à la toute fin de la
+     phase de sélection (`day_started_at + sel`) : il faut ENCORE `bet` heures après ÇA pour
+     laisser à l'adversaire son temps de pari complet — d'où `day_started_at + sel + bet`.
+     Réserver seulement `bet` (comme avant v8.247) suffisait pour celui qui choisit tout de
+     suite, pas pour celui qui attend la fin de la fenêtre de sélection. */
+  const t0=(L&&L.day_started_at)?new Date(L.day_started_at).getTime():Date.now();
+  const cutoffMin=t0+((_f.sel||24)+(_f.bet||24))*3600000;
   // Second filtre sur les sports (v6.96) — indispensable, et pas redondant avec la récolte : la
   // réserve est mutualisée jusqu'à 3 jours, donc elle contient encore les sports récoltés AVANT ce
   // changement. Sans ce filtre, retirer un sport ne prendrait effet qu'à la récolte suivante et le
@@ -1938,29 +1944,30 @@ function selectPool(all){
   /* ---- FENÊTRE DURE, PROPRE À LA FORMULE (v7.29, règle d'Hervé) ----------------------------
      Ce qu'il a vécu le 31/07 : ligue en mode FAST créée le vendredi, l'app lui propose des matchs
      du MARDI suivant. « Le principe du mode fast, c'est de jouer vite, quasiment tous les 2 jours. »
-     LA RÈGLE : au-delà de la fenêtre, on ne prend RIEN. Fast = 12 à 36 h, Classique = 24 à 72 h,
-     la fin étant repoussée jusqu'à 22 h ce soir-là (`finDeSoiree`) pour ne pas couper les coups
-     d'envoi européens de 18h30-21h — le défaut sauterait aux yeux sur une fenêtre finissant à 18 h.
-     Ces bornes ne sont pas des constantes de plus : `cutoffMin` vaut `bet` (12 h fast / 24 h
-     classique) et la fenêtre ajoute `sel+bet` derrière, soit un cycle complet de la formule.
-     Fast s'étend donc jusqu'à 36 h, Classique jusqu'à 72 h, automatiquement.
-     ⚠️ CES CHIFFRES ONT ÉTÉ FAUX DE LA v7.32 À LA v8.69. Ce paragraphe annonçait 24/48 h pour
-     `cutoffMin` et 48/96 h pour la fenêtre : c'était l'état d'AVANT la v7.32, qui a retiré le
-     `sel` de `cutoffMin` sans que le commentaire suive. Le code, lui, n'a jamais été faux — et
-     les chiffres montrés au joueur non plus, ils sont calculés depuis `FORMULAS`. Le piège était
-     donc entièrement ici : lire ce paragraphe et « corriger » le code pour le faire coller aurait
-     doublé le délai d'attente de toutes les ligues. Vérifier ces nombres en exécutant
-     `selectPool`, jamais en relisant la prose.
-     ⚠️ LA BOUCLE D'ÉLARGISSEMENT A ÉTÉ SUPPRIMÉE. Elle repoussait la limite de 6 h en 6 h jusqu'à
-     8 JOURS quand le lot n'était pas complet : c'est elle, et elle seule, qui est allée chercher
-     mardi. Elle partait d'une bonne intention (toujours rendre 9 affiches) qui s'est révélée
-     contraire au jeu — une journée fast avec des matchs à 96 h n'est plus une journée fast.
+     LA RÈGLE : au-delà de la fenêtre, on ne prend RIEN.
+     ⚠️ v8.247 — LARGEUR FIXÉE À 24 H (un jour civil), plus proportionnelle à la formule. Avant :
+     la fenêtre durait `sel+bet` (24 h fast, 48 h classique). Une fois `cutoffMin` ancré sur
+     `day_started_at` (voir plus haut) plutôt que sur l'heure d'ouverture de l'écran, Hervé a
+     préféré une règle simple et IDENTIQUE aux deux formules : « les matchs qui démarrent du
+     [jour] 8 h au [jour+1] 8 h », plutôt qu'une largeur qui varie selon la formule.
+     Concrètement (journée ouverte lundi 8 h) : Fast propose les matchs de mardi 8 h à mercredi
+     8 h ; Classique ceux de mercredi 8 h à jeudi 8 h. La fin reste repoussée jusqu'à 22 h ce
+     soir-là (`finDeSoiree`) pour ne pas couper les coups d'envoi européens de 18h30-21h.
+     ⚠️ CONSÉQUENCE ACCEPTÉE : la réserve de matchs candidats pour une journée Classique est deux
+     fois plus étroite qu'avant (24 h de matchs au lieu de 48 h) — donc « moins de 9 affiches »
+     un peu plus fréquent certains jours creux. `batir` complète déjà avec du basket/tennis, et
+     l'élargissement par palier de 24 h juste en dessous prend le relais si besoin.
+     ⚠️ LA BOUCLE D'ÉLARGISSEMENT [historique v7.29] A ÉTÉ SUPPRIMÉE. Elle repoussait la limite de
+     6 h en 6 h jusqu'à 8 JOURS quand le lot n'était pas complet : c'est elle, et elle seule, qui
+     est allée chercher mardi. Elle partait d'une bonne intention (toujours rendre 9 affiches) qui
+     s'est révélée contraire au jeu — une journée fast avec des matchs à 96 h n'est plus une
+     journée fast.
      ⚠️ CE QUI SE PASSE QUAND LA FENÊTRE EST MAIGRE (décision d'Hervé, 31/07) : on rend MOINS de
      9 affiches et le quota de football saute — `batir` complète déjà avec le basket et le tennis,
      qui eux jouent presque tous les soirs. Mieux vaut une journée à dominante NBA qu'une journée
      dont les matchs tombent quatre jours plus tard. Le seul vrai remède est en amont : que la
      RÉCOLTE couvre chaque jour (voir le critère d'arrêt de `fetchRealPool`). */
-  const limiteMax=finDeSoiree(cutoffMin+((_f.sel||24)+(_f.bet||24))*3600000);
+  const limiteMax=finDeSoiree(cutoffMin+24*3600000);
   let pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=limiteMax));
   /* ---- ÉLARGISSEMENT PAR QUALITÉ (v7.31, arbitrage d'Hervé) --------------------------------
      « Je préfère parier sur un match de Ligue des Champions dans 3 jours plutôt que sur un Boca
@@ -3188,8 +3195,8 @@ const EN={
      ⚠️ `check-i18n` ne pouvait PAS le voir : ces textes passent par `t(FORMULAS[k].d)`, donc un
      `t(variable)` — l'outil ne sait vérifier que les `t("texte littéral")`. Quand on modifie une
      description de formule, il faut donc reporter la clé À LA MAIN, ici. */
-  "Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 12h et 36h. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to vote and pick your bonuses, same as Classic. Then each matchday: up to 12h to pick the matches, after which you can still change your picks until the first kick-off (at least 12h). The matches on offer kick off between 12h and 36h from now. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
-  "Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 24h et 72h. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to vote and pick your bonuses. Then each matchday: up to 24h to pick the matches, after which you can still change your picks until the first kick-off (at least 24h). The matches on offer kick off between 24h and 72h from now. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
+  "Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 24h et 48h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to vote and pick your bonuses, same as Classic. Then each matchday: up to 12h to pick the matches, after which you can still change your picks until the first kick-off (at least 12h). The matches on offer kick off between 24h and 48h after the matchday starts. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
+  "Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 48h et 72h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to vote and pick your bonuses. Then each matchday: up to 24h to pick the matches, after which you can still change your picks until the first kick-off (at least 24h). The matches on offer kick off between 48h and 72h after the matchday starts. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
   "Ce ne sont pas des horaires fixes : chaque phase démarre <b>quand la précédente est bouclée</b>. Les mises s'ouvrent dès que tous les matchs sont choisis, et la journée suivante démarre dès que les résultats sont tombés. En 📡 données réelles, la plupart des matchs se jouant en soirée, le rythme se cale sur eux et se décale donc de jour en jour.":"These aren't fixed times of day: each phase starts <b>once the previous one is wrapped up</b>. Betting opens as soon as every match has been picked, and the next matchday starts as soon as the results are in. In 📡 real-data mode, most matches being played in the evening, the rhythm follows them and therefore drifts from day to day.",
   "🚀 Tout le monde est prêt — lancement du championnat…":"🚀 Everyone's ready — starting the championship…",
   "⏳ On attend les autres joueurs — <b>{a}/{b}</b> prêts.":"⏳ Waiting for the other players — <b>{a}/{b}</b> ready.",
@@ -3406,7 +3413,6 @@ const EN={
   "Liste à rafraîchir":"List needs refreshing",
   "Depuis que cet écran est ouvert, {a} des matchs choisis se joue(nt) trop tôt : ton adversaire n'aurait plus ses <b>{b} h</b> pour pronostiquer. Voici une liste à jour — <b>tes 5 choix sont à refaire</b>.":"Since this screen was opened, {a} of the matches you picked now kick off too soon: your opponent would no longer have their <b>{b}h</b> to make their picks. Here's an up-to-date list — <b>you'll need to pick your 5 again</b>.",
   // « Choisis vite » sur l'écran de sélection (v7.33) + fenêtre des matchs recalculée (v7.32).
-  "Les matchs proposés commencent au plus tôt <b>{a}</b> — c'est le temps de pari garanti à ton adversaire ({b} h). Chaque heure d'attente les repousse d'autant : plus tu choisis tôt, plus la journée se joue tôt.":"The matches on offer start no earlier than <b>{a}</b> — that's the betting time your opponent is guaranteed ({b}h). Every hour you wait pushes them back just as much: the sooner you pick, the sooner the matchday is played.",
   "Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b>, ou s'ouvre d'un jour ou deux pour aller chercher une <b>plus belle affiche</b> plutôt qu'un match anonyme tout proche.":"These fixtures kick off <b>shortly after betting closes</b>, never days later: at most <b>{f}h</b> in ⚡ Fast, <b>{c}h</b> in 🗓️ Classique — with a little slack on the final evening, until <b>{h}:00</b>, so European evening kick-offs aren't cut off. In a quiet period the matchday has <b>fewer than {a} fixtures</b>, or opens up by a day or two to reach a <b>better fixture</b> rather than an anonymous one close by.",
   // Clôture des paris au premier coup d'envoi, en données réelles (v7.32).
   "En <b>📡 données réelles</b>, tu peux <b>modifier tes pronos jusqu'au coup d'envoi du premier de tes 5 matchs</b>. Un pari n'est montré aux autres que lorsqu'il ne peut <b>plus</b> changer — sinon voir le pari d'un adversaire encore modifiable donnerait un avantage, et pas une simple information. En 🎮 simulé, la clôture reste l'échéance de la formule.":"With <b>📡 real data</b>, you can <b>edit your picks until the first of your 5 matches kicks off</b>. A bet is only shown to others once it can <b>no longer</b> change — otherwise seeing an opponent's still-editable bet would be an advantage, not just information. In 🎮 simulated leagues, the deadline stays the format's timer.",
@@ -4566,7 +4572,7 @@ function mesBonusGain(){ const c=pariAffiche().card; return (c && GAIN_MULTIPLIA
 function mesBonusPerte(){ const c=pariAffiche().card; return (c && (c.id==="assurance"||c.id==="parachute")) ? [c.id] : []; }
 /* ⚠️ v7.73 — LE BILAN SURVIT À LA VALIDATION (constat d'Hervé). On avait rendu « ce que je risque
    / ce que je gagne » visible au moment de décider… puis les deux chiffres disparaissaient dès le
-   pari validé. Or il s'écoule 12 à 72 h entre la validation et les résultats, et c'est justement
+   pari validé. Or il s'écoule 24 à 72 h entre la validation et les résultats, et c'est justement
    là qu'on rouvre l'app pour regarder son pari : il fallait alors additionner cinq lignes et
    multiplier par les cotes — le calcul qu'on venait d'épargner à la saisie.
    ⚠️ MÊME CALCUL, MÊME FICHE : `worstLoss` / `bestGain` / `showGainInfo`, rien de neuf à
@@ -5984,7 +5990,7 @@ async function ensureFixtures(){
   if(!todo.length) return false;
   if(L&&L.data_mode==="real"){
     if(Date.now()-lastRealFill < 300000) return false; lastRealFill=Date.now(); // throttle quota (5 min)
-    let pool=[]; try{ pool=await fetchRealPoolCached(); }catch(e){}
+    let pool=[]; try{ pool=await getOrCreateDayPool(); }catch(e){}
     if(pool.length<5) return false; // pas assez de vrais matchs → on attend (jamais de simulé en réel)
     for(const d of todo){ const cp=pool.slice(); for(let i=cp.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cp[i],cp[j]]=[cp[j],cp[i]];}
       const fx=cp.slice(0,5);
@@ -8333,24 +8339,35 @@ let selPool=null, selChosen=[], selLoading=false, selFor=null;
 // à sa place — doivent piocher dans LE MÊME tirage, sinon le partage entre duels ne tient que
 // si personne n'est jamais en retard ni remplacé par une IA. Cette fonction est donc désormais
 // la SEULE à lire/créer `day_pool` ; les deux appelants ne font plus que l'utiliser.
+// ⚠️ v8.247 (demandé par Hervé) — MÊME TIRAGE COMMUN POUR LES LIGUES EN MATCHS RÉELS. Jusqu'ici
+// seuls les matchs fictifs passaient par `day_pool` ; les vrais matchs étaient recalculés à
+// chaque appel (`fetchRealPoolCached()` en direct dans `loadRealPool()`/`ensureFixtures()`).
+// `selectPool()` est désormais ancrée sur `day_started_at` (voir plus haut), donc déjà stable
+// pour toute la journée à elle seule — mais figer le résultat ici évite de la relire à chaque
+// écran ET protège du cas marginal où la réserve brute (`fetchRealPoolCached`, cache 3 jours)
+// se renouvellerait en plein milieu de la journée. Même mécanisme « premier arrivé, premier
+// servi » que pour les matchs fictifs.
 async function getOrCreateDayPool(){
+  const real=(L&&L.data_mode==="real"), need=real?5:POOL_N;
+  const tirer=real?fetchRealPoolCached:(()=>genPool(POOL_N,leagueFormula().bet));
   try{
     const fresh=await q(db.from("leagues").select("day_pool").eq("id",L.id).single());
-    if(fresh && Array.isArray(fresh.day_pool) && fresh.day_pool.length>=POOL_N){ L.day_pool=fresh.day_pool; return fresh.day_pool; }
-    const pool=genPool(POOL_N,leagueFormula().bet);
+    if(fresh && Array.isArray(fresh.day_pool) && fresh.day_pool.length>=need){ L.day_pool=fresh.day_pool; return fresh.day_pool; }
+    const pool=await tirer();
+    if(real && pool.length<5) return pool;   // pas assez de vrais matchs : rien à figer, on retentera au prochain appel
     const claim=await q(db.from("leagues").update({day_pool:pool}).eq("id",L.id).is("day_pool",null).select("day_pool"));
     if(claim && claim.length){ L.day_pool=claim[0].day_pool; return claim[0].day_pool; }
     const again=await q(db.from("leagues").select("day_pool").eq("id",L.id).single());
     if(again && Array.isArray(again.day_pool) && again.day_pool.length){ L.day_pool=again.day_pool; return again.day_pool; }
     return pool;   // dernier repli : le tirage qu'on vient de faire, même s'il n'a pas pu s'écrire
-  }catch(e){ return genPool(POOL_N,leagueFormula().bet); }   // repli défensif : jamais bloquer le choix des matchs
+  }catch(e){ try{ return await tirer(); }catch(e2){ return []; } }   // repli défensif : jamais bloquer le choix des matchs
 }
 async function loadDayPool(){ selLoading=true;
   selPool=await getOrCreateDayPool();
   selChosen=[]; selLoading=false; render();
 }
 async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
-  try{ selPool=await fetchRealPoolCached(); }catch(e){ selPool=null; }
+  try{ selPool=await getOrCreateDayPool(); }catch(e){ selPool=null; }
   /* ⚠️ v7.36 — LE REPLI SUR DES MATCHS SIMULÉS A ÉTÉ SUPPRIMÉ. Règle d'Hervé, sans ambiguïté :
      « je ne veux absolument pas qu'une ligue réelle se transforme à un moment donné avec des
      matchs fictifs. Je préfère oublier la règle des 75 % de foot plutôt. »
@@ -8363,20 +8380,12 @@ async function loadRealPool(){ selLoading=true; selChosen=[]; showErr("");
      vrais matchs » avec un bouton Réessayer : la journée attend, elle ne devient jamais fictive. */
   if(!selPool) selPool=[];
   selLoading=false; render(); }
-/* ---- « Choisis vite » (v7.33, demandé par Hervé) -------------------------------------------
-   Depuis la v7.32, la fenêtre des matchs part de MAINTENANT + le temps de pari. Choisir tôt
-   rapproche donc les matchs, et raccourcit la journée pour LES DEUX joueurs du duel ; traîner
-   les repousse d'autant. Cette mécanique était totalement invisible — le joueur à domicile ne
-   pouvait pas savoir que son attente coûtait quelque chose à son adversaire.
-   ⚠️ Uniquement en données réelles : en simulé les matchs sont fabriqués à la demande, l'heure
-   de sélection n'a aucune influence sur eux. */
-function hateToiHTML(real){
-  if(!real) return "";
-  const f=leagueFormula(); const tot=(f.bet||24);
-  return `<div class="mini muted" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">⏱️ ${
-    t("Les matchs proposés commencent au plus tôt <b>{a}</b> — c'est le temps de pari garanti à ton adversaire ({b} h). Chaque heure d'attente les repousse d'autant : plus tu choisis tôt, plus la journée se joue tôt.",
-      {a:esc(fmtWhen(Date.now()+tot*3600000)), b:tot})}</div>`;
-}
+/* ---- « Choisis vite » (v7.33) — RETIRÉ EN v8.247 ---------------------------------------------
+   Ce message annonçait « plus tu choisis tôt, plus la journée se joue tôt » : vrai tant que la
+   fenêtre de matchs partait de MAINTENANT (v7.32→v8.246). Depuis que `selectPool()` est ancrée sur
+   `day_started_at` (même raison que `day_pool` pour les matchs fictifs), la fenêtre est FIXE pour
+   toute la journée : choisir tôt ou tard ne change plus rien aux matchs proposés. Le message
+   serait donc devenu faux — retiré avec sa fonction `hateToiHTML()`. */
 function viewSelect(d,dayLbl,opp){
   const real=(L.data_mode==="real");
   // Changement de ligue OU de journée → on repart d'une sélection VIERGE. Sans ce garde-fou, les
@@ -8398,7 +8407,7 @@ function viewSelect(d,dayLbl,opp){
   return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
      <div class="flow-head" style="margin-top:10px"><h3>${t("Choisis 5 rencontres")}</h3></div>
      <div class="flow-sub">${t("<b>{a}</b>/5 sélectionnées — imposées à <b>{b}</b>.",{a:selChosen.length,b:esc(opp.name)})}</div>
-     ${selLineHTML()}${cotesDatees()}${hateToiHTML(real)}</div>
+     ${selLineHTML()}${cotesDatees()}</div>
      ${selPool.map((f,i)=>{const on=selChosen.includes(i);
        const oddsTxt=`${cote(f.oh)}${f.draw?' / '+cote(f.od):''} / ${cote(f.oa)}`;
        return `<div class="match" onclick="toggleSel(${i})" style="cursor:pointer;${on?'border-color:var(--green)':''}">
@@ -8432,8 +8441,11 @@ function toggleSel(i){ const k=selChosen.indexOf(i); if(k>=0)selChosen.splice(k,
 async function saveSelection(){ if(busy)return;
   // `poolIdx` = position du match dans le tirage commun de la journée (cf. `loadDayPool`) — c'est
   // ce qui permet à `resolveDay` de reconnaître que deux duels ont choisi LE MÊME match fictif et
-  // de lui donner le même résultat aux deux. Sans objet en données réelles, où `selPool` ne vient
-  // pas d'un tirage commun mais de l'API des vrais matchs à venir.
+  // de lui donner le même résultat aux deux (un résultat fictif est TIRÉ, sans ça deux tirages
+  // indépendants divergeraient). Sans objet en données réelles : depuis la v8.247 `selPool` vient
+  // AUSSI d'un tirage commun (`day_pool`), mais chaque vrai match a déjà une identité stable
+  // (`evId`) — deux duels qui choisissent le même match réel reçoivent déjà le même résultat via
+  // `fetchRealResultsCached`, sans avoir besoin d'un index pour le reconnaître.
   const real=(L.data_mode==="real");
   const fx=selChosen.map(i=>real?selPool[i]:{...selPool[i],poolIdx:i});
   const mini=Date.now()+((leagueFormula().bet||24))*3600000;
@@ -10327,7 +10339,7 @@ function waitingResultsBody(d){
       return `<span class="mini">${esc(labelSel(f,p.sel))} · ${p.stake}€${o?' @'+cote(o):''}${capIdx===i?' 👑':''}</span>`; };
     /* ⚠️ v8.07 (demandé par Hervé) — MES MARQUEURS 👑 / 🃏 SUR L'ÉCRAN D'ATTENTE. La liste des
        affiches ne disait pas où j'avais posé mon Capitaine ni mon bonus : entre la validation et
-       les résultats il peut s'écouler 12 à 72 h, et c'est précisément là qu'on rouvre l'app pour
+       les résultats il peut s'écouler 24 à 72 h, et c'est précisément là qu'on rouvre l'app pour
        se rappeler ce qu'on a joué. L'information existait déjà sur l'onglet Pronos ; elle manquait
        ici, sur l'écran où l'on attend.
        ⚠️ UNIQUEMENT LES MIENS, et uniquement sur MON duel (`mine`) : les choix des autres restent
@@ -13260,7 +13272,7 @@ async function submitBuy(sellerId, cardId, maxP){
        naît du PAIEMENT, pas de la proposition — et le paiement, lui, reste bloqué (voir
        `accept_trade` et son code `pari_acheteur`).
        ⚠️ CE QUE LE BLOCAGE COÛTAIT : il fermait l'écran exactement au moment où l'on veut s'en
-       servir. Une fois ses pronos validés, on attend 12 à 72 h — c'est LE moment où l'on regarde
+       servir. Une fois ses pronos validés, on attend 24 à 72 h — c'est LE moment où l'on regarde
        les bonus des autres et où l'on négocie. Le jeu interdisait de parler pendant l'entracte.
        L'offre part, dort, et devient acceptable dès que la journée est résolue. */
     if(await rachatSansIssue(sellerId)){ closeCardInfo(); refusDerniereJournee(); return; }
@@ -14172,7 +14184,7 @@ function viewRulesFull(){
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
      ${li(t("La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend le bonus 🧈 {c} jouable — une journée sans football est donc une journée où ce bonus ne peut pas être joué.",{a:POOL_N,b:75,c:t(CARDS.chance.n)}))}
      ${li(t("Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b>, ou s'ouvre d'un jour ou deux pour aller chercher une <b>plus belle affiche</b> plutôt qu'un match anonyme tout proche.",
-       {a:POOL_N, h:FIN_SOIREE_H, f:FORMULAS.fast.bet+FORMULAS.fast.sel+FORMULAS.fast.bet, c:FORMULAS.classique.bet+FORMULAS.classique.sel+FORMULAS.classique.bet}))}
+       {a:POOL_N, h:FIN_SOIREE_H, f:FORMULAS.fast.sel+FORMULAS.fast.bet+24, c:FORMULAS.classique.sel+FORMULAS.classique.bet+24}))}
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
      ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur) — sauf à la <b>dernière journée</b>, où ce plafond saute : tu peux tout miser. Ton <b>match favori</b> reste compté double en cas de perte, donc le maximum réellement atteignable tourne autour de 99 % plutôt que 100 % pile.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
      ${li(t("En <b>📡 données réelles</b>, tu peux <b>modifier tes pronos jusqu'au coup d'envoi du premier de tes 5 matchs</b>. Un pari n'est montré aux autres que lorsqu'il ne peut <b>plus</b> changer — sinon voir le pari d'un adversaire encore modifiable donnerait un avantage, et pas une simple information. En 🎮 simulé, la clôture reste l'échéance de la formule."))}
