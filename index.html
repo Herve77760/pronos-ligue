@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.252";
+const APP_VERSION = "v8.253";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -10985,9 +10985,13 @@ function lienJourneeHTML(r){
   return `<span class="clik blue" onclick="statsGoDay('${r.lgId}','${r.pid}',${(r.day!=null)?(r.day|0):'null'})" title="${t("Ouvrir cette journée")}">🔗 ${lbl}</span>`;
 }
 function viewStats(){
-  const d=statsVue(); const line=(lab,val)=>`<div class="statrow"><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
+  const d=statsVue();
+  // `noBorder` : à passer quand une ligne de détail (match, lien de ligue) suit la ligne — sinon
+  // le trait de séparation de `.statrow` tombe ENTRE la valeur et son propre détail, au lieu de
+  // séparer deux stats différentes (repéré par Hervé le 2026-08-16 sur « Plus gros prono gagné »).
+  const line=(lab,val,noBorder)=>`<div class="statrow"${noBorder?' style="border-bottom:none"':''}><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   // Ligne CLIQUABLE : le libellé porte un ⓘ discret et ouvre la fiche du chiffre.
-  const lineI=(k,lab,val)=>`<div class="statrow clik" onclick="showStatInfo('${k}')"><span class="mini muted">${lab} <span style="opacity:.55">ⓘ</span></span><b class="mini">${val}</b></div>`;
+  const lineI=(k,lab,val,noBorder)=>`<div class="statrow clik"${noBorder?' style="border-bottom:none"':''} onclick="showStatInfo('${k}')"><span class="mini muted">${lab} <span style="opacity:.55">ⓘ</span></span><b class="mini">${val}</b></div>`;
   let h=`<div class="box"><div class="boxttl">📊 ${t("Mes stats")} ${premBadge('stats')}</div>
       <div class="mini muted">${t("Ton dossier complet, toutes tes ligues. Touche une ligne pour savoir ce que le chiffre veut dire.")}</div></div>`;
   // ⚠️ L'erreur vit sur `myStatsData`, PAS sur le dossier d'un onglet : elle est levée avant même
@@ -11014,7 +11018,7 @@ function viewStats(){
     ${lineI("roi", t("Rentabilité (ROI)"), `<span class="${a.roi>=0?'green':'red'}">${a.roi} %</span>`)}
     ${lineI("net", t("Résultat net cumulé"), `<span class="${a.net>=0?'green':'red'}">${fmt(a.net)} €</span>`)}
     ${lineI("ptsday", t("Points par journée"), a.ptsPerDay)}
-    ${line(t("Meilleure journée"), (a.best&&a.best.net>-1e8)?`<span class="green">${fmt(a.best.net)} €</span>`:'–')}
+    ${line(t("Meilleure journée"), (a.best&&a.best.net>-1e8)?`<span class="green">${fmt(a.best.net)} €</span>`:'–', !!(a.best&&a.best.net>-1e8&&lienJourneeHTML(a.best)))}
     ${(a.best&&a.best.net>-1e8&&lienJourneeHTML(a.best))?`<div class="mini" style="margin:-3px 0 6px;text-align:right">${lienJourneeHTML(a.best)}</div>`:''}
   </div>
   <div class="box"><div class="boxttl clik" onclick="showStatInfo('curve')">📈 ${t("Évolution du ROI")} <span style="opacity:.55">ⓘ</span></div>
@@ -11022,10 +11026,10 @@ function viewStats(){
   <div class="box"><div class="boxttl">🎯 ${t("Tes coups")}</div>
     ${lineI("avgodd", t("Cote moyenne gagnée"), a.avgWinOdd?a.avgWinOdd.toFixed(2):'–')}
     ${lineI("bestodd", t("Plus grosse cote gagnée"), a.bestOdd?a.bestOdd.toFixed(2):'–')}
-    ${lineI("bestpick", t("Plus gros prono gagné"), a.bestPick?`${sgn(a.bestPick.g)}${a.bestPick.cap?' 👑':''}`:'–')}
+    ${lineI("bestpick", t("Plus gros prono gagné"), a.bestPick?`${sgn(a.bestPick.g)}${a.bestPick.cap?' 👑':''}`:'–', !!a.bestPick)}
     ${a.bestPick?`<div class="mini muted" style="margin:-3px 0 2px">${esc(a.bestPick.m)} · ${t("cote")} ${a.bestPick.odd.toFixed(2)} · ${t("mise")} ${fmt(a.bestPick.st)} €</div>
-      <div class="mini" style="margin:0 0 8px">${lienJourneeHTML(a.bestPick)}</div>`:''}
-    ${lineI("bigstake", t("Plus grosse mise"), a.bigStake?`${fmt(a.bigStake.st)} € ${a.bigStake.win?'<span class="green">✓</span>':'<span class="red">✗</span>'}`:'–')}
+      <div class="mini" style="margin:0 0 8px;padding-bottom:8px;border-bottom:1px solid var(--border)">${lienJourneeHTML(a.bestPick)}</div>`:''}
+    ${lineI("bigstake", t("Plus grosse mise"), a.bigStake?`${fmt(a.bigStake.st)} € ${a.bigStake.win?'<span class="green">✓</span>':'<span class="red">✗</span>'}`:'–', !!a.bigStake)}
     ${a.bigStake?`<div class="mini muted" style="margin:-3px 0 2px">${esc(a.bigStake.m)}</div>
       <div class="mini" style="margin:0 0 2px">${lienJourneeHTML(a.bigStake)}</div>`:''}
   </div>
