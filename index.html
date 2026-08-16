@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.240";
+const APP_VERSION = "v8.241";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9638,7 +9638,17 @@ function recapBody(D){
     const hP=pById(homeId)||{}, aP=pById(awayId)||{};
     const hB=bets.find(b=>b.player_id===homeId), aB=bets.find(b=>b.player_id===awayId);
     const hNet=netMap[homeId]||0, aNet=netMap[awayId]||0;
-    const rr=duelPts(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)), isScoring2());
+    /* ⚠️ v8.241 (bug vécu par Hervé, capture à l'appui : duel Polo/Aurel, TOUS DEUX « n'a pas
+       parié », et pourtant Polo affichait 2 pts (duel) contre 0 pour Aurel — comme s'il avait
+       gagné) — CE `rr` APPELAIT `duelPts()`, LA VERSION QUI IGNORE LES OUBLIS. Elle compare les
+       deux nets normalement : entre deux pénalités d'oubli, celle qui rogne le MOINS le capital
+       "gagne" le duel par comparaison de net — alors que la règle du jeu dit noir sur blanc
+       qu'un double oubli ne doit donner AUCUN point de duel à personne (`duelPtsF`, juste
+       au-dessus dans ce fichier : `if(hForgot&&aForgot) return {h:0,a:0,win:null};`). Le total du
+       classement, plus haut sur cet écran, utilise déjà `duelPtsF` et affichait donc le bon
+       0-0 — seul CE récapitulatif de duel, calculé à part avec la mauvaise fonction, se
+       contredisait avec le total juste au-dessus de lui. */
+    const rr=duelPtsF(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)), forgot(homeId), forgot(awayId), isScoring2());
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
       return `<div class="duel-bonus-line clik" onclick="showBonusImpact('${bt.player_id}',${D})" title="${t("Toucher pour le détail : gain avec le bonus vs sans le bonus")}"><span class="duel-bonus-ic">${C.e}</span><span class="duel-bonus-txt"><b>🃏 ${esc(t(C.n))}</b>${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</span></div>`; };
