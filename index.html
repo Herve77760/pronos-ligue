@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.249";
+const APP_VERSION = "v8.250";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4847,6 +4847,7 @@ function optsSet(){ return (AUTH && Array.isArray(AUTH.options)) ? AUTH.options 
    le tien : leur retirer leurs options du jour au lendemain casserait les parties en cours. Les
    nouvelles souscriptions, elles, portent toutes leur échéance. */
 const OPT_DUREE_J=365;
+const CHECKOUT_FN=SB_URL+"/functions/v1/checkout";
 /* ⚠️ v8.191 — LES DROITS PREMIUM VIENNENT DÉSORMAIS DU SERVEUR (table `entitlements`).
    Avant, ils vivaient dans le `user_metadata` du joueur, écrit par SON navigateur : n'importe qui
    pouvait s'accorder n'importe quelle option en modifiant ses métadonnées. Sans conséquence tant
@@ -4920,13 +4921,14 @@ function showPremiumInfo(key){
     +footer+subBtn;
   infoModal(owned?p.e:"🔒", t(p.t), body);
 }
-// Souscription simulée : le joueur demande l'option → elle s'active immédiatement (le PAIEMENT est la
-// seule étape absente en phase de test). Écrit dans SON PROPRE user_metadata (updateUser, autorisé pour
-// soi-même) ; l'admin peut de toute façon régler/retirer ensuite. « pack » = souscrire aux 6 options.
+// Souscription : en phase de test, l'option s'active immédiatement (le PAIEMENT est la seule étape
+// absente) ; une fois `app_config.phase_test` à `false`, la règle d'accès Supabase refuse cette
+// écriture directe (v8.191) et on bascule automatiquement vers un vrai paiement Stripe (v8.250).
+// « pack » = souscrire aux 9 options d'un coup.
 async function subscribeOpt(key){
   const p=PITCHES[key]; if(!p) return;
   if(ownsOpt(key)) return;                              // déjà active
-  if(!await confirmTxt("🛒",t("Souscrire à cette option"),t("Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.",{a:t(p.t)}),t("Souscrire"))) return;
+  if(!await confirmTxt("🛒",t("Souscrire à cette option"),t("Souscrire à « {a} » ?",{a:t(p.t)}),t("Souscrire"))) return;
   /* ⚠️ La leçon de la v7.45 reste valable sous la nouvelle forme : on efface l'ancienne ligne de
      cette option avant d'en écrire une neuve. Sinon, réactiver une option périmée laisserait la
      périmée à côté de la nouvelle et le droit ne prendrait pas effet. C'est ce que fait le
@@ -4944,7 +4946,22 @@ async function subscribeOpt(key){
     await q(db.from("entitlements").insert(cles.map(k=>({user_id:AUTH.id, opt:k, expires_at:exp, source:'test'}))));
     await loadOpts();
     closeCardInfo(); infoWin(t("✅ Option activée sur ton compte. Bon jeu !"),"🎉"); render(); }
-  catch(e){ showErr("Souscription : "+e.message); }
+  catch(e){
+    // ⚠️ v8.250 — NE BASCULER VERS STRIPE QUE SUR UN REFUS DE LA RÈGLE D'ACCÈS (phase de test
+    // terminée), PAS SUR N'IMPORTE QUELLE ERREUR (réseau, table absente…) : sinon un problème sans
+    // rapport avec le paiement enverrait quand même le joueur vers un écran de paiement Stripe.
+    if(!/row-level security/i.test(e.message||"")){ showErr("Souscription : "+e.message); return; }
+    try{
+      const { data:{ session } } = await db.auth.getSession();
+      const jeton = (session && session.access_token) || "";
+      const r = await fetch(CHECKOUT_FN, { method:"POST",
+        headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jeton, "Content-Type":"application/json" },
+        body: JSON.stringify({opt:key}) });
+      const j = await r.json();
+      if(!r.ok || !j.url) throw new Error(j.error||"session de paiement refusée");
+      window.location.href = j.url;   // redirection vers Stripe — la suite se joue côté Stripe puis `stripe-webhook`
+    }catch(e2){ showErr("Souscription : "+e2.message); }
+  }
 }
 // 🛒 BOUTIQUE — toutes les options premium en un endroit + le Pack complet (souscrire à tout d'un coup).
 const SHOP_ORDER=["rachat","bonuscomplets","treve","ia","stats","direct","live","gageperso","voiradv"];   // "recap" (Partager ma saison) retiré : gratuit par défaut (v6.65) ; "live" séparé de "direct" en v6.99
