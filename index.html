@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.247";
+const APP_VERSION = "v8.248";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9717,10 +9717,21 @@ function recapBody(D){
         </div>
       </div>
       ${bonusMini(hB)}${bonusMini(aB)}
-      ${(()=>{ const dbN=Math.max(hNet,aNet), dbP=(hNet>=aNet?hP:aP); const sP=starId?(pById(starId)||{}):{}; const sN=starId?(netMap[starId]||0):0;
-        return `<div class="mini" style="margin:2px 2px 0;line-height:1.85">
-        🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="clik ${dbN>=0?'green':'red'}" onclick="showGainDetail('${dbP.id}')" title="${t("Comment ce montant est calculé")}">${fmt(dbN)}€</b> — ${avaName(dbP)}${starId?`<br>
-        <span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="clik ${sN>=0?'green':'red'}" onclick="showGainDetail('${starId}')" title="${t("Comment ce montant est calculé")}">${fmt(sN)}€</b> — ${avaName(sP)} <span class="muted">${t("→ +1 pt bonus")}</span>`:''}</div>`; })()}`;
+      ${(()=>{
+        /* ⚠️ v8.248 (demandé par Hervé) — PAS DE « MEILLEUR GAIN » QUAND PERSONNE N'A PARIÉ.
+           Si les deux joueurs du duel ont oublié, `hNet`/`aNet` ne sont que deux pénalités
+           d'oubli — `Math.max` désignait quand même l'un des deux comme « meilleur gain du
+           duel », ce qui n'a pas de sens (personne n'a rien gagné). Même logique que le
+           correctif v8.241 sur `rr`/`duelPtsF` juste au-dessus, mais pour cette ligne
+           informative séparée, restée intacte à l'époque. La ligue (⭐, `starId`) N'EST PAS
+           concernée : elle porte sur TOUS les joueurs de la ligue, pas seulement ce duel — un
+           double oubli ici n'empêche pas un autre joueur d'avoir un vrai gain ce jour-là. */
+        const bothForgot=forgot(homeId)&&forgot(awayId);
+        const dbN=Math.max(hNet,aNet), dbP=(hNet>=aNet?hP:aP); const sP=starId?(pById(starId)||{}):{}; const sN=starId?(netMap[starId]||0):0;
+        const duelLine=bothForgot?'':`🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="clik ${dbN>=0?'green':'red'}" onclick="showGainDetail('${dbP.id}')" title="${t("Comment ce montant est calculé")}">${fmt(dbN)}€</b> — ${avaName(dbP)}`;
+        const starLine=starId?`<span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="clik ${sN>=0?'green':'red'}" onclick="showGainDetail('${starId}')" title="${t("Comment ce montant est calculé")}">${fmt(sN)}€</b> — ${avaName(sP)} <span class="muted">${t("→ +1 pt bonus")}</span>`:'';
+        if(!duelLine && !starLine) return '';
+        return `<div class="mini" style="margin:2px 2px 0;line-height:1.85">${duelLine}${(duelLine&&starLine)?'<br>':''}${starLine}</div>`; })()}`;
   }
   // ✨ Faits marquants de la journée (dont bonus qui se sont retournés contre leur joueur) — demandé par Hervé.
   /* ORDRE DE PRIORITÉ FIXÉ PAR HERVÉ (v7.15) — trois groupes, dans cet ordre :
