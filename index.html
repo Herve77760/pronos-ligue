@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.239";
+const APP_VERSION = "v8.240";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2749,6 +2749,9 @@ const EN={
   // v8.78 — bandeau « résultats à découvrir », prioritaire sur « pronos à faire ».
   "Résultats à découvrir":"Results to discover",
   "la journée {a} est jouée, tu n'as pas encore vu le verdict.":"matchday {a} has been played — you haven't seen the verdict yet.",
+  "Résultats prêts à être révélés":"Results ready to be revealed",
+  "tous les matchs de la journée {a} sont terminés : ouvre la ligue pour déclencher la résolution.":"every match of matchday {a} has finished: open the league to trigger the resolution.",
+  "Découvrir":"Reveal",
   "Voir les résultats":"See the results",
   "tes pronos ne sont pas validés.":"your picks aren't locked in.",
   "Clôture {a} · <b>{b}</b>":"Closes {a} · <b>{b}</b>",
@@ -6448,6 +6451,22 @@ async function loadHomeTodo(){
         homeTodo.push({lg:m.lg, pid:m.pid, kind:"resultats", jour:(m.lg.current_day|0)});
         return;                                             // une seule action par ligue à la fois
       }
+      /* ⚠️ v8.240 (bug vécu par Hervé, ligue 66NW7, capture à l'appui) — MATCHS TERMINÉS MAIS
+         JOURNÉE PAS ENCORE RÉSOLUE : rien ne déclenche la résolution en tâche de fond (aucune
+         tâche planifiée côté serveur, cf. `resolveRealIfReady`) — seul le fait d'OUVRIR la ligue
+         le fait. L'accueil ne le disait nulle part : le petit badge `🏁 résultats en attente`
+         (`phaseLigue`, ci-dessus) le laissait deviner, mais le badge vert `✅ à jour` juste à côté
+         disait le contraire — parce que `doitJouer` ne regarde QUE ce tableau `homeTodo`, qui ne
+         poussait rien dans cette situation précise (`current_day` n'avance qu'APRÈS résolution,
+         donc le contrôle « résultats non vus » ci-dessus, basé sur `current_day`, ne peut
+         structurellement pas la voir venir).
+         ⚠️ ON RÉUTILISE `ph`, PAS UN NOUVEAU CALCUL : `phaseLigue` sait déjà dire « tous les
+         matchs ont l'air finis » (`matchEtat`) — une deuxième version de cette même règle
+         divergerait tôt ou tard, exactement le défaut que ce bandeau corrige pour les autres cas. */
+      if(ph && ph.e==="🏁"){
+        homeTodo.push({lg:m.lg, pid:m.pid, kind:"declencher", jour:(m.lg.current_day|0)});
+        return;
+      }
       /* ⚠️ v8.96 (bug vécu par Hervé : « 47h pour faire mes pronos » alors qu'aucun match n'était
          encore choisi) — `duelDeadline` SANS FIXTURES RETOMBE SUR LE MINUTEUR DE LA FORMULE
          (day_started_at + sel+bet), PAS SUR « rien à faire ». Ce repli existe pour une bonne
@@ -6653,6 +6672,10 @@ function viewHome(){
     ? `<div class="alert-card good"><div class="ttl">🎁 ${t("Résultats à découvrir")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("la journée {a} est jouée, tu n'as pas encore vu le verdict.",{a:x.jour})}</div>
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Voir les résultats")}</button></div>`
+    : x.kind==="declencher"
+    ? `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats prêts à être révélés")}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tous les matchs de la journée {a} sont terminés : ouvre la ligue pour déclencher la résolution.",{a:(x.jour|0)+1})}</div>
+      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Découvrir")}</button></div>`
     : x.kind==="prep"
     ? `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("la préparation de la saison t'attend :")} ${x.label.e} ${esc(x.label.t)}.</div>
