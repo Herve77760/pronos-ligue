@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.262";
+const APP_VERSION = "v8.263";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5979,6 +5979,15 @@ function maybeRecapModal(dispDay){
   // arrive sur CETTE journée-là (au lancement des paris), après avoir vu les résultats de la précédente —
   // et non plus sur l'écran de résultats. On ne conditionne donc plus à `S.recap`.
   if(!L || !L.recap_note || L.recap_note.day!==dispDay) return;
+  /* ⚠️ v8.263 (bug vécu par Hervé, XXZQ3) — LE COMMENTAIRE CI-DESSUS DISAIT DÉJÀ L'INTENTION
+     (pronos de la journée suivante, pas résultats) mais rien ne la faisait respecter : `refresh()`
+     appelle cette fonction à CHAQUE sondage, sans jamais regarder `S.view` — elle s'ouvrait donc
+     sur n'importe quel écran ouvert au moment où la journée bascule, y compris Résultats (vécu :
+     ouverte alors qu'il regardait encore le récap de la journée précédente).
+     ⚠️ ON NE MARQUE PAS "VU" ICI SI LE MAUVAIS ÉCRAN EST OUVERT : le retour anticipé précède
+     l'écriture dans `localStorage` — le prochain sondage, une fois sur Pronos ou Classement,
+     retentera normalement au lieu d'avoir perdu sa seule chance de s'afficher. */
+  if(S.view!=="game" && S.view!=="standings") return;
   const key="pl_recapseen_"+L.id+"_"+dispDay+"_"+(S.myId||"?");
   try{ if(localStorage.getItem(key)) return; localStorage.setItem(key,"1"); }catch(e){}
   infoModal("💸", t("💸 Recapitalisation solidaire — J{a}",{a:dispDay+1}),
