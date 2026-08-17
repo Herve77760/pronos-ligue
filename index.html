@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.256";
+const APP_VERSION = "v8.257";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2111,6 +2111,15 @@ const SCORES_SHARED_TTL = 2*60*60*1000;    // 2 h — fréquence de mise à jour
    heures, pour TOUT LE MONDE. Une minute plus tard, le score s'affichait aussitôt. C'est ce qui
    rend le symptôme si irrégulier : parfois instantané, parfois deux heures. */
 const SCORES_PENDING_TTL = 15*60*1000;     // 15 min — tant qu'un résultat ATTENDU manque encore
+// ⚠️ v8.257 (demandé par Hervé) — AU TENNIS SEULEMENT, LE RETARD RALENTIT LA CADENCE APRÈS 1H.
+// Un match de foot/basket qui ne rend pas son score dans les 10-40 min normales (v8.28) reste rare :
+// le rythme de 15 min ci-dessus est acceptable même s'il traîne. Au tennis, un décalage (retard du
+// match précédent sur le court, pluie) est FRÉQUENT — vécu par Hervé le 2026-08-17 sur un match
+// reporté qui ne redevenait "connu" qu'au bout de 24h (STALE_MATCH_H), en repayant 2 crédits toutes
+// les 15 min tout du long. Passé 1h de retard, on retombe donc sur le rythme normal (2h) — la
+// fenêtre normale de publication (10-40 min) est largement dépassée, poursuivre à 15 min ne fait
+// plus que payer pour rien. Les 24h de STALE_MATCH_H restent inchangées : seule la CADENCE change.
+const TENNIS_RETARD_LENT_H = 1;            // h de retard au tennis avant de repasser à SCORES_SHARED_TTL
 const MATCH_DUREE_MIN   = 105;             // min. après le coup d'envoi avant d'espérer un résultat
 const CLAIM_TTL         = 2*60*1000;       // 2 min — si le client qui a pris le jeton meurt, un autre reprend
 
@@ -2231,8 +2240,11 @@ async function fetchRealResultsCached(sportKeys, enCours){
        ⚠️ ET IL S'ÉTEINT SEUL, grâce à la v8.27 : dès qu'un résultat est enregistré, son match sort
        d'`enCours`, donc le championnat repasse en cache long sans que personne n'ait à y penser. */
     const ko=enCours && enCours[k];
-    const attendu = (ko!=null && Date.now() >= ko + MATCH_DUREE_MIN*60000);
-    const c=await cacheRead("scores:"+k, attendu?SCORES_PENDING_TTL:SCORES_SHARED_TTL);
+    const retardMs = (ko!=null) ? (Date.now() - (ko + MATCH_DUREE_MIN*60000)) : null;
+    const attendu = (retardMs!=null && retardMs>=0);
+    // Tennis + retard > 1h : on repasse au rythme normal (2h) — voir TENNIS_RETARD_LENT_H ci-dessus.
+    const lent = attendu && k.startsWith("tennis_") && retardMs >= TENNIS_RETARD_LENT_H*3600000;
+    const c=await cacheRead("scores:"+k, (attendu&&!lent)?SCORES_PENDING_TTL:SCORES_SHARED_TTL);
     if(c){ Object.assign(out,c); continue; }
     // Trop tôt pour espérer un résultat → on ne dépense pas les 2 crédits. On ressert ce qu'on a.
     if(ko!=null && Date.now() < ko + MATCH_DUREE_MIN*60000){
