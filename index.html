@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.255";
+const APP_VERSION = "v8.256";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6576,11 +6576,24 @@ async function loadHomeTodo(){
       homeTodo.push({lg:m.lg, pid:m.pid, kind:"coulisses"});
     });
     // La trêve d'abord (c'est ce que `viewGame()` affiche en premier), puis les résultats à
-    // découvrir, puis une préparation à démarrer, puis « choisir ses matchs », puis les pronos
-    // par urgence, puis un rappel discret pour les Coulisses jamais visitées.
-    const rang={treve:0, resultats:1, prep:2, trevebid:2, choix:3, pronos:4, coulisses:5};
+    // découvrir (vus ou juste prêts à déclencher — même bonne nouvelle), puis une préparation à
+    // démarrer, puis « choisir ses matchs », puis les pronos par urgence, puis un rappel discret
+    // pour les Coulisses jamais visitées.
+    // ⚠️ `declencher` MANQUAIT ICI (repéré le 2026-08-17, sur XXZQ3 — signalé par Hervé : aucun
+    // bandeau n'apparaissait un matin où une journée finie attendait sa résolution). Sans entrée,
+    // `rang["declencher"]` valait `undefined` et le tri comparait des `NaN` — pas ce qui a fait
+    // disparaître le bandeau ce jour-là (voir plus bas), mais une vraie incohérence à corriger.
+    const rang={treve:0, resultats:1, declencher:1, prep:2, trevebid:2, choix:3, pronos:4, coulisses:5};
     homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
-  }catch(e){ homeTodo=[]; homePhase={}; }
+  }catch(e){
+    // ⚠️ v8.256 (bug vécu par Hervé sur XXZQ3, 2026-08-17) — NE PLUS TOUT EFFACER ICI. Avant : la
+    // moindre erreur pendant le chargement des ligues EN COURS (réseau qui coupe une seconde au
+    // réveil du téléphone, par exemple) effaçait aussi les bandeaux « préparation »/« trêve »/
+    // « ligue terminée » déjà calculés AVANT ce bloc, sans aucun message — l'accueil restait muet
+    // même après une longue attente, exactement le symptôme signalé. Une panne ici ne doit priver
+    // que des bandeaux qui EN DÉPENDENT (résultats/pronos des ligues en cours), pas de tout le
+    // reste déjà réussi.
+  }
   homeTodoLoaded=true; render();
   } finally { homeTodoLoading=false; }
 }
