@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.261";
+const APP_VERSION = "v8.262";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6391,6 +6391,18 @@ function phaseLigue(lg, duel, monPari){
     const parie=!!(monPari && Array.isArray(monPari.picks) && monPari.picks.length);
     return parie ? {e:"✅", t:t("pronos validés")} : {e:"⚠️", t:t("pronos à faire")};
   }
+  /* ⚠️ v8.262 (bug vécu par Hervé sur XXZQ3 : la clôture des pronos passée depuis un moment, le
+     bandeau restait muet) — EN SIMULÉ, LA CLÔTURE SUFFIT. `shouldAutoResolve()` (le vrai
+     déclencheur de la résolution, plus haut dans ce fichier) résout une journée fictive dès la
+     clôture des pronos (repli `allDuelsClosed()`) — SANS ATTENDRE que les matchs fictifs « se
+     jouent » (horaire décalé + durée, `fixtureKickoff`/`matchEtat`, pensés pour le RÉEL). Cette
+     fonction, elle, continuait de regarder `matchEtat` pour tout le monde : en simulé, ça revenait
+     à annoncer « 🕐 matchs à venir » pendant des heures alors que la résolution était déjà à
+     portée d'un simple clic sur la ligue.
+     ⚠️ `t0` VIENT D'ÊTRE FRANCHI (test juste au-dessus) : en simulé, `duelDeadline` renvoie LA
+     MÊME échéance pour tous les duels de la ligue (elle ignore les fixtures, cf. sa définition) —
+     donc la franchir revient exactement à `allDuelsClosed()`. Pas besoin de la recalculer. */
+  if(lg.data_mode!=="real") return {e:"🏁", t:t("résultats en attente")};
   const fx=duel.fixtures.filter(f=>f && !f.canceled);
   if(!fx.length) return null;
   if(fx.every(f=>matchEtat(f)==="fini")) return {e:"🏁", t:t("résultats en attente")};
