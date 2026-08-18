@@ -962,7 +962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.272";
+const APP_VERSION = "v8.273";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3536,6 +3536,9 @@ const EN={
   // v8.104 — même bandeau, pour les enchères de la trêve encore OUVERTES (pas la révélation).
   "c'est la trêve : les bonus sont remis en vente, à toi de miser.":"it's the truce: bonuses are back up for auction, place your bids.",
   "Faire mes enchères de la trêve":"Place my truce bids",
+  "Trêve prête à être conclue":"Truce ready to be closed",
+  "tes enchères sont validées, le délai est passé : ouvre la ligue pour attribuer les bonus et reprendre la saison.":"your bids are locked in, the deadline has passed: open the league to assign the bonuses and resume the season.",
+  "Conclure la trêve":"Close the truce",
   "— aucun":"— none",
   // v8.112 (relevé par Hervé sur FA8GL) — « Au départ — aucun » MENTAIT quand tout avait été perdu
   // à la trêve : le joueur avait bien gagné des bonus au lancement, il les a juste tous perdus,
@@ -6516,7 +6519,19 @@ async function loadHomeTodo(){
       return;
     }
     const s=m.lg.prep_summary||{}; const fait=!!((s.treve_st&&s.treve_st.done)||{})[m.pid];
-    if(!fait) homeTodo.push({lg:m.lg, pid:m.pid, kind:"trevebid"});
+    if(!fait){ homeTodo.push({lg:m.lg, pid:m.pid, kind:"trevebid"}); return; }
+    /* ⚠️ v8.273 (bug vécu par Hervé) — MÊME DÉFAUT QUE v8.240 SUR LES JOURNÉES RÉELLES, APPLIQUÉ À
+       LA TRÊVE. `resolveTreve()` (cf. `refresh()`) ne se déclenche que si quelqu'un a la ligue
+       OUVERTE au moment où la clôture est due (délai écoulé, ou tout le monde a enchéri) — aucune
+       tâche planifiée côté serveur. Une fois SES enchères validées (`fait`), le joueur qui
+       n'ouvre plus la ligue ne voyait plus AUCUN bandeau ici : ni « en attente », ni « c'est
+       prêt » — silence total, alors que la trêve n'attendait qu'un clic pour se conclure.
+       ⚠️ SEUL LE DÉLAI EST VÉRIFIABLE ICI, PAS « tout le monde a enchéri » : cette boucle ne
+       charge que MES ligues, pas les enchères des autres joueurs — même limite que documentée
+       plus haut pour le mode simulé (`phaseLigue`, résultats réels). Le délai suffit : c'est de
+       toute façon la condition qui finit TOUJOURS par devenir vraie, même si tout le monde a fini. */
+    const dl=s.treve_st&&s.treve_st.deadline;
+    if(dl && new Date(dl).getTime()<=Date.now()) homeTodo.push({lg:m.lg, pid:m.pid, kind:"trevedeclencher"});
   });
   /* ⚠️ v8.107 (bug vécu par Hervé : une ligue tout juste terminée, vue par l'admin, disparaissait
      du coup d'œil de l'AUTRE joueur — ni bandeau, ni « Tes ligues en cours », alors qu'il n'avait
@@ -6681,7 +6696,7 @@ async function loadHomeTodo(){
     // bandeau n'apparaissait un matin où une journée finie attendait sa résolution). Sans entrée,
     // `rang["declencher"]` valait `undefined` et le tri comparait des `NaN` — pas ce qui a fait
     // disparaître le bandeau ce jour-là (voir plus bas), mais une vraie incohérence à corriger.
-    const rang={treve:0, resultats:1, declencher:1, prep:2, trevebid:2, choix:3, pronos:4, coulisses:5};
+    const rang={treve:0, trevedeclencher:0, resultats:1, declencher:1, prep:2, trevebid:2, choix:3, pronos:4, coulisses:5};
     homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
   }catch(e){
     // ⚠️ v8.256 (bug vécu par Hervé sur XXZQ3, 2026-08-17) — NE PLUS TOUT EFFACER ICI. Avant : la
@@ -6836,6 +6851,10 @@ function viewHome(){
     ? `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("c'est la trêve : les bonus sont remis en vente, à toi de miser.")}</div>
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Faire mes enchères de la trêve")}</button></div>`
+    : x.kind==="trevedeclencher"
+    ? `<div class="alert-card good"><div class="ttl">🔄 ${t("Trêve prête à être conclue")}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tes enchères sont validées, le délai est passé : ouvre la ligue pour attribuer les bonus et reprendre la saison.")}</div>
+      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Conclure la trêve")}</button></div>`
     : x.kind==="choix"
     ? `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${x.auto
