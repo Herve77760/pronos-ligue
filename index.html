@@ -513,6 +513,14 @@
   .hero-amount{font-size:26px;font-weight:800;letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1;margin-top:10px;display:flex;align-items:baseline;gap:5px;}
   .hero-amount .cur{font-size:15px;font-weight:700;opacity:.85;}
   .hero-amount .lbl{font-size:11px;font-weight:700;opacity:.75;margin-left:2px;}
+  /* ⚠️ v8.271 (bug vécu par Hervé, vidéo à l'appui) — LE CÔTÉ DU DUEL SE LIT AUSSI ICI, pas
+     seulement en haut. v8.269 a rangé les avatars par côté de terrain (domicile/extérieur), mais
+     ce bloc (mon propre gain net, mes points de duel) restait planté à gauche : à l'extérieur, mon
+     avatar passait à droite pendant que MES chiffres restaient sous l'avatar adverse — le même
+     défaut que v8.269 corrigeait plus haut, laissé intact ici. `.away` bascule ces trois blocs à
+     droite ; `text-align` pour `.hero-result` (bloc simple), `justify-content` pour les deux flex. */
+  .hero-result.away{text-align:right;}
+  .hero-amount.away,.hero-points.away{justify-content:flex-end;}
   .hero-points{display:flex;align-items:baseline;gap:9px;margin-top:6px;}
   .hero-points .num{font-size:40px;font-weight:900;letter-spacing:-.02em;line-height:.85;font-variant-numeric:tabular-nums;}
   .hero-points .lbl{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;opacity:.85;}
@@ -954,7 +962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.270";
+const APP_VERSION = "v8.271";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -10111,9 +10119,9 @@ function recapBody(D){
       ${oppId==null?blocMoi
         :(fpIsHome?blocMoi:blocAdv)+`<span class="vsx">${t("vs")}</span>`+(fpIsHome?blocAdv:blocMoi)}
     </div>
-    ${oppId!=null?`<div class="hero-result clik" id="recapResult" onclick="showDuelPtsInfo('${fp}')" title="${t("Comment ces points sont attribués")}">${st0.revealed?st0.resultText:`${calcTxt}<span class="dots"><i></i><i></i><i></i></span>`}</div>`:''}
-    <div class="hero-amount clik" onclick="showGainDetail('${fp}')" title="${t("Comment ce montant est calculé")}"><span id="recapAmtVal">${fmt(st0.amt)}</span><span class="cur">€</span><span class="lbl">${t("gain net")}</span></div>
-    ${oppId!=null?`<div class="hero-points"><span class="num" id="recapPtsVal">${Math.round(st0.pts)}</span><span class="lbl">${t("Points de duel")}</span></div>`:''}
+    ${oppId!=null?`<div class="hero-result clik${fpIsHome?'':' away'}" id="recapResult" onclick="showDuelPtsInfo('${fp}')" title="${t("Comment ces points sont attribués")}">${st0.revealed?st0.resultText:`${calcTxt}<span class="dots"><i></i><i></i><i></i></span>`}</div>`:''}
+    <div class="hero-amount clik${fpIsHome?'':' away'}" onclick="showGainDetail('${fp}')" title="${t("Comment ce montant est calculé")}"><span id="recapAmtVal">${fmt(st0.amt)}</span><span class="cur">€</span><span class="lbl">${t("gain net")}</span></div>
+    ${oppId!=null?`<div class="hero-points${fpIsHome?'':' away'}"><span class="num" id="recapPtsVal">${Math.round(st0.pts)}</span><span class="lbl">${t("Points de duel")}</span></div>`:''}
     <div class="hero-reveal${st0.extra?' show':''}" id="recapExtra">
     <div class="hero-meta">
       ${capInfo?`<span class="m">${t("capital")} <b>${eur(capInfo.cap)} €</b></span>`:''}
