@@ -962,7 +962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.271";
+const APP_VERSION = "v8.272";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4220,12 +4220,13 @@ const EN={
   "✅ gagnée":"✅ won", " ⚡ le + rapide":" ⚡ fastest", "↩︎ remboursée":"↩︎ refunded",
   "🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.":"🏁 Tie at {a}€ → settled by speed: the first to bid that amount wins.",
   "Personne n'a misé sur les bonus — tout le monde démarre à 100 €.":"Nobody bid on the bonuses — everyone starts at 100 €.",
+  "Personne n'a misé sur les bonus de la trêve — les {a} € de chacun sont perdus.":"Nobody bid on the truce bonuses — everyone's €{a} is lost.",
   "😶 Sans acquéreur":"😶 No takers",
   "Personne n'a misé dessus : ces <b>{a}</b> bonus restent <b>hors jeu toute la saison</b>. Aucun joueur ne peut en obtenir un — les échanges ne font que déplacer les bonus déjà attribués.":"Nobody bid on them: these <b>{a}</b> bonuses stay <b>out of play for the whole season</b>. No player can ever get one — trades only move bonuses that were already handed out.",
   // v8.113 — même bloc, ligue AVEC trêve : les invendus du départ repassent aux enchères à la trêve.
   "Personne n'a misé dessus au départ : ces <b>{a}</b> bonus restent hors jeu <b>jusqu'à la trêve</b>, où ils seront de nouveau proposés aux enchères.":"Nobody bid on them at the start: these <b>{a}</b> bonuses stay out of play <b>until the truce</b>, where they'll be auctioned again.",
   "Personne n'a misé dessus : ces bonus sont restés <b>hors jeu</b>. Cette ligue est antérieure à l'enregistrement des bonus proposés — la liste est reconstituée à partir du jeu actuel, elle peut donc être approximative.":"Nobody bid on them: these bonuses stayed <b>out of play</b>. This league predates the recording of which bonuses were offered — the list is rebuilt from the current set, so it may be approximate.",
-  "💰 Capital de départ":"💰 Starting capital", "Dépensé":"Spent", "Capital":"Capital",
+  "💰 Capital de départ":"💰 Starting capital", "Dépensé":"Spent", "Capital":"Capital", "💰 Bonus obtenus à la trêve":"💰 Bonuses won at the truce",
   // — v7.80 : le détail du capital (colonne « Cap. » du classement, rendue cliquable) —
   "Le capital":"The balance", "Résultat":"Result", "Détail du capital":"Balance breakdown",
   "Au classement actuel, elle irait à <b>{a}</b> — rien n'est joué.":"On the current standings it would go to <b>{a}</b> — nothing is settled yet.",
@@ -4244,6 +4245,10 @@ const EN={
   "🙈 <b>Les abstentionnistes :</b> {N} n'ont misé sur aucun bonus — 100 € intacts pour chacun.":"🙈 <b>The abstainers:</b> {N} bid on no bonus — €100 intact each.",
   "🧘 <b>Les zen :</b> {N} ont snobé les enchères. Pari sur le talent pur !":"🧘 <b>The zen ones:</b> {N} snubbed the auction. Betting on pure skill!",
   "🪙 <b>Les prudents :</b> {N} gardent leurs 100 € — aucun bonus acheté.":"🪙 <b>The cautious ones:</b> {N} keep their €100 — no bonus bought.",
+  "🧘 <b>Le zen :</b> {N} a snobé les enchères de la trêve. Zéro bonus, {a} € perdus.":"🧘 <b>The zen one:</b> {N} snubbed the truce auction. Zero bonuses, €{a} lost.",
+  "💨 <b>L'étourdi :</b> {N} laisse filer ses {a} € de la trêve : aucun bonus acheté.":"💨 <b>The scatterbrain:</b> {N} lets their €{a} truce money slip away: no bonus bought.",
+  "🙈 <b>Les abstentionnistes :</b> {N} n'ont misé sur aucun bonus — {a} € perdus pour chacun.":"🙈 <b>The abstainers:</b> {N} bid on no bonus — €{a} lost each.",
+  "💨 <b>Les étourdis :</b> {N} laissent filer leurs {a} € de la trêve — aucun bonus acheté.":"💨 <b>The scatterbrains:</b> {N} let their €{a} truce money slip away — no bonus bought.",
   "🧠 <b>Le stratège :</b> {N} — a raflé <b>{w}</b> bonus sur {b} visé{s}. Chirurgical.":"🧠 <b>The strategist:</b> {N} — snagged <b>{w}</b> out of {b} targeted. Surgical.",
   "🎯 <b>Le sniper des enchères :</b> {N} — {w} bonus décroché{w1} sur {b} tenté{s}. Redoutable.":"🎯 <b>The auction sniper:</b> {N} — {w} landed out of {b} attempts. Deadly.",
   "🧠 <b>Le cerveau :</b> {N} avait tout calculé — <b>{w}</b> bonus dans la poche. Personne n'a rien vu venir.":"🧠 <b>The mastermind:</b> {N} had it all worked out — <b>{w}</b> in the bag. Nobody saw it coming.",
@@ -7274,7 +7279,7 @@ function viewGame(){
 }
 function prepSeen(){ return localStorage.getItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"))==="1"; }
 function ackPrep(){ localStorage.setItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"),"1"); render(); }
-function prepSuperlatives(s){
+function prepSuperlatives(s, treve){
   const auction=s.auction||[]; const ps=(s.players||[]);
   if(ps.length<2 || !auction.length) return '';
   const nm=pid=>{const p=ps.find(x=>x.pid===pid)||{}; return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
@@ -7339,7 +7344,21 @@ function prepSuperlatives(s){
   const zero=ps.filter(p=>st[p.pid].bids===0);
   if(zero.length){ const noms=zero.map(p=>nm(p.pid));
     const N=(noms.length===1)?noms[0]:(noms.slice(0,-1).join(', ')+t(" et ")+noms[noms.length-1]);
-    items.push(pickV((zero.length===1)?[
+    /* ⚠️ v8.272 (bug vécu par Hervé) — À LA TRÊVE, L'ARGENT NON DÉPENSÉ EST PERDU, PAS « INTACT ».
+       Les 40 € de la trêve ne sortent pas de la cagnotte (cf. viewTreve) : ne pas les dépenser ne
+       les préserve pas, ils disparaissent. Réutiliser « intacts »/« garde »/« gardent » — vrai au
+       départ, où l'argent non misé RESTE dans le capital de pari — les aurait donc fait mentir
+       ici. D'où deux jeux de phrases distincts, pas seulement un montant qui change. */
+    items.push(treve ? pickV((zero.length===1)?[
+      t("🙈 <b>L'abstentionniste :</b> {N} n'a misé sur aucun bonus — pari sur le talent pur !",{N}),
+      t("🧘 <b>Le zen :</b> {N} a snobé les enchères de la trêve. Zéro bonus, {a} € perdus.",{N,a:SHOP_CAP}),
+      t("🎭 <b>Le puriste :</b> pas un euro de bonus pour {N} — rien que du flair.",{N}),
+      t("💨 <b>L'étourdi :</b> {N} laisse filer ses {a} € de la trêve : aucun bonus acheté.",{N,a:SHOP_CAP})
+    ]:[
+      t("🙈 <b>Les abstentionnistes :</b> {N} n'ont misé sur aucun bonus — {a} € perdus pour chacun.",{N,a:SHOP_CAP}),
+      t("🧘 <b>Les zen :</b> {N} ont snobé les enchères. Pari sur le talent pur !",{N}),
+      t("💨 <b>Les étourdis :</b> {N} laissent filer leurs {a} € de la trêve — aucun bonus acheté.",{N,a:SHOP_CAP})
+    ],'Z'+zero.length) : pickV((zero.length===1)?[
       t("🙈 <b>L'abstentionniste :</b> {N} n'a misé sur aucun bonus — pari sur le talent pur !",{N}),
       t("🧘 <b>Le zen :</b> {N} a snobé les enchères. Zéro bonus, 100 € intacts.",{N}),
       t("🎭 <b>Le puriste :</b> pas un euro de bonus pour {N} — rien que du flair.",{N}),
@@ -7393,7 +7412,7 @@ function enjeuTableHTML(r){
    à maintenir, qui auraient fini par diverger — exactement le défaut que ce fichier corrige sans
    cesse. `pName` est passé en argument plutôt que recalculé : le tour de la trêve n'a pas la même
    liste de joueurs sous la main que `s.players` (paiement à 0, capital non touché). */
-function auctionRoundHTML(auction, pName){
+function auctionRoundHTML(auction, pName, treve){
   return (auction||[]).length ? (auction||[]).map(a=>`<div class="auc-row">
       <div class="auc-head">
         <div class="auc-ic clik" title="${esc(t(CARDS[a.card].d))}" onclick="showCardInfo('${a.card}')">${CARDS[a.card].e}</div>
@@ -7401,7 +7420,31 @@ function auctionRoundHTML(auction, pName){
         <div class="auc-win"><div class="who">${pName(a.winner)}</div><div class="amt">${a.amount} €</div></div>
       </div>
       <div class="auc-bids">${t("Enchères :")} ${a.bids.map(bd=>`<span class="bid${bd.pid===a.winner?' win':''}">${pName(bd.pid)} <b>${bd.amt}€</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}</span>`).join('')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold">${t("🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:a.amount})}</span>`:''}</div></div>`).join("")
-    : `<div class="box mini muted">${t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`;
+    /* ⚠️ v8.272 (demandé par Hervé) — LE TEXTE À VIDE DIFFÈRE SELON LE CONTEXTE, pas seulement le
+       montant : à la trêve, personne ne « démarre » à 40 € — c'est une allocation en plus de la
+       vraie cagnotte (cf. viewTreve). Et surtout, ne pas la dépenser ne la PRÉSERVE pas — cet
+       argent-là est PERDU s'il n'est pas misé, pas « intact » comme au départ où il rejoint le
+       capital de pari. Même piège que les superlatifs ci-dessous, qui réutilisaient tous « 100 € »
+       et « intacts » sans regarder d'où l'appel venait. */
+    : `<div class="box mini muted">${treve
+        ? t("Personne n'a misé sur les bonus de la trêve — les {a} € de chacun sont perdus.",{a:SHOP_CAP})
+        : t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`;
+}
+/* ⚠️ v8.272 (demandé par Hervé, écran de fin de trêve) — IL MANQUAIT UN RÉCAP DES BONUS OBTENUS,
+   sur le principe du « 💰 Capital de départ » de `prepSummaryBody()` (qui a servi de modèle) —
+   mais SANS colonne Capital : cet argent-là ne touche pas la vraie cagnotte (cf. viewTreve), donc
+   « combien il te reste » n'a pas de sens ici comme au départ. Seuls Dépensé (sur les `cap` €
+   alloués) et les bonus effectivement remportés comptent.
+   ⚠️ CALCULÉ DEPUIS `auction`, PAS `players` : même raison que `pName` dans `auctionRoundHTML`
+   juste au-dessus — `s.players` (figé à la création de la ligue) ne reflète pas ce tour-ci. */
+function treveCapTableHTML(auction, players){
+  const won={}, spent={}; players.forEach(p=>{ won[p.pid]=[]; spent[p.pid]=0; });
+  (auction||[]).forEach(a=>{ if(won[a.winner]==null) return; won[a.winner].push(a.card); spent[a.winner]+=(+a.amount||0); });
+  return `<div class="listsec">${t("💰 Bonus obtenus à la trêve")}</div>
+   <div class="table-wrap"><table class="cap-table"><tr><th>${t("Joueur")}</th><th>${t("Dépensé")}</th><th>${t("Bonus")}</th></tr>
+     ${players.map(p=>`<tr><td><span class="pname">${avaName(p)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</span></td>
+        <td class="muted">${spent[p.pid]||0}€</td>
+        <td><span class="hand">${(won[p.pid]||[]).length?(won[p.pid]||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(''):'<span class="none">–</span>'}</span></td></tr>`).join("")}</table></div>`;
 }
 function prepSummaryBody(){
   const s=L.prep_summary||{}; const both=(s.enjeu==="both");
@@ -7479,8 +7522,9 @@ function viewTreveSummary(){
   return `<div class="box"><div class="boxttl">🔄 ${t("La trêve est terminée")}</div>
       <div class="mini muted">${t("Voici qui a remporté quoi à la mi-saison — jette un œil avant de reprendre.")}</div></div>
     <div class="listsec">${t("🃏 Enchères de la trêve — bonus attribués")}</div>
-    ${auctionRoundHTML(st.auction, pName)}
-    ${prepSuperlatives({auction:st.auction, players:s.players||[]})}
+    ${auctionRoundHTML(st.auction, pName, true)}
+    ${treveCapTableHTML(st.auction, s.players||[])}
+    ${prepSuperlatives({auction:st.auction, players:s.players||[]}, true)}
     <button class="btn" onclick="ackTreveResult()">${t("La saison reprend →")}</button>`;
 }
 function viewPrepSummary(){
@@ -7531,7 +7575,8 @@ function viewCoulisses(){
      const pName=pid=>{const p=pById(pid)||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
      const perdusHTML=Object.keys(st.perdus||{}).length ? `<div class="box mini muted"><b>${t("😶 Perdus à la trêve")}</b>
        ${Object.entries(st.perdus).map(([pid,ids])=>`<div style="margin-top:4px">${pName(pid)} : ${ids.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(', ')}</div>`).join('')}</div>` : '';
-     return `<div class="listsec">${t("🔄 Enchères — à la trêve (mi-saison)")}</div>${auctionRoundHTML(st.auction, pName)}${perdusHTML}${prepSuperlatives({auction:st.auction, players:(L.prep_summary&&L.prep_summary.players)||[]})}`; })()}
+     const trevePlayers=(L.prep_summary&&L.prep_summary.players)||[];
+     return `<div class="listsec">${t("🔄 Enchères — à la trêve (mi-saison)")}</div>${auctionRoundHTML(st.auction, pName, true)}${treveCapTableHTML(st.auction, trevePlayers)}${perdusHTML}${prepSuperlatives({auction:st.auction, players:trevePlayers}, true)}`; })()}
    ${(L.prep_summary && L.status==="running")?`<button class="btn" onclick="goGame()">⚽ ${t("Aller aux pronos →")}</button>`:''}`;
 }
 // Choix du format en SOLO : 1 ou 2 allers-retours contre l'IA (2 ou 4 journées).
