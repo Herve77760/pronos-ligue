@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.265";
+const APP_VERSION = "v8.266";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3738,7 +3738,7 @@ const EN={
   "Choisi par <b>{a}</b>.":"Chosen by <b>{a}</b>.", "Choisie par <b>{a}</b>.":"Chosen by <b>{a}</b>.",
   "Voir le classement journée par journée":"See the standings matchday by matchday",
   "Revenir au bilan de la ligue":"Back to the league summary",
-  "📋 Résultats · J{a}":"📋 Results · MD{a}", "Les affiches du jour":"Today's fixtures", "vs":"vs", "Toi":"You", "Les 5 matchs ne sont pas encore choisis.":"The 5 matches haven't been picked yet.",
+  "📋 Résultats · J{a}":"📋 Results · MD{a}", "Les affiches du jour":"Today's fixtures", "vs":"vs", "Toi":"You", "Qui a validé la trêve ?":"Who has confirmed the truce?", "Les 5 matchs ne sont pas encore choisis.":"The 5 matches haven't been picked yet.",
   "Journée en cours.":"Matchday in progress.",
   // v8.71 — pourquoi rien n'est visible tant que TON premier match n'a pas commencé.
   "Rien n'est visible pour l'instant — ni les résultats, ni les pronos des autres. Tout dépend du <b>coup d'envoi de ton premier match</b>, {a} : avant lui, ton pari peut encore changer, et voir le pari de quelqu'un qui peut encore le modifier serait un avantage, pas une information.":"Nothing is visible yet — neither the results nor anyone else's picks. It all hinges on the <b>kick-off of your first match</b>, {a}: until then your bet can still change, and seeing a bet that can still be changed would be an advantage, not information.",
@@ -8057,6 +8057,14 @@ function bidsSame(a,b){ const ka=Object.keys(a||{}).filter(k=>+a[k]>0), kb=Objec
    main vidée sans explication croit à un bug — c'est la première chose qu'il verra.
    ⚠️ `bidL` EST PARTAGÉ avec l'écran de préparation. On le recharge sur `S.bidLLeague` en y
    mêlant la phase, sinon on rouvrirait la trêve avec les mises du départ déjà inscrites. */
+// Détail des joueurs prêts à la trêve (demandé par Hervé, 2026-08-18) — même principe que le
+// statut de préparation de départ (prepRosterHTML) : le nombre seul ne dit pas QUI reste à attendre.
+function showTrevePretsInfo(){
+  const st=treveState()||{}; const humans=players.filter(p=>!p.is_ai);
+  const rows=humans.map(p=>{ const ok=!!(st.done||{})[p.id];
+    return `<div class="row" style="justify-content:space-between;margin:4px 0"><span>${avatarHTML(p.emoji)} ${esc(p.name||'?')}</span><b>${ok?'✅':'⏳'}</b></div>`; }).join('');
+  infoModal("🔄", t("Qui a validé la trêve ?"), `<div class="mini muted" style="text-align:left">${rows}</div>`);
+}
 function viewTreve(){
   const meP=me(); if(!meP) return `<div class="box">…</div>`;
   const st=treveState()||{}; const dejaFait=!!(st.done||{})[S.myId];
@@ -8073,7 +8081,7 @@ function viewTreve(){
       <div class="mini" style="line-height:1.6">${t("La saison s'arrête le temps d'un transfert. <b>Tous les bonus non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> pour racheter parmi <b>tous</b> les bonus.",{a:SHOP_CAP})}</div>
       <div class="mini muted" style="margin-top:6px;line-height:1.6">${t("Ces {a} € ne sortent pas de ta cagnotte, et <b>ce que tu ne dépenses pas est perdu</b>. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.",{a:SHOP_CAP,b:maxCards})}</div>
       ${perdus.length?`<div class="mini" style="margin-top:8px;color:var(--red)">${t("Perdus à la trêve :")} ${perdus.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(' · ')}</div>`:''}
-      <div class="mini muted" style="margin-top:8px">⏳ ${t("Reprise dans {a} au plus tard — ou dès que tout le monde a validé.",{a:fmtLeft(st.deadline)})} · <b>${prets}/${humans.length}</b> ${t("prêts")}</div></div>
+      <div class="mini muted" style="margin-top:8px">⏳ ${t("Reprise dans {a} au plus tard — ou dès que tout le monde a validé.",{a:fmtLeft(st.deadline)})} · <span class="clik" onclick="showTrevePretsInfo()"><b>${prets}/${humans.length}</b> ${t("prêts")} <span style="opacity:.6">ⓘ</span></span></div></div>
     <div class="box"><div class="row mini"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b> / ${maxCards} ${t("bonus")}</span></div>
       <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport clik" onclick="showCardInfo('${id}')">${CARDS[id].e}</span>
