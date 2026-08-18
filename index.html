@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.268";
+const APP_VERSION = "v8.269";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -10077,13 +10077,25 @@ function recapBody(D){
     };
     requestAnimationFrame(frame);
   }
+  /* ⚠️ v8.269 (demandé par Hervé) — LE DOMICILE EST À GAUCHE, COMME PARTOUT AILLEURS SUR L'ÉCRAN.
+     Le joueur suivi occupait toujours la case de gauche. Quand il jouait à l'EXTÉRIEUR, l'entête
+     le montrait donc à gauche pendant que « ⚔️ Le duel en détail » juste en dessous — les deux
+     lignes de pronos (🏠 puis ✈️), la jauge de gain net et les deux nets du pied — le donnaient
+     à droite. Deux lectures opposées du même duel sur un même écran : on suit un avatar des yeux
+     et il change de côté en cours de page.
+     On range donc les deux blocs par CÔTÉ DE TERRAIN, jamais par identité.
+     ⚠️ LES ID NE BOUGENT PAS (`recapDuelistMe` / `recapDuelistOpp`) : la boucle de révélation les
+     retrouve par `getElementById` pour poser `win-side` / `lose-side`. Seul l'ORDRE change — et
+     `.faceoff` étant un flex centré, aucun style ne suppose un côté. */
+  const fpIsHome = !myD || myD.home_id===fp;   // pas de duel ce jour-là → on garde la gauche
+  const blocMoi = `<div class="duelist${st0.revealed?' '+meSideClass:''}" id="recapDuelistMe"><span class="ava">${avatarHTML(fpP.emoji,96)}</span><span class="who">${isMe?t("Toi"):esc(fpName)}</span></div>`;
+  const blocAdv = oppId!=null?`<div class="duelist${st0.revealed?' '+oppSideClass:''}" id="recapDuelistOpp"><span class="ava">${avatarHTML(pById(oppId).emoji,96)}</span><span class="who">${esc(oppName)}</span>
+        <span class="opp-stat" id="recapOppStat"><span class="opp-amount" id="recapOppAmt">${fmt(st0.oppAmt)}€</span><span class="opp-pts" id="recapOppPts">${fmtOppPts(st0.oppPts)}</span></span></div>`:'';
   return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}<div class="hero ${st0.revealed?heroOutcomeClass:''}${heroFresh?' rise':''}" id="recapHero">
     ${!isMe?`<button class="hero-back" onclick="setRecapFocus('')">${t("← Revenir à mes résultats")}</button>`:''}
     <div class="faceoff">
-      <div class="duelist${st0.revealed?' '+meSideClass:''}" id="recapDuelistMe"><span class="ava">${avatarHTML(fpP.emoji,96)}</span><span class="who">${isMe?t("Toi"):esc(fpName)}</span></div>
-      ${oppId!=null?`<span class="vsx">${t("vs")}</span>
-      <div class="duelist${st0.revealed?' '+oppSideClass:''}" id="recapDuelistOpp"><span class="ava">${avatarHTML(pById(oppId).emoji,96)}</span><span class="who">${esc(oppName)}</span>
-        <span class="opp-stat" id="recapOppStat"><span class="opp-amount" id="recapOppAmt">${fmt(st0.oppAmt)}€</span><span class="opp-pts" id="recapOppPts">${fmtOppPts(st0.oppPts)}</span></span></div>`:''}
+      ${oppId==null?blocMoi
+        :(fpIsHome?blocMoi:blocAdv)+`<span class="vsx">${t("vs")}</span>`+(fpIsHome?blocAdv:blocMoi)}
     </div>
     ${oppId!=null?`<div class="hero-result clik" id="recapResult" onclick="showDuelPtsInfo('${fp}')" title="${t("Comment ces points sont attribués")}">${st0.revealed?st0.resultText:`${calcTxt}<span class="dots"><i></i><i></i><i></i></span>`}</div>`:''}
     <div class="hero-amount clik" onclick="showGainDetail('${fp}')" title="${t("Comment ce montant est calculé")}"><span id="recapAmtVal">${fmt(st0.amt)}</span><span class="cur">€</span><span class="lbl">${t("gain net")}</span></div>
