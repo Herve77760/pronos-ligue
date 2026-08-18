@@ -947,7 +947,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.267";
+const APP_VERSION = "v8.268";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -13648,6 +13648,12 @@ async function cancelTrade(id){ await markTrade(id,"cancelled",null); infoWin(t(
 let ttStep=0, ttSel=[], ttPicks={}, ttMises={}, ttFav=null, ttBonus=null, ttCible=null;
 let ttEnch={}, ttGagnes=[], ttOffert=null;
 let ttT=[], ttManuel=false, ttEnAuto=false, ttAutoCourant=null, ttSeq=false;
+/* ⚠️ `ttManuel` ne vaut QUE pour l'écran en cours : `ttGo` le remet à faux, sinon revenir
+   sur un écran n'y rejouerait plus rien. Il fallait donc une mémoire qui SURVIVE à la
+   navigation, sans quoi la démo effaçait la journée composée par le joueur dès qu'il
+   faisait « ← Précédent » (v8.268). D'où ces deux drapeaux : ce qu'il a choisi lui-même
+   ne se réécrit plus, la démo se contente de COMPLÉTER ce qui manque. */
+let ttSelManuel=false, ttSaisiManuel=false;
 
 const TT_NB=5;              // le joueur pioche 5 matchs
 const TT_MISE_BASE=2;       // les mises PARTENT de là et montent sous les yeux
@@ -13657,20 +13663,37 @@ const TT_AV_MOI="avimg:0", TT_AV_LEA="avimg:3";
 /* Le vivier : 9 affiches dont 7 de football, comme POOL_N / POOL_FOOT. Le nul n'existe
    QUE là où le sport en a un — même test que le jeu (`f.draw ? "N" : ""`). */
 const TT_MATCHS=[
- {i:0,s:"⚽",h:"Lyon",     a:"Nantes",      dr:1,o:{"1":1.85,"N":3.40,"2":4.10},r:"1",sc:"2–1"},
- {i:1,s:"⚽",h:"Marseille",a:"Lens",        dr:1,o:{"1":2.40,"N":3.20,"2":2.95},r:"2",sc:"0–1"},
- {i:2,s:"🏀",h:"ASVEL",    a:"Monaco",      dr:0,o:{"1":1.60,"2":2.35},         r:"1",sc:"88–79"},
- {i:3,s:"⚽",h:"Rennes",   a:"Toulouse",    dr:1,o:{"1":2.10,"N":3.30,"2":3.55},r:"1",sc:"3–0"},
- {i:4,s:"🎾",h:"Humbert",  a:"Rune",        dr:0,o:{"1":2.75,"2":1.45},         r:"2",sc:"1–2"},
- {i:5,s:"⚽",h:"Lille",    a:"Brest",       dr:1,o:{"1":1.72,"N":3.60,"2":4.60},r:"N",sc:"1–1"},
- {i:6,s:"⚽",h:"Nice",     a:"Strasbourg",  dr:1,o:{"1":1.95,"N":3.35,"2":3.90},r:"2",sc:"1–2"},
- {i:7,s:"⚽",h:"PSG",      a:"Monaco",      dr:1,o:{"1":1.40,"N":4.80,"2":7.20},r:"1",sc:"3–1"},
- {i:8,s:"⚽",h:"Auxerre",  a:"Le Havre",    dr:1,o:{"1":2.05,"N":3.25,"2":3.70},r:"1",sc:"2–0"}];
+ {i:0,s:"⚽",h:"Lyon",     a:"Nantes",      dr:1,o:{"1":1.85,"N":3.40,"2":4.10},r:"1",dv:"1",sc:"2–1"},
+ {i:1,s:"⚽",h:"Marseille",a:"Lens",        dr:1,o:{"1":2.40,"N":3.20,"2":2.95},r:"2",dv:"2",sc:"0–1"},
+ {i:2,s:"🏀",h:"ASVEL",    a:"Monaco",      dr:0,o:{"1":1.60,"2":2.35},         r:"1",dv:"2",sc:"88–79"},
+ {i:3,s:"⚽",h:"Rennes",   a:"Toulouse",    dr:1,o:{"1":2.10,"N":3.30,"2":3.55},r:"1",dv:"1",sc:"3–0"},
+ {i:4,s:"🎾",h:"Humbert",  a:"Rune",        dr:0,o:{"1":2.75,"2":1.45},         r:"2",dv:"1",sc:"1–2"},
+ {i:5,s:"⚽",h:"Lille",    a:"Brest",       dr:1,o:{"1":1.72,"N":3.60,"2":4.60},r:"N",dv:"N",sc:"1–1"},
+ {i:6,s:"⚽",h:"Nice",     a:"Strasbourg",  dr:1,o:{"1":1.95,"N":3.35,"2":3.90},r:"2",dv:"2",sc:"1–2"},
+ {i:7,s:"⚽",h:"PSG",      a:"Monaco",      dr:1,o:{"1":1.40,"N":4.80,"2":7.20},r:"1",dv:"1",sc:"3–1"},
+ {i:8,s:"⚽",h:"Auxerre",  a:"Le Havre",    dr:1,o:{"1":2.05,"N":3.25,"2":3.70},r:"1",dv:"2",sc:"2–0"}];
 
-/* Le scénario. Choisi POUR enseigner : 4 foot sur 5, des issues variées (deux « 1 », un
-   nul, deux extérieurs), cinq mises TOUTES DIFFÉRENTES qui s'arrêtent SOUS le plafond,
-   et un pari perdu sur cinq — sans défaite on n'apprend rien. */
-const TT_PLAN=[{i:0,v:"1",m:10},{i:3,v:"1",m:7},{i:5,v:"N",m:5},{i:6,v:"2",m:4},{i:2,v:"2",m:3}];
+/* ⚠️ `dv` — LE PRONO DE DÉMO, UN PAR AFFICHE, LES NEUF COMPRISES (v8.268). Il n'existait
+   que pour les cinq du scénario : dès que le joueur composait SA journée, l'écran suivant
+   n'avait plus rien à poser et le restait vide. Trois `dv` sur neuf sont PERDANTS
+   (ASVEL, Humbert, Auxerre) : quel que soit le quintette, la démo a 95 % de chances de
+   montrer au moins une défaite — et sans défaite on n'apprend rien.
+   ⚠️ Un `dv` doit exister dans les issues de SON affiche : pas de "N" là où `dr:0`. */
+
+/* Le scénario par défaut : QUELLES affiches la démo pioche quand le joueur la laisse
+   faire. Choisi POUR enseigner : 4 foot sur 5, des issues variées (deux « 1 », un nul,
+   deux extérieurs) et un pari perdu sur cinq.
+   ⚠️ IL NE DIT PLUS QUE L'ORDRE DE SÉLECTION (v8.268). Le prono vient de `dv`, propre à
+   l'AFFICHE ; la mise de TT_MISES, propre au RANG. C'est ce qui rend la démo rejouable
+   sur n'importe quel choix du joueur, et pas seulement sur ces cinq-là. */
+const TT_PLAN=[0,3,5,6,2];
+
+/* Les mises de la démo, par RANG de sélection et non par match : quel que soit le
+   quintette retenu, le total fait 29 € — sous le plafond MÊME DANS LE PIRE CAS
+   (100 € − 40 € de bonus remportés → plafond 30 €). Les attacher aux matchs ferait
+   buter la démo sur le plafond dès que le joueur en choisit cinq « chers », et
+   `ttDm` s'arrête alors en silence : des mises tronquées, sans rien pour le dire. */
+const TT_MISES=[10,7,5,4,3];
 
 /* Trois cartes du jeu. La plus forte part au plus offrant de la ligue : le joueur la
    perd, et apprend que la meilleure carte est la plus disputée.
@@ -13709,7 +13732,12 @@ const ttM=i=>TT_MATCHS[i];
 const ttIssues=m=>["1",m.dr?"N":"","2"].filter(Boolean);
 const ttNomIssue=(m,v)=>v==="1"?m.h:v==="2"?m.a:t("Nul");
 const ttCarte=id=>CARDS[id];                      // les vraies fiches du jeu
-const ttPlanM=i=>{const p=TT_PLAN.filter(x=>x.i===i)[0];return p?p.m:TT_MISE_BASE;};
+const ttDemoV=i=>ttM(i).dv;                    // le prono que la démo pose sur CETTE affiche
+const ttDemoM=k=>TT_MISES[k]||TT_MISE_BASE;    // la mise du RANG k dans la sélection
+/* Le 👑 de la démo : la plus grosse mise du moment, jamais un match écrit en dur. Sur la
+   sélection par défaut c'est la première affiche — et ça reste juste si le joueur a tout
+   changé, ou s'il a remonté une mise à la main. */
+const ttDemoFav=()=>ttSel.length?ttSel.slice().sort((a,b)=>ttMise(b)-ttMise(a))[0]:null;
 
 const ttMise=i=>ttMises[i]==null?TT_MISE_BASE:ttMises[i];
 const ttTotMise=()=>ttSel.reduce((a,i)=>a+ttMise(i),0);
@@ -13797,18 +13825,19 @@ function ttGo(n){ ttStop(); ttManuel=false; ttStep=n; render();
 function ttSuivant(){ ttGo(ttStep+1); }
 function ttPrecedent(){ if(ttStep>0) ttGo(ttStep-1); }
 function ttReset(){ ttStep=0; ttSel=[]; ttPicks={}; ttMises={}; ttFav=null; ttBonus=null;
-  ttCible=null; ttEnch={}; ttGagnes=[]; ttOffert=null; ttManuel=false; ttStop(); }
+  ttCible=null; ttEnch={}; ttGagnes=[]; ttOffert=null; ttManuel=false;
+  ttSelManuel=false; ttSaisiManuel=false; ttStop(); }
 function openTuto(){ ttReset(); navOpen("tuto"); ttLancer(); }
 function closeTuto(){ ttStop(); navBack(); }
 
 /* ── interactions ────────────────────────────────────────────────────────────── */
-function ttChoisir(i){ ttTouche();
+function ttChoisir(i){ ttTouche(); if(!ttEnAuto) ttSelManuel=true;
   if(ttSel.indexOf(i)>=0){ ttSel=ttSel.filter(x=>x!==i); delete ttPicks[i]; delete ttMises[i];
     if(ttFav===i) ttFav=null; if(ttCible===i) ttCible=null; }
   else if(ttSel.length<TT_NB) ttSel.push(i);
   ttMaj(); }
-function ttIssue(i,v){ ttTouche(); ttPicks[i]=v; ttMaj(); }
-function ttDm(i,d){ ttTouche();
+function ttIssue(i,v){ ttTouche(); if(!ttEnAuto) ttSaisiManuel=true; ttPicks[i]=v; ttMaj(); }
+function ttDm(i,d){ ttTouche(); if(!ttEnAuto) ttSaisiManuel=true;
   const av=ttMise(i);
   const libre=Math.min(ttCap(),ttPlafond())-ttTotMise()+av;
   const neuf=Math.max(1,Math.min(libre,av+d));
@@ -13968,8 +13997,12 @@ const TT_ECRANS=[
 
 // 5 ─ CHOISIR LES AFFICHES
 ()=>({
-  auto:()=>{ ttSel=[]; ttPicks={}; ttMises={}; ttFav=null; ttCible=null; ttMaj();
-    TT_PLAN.forEach((p,k)=>ttApres(620+k*520,()=>ttChoisir(p.i))); },
+  /* La démo ne repart de zéro que si le joueur n'a rien composé ; sinon elle COMPLÈTE
+     sa sélection jusqu'à TT_NB, en piochant dans le scénario ce qui n'est pas déjà pris. */
+  auto:()=>{ if(!ttSelManuel){ ttSel=[]; ttPicks={}; ttMises={}; ttFav=null; ttCible=null; }
+    ttMaj();
+    TT_PLAN.filter(i=>ttSel.indexOf(i)<0).slice(0,TT_NB-ttSel.length)
+      .forEach((i,k)=>ttApres(620+k*520,()=>ttChoisir(i))); },
   html:`
   <div class="tt-h1">${t("Choisis {a} affiches.",{a:TT_NB})}</div>
   <p class="tt-sous"><b id="ttCpt">${ttSel.length}</b> ${t("sur {a} — touche les matchs qui t'inspirent.",{a:TT_NB})}</p>
@@ -13990,10 +14023,17 @@ const TT_ECRANS=[
   /* Chaque prono se pose, PUIS sa mise grimpe euro par euro : le total et la jauge
      bougent à chaque pas. Les mises partent toutes de TT_MISE_BASE et divergent —
      c'est le dosage qu'on donne à voir. */
-  auto:()=>{ ttPicks={}; ttMises={}; ttMaj();
+  /* ⚠️ ON PARCOURT `ttSel`, PAS `TT_PLAN` (v8.268) : le scénario ne dit que la sélection
+     PAR DÉFAUT. Tant qu'on déroulait ses cinq index, un joueur qui avait composé sa propre
+     journée arrivait ici sur cinq affiches vides — la démo posait pronos et mises sur des
+     matchs qu'il n'avait pas retenus, donc affichés nulle part. Le prono vient de
+     l'affiche (`dv`), la mise du rang (`ttDemoM`) : les neuf sont couvertes. */
+  auto:()=>{ if(!ttSaisiManuel){ ttPicks={}; ttMises={}; }
+    ttMaj();
     let x=520;
-    TT_PLAN.forEach(p=>{ ttApres(x,()=>ttIssue(p.i,p.v)); x+=430;
-      for(let k=TT_MISE_BASE;k<p.m;k++){ ttApres(x,()=>ttDm(p.i,1)); x+=95; }
+    ttSel.forEach((i,k)=>{ if(ttPicks[i]) return;   // posé par le joueur : on n'y touche pas
+      ttApres(x,()=>ttIssue(i,ttDemoV(i))); x+=430;
+      for(let n=ttMise(i);n<ttDemoM(k);n++){ ttApres(x,()=>ttDm(i,1)); x+=95; }
       x+=220; }); },
   html:`
   <div class="tt-h1">${t("Ton prono et ta mise.")}</div>
@@ -14022,7 +14062,8 @@ const TT_ECRANS=[
 
 // 7 ─ LE MATCH FAVORI
 ()=>({
-  auto:()=>{ ttFav=null; ttMaj(); ttApres(1300,()=>ttCouronne(TT_PLAN[0].i)); },
+  auto:()=>{ ttFav=null; ttMaj();
+    ttApres(1300,()=>{ const i=ttDemoFav(); if(i!=null) ttCouronne(i); }); },
   html:`
   <div class="tt-h1">${t("Chaque journée, un match favori.")}</div>
   <p class="tt-sous">${t("Sélectionne la <b>👑</b> sur le match dont tu es le plus sûr : le <b>gain</b> y est doublé… et la <b>perte</b> aussi.")}</p>
@@ -14149,13 +14190,17 @@ const TT_ECRANS=[
 /* ── L'ANIMATION DES RÉSULTATS ────────────────────────────────────────────────── */
 function ttResultats(){
   const d=420;
-  ttSel.forEach((i,k)=>ttApres(d*(k+1),()=>{
+  /* ⚠️ MÊME LISTE QUE LE GABARIT, filtre compris : les blocs sont numérotés `ttR{k}` sur
+     `ttSel.filter(...)`. Parcourir `ttSel` brut décalait tout dès qu'une affiche restait
+     sans prono — les scores se seraient posés sur le voisin. */
+  const liste=ttSel.filter(i=>ttPicks[i]);
+  liste.forEach((i,k)=>ttApres(d*(k+1),()=>{
     const c=ttQ("#ttR"+k); if(!c) return; c.classList.add("vu");
     ttQ("#ttSc"+k).textContent=ttM(i).sc;
     ttQ("#ttVd"+k).innerHTML=ttJuste(i)
       ? '<b class="tt-green">+'+ttEur(ttGain(i))+' €</b>'
       : '<b class="tt-red">−'+ttEur(ttPerte(i))+' €</b>'; }));
-  const t0=d*(ttSel.length+1), nl=ttNetLea();
+  const t0=d*(liste.length+1), nl=ttNetLea();
 
   /* 1. LES DEUX NETS montent côte à côte : le duel se joue au chiffre. */
   ttApres(t0,()=>{ const brut=ttNetBrut();
