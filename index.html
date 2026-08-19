@@ -962,7 +962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.273";
+const APP_VERSION = "v8.274";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3134,6 +3134,9 @@ const EN={
   "<b>{a} €</b> de moins que Léa":"<b>€{a}</b> less than Léa",
   "<b>{a}</b> est gagné : il n'y avait <b>rien à rembourser</b>.":"<b>{a}</b> was won: there was <b>nothing to refund</b>.",
   "<b>{a}</b> est perdu : il n'y avait <b>aucun gain à doubler</b>.":"<b>{a}</b> was lost: there was <b>no gain to double</b>.",
+  "<b>{a}</b> est gagné : le gain est <b>doublé</b>.":"<b>{a}</b> was won: the gain is <b>doubled</b>.",
+  "<b>{a}</b> est perdu : <b>la moitié de la mise</b> est remboursée.":"<b>{a}</b> was lost: <b>half the stake</b> is refunded.",
+  "Léa perd <b>{a} €</b> sur son gain — quel que soit le résultat de son pari.":"Léa loses <b>€{a}</b> off her gain — whatever the outcome of her bet.",
   "<b>{a}</b> finit à <b>{b}</b> et marque pourtant <b>{c} pts</b> : le duel était contre <b>{d}</b>, à <b>{e}</b> — donc <b>duel gagné</b>.":"<b>{a}</b> ends at <b>{b}</b> and still scores <b>{c} pts</b>: the duel was against <b>{d}</b>, at <b>{e}</b> — so <b>duel won</b>.",
   "<b>{a}</b> finit à <b>{b}</b> et n'en marque qu'<b>1</b> : le duel était contre <b>{c}</b>, à <b>{d}</b> — donc <b>duel perdu</b>.":"<b>{a}</b> ends at <b>{b}</b> and scores only <b>1</b>: the duel was against <b>{c}</b>, at <b>{d}</b> — so <b>duel lost</b>.",
   "<b>Miser est facultatif.</b> C'est ici que démarre la stratégie : <b>garder du capital</b> pour parier gros, ou <b>prendre des bonus</b> pour renverser une journée. À toi de choisir tes armes.":"<b>Bidding is optional.</b> This is where strategy starts: <b>keep your balance</b> to bet big, or <b>take bonuses</b> to turn a matchday around. Choose your weapons.",
@@ -7435,7 +7438,7 @@ function auctionRoundHTML(auction, pName, treve){
   return (auction||[]).length ? (auction||[]).map(a=>`<div class="auc-row">
       <div class="auc-head">
         <div class="auc-ic clik" title="${esc(t(CARDS[a.card].d))}" onclick="showCardInfo('${a.card}')">${CARDS[a.card].e}</div>
-        <div class="auc-mid"><div class="n">${esc(t(CARDS[a.card].n))}</div><div class="d">${esc(t(CARDS[a.card].d))}</div></div>
+        <div class="auc-mid"><div class="n clik" onclick="showCardInfo('${a.card}')">${esc(t(CARDS[a.card].n))} <span style="opacity:.55">ⓘ</span></div></div>
         <div class="auc-win"><div class="who">${pName(a.winner)}</div><div class="amt">${a.amount} €</div></div>
       </div>
       <div class="auc-bids">${t("Enchères :")} ${a.bids.map(bd=>`<span class="bid${bd.pid===a.winner?' win':''}">${pName(bd.pid)} <b>${bd.amt}€</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}</span>`).join('')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold">${t("🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:a.amount})}</span>`:''}</div></div>`).join("")
@@ -13865,6 +13868,18 @@ function ttMotif(){
   if(ttBonus==="assurance") return t("<b>{a}</b> est gagné : il n'y avait <b>rien à rembourser</b>.",{a:nom});
   return t("Le pari de Léa sur <b>{a}</b> n'a pas pu être inversé.",{a:nom});
 }
+/* ⚠️ v8.274 (demandé par Hervé) — POURQUOI LA CARTE A DONNÉ CE QU'ELLE A DONNÉ, symétrique de
+   `ttMotif()` ci-dessus. Avant : quand le bonus AVAIT un effet, seul le montant s'affichait —
+   la leçon (« doublé parce que le pari était juste », « remboursé parce qu'il était perdu »)
+   restait à deviner, alors que le cas « aucun effet » l'explique déjà en toutes lettres. */
+function ttMotifOK(){
+  if(ttBonus==="cadeau") return t("Léa perd <b>{a} €</b> sur son gain — quel que soit le résultat de son pari.",{a:TT_CADEAU});
+  if(ttCible==null) return "";
+  const nom=ttM(ttCible).h+" – "+ttM(ttCible).a;
+  if(ttBonus==="double")    return t("<b>{a}</b> est gagné : le gain est <b>doublé</b>.",{a:nom});
+  if(ttBonus==="assurance") return t("<b>{a}</b> est perdu : <b>la moitié de la mise</b> est remboursée.",{a:nom});
+  return "";
+}
 /* Barème réel : duel gagné 2 · nul 1 · perdu 0, +1 si le net est POSITIF,
    +1 au ⭐ meilleur net de TOUTE la ligue. */
 const ttPtsDuel=x=>x==="g"?2:x==="n"?1:0;
@@ -13954,7 +13969,9 @@ function ttBoutonsMise(){ const plein=ttTotMise()>=ttPlafond();
 function ttCouronne(i){ ttTouche();
   const aG={}, aP={}; ttSel.forEach(j=>{aG[j]=ttGain(j);aP[j]=ttPerte(j);});
   ttFav=(ttFav===i)?null:i;
-  if(ttCible===ttFav) ttCible=null;           // la cible ne peut pas être le favori
+  // même exemption qu'au-dessus : un bonus qui vise l'adversaire (🎁 cadeau) peut coexister avec le 👑
+  const advNow=ttBonus&&TT_CARTES.filter(x=>x.id===ttBonus)[0].adv;
+  if(ttCible===ttFav && !advNow) ttCible=null;
   ttMaj();
   ttSel.forEach(j=>{ const g=ttQ("#ttG"+j), p=ttQ("#ttP"+j);
     if(g&&aG[j]!==ttGain(j)){ ttAnime(g,aG[j],ttGain(j),"",620); g.parentElement.classList.add("tt-pop"); }
@@ -14189,7 +14206,14 @@ const TT_ECRANS=[
     ${ttBonus?esc(t(ttCarte(ttBonus).d)):'<span class="tt-muted">'+t("Touche une carte pour voir ce qu'elle fait.")+'</span>'}</div></div>
   ${ttBonus?`
     <p class="tt-sous" style="margin-top:16px">${t("Cette carte se pose sur un match. <b>Choisis lequel :</b>")}</p>
-    ${ttSel.map(i=>{const no=(i===ttFav);return `
+    ${ttSel.map(i=>{
+      /* ⚠️ v8.274 (bug vécu par Hervé) — L'INTERDIT « cible ≠ favori » NE VAUT PAS POUR TOUS LES
+         BONUS DANS LE VRAI JEU : les bonus qui visent le pari de L'ADVERSAIRE (🎁 Chérie c'est
+         cadeau, et 🏷️ Deux pour le prix d'un / 🤛 Dans ta face hors tuto) en sont exemptés — cf.
+         `oppCard`/`conflict` dans `myBet()`, et le texte d'aide qui liste les 3 exceptions. Le
+         tuto bloquait TOUJOURS la case du favori, quelle que soit la carte — seul « cadeau »
+         (`adv:1` dans TT_CARTES) est concerné ici, les deux autres bonus du tuto n'y visent pas. */
+      const adv=TT_CARTES.filter(x=>x.id===ttBonus)[0].adv; const no=(i===ttFav)&&!adv;return `
       <div class="tt-aff ${ttCible===i?'on':''} ${no?'':'clik'}" ${no?'':`onclick="ttViser(${i})"`} style="${no?'opacity:.5':''}">
         <div class="tt-row"><div><span style="margin-right:6px">${ttM(i).s}</span><span class="tt-eq">${ttM(i).h} – ${ttM(i).a}</span>
           <div class="tt-mini tt-muted">${no?t("ton 👑 match favori — interdit comme cible"):ttNomIssue(ttM(i),ttPicks[i])+" · "+ttMise(i)+" €"}</div></div>
@@ -14319,8 +14343,8 @@ function ttResultats(){
     ttQ("#ttEff").innerHTML='<div class="tt-row"><div><span style="font-size:19px;margin-right:6px">'+C.e+'</span><b>'+esc(t(C.n))+'</b>'
       +'<div class="tt-mini tt-muted">'+(ttCible!=null?t("posé sur {a}",{a:ttM(ttCible).h+" – "+ttM(ttCible).a}):"")+'</div></div>'
       +'<b class="'+(nul?'tt-muted':'tt-gold')+'" id="ttDb">'+(nul?t("aucun effet"):"—")+'</b></div>'
-      +(nul?'<div class="tt-mini tt-muted" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">'
-        +ttMotif()+" "+t("⚠️ La carte est <b>consommée quand même</b> : un bonus mal placé est un bonus perdu.")+'</div>':'');
+      +'<div class="tt-mini tt-muted" style="margin-top:8px;border-top:1px dashed var(--border);padding-top:8px">'
+      +(nul ? ttMotif()+" "+t("⚠️ La carte est <b>consommée quand même</b> : un bonus mal placé est un bonus perdu.") : ttMotifOK())+'</div>';
     if(nul) return;
     ttAnime(ttQ("#ttDb"),0,delta," €",750);
     if(surAdv) ttAnime(ttQ("#ttNl"),TT_AUTRES.filter(p=>p.n==="Léa")[0].net,nl," €",750);
