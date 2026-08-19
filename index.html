@@ -851,7 +851,7 @@
   #ttWrap .tt-mise{display:flex;align-items:center;gap:9px;}
   #ttWrap .tt-mise button{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);
     background:var(--panel2);color:var(--ink);font:800 17px/1 inherit;cursor:pointer;}
-  #ttWrap .tt-mise button:disabled{opacity:.3;cursor:default;}
+  #ttWrap .tt-mise button:disabled,#ttWrap .tt-mise button.off{opacity:.3;cursor:default;}
   #ttWrap .tt-mise b{min-width:46px;text-align:center;font-variant-numeric:tabular-nums;}
   #ttWrap .tt-gros{font-size:27px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.15;margin-top:2px;}
   #ttWrap .tt-duo{font-size:21px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.2;}
@@ -970,7 +970,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.276";
+const APP_VERSION = "v8.277";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -13812,7 +13812,7 @@ const TT_CARTES=[
  {id:"cadeau",   best:{n:"Karim",v:17}, vise:1, adv:1},
  {id:"double",   best:{n:"Sofia",v:13}, vise:1, adv:0},
  {id:"assurance",best:{n:"Marc", v:6 }, vise:1, adv:0}];
-const TT_CADEAU=9.30;       // ce que l'inversion coûterait à Léa — valeur d'illustration
+const TT_CADEAU=10;         // ce que l'inversion coûterait à Léa — chiffre rond, comme les vraies mises (demandé par Hervé)
 
 /* Trois duels : Toi–Léa, Karim–Sofia, Marc–Inès. L'issue n'est jamais DÉCLARÉE mais
    calculée en comparant les deux nets — le tableau ne peut pas se contredire.
@@ -13977,9 +13977,16 @@ function ttDm(i,d){ ttTouche(); if(!ttEnAuto) ttSaisiManuel=true;
   if(jm){ const k=Math.min(100,ttTotMise()/Math.max(1,ttPlafond())*100);
     jm.style.width=k+"%"; jm.style.background=k>=99?"var(--gold)":"var(--brand)"; }
   ttBoutonsMise(); }
+/* ⚠️ v8.277 (bug vécu par Hervé, persistant malgré v8.275) — `disabled` (l'ATTRIBUT natif), PAS
+   UNE CLASSE, jusqu'ici. Un `<button disabled>` sort du calcul tactile normal de Safari iOS :
+   `touch-action:manipulation`, posé sur le bouton ET sur son conteneur (v8.275), ne s'applique
+   tout simplement plus à un élément désactivé — d'où le double-tap zoom qui persistait pile sur
+   ces boutons-là. On bascule sur une classe CSS (`.off`) + `aria-disabled` (accessibilité) : le
+   bouton reste un vrai bouton tactile, `ttDm`/`ttEnchere` continuent de ne rien faire au plafond
+   (leur garde `neuf===av` ne dépendait déjà pas de l'attribut `disabled`). */
 function ttBoutonsMise(){ const plein=ttTotMise()>=ttPlafond();
   ttSel.forEach(j=>{ const mo=ttQ("#ttMo"+j), pl=ttQ("#ttPl"+j);
-    if(mo) mo.disabled=ttMise(j)<=1; if(pl) pl.disabled=plein; }); }
+    if(mo) mo.classList.toggle("off",ttMise(j)<=1); if(pl) pl.classList.toggle("off",plein); }); }
 function ttCouronne(i){ ttTouche();
   const aG={}, aP={}; ttSel.forEach(j=>{aG[j]=ttGain(j);aP[j]=ttPerte(j);});
   ttFav=(ttFav===i)?null:i;
@@ -14009,8 +14016,11 @@ function ttEnchere(id,d){ ttTouche();
   if(j){ j.style.width=(apr/TT_POT*100)+"%"; j.style.background=apr<=8?"var(--gold)":"var(--brand)"; }
   ttBoutonsEnch(); }
 function ttBoutonsEnch(){ const reste=TT_POT-ttEnchTot();
+  // ⚠️ v8.277 — même bascule `disabled` → `.off` que ttBoutonsMise() ci-dessus, même raison
+  // (double-tap zoom iOS sur un bouton natif `disabled`). `ttBtnE` n'est PAS concerné : ce n'est
+  // pas un ± qu'on martèle près d'un plafond, l'attribut natif y reste sans risque.
   TT_CARTES.forEach(x=>{ const mo=ttQ("#ttEmo_"+x.id), pl=ttQ("#ttEpl_"+x.id);
-    if(mo) mo.disabled=(ttEnch[x.id]||0)<=0; if(pl) pl.disabled=reste<=0; });
+    if(mo) mo.classList.toggle("off",(ttEnch[x.id]||0)<=0); if(pl) pl.classList.toggle("off",reste<=0); });
   const b=ttQ("#ttBtnE"); if(b) b.disabled=ttEnchTot()===0; }
 /* Le dépouillement ne calcule QUE l'état : l'écran suivant l'affiche.
    ⚠️ Le tutoriel doit montrer un bonus en action — si la ligue rafle tout, on en prête
@@ -14092,7 +14102,7 @@ const TT_ECRANS=[
       <div><span style="font-size:21px;margin-right:7px">${C.e}</span><b>${esc(t(C.n))}</b>
         <div class="tt-mini tt-muted" style="max-width:190px">${esc(t(C.d)).slice(0,120)}…</div></div>
       <div class="tt-mise">
-        <button id="ttEmo_${b.id}" ${(ttEnch[b.id]||0)<=0?'disabled':''} onclick="ttEnchere('${b.id}',-2)">−</button><b id="ttE_${b.id}">${ttEnch[b.id]||0} €</b><button id="ttEpl_${b.id}" ${(TT_POT-ttEnchTot())<=0?'disabled':''} onclick="ttEnchere('${b.id}',2)">+</button>
+        <button id="ttEmo_${b.id}" class="${(ttEnch[b.id]||0)<=0?'off':''}" ${(ttEnch[b.id]||0)<=0?'aria-disabled="true"':''} onclick="ttEnchere('${b.id}',-2)">−</button><b id="ttE_${b.id}">${ttEnch[b.id]||0} €</b><button id="ttEpl_${b.id}" class="${(TT_POT-ttEnchTot())<=0?'off':''}" ${(TT_POT-ttEnchTot())<=0?'aria-disabled="true"':''} onclick="ttEnchere('${b.id}',2)">+</button>
       </div></div></div>`;}).join("")}
   <p class="tt-mini tt-muted tt-res" style="text-align:center">${t("Trois cartes ici pour la démo — le vrai jeu en compte <b>{a}</b>. <b>Tous les joueurs</b> de la ligue enchérissent aussi, en secret : la plus grosse mise emporte la carte.",{a:CARD_IDS.length})}</p>
   <p class="tt-mini tt-res tt-gold" style="text-align:center">${t("⚠️ Ici, la démo t'impose <b>au moins une enchère</b> : sans bonus, il n'y aurait rien à te montrer ensuite.")}</p>
@@ -14181,7 +14191,7 @@ const TT_ECRANS=[
       <div class="tt-row">
         <div><span style="margin-right:6px">${ttM(i).s}</span><b>${ttM(i).h} – ${ttM(i).a}</b></div>
         <div class="tt-mise">
-          <button id="ttMo${i}" ${ttMise(i)<=1?'disabled':''} onclick="ttDm(${i},-1)">−</button><b id="ttM${i}">${ttMise(i)} €</b><button id="ttPl${i}" ${ttTotMise()>=ttPlafond()?'disabled':''} onclick="ttDm(${i},1)">+</button>
+          <button id="ttMo${i}" class="${ttMise(i)<=1?'off':''}" ${ttMise(i)<=1?'aria-disabled="true"':''} onclick="ttDm(${i},-1)">−</button><b id="ttM${i}">${ttMise(i)} €</b><button id="ttPl${i}" class="${ttTotMise()>=ttPlafond()?'off':''}" ${ttTotMise()>=ttPlafond()?'aria-disabled="true"':''} onclick="ttDm(${i},1)">+</button>
         </div></div>
       <div class="tt-cotes">${ttIssues(ttM(i)).map(v=>`
         <div class="tt-cote clik ${ttPicks[i]===v?'sel':''}" onclick="ttIssue(${i},'${v}')">${ttNomIssue(ttM(i),v)}<b>${ttCo(ttM(i).o[v])}</b></div>`).join("")}</div>
