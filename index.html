@@ -203,6 +203,7 @@
   .row>*{min-width:0;}
   .muted{color:var(--muted);} .green{color:var(--green);} .red{color:var(--red);}
   .gold{color:var(--gold);} .blue{color:var(--blue);} .mini{font-size:13px;}
+  .lnk{color:var(--brand);font-weight:700;cursor:pointer;}
   .btn{background:var(--accent);color:var(--accent-ink);font-weight:700;border:none;border-radius:12px;
     padding:14px;width:100%;font-size:15px;cursor:pointer;transition:opacity .15s,transform .05s;}
   .btn:active{transform:scale(.99);}
@@ -970,7 +971,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.279";
+const APP_VERSION = "v8.280";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2822,6 +2823,11 @@ const EN={
   // Écran connexion
   "Identifiant (pseudo)":"Username", "Mot de passe":"Password", "ex : herve":"e.g. herve",
   "Se connecter":"Log in", "Créer un compte":"Create an account",
+  // v8.280 : deux portes S'inscrire / Se connecter sur l'écran d'accueil, tuto remonté
+  "S'inscrire":"Sign up", "Tu as déjà un compte":"You already have an account",
+  "Créer un compte — Google, Apple ou pseudo":"Create an account — Google, Apple or username",
+  "ou avec un pseudo":"or with a username",
+  "Comme si tu y étais, sans rien créer.":"As if you were already there — no account needed.",
   "Adresse e-mail":"Email address", "Adresse e-mail invalide.":"Invalid email address.",
   "Sert uniquement à récupérer ton compte en cas d'oubli du mot de passe.":"Only used to recover your account if you forget your password.",
   "On t'enverra un lien de confirmation à cette adresse — clique dessus pour activer ton compte.":"We'll send a confirmation link to this address — click it to activate your account.",
@@ -2829,7 +2835,6 @@ const EN={
   "Un lien de confirmation vient d'être envoyé à <b>{a}</b>. Clique dessus pour activer ton compte, puis reviens te connecter ici.":"A confirmation link was just sent to <b>{a}</b>. Click it to activate your account, then come back here to log in.",
   "← Retour à la connexion":"← Back to login",
   "Cette adresse est déjà utilisée.":"This address is already in use.",
-  "Choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b>, depuis n'importe quel appareil.":"Pick a username + password. Your account lets you <b>find all your leagues</b> again, from any device.",
   "Mot de passe oublié ?":"Forgot your password?", "Mot de passe oublié":"Forgot password",
   "On enverra un lien de réinitialisation à l'adresse e-mail associée à ce compte.":"We'll send a reset link to the email address linked to this account.",
   "Envoyer le lien":"Send the link", "Identifiant requis.":"Username required.",
@@ -3258,7 +3263,6 @@ const EN={
   "Un bonus joué ne revient pas.":"A bonus once played never comes back.",
   "Un joueur différent chaque journée. Le meilleur net marque les points.":"A different player each matchday. The best net scores the points.",
   "Un retard se rattrape jusqu'au dernier jour.":"A gap can be closed right up to the last day.",
-  "Une journée entière, en cliquant. Sans compte.":"A whole matchday, just by tapping. No account needed.",
   "Une seule vente, <b>avant la première journée</b>. Les bonus remportés te suivent toute la saison — ça ne recommence pas chaque jour.":"A single sale, <b>before matchday one</b>. The bonuses you win stay with you all season — it doesn't start over each day.",
   "utilisé":"used",
   "Voir les résultats →":"See the results →",
@@ -6200,32 +6204,55 @@ function pById(id){ return players.find(p=>p.id===id); }
 // `pos` = côté du filet de séparation : "bas" (le texte précède) ou "haut" (le texte suit).
 // Pas dans #subtitle : cette ligne sert de fil d'Ariane dynamique (« Connexion », « Journée 3/10 »)
 // et vit dans une barre flex avec les boutons, où 79 caractères casseraient la mise en page.
-function sloganHTML(pos,big){
-  const sep = pos==="haut" ? "margin-top:10px;padding-top:10px;border-top" : "margin-bottom:14px;padding-bottom:12px;border-bottom";
-  return `<div class="${big?'':'mini'}" style="text-align:center;font-style:italic;line-height:1.6;${big?'font-size:15px;':''}${sep}:1px solid var(--border)">${t("Les pronostics font gagner les <b>matchs</b>,<br>la stratégie fait gagner le <b>championnat</b>.")}</div>`;
+function sloganHTML(pos,big,noSep){
+  // v8.280 : `noSep` sert à l'écran de connexion, qui n'a plus besoin du filet du bas — le tuto
+  // qui suit immédiatement le slogan a déjà son propre séparateur (`.pathdiv`).
+  const sep = noSep ? "" : (pos==="haut" ? "margin-top:10px;padding-top:10px;border-top:1px solid var(--border)" : "margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border)");
+  return `<div class="${big?'':'mini'}" style="text-align:center;font-style:italic;line-height:1.6;${big?'font-size:15px;':''}${sep}">${t("Les pronostics font gagner les <b>matchs</b>,<br>la stratégie fait gagner le <b>championnat</b>.")}</div>`;
 }
 function viewAuth(){
-  // ⚠️ v8.261 (demandé par Hervé, 2026-08-17) — HAUTEUR DU BANDEAU À AUGMENTER quand pseudo/mot de
-  // passe seront retirés (bascule finale, AVANT-OUVERTURE-PUBLIQUE.md §2bis) : plus d'espace libéré
-  // sous le bandeau une fois qu'il ne reste que Google + Apple. Pas fait maintenant pour ne pas
-  // pousser le formulaire actuel plus bas pendant que les champs sont encore là.
+  // ⚠️ v8.280 (demandé par Hervé, 2026-08-19) — REFONTE : cet écran n'affiche plus le formulaire
+  // pseudo/mot de passe. Constat de départ — `boot()` saute directement à l'accueil dès qu'une
+  // session existe (`db.auth.getSession()`) : un joueur déjà inscrit ne revoit cet écran QUE s'il
+  // se déconnecte ou change d'appareil. La quasi-totalité de ce qui s'affiche ici est donc vu par
+  // des NOUVEAUX venus — le tuto (jusque-là tout en bas, après tout un formulaire de connexion à
+  // ignorer) remonte juste sous le slogan, et la connexion/inscription passe en 2ᵉ carte, sous
+  // forme de deux portes (mécanique identique aux boutons de découverte ci-dessous) plutôt qu'un
+  // formulaire ouvert par défaut. Le détail (pseudo/mot de passe, Google, Apple) vit maintenant
+  // dans `viewLogin()` et `viewSignup()`, chacune sa propre page.
   return `<div class="box">
     <div style="margin:-16px -16px 12px;border-radius:var(--r) var(--r) 0 0;overflow:hidden;background:#0d0a1f"><img src="${HERO_LOGIN_B64}" alt="Tactizo" style="display:block;width:100%;height:200px;object-fit:cover;object-position:50% 70%"></div>
-    ${sloganHTML("bas")}
-    <div class="boxttl">${t("Connexion")}</div>
+    ${sloganHTML("bas",false,true)}
+    ${/* ⚠️ v8.64/v8.66/v8.205 (demandé par Hervé) — UNE SEULE PORTE VERS LA DÉCOUVERTE. Il y a eu
+         DEUX boutons (l'accéléré et le tuto complet), et le choix lui-même était un obstacle : on
+         demandait à quelqu'un qui ne connaît rien au jeu d'arbitrer entre deux parcours qu'il ne
+         peut pas comparer. Le tutoriel dynamique règle la question à lui seul — ne pas réintroduire
+         un second parcours « version courte ». */''}
+    <div class="pathdiv"><span>${t("Découvrir sans compte")}</span></div>
+    <button class="pathbtn hi" onclick="openTuto()"><div class="t">${t("🎓 Découvrir le jeu en 2 min")}</div><div class="s">${t("Comme si tu y étais, sans rien créer.")}</div></button>
+    ${/* ⚠️ v8.213 (demandé par Hervé) — LE BOUTON « 📖 Lire les règles » RESTE ABSENT D'ICI : il
+         menait à un écran dont la première action est… le tutoriel, déjà proposé juste au-dessus.
+         Choix de PRODUIT, pas un oubli — à quelqu'un qui hésite encore on montre le JEU, pas un
+         règlement ; les règles complètes l'attendent une fois entré (📖 masqué sur cet écran
+         depuis la v8.31, précisément pour cette raison). */''}</div>
+  <div class="box">
+    <button class="pathbtn" onclick="showErr('');S.view='signup';render()"><div class="t">📝 ${t("S'inscrire")}</div><div class="s">${t("Créer un compte — Google, Apple ou pseudo")}</div></button>
+    <button class="pathbtn" style="margin-top:9px" onclick="showErr('');S.view='login';render()"><div class="t">🔑 ${t("Se connecter")}</div><div class="s">${t("Tu as déjà un compte")}</div></button>
+  </div>`;
+}
+/* ⚠️ v8.280 — ANCIEN CONTENU DE `viewAuth()` : le pseudo/mot de passe + Google/Apple vivaient
+   directement sur l'écran d'accueil de connexion. Devenu son propre écran (même principe que
+   `viewSignup()`, avec le même bouton retour) quand l'accueil s'est mis à ouvrir sur le tuto —
+   voir le commentaire en tête de `viewAuth()`. */
+function viewLogin(){
+  return `<div class="box">
+    <button class="btn ghost sm" style="width:auto" onclick="showErr('');S.view='auth';render()">← ${t("Connexion")}</button>
+    <div class="boxttl" style="margin-top:12px">${t("Connexion")}</div>
     <label class="fld-lbl" style="margin-top:0">${t("Identifiant (pseudo)")}</label><input id="aUser" autocomplete="username" placeholder="${t("ex : herve")}" maxlength="20">
-    <label class="fld-lbl">${t("Mot de passe")}</label><input id="aPass" type="password" autocomplete="current-password" placeholder="••••••">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px"><label class="fld-lbl" style="margin-bottom:4px">${t("Mot de passe")}</label><span class="lnk mini" onclick="showErr('');S.view='resetPassword';render()">${t("Mot de passe oublié ?")}</span></div>
+    <input id="aPass" type="password" autocomplete="current-password" placeholder="••••••">
     <div style="height:12px"></div>
     <button class="btn" onclick="doLogin()">${t("Se connecter")}</button>
-    <button class="btn ghost sm" style="width:auto;margin-top:8px" onclick="showErr('');S.view='resetPassword';render()">${t("Mot de passe oublié ?")}</button>
-    ${/* ⚠️ v8.31 (relevé par Hervé) — « Créer un compte » OUVRE MAINTENANT UN ÉCRAN. Avant, ce
-         bouton ne montrait rien de neuf : il lisait en silence les champs de CONNEXION, puis
-         ouvrait une fenêtre pour les mots de passe. Deux défauts d'un coup — les mêmes champs
-         servaient à deux intentions opposées, et champ identifiant vide on recevait un message
-         d'erreur là où on attendait un formulaire. On ne devine pas qu'il faut remplir un
-         formulaire de connexion pour s'inscrire. */''}
-    <button class="btn ghost" style="margin-top:8px" onclick="showErr('');S.view='signup';render()">${t("Créer un compte")}</button>
-    <div class="mini muted" style="margin-top:12px">${t("Choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b>, depuis n'importe quel appareil.")}</div>
     ${/* ⚠️ v8.224 — CONNEXION GOOGLE, EN PLUS DU PSEUDO/MOT DE PASSE, PAS À LA PLACE. Ajoutée
          pendant que des ligues de test sont en cours : ne rien retirer au flux existant, juste
          proposer une option de plus. Le remplacement complet (pseudo/mot de passe retiré,
@@ -6233,41 +6260,8 @@ function viewAuth(){
          AVANT-OUVERTURE-PUBLIQUE.md §2bis. */''}
     <div class="mini muted" style="margin:14px 0 8px;text-align:center">— ${t("ou")} —</div>
     <button class="btn ghost" onclick="loginGoogle()">${t("Continuer avec Google")}</button>
-    ${/* ⚠️ v8.237 — bouton masqué tant que l'abonnement Apple Developer Program et le fournisseur
-         Apple côté Supabase n'étaient pas prêts. Rétabli le 2026-08-16 : compte activé, App ID +
-         Services ID + clé créés côté Apple, fournisseur activé dans Supabase → Authentication →
-         Providers → Apple (`loginApple()` n'a jamais changé, cf. v8.227). */''}
-    <button class="btn ghost" style="margin-top:8px" onclick="loginApple()">${t("Continuer avec Apple")}</button></div>
-    ${/* ⚠️ v8.64 (demandé par Hervé) — DEUX PORTES D'ENTRÉE, PAS UNE. Il n'y avait qu'un bouton,
-         menant au tuto complet : 11 étapes, toute une saison. Qui ouvre l'app par curiosité n'a
-         pas signé pour ça et referme avant d'avoir vu un match — on perdait le visiteur au moment
-         précis où on essayait de le convaincre.
-         ⚠️ L'EXPRESS EST EN PREMIER ET EN VERT (la couleur d'appel de cet écran) : c'est le
-         parcours par défaut pour quelqu'un qui ne connaît pas le jeu. Le complet reste accessible,
-         en second, sans mise en avant — celui qui le veut le cherche, celui qui doute prend
-         l'autre. Inverser les deux, c'est revenir à ce qu'on vient de corriger.
-         ⚠️ Les sous-titres disent la DURÉE et l'EFFORT, pas le contenu : c'est là-dessus qu'on
-         choisit quand on ne connaît encore rien au jeu. */''}
-    ${/* ⚠️ v8.66 — DEUX PORTES, RANGÉES PAR QUANTITÉ DE LECTURE. L'accéléré passe en premier et
-         en vert : c'est le parcours par défaut pour qui ne connaît pas le jeu — il montre la
-         saison entière sans le mode d'emploi. Le complet reste juste dessous, sans mise en avant.
-         ⚠️ Ne PAS rajouter de second parcours « version courte » : essayé en v8.64, supprimé en
-         v8.66, et les deux portes qui restaient ont fusionné en v8.205. */''}
-    <div class="pathdiv"><span>${t("Découvrir sans compte")}</span></div>
-    ${/* ⚠️ v8.205 — UNE SEULE PORTE. Il y en avait DEUX (« la saison en accéléré » et « le
-         tuto complet »), et le choix lui-même était un obstacle : on demandait à quelqu'un
-         qui ne connaît rien au jeu d'arbitrer entre deux parcours qu'il ne peut pas
-         comparer. Le tutoriel dynamique règle la question — il est court PARCE QU'il
-         montre au lieu d'expliquer, donc il n'y a plus d'arbitrage à rendre. */''}
-    <button class="pathbtn hi" onclick="openTuto()"><div class="t">${t("🎓 Découvrir le jeu en 2 min")}</div><div class="s">${t("Une journée entière, en cliquant. Sans compte.")}</div></button>
-    ${/* ⚠️ v8.213 (demandé par Hervé) — LE BOUTON « 📖 Lire les règles » EST RETIRÉ D'ICI : il
-         menait à un écran dont la première action est… le tutoriel, déjà proposé juste au-dessus.
-         Deux portes pour la même chose, à trois centimètres l'une de l'autre.
-         ⚠️ IL ÉTAIT LA SEULE VOIE VERS LES RÈGLES AVANT CONNEXION — le 📖 de la barre du haut est
-         masqué ici depuis la v8.31, PRÉCISÉMENT parce que ce bouton existait. J'ai d'abord voulu
-         lever ce masquage ; Hervé a tranché l'inverse : « juste le tuto suffit ». C'est un choix
-         de PRODUIT, pas un oubli — à quelqu'un qui hésite encore on montre le JEU, pas un
-         règlement, et les règles complètes l'attendent une fois entré. */''}`;
+    <button class="btn ghost" style="margin-top:8px" onclick="loginApple()">${t("Continuer avec Apple")}</button>
+  </div>`;
 }
 /* ⚠️ v8.278 — LE PSEUDO N'EST PLUS L'E-MAIL DU COMPTE (depuis la vraie adresse demandée à
    l'inscription). La résolution pseudo → e-mail se fait DÉSORMAIS côté serveur, jamais ici :
@@ -6345,6 +6339,13 @@ function viewSignup(){
   return `<div class="box">
     <button class="btn ghost sm" style="width:auto" onclick="showErr('');S.view='auth';render()">← ${t("Connexion")}</button>
     <div class="boxttl" style="margin-top:12px">${t("Créer un compte")}</div>
+    ${/* ⚠️ v8.280 (demandé par Hervé) — GOOGLE/APPLE PROPOSÉS ICI AUSSI, PAS SEULEMENT SUR
+         `viewLogin()` : le même bouton OAuth crée le compte au premier passage (Supabase s'en
+         charge tout seul), donc quelqu'un qui atterrit sur « S'inscrire » sans avoir remarqué
+         « Se connecter » doit pouvoir aller aussi vite. */''}
+    <button class="btn ghost" onclick="loginGoogle()">${t("Continuer avec Google")}</button>
+    <button class="btn ghost" style="margin-top:8px" onclick="loginApple()">${t("Continuer avec Apple")}</button>
+    <div class="mini muted" style="margin:14px 0 8px;text-align:center">— ${t("ou avec un pseudo")} —</div>
     <label class="fld-lbl" style="margin-top:0">${t("Identifiant (pseudo)")}</label>
     <input id="sUser" autocomplete="username" placeholder="${t("ex : herve")}" maxlength="20">
     <div class="mini muted" style="margin-top:3px">${t("2 à 20 caractères — lettres, chiffres, . _ - (sans espace ni accent).")}</div>
@@ -13059,7 +13060,7 @@ function render(){
      inatteignables sans compte. C'est un choix de PRODUIT, pas un oubli : à quelqu'un qui
      hésite encore, on montre le jeu, on ne lui tend pas un règlement. Les règles complètes
      l'attendent une fois entré. Ne pas « rétablir » ce 📖 en croyant réparer un manque. */
-  $("rulesBtn").classList.toggle("hide", S.view==="auth"||S.view==="signup"||S.view==="checkEmail"||S.view==="resetPassword"||S.view==="newPassword"||S.view==="choosePseudo");
+  $("rulesBtn").classList.toggle("hide", S.view==="auth"||S.view==="login"||S.view==="signup"||S.view==="checkEmail"||S.view==="resetPassword"||S.view==="newPassword"||S.view==="choosePseudo");
   // 🛒 et 🐛 : conditionnés à la SESSION, pas à l'écran affiché. Tester `S.view==="auth"` ne
   // suffisait pas — un visiteur non connecté ouvrant les 📖 règles depuis l'écran de connexion
   // quittait la vue "auth" et voyait donc réapparaître la boutique (signalé par Hervé).
@@ -13071,7 +13072,7 @@ function render(){
   $("bugBtn").classList.toggle("hide", !AUTH || S.view==="choosePseudo");
   // Relocalisés en onglets du bas / Profil → masqués de la barre du haut (v6 navigation).
   ["shopBtn","settingsBtn","leaguesBtn","themeBtn"].forEach(id=>{ const e=$(id); if(e) e.classList.add("hide"); });
-  $("langBtn").classList.toggle("hide", S.view!=="auth" && S.view!=="choosePseudo");   // 🌐 langue : dispo sur la page de connexion (avant d'avoir accès au Profil)
+  $("langBtn").classList.toggle("hide", S.view!=="auth" && S.view!=="login" && S.view!=="choosePseudo");   // 🌐 langue : dispo sur la page de connexion (avant d'avoir accès au Profil)
   // 🤝 rachat de bonus : visible en cours de championnat ; pastille = nb d'offres reçues à traiter.
   // 🤝 masqué en consultation : l'écriture serait refusée par `q()`, autant ne pas le proposer.
   const canTrade = !!(L && L.status==="running" && inLeague) && !LECTURE_SEULE;
@@ -13080,6 +13081,7 @@ function render(){
   // leaguesBtn/settingsBtn : remplacés par 🏠 (haut) et l'onglet Profil (bas) — masqués ci-dessus.
   let html="";
   if(S.view==="auth") html=viewAuth();
+  else if(S.view==="login") html=viewLogin();   // v8.280 : pseudo/mot de passe, sorti de viewAuth()
   else if(S.view==="signup") html=viewSignup();   // v8.31 : écran de création à part entière
   else if(S.view==="checkEmail") html=viewCheckEmail(S.checkEmailAddr);   // v8.278 : confirmation d'adresse en attente
   else if(S.view==="resetPassword") html=viewResetPassword();   // v8.278 : « mot de passe oublié »
@@ -13145,7 +13147,7 @@ function render(){
   const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"")+"|"+(S.ptab||"")
     +"|"+(standHist?"h":"")+"|"+(standDay==null?"":("d"+standDay))+gsub;
   if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
-  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="signup"?t("Créer un compte") : S.view==="checkEmail"?t("Confirme ton adresse") : S.view==="resetPassword"?t("Mot de passe oublié") : S.view==="newPassword"?t("Nouveau mot de passe") : S.view==="rulesfull"?t("📚 Règles détaillées") : S.view==="settings"?t("Paramètres") : S.view==="profil"?t("Profil") : S.view==="shop"?t("Boutique") : S.view==="palmares"?t("Palmarès") : S.view==="stats"?t("Mes stats") : S.view==="home"?t("Accueil") : S.view==="leagues"?t("Mes ligues") : S.view==="essai"?t("▶️ Partie d'essai") : (L? (
+  $("subtitle").textContent = S.view==="auth"?t("Connexion") : S.view==="login"?t("Connexion") : S.view==="signup"?t("Créer un compte") : S.view==="checkEmail"?t("Confirme ton adresse") : S.view==="resetPassword"?t("Mot de passe oublié") : S.view==="newPassword"?t("Nouveau mot de passe") : S.view==="rulesfull"?t("📚 Règles détaillées") : S.view==="settings"?t("Paramètres") : S.view==="profil"?t("Profil") : S.view==="shop"?t("Boutique") : S.view==="palmares"?t("Palmarès") : S.view==="stats"?t("Mes stats") : S.view==="home"?t("Accueil") : S.view==="leagues"?t("Mes ligues") : S.view==="essai"?t("▶️ Partie d'essai") : (L? (
      L.status==="lobby"?t("Salon")+" · "+L.code :
      (L.status==="prep"||L.status==="starting")?t("Préparation") :
      S.view==="standings"?t("Classement") :
