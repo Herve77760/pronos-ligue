@@ -970,7 +970,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.275";
+const APP_VERSION = "v8.276";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3144,7 +3144,7 @@ const EN={
   "<b>{a}</b> est perdu : il n'y avait <b>aucun gain à doubler</b>.":"<b>{a}</b> was lost: there was <b>no gain to double</b>.",
   "<b>{a}</b> est gagné : le gain est <b>doublé</b>.":"<b>{a}</b> was won: the gain is <b>doubled</b>.",
   "<b>{a}</b> est perdu : <b>la moitié de la mise</b> est remboursée.":"<b>{a}</b> was lost: <b>half the stake</b> is refunded.",
-  "Léa perd <b>{a} €</b> sur son gain — quel que soit le résultat de son pari.":"Léa loses <b>€{a}</b> off her gain — whatever the outcome of her bet.",
+  "Son pari sur ce match aurait gagné sans ton bonus : l'inversion le fait perdre, ce qui coûte <b>{a} €</b> à Léa.":"Her bet on this match would have won without your bonus: the flip makes it lose, costing Léa <b>€{a}</b>.",
   "<b>{a}</b> finit à <b>{b}</b> et marque pourtant <b>{c} pts</b> : le duel était contre <b>{d}</b>, à <b>{e}</b> — donc <b>duel gagné</b>.":"<b>{a}</b> ends at <b>{b}</b> and still scores <b>{c} pts</b>: the duel was against <b>{d}</b>, at <b>{e}</b> — so <b>duel won</b>.",
   "<b>{a}</b> finit à <b>{b}</b> et n'en marque qu'<b>1</b> : le duel était contre <b>{c}</b>, à <b>{d}</b> — donc <b>duel perdu</b>.":"<b>{a}</b> ends at <b>{b}</b> and scores only <b>1</b>: the duel was against <b>{c}</b>, at <b>{d}</b> — so <b>duel lost</b>.",
   "<b>Miser est facultatif.</b> C'est ici que démarre la stratégie : <b>garder du capital</b> pour parier gros, ou <b>prendre des bonus</b> pour renverser une journée. À toi de choisir tes armes.":"<b>Bidding is optional.</b> This is where strategy starts: <b>keep your balance</b> to bet big, or <b>take bonuses</b> to turn a matchday around. Choose your weapons.",
@@ -13881,7 +13881,13 @@ function ttMotif(){
    la leçon (« doublé parce que le pari était juste », « remboursé parce qu'il était perdu »)
    restait à deviner, alors que le cas « aucun effet » l'explique déjà en toutes lettres. */
 function ttMotifOK(){
-  if(ttBonus==="cadeau") return t("Léa perd <b>{a} €</b> sur son gain — quel que soit le résultat de son pari.",{a:TT_CADEAU});
+  /* ⚠️ v8.276 (bug vécu par Hervé) — LA PERTE N'EST PAS INCONDITIONNELLE. Le bonus INVERSE le
+     pari de Léa (domicile ↔ extérieur) : ça ne lui coûte que si son pari d'origine était
+     GAGNANT (l'inversion le fait perdre) — sinon l'inversion l'aurait au contraire aidée, cf. le
+     descriptif de la carte (« arme à double tranchant »). Dans ce scénario du tuto, son pari
+     d'origine était gagnant (`TT_CADEAU` = ce que l'inversion lui coûte), mais le texte ne doit
+     pas donner l'impression que la carte prend TOUJOURS à Léa, quel que soit son pari. */
+  if(ttBonus==="cadeau") return t("Son pari sur ce match aurait gagné sans ton bonus : l'inversion le fait perdre, ce qui coûte <b>{a} €</b> à Léa.",{a:TT_CADEAU});
   if(ttCible==null) return "";
   const nom=ttM(ttCible).h+" – "+ttM(ttCible).a;
   if(ttBonus==="double")    return t("<b>{a}</b> est gagné : le gain est <b>doublé</b>.",{a:nom});
