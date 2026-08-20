@@ -971,7 +971,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.288";
+const APP_VERSION = "v8.289";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2633,6 +2633,7 @@ let STAND_H2H=null, STAND_H2H_LG=null;
 let palmares=null, adminData=null, palmOpen="", myStatsData=null;
 let adminUsers=null, adminPwd="";
 let adminConnex=null;   // ⏳ mesure temporaire des connexions — supprimer avec son bloc
+let adminStats=null;    // comptes créés + options prises, par source (test/admin/stripe)
 let adminReports=null, repOpen="";   // remontées des joueurs (v6.98) + n° de celle dépliée
 let admOpen="";                      // chapitre ouvert de l'écran Admin (v7.02)
 let endStats=null; // bilan de fin de ligue (calculé une fois quand la ligue est terminée)
@@ -12477,6 +12478,14 @@ async function adminLoadConnex(){
   catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect."
             :(/schema cache|function/i.test(e.message)?"Mesure non installée — lance MESURE-CONNEXIONS-TEMPORAIRE.sql."
             :("Erreur : "+e.message))); } }
+// Comptes créés + options prises, par source (test/admin/stripe) — même schéma que adminLoadConnex.
+async function adminLoadStats(){
+  const pwd=(($("adminPwdS")||{}).value||"")||adminPwd||(($("adminPwd")||{}).value||"");
+  if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
+  try{ adminStats=await q(db.rpc("admin_overview_stats",{p_admin_id:AUTH.id,p_admin_password:pwd})); adminPwd=pwd; showErr(""); render(); }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect."
+            :(/schema cache|function/i.test(e.message)?"Vue d'ensemble non installée — lance MIGRATION-admin-stats.sql."
+            :("Erreur : "+e.message))); } }
 // Self-service : un utilisateur CONNECTÉ change SON mot de passe sans l'ancien (session active).
 /* ⚠️ v7.87 — CHANGER SON MOT DE PASSE EXIGE MAINTENANT L'ANCIEN.
    Avant, `updateUser({password})` ne demandait qu'une SESSION OUVERTE : trente secondes sur un
@@ -12997,6 +13006,24 @@ function viewAdmin(){
      un permanent par simple oubli.
      ⚠️ La durée mesure le temps AU PREMIER PLAN, pas l'onglet ouvert (cf. `mesureConnexionDebut`).
      Elle est juste à la minute près : la fermeture d'un onglet ne prévient pas. */
+  // Vue d'ensemble : comptes créés + options prises, par source (test/admin/stripe). Distingue un
+  // VRAI achat Stripe d'une option accordée à la main ou héritée de la phase de test (demande
+  // d'Hervé : savoir, une fois l'app en ligne, combien de comptes et combien d'abonnements réels).
+  const cStats=`${adminPwd?'':`<label class="mini muted">Ton mot de passe admin</label>
+      <input id="adminPwdS" type="password" placeholder="••••••" autocomplete="off">
+      <div style="height:8px"></div>`}
+    ${!adminStats?`<button class="btn sm" onclick="adminLoadStats()">📥 Charger les chiffres</button>`
+      :`${st("👤 Comptes créés (total)", adminStats.total_accounts)}
+        <div class="box row"><span class="muted">Nouveaux — 7 derniers jours</span><b class="num">${adminStats.accounts_7j}</b></div>
+        <div class="box row"><span class="muted">Nouveaux — 30 derniers jours</span><b class="num">${adminStats.accounts_30j}</b></div>
+        ${st("💳 Options actives (tous joueurs)", adminStats.entitlements_actifs)}
+        <div class="box row"><span class="muted">Dont payeurs Stripe distincts</span><b class="num">${adminStats.payeurs_stripe}</b></div>
+        <div class="mini muted" style="margin:10px 0 2px">Détail par option — actives seulement</div>
+        ${(adminStats.par_option||[]).length?`<div class="box" style="padding:4px 10px;overflow-x:auto"><table>
+          <tr><th>Option</th><th style="text-align:right">💳 Stripe</th><th style="text-align:right">🛠 Admin</th><th style="text-align:right">🧪 Test</th></tr>
+          ${adminStats.par_option.map(o=>`<tr><td class="mini">${esc(OPT_LABELS[o.opt]||o.opt)}</td><td class="num">${o.achats_stripe}</td><td class="num muted">${o.attribues_admin}</td><td class="num muted">${o.phase_test}</td></tr>`).join("")}
+        </table></div>`:`<div class="box mini muted">Aucune option active pour le moment.</div>`}
+        <button class="btn ghost sm" style="margin-top:8px" onclick="adminStats=null;render()">↻ Recharger</button>`}`;
   const dur=s=>{ s=+s||0; const h=Math.floor(s/3600), m=Math.round((s%3600)/60);
     return h?`${h} h ${String(m).padStart(2,'0')}`:`${m} min`; };
   const cConnex=`<div class="box mini" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10)">
@@ -13088,6 +13115,7 @@ function viewAdmin(){
       <div class="mini muted">Touche un chapitre pour l'ouvrir. Un seul à la fois.</div></div>
     ${sec("ligues","🏆 Toutes les ligues", (a.leagues+" au total"+(nbDort?" · "+nbDort+" à l'arrêt":"")), cLigues)}
     ${sec("activite","📈 Activité", a.leagues+" ligues", cActivite)}
+    ${sec("stats","💳 Comptes & abonnements", (adminStats?adminStats.total_accounts+" comptes · "+adminStats.entitlements_actifs+" options actives":"non chargés"), cStats)}
     ${sec("usage","🎮 Usage du jeu", a.totalBets+" paris", cUsage)}
     ${sec("api","📡 Crédits API", quotaTxt, cApi)}
     ${sec("jeu","🃏 Bonus, gages & récompenses", a.cardsPlayed+" bonus", cJeu)}
