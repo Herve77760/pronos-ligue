@@ -963,7 +963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.295";
+const APP_VERSION = "v8.296";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6510,6 +6510,17 @@ async function doSignup(){
   if(p.length<8){ showErr(t("Mot de passe : 8 caractères minimum.")); return; }
   if(p!==p2){     showErr(t("Les deux mots de passe ne sont pas identiques.")); return; }
   const promo=((($("sPromo")||{}).value)||"").trim();
+  /* ⚠️ v8.296 (constaté par Hervé) — LE CODE DOIT ÊTRE VÉRIFIÉ ICI, PAS APRÈS. La confirmation
+     par e-mail retarde de facto l'inscription : à ce stade, aucune session n'existe encore pour
+     appeler redeem_promo_code (qui exige auth.uid()). Sans ce contrôle, un code faux ne provoquait
+     AUCUNE erreur nulle part — il finissait vérifié silencieusement à la 1ère connexion suivante
+     (cf. autoRedeemPromoIfAny, volontairement silencieux pour ne pas gêner une connexion normale).
+     `promo_code_valid` ne consomme rien : un simple oui/non, appelable sans être connecté. */
+  if(promo){
+    try{ const ok=await q(db.rpc("promo_code_valid",{p_code:promo}));
+      if(!ok){ showErr(t("Ce code n'existe pas.")); return; } }
+    catch(e){ /* vérification indisponible (réseau, fonction pas encore installée) : on ne bloque pas l'inscription pour ça */ }
+  }
   busy=true; showErr("");
   const { data, error } = await db.auth.signUp({ email, password: p, options:{ data:{ username: u, lang, promo_code: promo } } });
   if(error){ showErr(/registered|exists|already/i.test(error.message)?t("Cette adresse est déjà utilisée."):("Création : "+error.message)); busy=false; return; }
@@ -6520,7 +6531,7 @@ async function doSignup(){
   AUTH={ id:data.user.id, name:u, avatar:"", options:null };
   await loadOpts();
   S.view="home"; startPoll(); await loadMyLeagues();
-  if(promo) await applyPromoCode(promo,{silent:true});
+  if(promo) await applyPromoCode(promo);
 }
 /* ⚠️ v8.224 — GOOGLE NE DONNE JAMAIS DE PSEUDO (juste un nom civil, parfois une adresse), donc
    `user_metadata.username` reste vide après une première connexion OAuth : `boot()` détecte ce
