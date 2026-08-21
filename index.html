@@ -963,7 +963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.304";
+const APP_VERSION = "v8.305";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3512,6 +3512,8 @@ const EN={
   "Ce code n'est plus valable.":"This code is no longer valid.",
   "Tu as déjà utilisé un code promo sur ce compte.":"You've already used a promo code on this account.",
   "✅ Code activé : toutes les options premium sont à toi pendant {a} jours. Bon jeu !":"✅ Code activated: every premium option is yours for {a} days. Enjoy!",
+  "↻ Restaurer mes achats":"↻ Restore my purchases", "Achats restaurés ✓":"Purchases restored ✓",
+  "Restauration : ":"Restore: ",
   // Validité d'un an des options premium (v7.45).
   "Valable jusqu'au <b>{a}</b>. Au-delà, l'option s'arrête et devra être reprise.":"Valid until <b>{a}</b>. After that the option stops and has to be taken again.",
   "Cette option a expiré le <b>{a}</b>. Reprends-la pour la réactiver.":"This option expired on <b>{a}</b>. Take it again to reactivate it.",
@@ -4965,6 +4967,58 @@ function optsSet(){ return (AUTH && Array.isArray(AUTH.options)) ? AUTH.options 
    nouvelles souscriptions, elles, portent toutes leur échéance. */
 const OPT_DUREE_J=365;
 const CHECKOUT_FN=SB_URL+"/functions/v1/checkout";
+// ⚠️ v8.305 — ACHATS NATIFS (App Store / Play Store, via RevenueCat, cf. REVENUECAT-SETUP.md).
+// Clés PUBLIQUES (safe côté client, c'est leur usage prévu) — vides tant que le projet RevenueCat
+// n'existe pas encore : `ensureRevenueCatLogin()` se tait simplement dans ce cas, pas d'erreur.
+const REVENUECAT_KEY_IOS="";
+const REVENUECAT_KEY_ANDROID="";
+function estNatif(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+let revenueCatPret=false;
+// Configure le SDK RevenueCat (une seule fois) puis relie l'identité RevenueCat au compte
+// Supabase (`AUTH.id`) — c'est CE lien qui permet au webhook de savoir à qui accorder le droit
+// après un achat. Appelé partout où `AUTH` vient d'être posé (boot, connexion, inscription),
+// même schéma que `autoRedeemPromoIfAny`. Silencieux : ne doit jamais bloquer l'entrée dans l'app.
+async function ensureRevenueCatLogin(){
+  if(!estNatif() || !AUTH || !AUTH.id) return;
+  const P=window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases; if(!P) return;
+  try{
+    if(!revenueCatPret){
+      const plateforme=window.Capacitor.getPlatform?window.Capacitor.getPlatform():"";
+      const cle=plateforme==="ios"?REVENUECAT_KEY_IOS:REVENUECAT_KEY_ANDROID;
+      if(!cle) return;   // RevenueCat pas encore configuré (cf. REVENUECAT-SETUP.md)
+      await P.configure({ apiKey:cle }); revenueCatPret=true;
+    }
+    await P.logIn({ appUserID:AUTH.id });
+  }catch(e){ /* silencieux, cf. commentaire ci-dessus */ }
+}
+// Achat natif : appelé quand la souscription gratuite (phase de test) est refusée ET qu'on
+// tourne dans l'app native. Le paiement est géré par RevenueCat ; l'octroi du droit arrive
+// ensuite via `revenuecat-webhook` (écrit dans `entitlements` comme stripe-webhook) — d'où le
+// court délai avant de relire les droits, le temps que le webhook ait pu passer.
+async function achatNatif(key){
+  const P=window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases;
+  if(!P) throw new Error("Achats indisponibles sur cet appareil.");
+  const offerings=await P.getOfferings();
+  const paquets=(offerings&&offerings.current&&offerings.current.availablePackages)||[];
+  const pkg=paquets.find(p=>p.identifier===key || (p.storeProduct&&p.storeProduct.identifier==="com.tactizo.app."+key));
+  if(!pkg) throw new Error("Cette option n'est pas encore disponible à l'achat.");
+  await P.purchasePackage({ aPackage:pkg });
+  await new Promise(r=>setTimeout(r,1500));
+  await loadOpts();
+  closeCardInfo(); infoWin(t("✅ Option activée sur ton compte. Bon jeu !"),"🎉"); render();
+}
+// Bouton « Restaurer mes achats » (Boutique, natif uniquement) — exigé par les règles App Store
+// pour tout achat non consommable : permet de retrouver ses droits sur un nouvel appareil ou
+// après réinstallation, sans repayer.
+async function restaurerAchats(){
+  const P=window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases; if(!P) return;
+  try{
+    await P.restorePurchases();
+    await new Promise(r=>setTimeout(r,1000));
+    await loadOpts(); render();
+    toast(t("Achats restaurés ✓"));
+  }catch(e){ showErr(t("Restauration : ")+(e.message||e)); }
+}
 const LOGIN_FN=SB_URL+"/functions/v1/login-username";   // v8.278 : résout le pseudo en e-mail côté serveur, jamais côté client
 const RESET_FN=SB_URL+"/functions/v1/request-password-reset";
 /* ⚠️ v8.191 — LES DROITS PREMIUM VIENNENT DÉSORMAIS DU SERVEUR (table `entitlements`).
@@ -5068,10 +5122,18 @@ async function subscribeOpt(key){
     await loadOpts();
     closeCardInfo(); infoWin(t("✅ Option activée sur ton compte. Bon jeu !"),"🎉"); render(); }
   catch(e){
-    // ⚠️ v8.250 — NE BASCULER VERS STRIPE QUE SUR UN REFUS DE LA RÈGLE D'ACCÈS (phase de test
-    // terminée), PAS SUR N'IMPORTE QUELLE ERREUR (réseau, table absente…) : sinon un problème sans
-    // rapport avec le paiement enverrait quand même le joueur vers un écran de paiement Stripe.
+    // ⚠️ v8.250 — NE BASCULER VERS UN PAIEMENT RÉEL QUE SUR UN REFUS DE LA RÈGLE D'ACCÈS (phase
+    // de test terminée), PAS SUR N'IMPORTE QUELLE ERREUR (réseau, table absente…) : sinon un
+    // problème sans rapport avec le paiement enverrait quand même le joueur payer.
     if(!/row-level security/i.test(e.message||"")){ showErr("Souscription : "+e.message); return; }
+    // ⚠️ v8.305 — SUR MOBILE NATIF, JAMAIS STRIPE : Apple/Google interdisent qu'un contenu payant
+    // consommé dans l'app passe par un paiement externe (règle 3.1.1 App Store, équivalent
+    // Google) — cf. REVENUECAT-SETUP.md. `achatNatif` déclenche StoreKit/Play Billing.
+    if(estNatif()){
+      try{ await achatNatif(key); }
+      catch(e2){ if(!(e2&&e2.userCancelled)) showErr("Souscription : "+(e2.message||e2)); }
+      return;
+    }
     try{
       const { data:{ session } } = await db.auth.getSession();
       const jeton = (session && session.access_token) || "";
@@ -5134,7 +5196,8 @@ function viewShop(){
       <div class="row" style="gap:8px">
         <input id="promoInput" placeholder="${t("ex : GIULIAN")}" maxlength="20" style="text-transform:uppercase;flex:1">
         <button class="btn ghost sm" style="flex:0 0 auto" onclick="redeemPromoCode()">${t("Valider")}</button>
-      </div></div>`}`;
+      </div></div>`}
+    ${estNatif()?`<button class="btn ghost sm" style="margin-top:10px" onclick="restaurerAchats()">${t("↻ Restaurer mes achats")}</button>`:''}`;
 }
 // Code promo : toutes les options offertes pour la durée fixée par le code, une seule fois par
 // compte (cf. redeem_promo_code, MIGRATION-promo-codes.sql — toute la validation vit côté serveur).
@@ -6359,6 +6422,7 @@ async function doLogin(){
   await loadOpts();
   S.view="home"; busy=false; startPoll(); await loadMyLeagues();
   await autoRedeemPromoIfAny(data.user.user_metadata);   // code promo saisi à l'inscription, en attente de l'e-mail confirmé
+  await ensureRevenueCatLogin();
 }
 /* ⚠️ v8.224 — LA REDIRECTION QUITTE LA PAGE : rien à faire après le `signInWithOAuth` en cas de
    succès, le navigateur part vers l'écran de consentement Google puis revient sur cette même URL
@@ -6558,6 +6622,7 @@ async function doSignup(){
   await loadOpts();
   S.view="home"; startPoll(); await loadMyLeagues();
   if(promo) await applyPromoCode(promo);
+  await ensureRevenueCatLogin();
 }
 /* ⚠️ v8.224 — GOOGLE NE DONNE JAMAIS DE PSEUDO (juste un nom civil, parfois une adresse), donc
    `user_metadata.username` reste vide après une première connexion OAuth : `boot()` détecte ce
@@ -6597,8 +6662,12 @@ async function doChoosePseudo(){
   AUTH.name=u; busy=false;
   S.view="home"; render(); startPoll(); await loadMyLeagues();
   if(promo) await applyPromoCode(promo);   // session déjà là (Google/Apple) : s'applique tout de suite
+  await ensureRevenueCatLogin();
 }
 async function logout(){ if(!await confirmTxt("👋",t("Se déconnecter"),t("Se déconnecter ?")))return; sortirConsultation(); if(poll)clearInterval(poll);
+  // Détache l'identité RevenueCat du compte qui se déconnecte — sinon un autre joueur se
+  // connectant ensuite sur le même appareil hériterait de son identité d'achat.
+  try{ const P=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Purchases; if(P) await P.logOut(); }catch(e){}
   try{ await db.auth.signOut(); }catch(e){} AUTH=null; myLeagues=[];
   S={view:"auth",leagueId:null,myId:null,code:null,recap:false,dispDay:0,nav:[]}; L=null; render(); }
 
@@ -13187,11 +13256,11 @@ function viewAdmin(){
         <div class="box row"><span class="muted">Nouveaux — 7 derniers jours</span><b class="num clik" title="Voir qui" onclick="showNewAccounts(7)">${adminStats.accounts_7j}</b></div>
         <div class="box row"><span class="muted">Nouveaux — 30 derniers jours</span><b class="num clik" title="Voir qui" onclick="showNewAccounts(30)">${adminStats.accounts_30j}</b></div>
         ${st("💳 Options actives (tous joueurs)", adminStats.entitlements_actifs)}
-        <div class="box row"><span class="muted">Dont payeurs Stripe distincts</span><b class="num">${adminStats.payeurs_stripe}</b></div>
+        <div class="box row"><span class="muted">Dont payeurs réels distincts <span class="mini">(web + mobile)</span></span><b class="num">${adminStats.payeurs_reels}</b></div>
         <div class="mini muted" style="margin:10px 0 2px">Détail par option — actives seulement</div>
         ${(adminStats.par_option||[]).length?`<div class="box" style="padding:4px 10px;overflow-x:auto"><table>
-          <tr><th>Option</th><th style="text-align:right">💳 Stripe</th><th style="text-align:right">🛠 Admin</th><th style="text-align:right">🧪 Test</th></tr>
-          ${adminStats.par_option.map(o=>`<tr><td class="mini">${esc(OPT_LABELS[o.opt]||o.opt)}</td><td class="num">${o.achats_stripe}</td><td class="num muted">${o.attribues_admin}</td><td class="num muted">${o.phase_test}</td></tr>`).join("")}
+          <tr><th>Option</th><th style="text-align:right">💳 Web</th><th style="text-align:right">📱 Mobile</th><th style="text-align:right">🛠 Admin</th><th style="text-align:right">🧪 Test</th></tr>
+          ${adminStats.par_option.map(o=>`<tr><td class="mini">${esc(OPT_LABELS[o.opt]||o.opt)}</td><td class="num">${o.achats_stripe}</td><td class="num">${o.achats_mobile}</td><td class="num muted">${o.attribues_admin}</td><td class="num muted">${o.phase_test}</td></tr>`).join("")}
         </table></div>`:`<div class="box mini muted">Aucune option active pour le moment.</div>`}
         <button class="btn ghost sm" style="margin-top:8px" onclick="adminStats=null;render()">↻ Recharger</button>`}`;
   // Codes promo testeurs — un code par testeur, toutes options offertes un mois, suivi de
@@ -15143,6 +15212,7 @@ db.auth.onAuthStateChange((event)=>{ if(event==="PASSWORD_RECOVERY"){ modeRecupe
      désormais le seul écran de démarrage, quel que soit le nombre de ligues en cours. */
   S.view="home"; startPoll(); await loadMyLeagues();
   await autoRedeemPromoIfAny(sessionMeta);   // code promo saisi à l'inscription, en attente de l'e-mail confirmé
+  await ensureRevenueCatLogin();
 })();
 </script>
 </body>
