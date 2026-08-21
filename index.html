@@ -963,7 +963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.299";
+const APP_VERSION = "v8.300";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2838,9 +2838,10 @@ const EN={
   "Cette adresse est déjà utilisée.":"This address is already in use.",
   "Mot de passe oublié ?":"Forgot your password?", "Mot de passe oublié":"Forgot password",
   "On enverra un lien de réinitialisation à l'adresse e-mail associée à ce compte.":"We'll send a reset link to the email address linked to this account.",
-  "Envoyer le lien":"Send the link", "Identifiant requis.":"Username required.",
+  "Envoyer le lien":"Send the link", "Pseudo ou e-mail requis.":"Username or email required.",
+  "Pseudo ou e-mail":"Username or email", "ex : herve ou herve@exemple.fr":"e.g. herve or herve@example.com",
   "Vérifie tes e-mails":"Check your email",
-  "Si un compte existe avec ce pseudo, un lien de réinitialisation vient d'être envoyé à l'adresse associée.":"If an account exists with this username, a reset link was just sent to the associated address.",
+  "Si un compte correspond, un lien de réinitialisation vient d'être envoyé à l'adresse associée.":"If a matching account exists, a reset link was just sent to the associated address.",
   "Choisis un nouveau mot de passe":"Choose a new password", "Mot de passe changé ✓":"Password changed ✓",
   "Découvrir sans compte":"Try without an account",
   "Pas besoin d'email : choisis un pseudo + un mot de passe. Ton compte te permet de <b>retrouver toutes tes ligues</b> et d'en jouer <b>plusieurs à la fois</b>, depuis n'importe quel appareil.":"No email needed: pick a username + password. Your account lets you <b>find all your leagues</b> and play <b>several at once</b>, from any device.",
@@ -6454,29 +6455,35 @@ function viewCheckEmail(email){
     <div class="mini muted" style="margin-top:8px;line-height:1.6">${t("Un lien de confirmation vient d'être envoyé à <b>{a}</b>. Clique dessus pour activer ton compte, puis reviens te connecter ici.",{a:esc(email)})}</div>
     <button class="btn ghost" style="margin-top:16px" onclick="showErr('');S.view='auth';render()">${t("← Retour à la connexion")}</button></div>`;
 }
-/* ⚠️ v8.278 — DEMANDE DE RÉINITIALISATION, PAS LA RÉINITIALISATION ELLE-MÊME. Cet écran ne
-   demande que le pseudo (jamais l'e-mail — le joueur n'a pas à s'en souvenir, seul le pseudo
-   compte pour se connecter). Le lien réel part par e-mail ; `viewNewPassword()` plus bas prend
-   le relais quand ce lien est cliqué. */
+/* ⚠️ v8.278 — DEMANDE DE RÉINITIALISATION, PAS LA RÉINITIALISATION ELLE-MÊME. Le lien réel part
+   par e-mail ; `viewNewPassword()` plus bas prend le relais quand ce lien est cliqué.
+   ⚠️ v8.300 (demandé par Hervé) — PSEUDO **OU** E-MAIL, UN SEUL CHAMP. Avant, seul le pseudo était
+   accepté (motif : « le joueur n'a pas à se souvenir de son e-mail ») — mais quelqu'un qui a
+   justement oublié son mot de passe peut tout aussi bien avoir un doute sur son pseudo exact
+   (accents, casse — cf. le piège vécu sur le compte d'Hervé lui-même), alors que son adresse, elle,
+   ne change pas. Un seul champ, détecté par la présence d'un « @ » (cf. `doRequestReset`), pour ne
+   pas demander de choisir entre deux formulaires. */
 function viewResetPassword(){
   return `<div class="box">
     <button class="btn ghost sm" style="width:auto" onclick="showErr('');S.view='auth';render()">← ${t("Connexion")}</button>
     <div class="boxttl" style="margin-top:12px">${t("Mot de passe oublié")}</div>
     <div class="mini muted" style="margin-top:-4px">${t("On enverra un lien de réinitialisation à l'adresse e-mail associée à ce compte.")}</div>
-    <label class="fld-lbl">${t("Identifiant (pseudo)")}</label>
-    <input id="rUser" autocomplete="username" placeholder="${t("ex : herve")}" maxlength="20">
+    <label class="fld-lbl">${t("Pseudo ou e-mail")}</label>
+    <input id="rUser" autocomplete="username" placeholder="${t("ex : herve ou herve@exemple.fr")}" maxlength="60">
     <div style="height:14px"></div>
     <button class="btn" onclick="doRequestReset()">${t("Envoyer le lien")}</button></div>`;
 }
 async function doRequestReset(){
-  if(busy)return; const u=(($("rUser").value)||"").trim();
-  if(!u){ showErr(t("Identifiant requis.")); return; }
+  if(busy)return; const v=(($("rUser").value)||"").trim();
+  if(!v){ showErr(t("Pseudo ou e-mail requis.")); return; }
+  const estEmail=v.indexOf("@")>0;
   busy=true; showErr("");
   try{
-    await fetch(RESET_FN,{ method:"POST", headers:{ "apikey":SB_KEY, "Content-Type":"application/json" }, body:JSON.stringify({username:u}) });
+    await fetch(RESET_FN,{ method:"POST", headers:{ "apikey":SB_KEY, "Content-Type":"application/json" },
+      body:JSON.stringify(estEmail?{email:v}:{username:v}) });
   }catch(e){ /* on affiche quand même la confirmation générique ci-dessous — voir la note de RESET_FN */ }
   busy=false;
-  infoModal("📬", t("Vérifie tes e-mails"), `<div class="mini muted" style="text-align:left;line-height:1.6">${t("Si un compte existe avec ce pseudo, un lien de réinitialisation vient d'être envoyé à l'adresse associée.")}</div>`);
+  infoModal("📬", t("Vérifie tes e-mails"), `<div class="mini muted" style="text-align:left;line-height:1.6">${t("Si un compte correspond, un lien de réinitialisation vient d'être envoyé à l'adresse associée.")}</div>`);
   showErr(''); S.view='auth'; render();
 }
 /* Écran atteint en cliquant le lien reçu par e-mail : Supabase installe alors une session de
