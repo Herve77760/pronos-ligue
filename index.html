@@ -963,7 +963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.297";
+const APP_VERSION = "v8.298";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6428,6 +6428,7 @@ function viewSignup(){
     <label class="fld-lbl">${t("Confirme ton mot de passe")}</label>
     <input id="sPass2" type="password" autocomplete="new-password" placeholder="••••••">
     <label class="fld-lbl">${t("Code promo (optionnel)")}</label>
+    <div id="sPromoErr" class="mini" style="color:var(--red);display:none"></div>
     <input id="sPromo" placeholder="${t("ex : GIULIAN")}" maxlength="20" style="text-transform:uppercase">
     <div style="height:14px"></div>
     <button class="btn" onclick="doSignup()">${t("Créer mon compte")}</button>
@@ -6502,6 +6503,7 @@ async function doSetNewPassword(){
 }
 async function doSignup(){
   if(busy)return;
+  const pe=$("sPromoErr"); if(pe){ pe.textContent=""; pe.style.display="none"; }
   const u=((($("sUser")||{}).value)||"").trim();
   if(!validUser(u)){showErr(t("Identifiant : 2 à 20 caractères — lettres, chiffres, . _ - (sans espace ni accent)."));return;}
   const email=((($("sEmail")||{}).value)||"").trim();
@@ -6515,10 +6517,14 @@ async function doSignup(){
      appeler redeem_promo_code (qui exige auth.uid()). Sans ce contrôle, un code faux ne provoquait
      AUCUNE erreur nulle part — il finissait vérifié silencieusement à la 1ère connexion suivante
      (cf. autoRedeemPromoIfAny, volontairement silencieux pour ne pas gêner une connexion normale).
-     `promo_code_valid` ne consomme rien : un simple oui/non, appelable sans être connecté. */
+     `promo_code_valid` ne consomme rien : un simple oui/non, appelable sans être connecté.
+     ⚠️ v8.298 (demandé par Hervé) — ERREUR À CÔTÉ DU CHAMP, PAS EN HAUT DE PAGE : `showErr` écrit
+     tout en haut de l'écran, loin du champ concerné — sur ce formulaire déjà long, le joueur ne
+     fait pas forcément le lien. `#sPromoErr` vit juste sous son propre champ, comme `#repErr` sur
+     le formulaire de remontée de bug. */
   if(promo){
     try{ const ok=await q(db.rpc("promo_code_valid",{p_code:promo}));
-      if(!ok){ showErr(t("Ce code n'existe pas.")); return; } }
+      if(!ok){ if(pe){ pe.textContent=t("Ce code n'existe pas."); pe.style.display="block"; } return; } }
     catch(e){ /* vérification indisponible (réseau, fonction pas encore installée) : on ne bloque pas l'inscription pour ça */ }
   }
   busy=true; showErr("");
