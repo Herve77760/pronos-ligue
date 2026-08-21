@@ -963,7 +963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.292";
+const APP_VERSION = "v8.293";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4982,7 +4982,8 @@ function optEntry(k){
     if(s===k) return {k, exp:null};                       // héritage : sans échéance
     if(s.indexOf(k+"@")===0) return {k, exp:s.slice(k.length+1)}; }
   return null; }
-function optFin(k){ const e=optEntry(k); if(!e||!e.exp) return 0;
+function optFin(k){ if(AUTH && AUTH.id===ADMIN_ID) return 0;   // admin : accès illimité, jamais d'échéance affichée (même garde que hasOpt)
+  const e=optEntry(k); if(!e||!e.exp) return 0;
   const t=new Date(e.exp).getTime(); return isNaN(t)?0:t; }
 // Clé à ÉCRIRE pour une souscription qui démarre maintenant.
 function optAvecFin(k){ return k+"@"+new Date(Date.now()+OPT_DUREE_J*86400000).toISOString(); }
