@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.308";
+const APP_VERSION = "v8.309";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3829,6 +3829,12 @@ const EN={
   "✅ Cette option est <b>active sur ton compte</b>. Profites-en !":"✅ This option is <b>active on your account</b>. Enjoy!",
   "🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.":"🔒 This option isn't <b>active on your account yet</b>. Subscribe to use it — <b>during the test phase there's no payment</b>: activation is instant.",
   "Souscrire à cette option":"Subscribe to this option",
+  "Avant de payer":"Before you pay",
+  "Achat de « {a} » — {b}":"Purchasing “{a}” — {b}",
+  "J'accepte les":"I accept the",
+  "Conditions Générales de Vente":"Terms of Sale",
+  "Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'une fois pleinement exécutée à ma demande, je perdrai mon droit de rétractation.":"I request that this digital option be activated immediately, before the end of the 14-day withdrawal period, and I acknowledge that once fully performed at my request, I will lose my right of withdrawal.",
+  "Continuer vers le paiement":"Continue to payment",
   "— valable 1 an":"— valid for 1 year",
   "Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.":"Subscribe to “{a}”?\n\nTest phase: no payment — the option activates instantly on your account.",
   "Souscrire à « {a} » ?":"Subscribe to “{a}”?",
@@ -5100,6 +5106,50 @@ function showPremiumInfo(key){
 // Souscription : en phase de test, l'option s'active immédiatement (le PAIEMENT est la seule étape
 // absente) ; une fois `app_config.phase_test` à `false`, la règle d'accès Supabase refuse cette
 // écriture directe (v8.191) et on bascule automatiquement vers un vrai paiement Stripe (v8.250).
+/* ⚠️ v8.309 (audit juridique du 22 août 2026) — CASE COCHÉE ≠ CASE AFFICHÉE. Stripe Checkout ne
+   propose qu'une case générique « J'accepte les conditions » avec un lien ; impossible d'y mettre
+   le texte exact exigé par le Code de la consommation pour le renoncement au délai de
+   rétractation. D'où cet écran, AVANT la redirection Stripe — deux cases DISTINCTES (CGV /
+   renoncement), toutes deux non cochées au départ, reprenant l'idiome « carte à bord vert »
+   déjà utilisé par `choixDuree()` plutôt qu'une case à cocher native (jamais utilisée ailleurs
+   dans l'app). La preuve du consentement n'est écrite que côté serveur, dans `checkout/`
+   — cf. MIGRATION-consent-log.sql : un consentement que le client pourrait fabriquer lui-même
+   n'en serait plus un. */
+let _consentResolve=null, _consentCgv=false, _consentRetract=false;
+function _consentRender(){
+  const b1=document.getElementById("consCgv"), b2=document.getElementById("consRetract");
+  if(b1){ b1.style.borderColor=_consentCgv?"var(--green)":"var(--border)";
+    const m=document.getElementById("consCgvMark"); if(m) m.textContent=_consentCgv?"☑":"☐"; }
+  if(b2){ b2.style.borderColor=_consentRetract?"var(--green)":"var(--border)";
+    const m=document.getElementById("consRetractMark"); if(m) m.textContent=_consentRetract?"☑":"☐"; }
+  const ok=document.getElementById("consOk");
+  if(ok){ const pret=_consentCgv&&_consentRetract; ok.disabled=!pret; ok.style.opacity=pret?1:.5; }
+}
+function consentToggleCgv(){ _consentCgv=!_consentCgv; _consentRender(); }
+function consentToggleRetract(){ _consentRetract=!_consentRetract; _consentRender(); }
+function consentModalEnd(v){ const r=_consentResolve; _consentResolve=null; closeCardInfo(); if(r) r(v); }
+function consentementAchat(key){
+  _consentCgv=false; _consentRetract=false;
+  const p=PITCHES[key]||{};
+  return new Promise(res=>{
+    // ⚠️ infoModal() commence par fermer un éventuel modal précédent (closeCardInfo()), qui
+    // résout _consentResolve à false s'il est déjà posé — DONC on ouvre le modal D'ABORD,
+    // et on n'affecte _consentResolve qu'ENSUITE. Régler l'ordre inverse a fait tourner ce
+    // Promise en résolution instantanée à false, avant même que le joueur ait pu cliquer.
+    infoModal("📜", t("Avant de payer"),
+      `<div class="mini muted" style="text-align:left;line-height:1.6;margin-bottom:10px">${t("Achat de « {a} » — {b}",{a:t(p.t||key),b:PRICES[key]||""})}</div>
+       <div class="box clik" id="consCgv" onclick="consentToggleCgv()" style="text-align:left;margin:0 0 8px;border-color:var(--border)">
+         <span class="mini"><span id="consCgvMark">☐</span> ${t("J'accepte les")} <a href="cgv.html" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t("Conditions Générales de Vente")}</a></span>
+       </div>
+       <div class="box clik" id="consRetract" onclick="consentToggleRetract()" style="text-align:left;margin:0 0 14px;border-color:var(--border)">
+         <span class="mini"><span id="consRetractMark">☐</span> ${t("Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'une fois pleinement exécutée à ma demande, je perdrai mon droit de rétractation.")}</span>
+       </div>
+       <button class="btn" id="consOk" style="opacity:.5" onclick="consentModalEnd(true)" disabled>${t("Continuer vers le paiement")}</button>`,
+      true);
+    _consentResolve=res;
+    setTimeout(_consentRender,0);
+  });
+}
 // « pack » = souscrire aux 9 options d'un coup.
 async function subscribeOpt(key){
   const p=PITCHES[key]; if(!p) return;
@@ -5135,12 +5185,13 @@ async function subscribeOpt(key){
       catch(e2){ if(!(e2&&e2.userCancelled)) showErr("Souscription : "+(e2.message||e2)); }
       return;
     }
+    if(!await consentementAchat(key)) return;   // annulé : pas de CGV/renoncement, pas de Stripe
     try{
       const { data:{ session } } = await db.auth.getSession();
       const jeton = (session && session.access_token) || "";
       const r = await fetch(CHECKOUT_FN, { method:"POST",
         headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jeton, "Content-Type":"application/json" },
-        body: JSON.stringify({opt:key}) });
+        body: JSON.stringify({opt:key, cgvAcceptees:true, renonceRetractation:true}) });
       const j = await r.json();
       if(!r.ok || !j.url) throw new Error(j.error||"session de paiement refusée");
       window.location.href = j.url;   // redirection vers Stripe — la suite se joue côté Stripe puis `stripe-webhook`
@@ -5459,7 +5510,10 @@ function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.
   // ⚠️ MÊME RÈGLE POUR LE CHOIX DE DURÉE (v8.02) : sans cette ligne, fermer la fenêtre par le fond
   // laisserait `closeRegistration` suspendu pour toujours — le bouton « Clôturer » deviendrait
   // muet, sans erreur ni message. `null` = annulé, la ligue reste ouverte.
-  if(_dureeResolve){ const r=_dureeResolve; _dureeResolve=null; r(null); } }
+  if(_dureeResolve){ const r=_dureeResolve; _dureeResolve=null; r(null); }
+  // ⚠️ MÊME RÈGLE POUR LE CONSENTEMENT D'ACHAT (v8.309) : fermer par le fond = achat annulé,
+  // jamais un « oui » implicite — un consentement au paiement ne se déduit pas d'un clic ailleurs.
+  if(_consentResolve){ const r=_consentResolve; _consentResolve=null; r(false); } }
 /* Choix de la durée d'une ligue à DEUX humains, posé au moment de clôturer les inscriptions.
    ⚠️ v8.05 (signalé par Hervé) — CHOISIR N'EST PAS VALIDER. Ma première version faisait des deux
    durées des BOUTONS D'ACTION : toucher « 2 journées » clôturait la ligue sur-le-champ. Hervé a
