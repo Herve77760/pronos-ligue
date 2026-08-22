@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.310";
+const APP_VERSION = "v8.311";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6667,6 +6667,16 @@ async function doSignup(){
   if(error){
     if(/registered|exists|already/i.test(error.message)) fieldErr("sEmailErr",t("Cette adresse est déjà utilisée."));
     else showErr("Création : "+error.message);
+    busy=false; return;
+  }
+  /* ⚠️ v8.310 (constaté par Hervé) — SUPABASE NE RENVOIE PAS D'ERREUR SI L'E-MAIL EST DÉJÀ
+     CONFIRMÉ (anti-énumération de comptes) : `error` reste null, `data.session` reste null
+     comme pour une vraie inscription, et le joueur atterrit sur "vérifie tes e-mails" — SANS
+     qu'aucun mail ne soit jamais envoyé, condamné à attendre indéfiniment. Le seul signal
+     disponible est `data.user.identities` : vide seulement dans ce cas précis (un compte tout
+     neuf ou en attente de confirmation a toujours au moins une identité). */
+  if(data.user && Array.isArray(data.user.identities) && data.user.identities.length===0){
+    fieldErr("sEmailErr",t("Cette adresse est déjà utilisée."));
     busy=false; return;
   }
   busy=false;
