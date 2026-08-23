@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.317";
+const APP_VERSION = "v8.318";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3031,6 +3031,12 @@ const EN={
   "Aucune journée terminée pour l'instant — les résultats arriveront après la clôture.":"No matchday finished yet — results will come after the close.",
   "Perte de capital ce jour-là : <b>{a}€</b>.":"Balance lost that day: <b>{a}€</b>.",
   "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
+  "Résultat à découvrir":"Result ready to discover",
+  "Tout le monde a validé — la journée est résolue.":"Everyone has confirmed — the matchday is resolved.",
+  "Découvrir les résultats":"Discover the results",
+  "Résultat des enchères à découvrir":"Auction result ready to discover",
+  "Tout le monde a misé — les bonus sont attribués.":"Everyone has bid — the bonuses are assigned.",
+  "Découvrir le résultat":"Discover the result",
   "⚠️ La journée s'est résolue pendant que tu modifiais tes pronos — ta modification n'a pas été prise en compte, c'est ton dernier prono validé qui compte.":"⚠️ The matchday resolved while you were editing your picks — your change was not applied, your last validated bet is the one that counted.",
   "⏰ Trop tard — pronos non validés":"⏰ Too late — picks not submitted",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.":"You didn't submit your picks before the close: <b>no bet</b> counts for that day → <b>−2 pts</b> in the standings and <b>−25%</b> of your balance. You can still follow everyone else's bets below.",
@@ -5481,6 +5487,22 @@ function confirmModal(emoji,title,bodyHTML,okLabel){
     _confirmResolve=res; });
 }
 function confirmModalEnd(v){ const r=_confirmResolve; _confirmResolve=null; closeCardInfo(); if(r) r(v); }
+/* ⚠️ v8.318 (demandé par Hervé) — QUAND C'EST SA PROPRE VALIDATION QUI VIENT DE RÉSOUDRE LA
+   JOURNÉE (ou de conclure les enchères de trêve), le joueur atterrissait instantanément sur
+   l'écran déjà rempli — animation du gain comprise — sans le moindre temps d'arrêt. Tous les
+   AUTRES joueurs, eux, découvrent la même chose plus tard via le bandeau d'accueil, qu'ils
+   doivent CLIQUER pour y entrer : ce clic EST leur temps de suspense. `revealGate` rend ce même
+   temps d'arrêt au dernier validateur — un seul bouton, pas de « Annuler » (contrairement à
+   `confirmModal` juste au-dessus) : la journée est de toute façon déjà résolue, il n'y a rien à
+   annuler, juste à choisir de regarder maintenant. */
+let _revealResolve=null;
+function revealGate(emoji,title,bodyHTML,btnLabel){
+  return new Promise(res=>{
+    infoModal(emoji,title,`${bodyHTML}
+      <button class="btn" style="margin-top:16px" onclick="revealGateEnd()">${btnLabel}</button>`, true);
+    _revealResolve=res; });
+}
+function revealGateEnd(){ const r=_revealResolve; _revealResolve=null; closeCardInfo(); if(r) r(true); }
 /* ============ SAISIE DE MOTS DE PASSE — fenêtre à champs MASQUÉS (v7.87) ====================
  * Remplace les `prompt()` du navigateur, qui affichaient le mot de passe EN CLAIR à l'écran et
  * que le navigateur pouvait retenir. Un seul champ, aucune confirmation : une faute de frappe
@@ -5531,7 +5553,11 @@ function closeCardInfo(){ const m=document.getElementById("cardModal"); if(m) m.
   if(_dureeResolve){ const r=_dureeResolve; _dureeResolve=null; r(null); }
   // ⚠️ MÊME RÈGLE POUR LE CONSENTEMENT D'ACHAT (v8.309) : fermer par le fond = achat annulé,
   // jamais un « oui » implicite — un consentement au paiement ne se déduit pas d'un clic ailleurs.
-  if(_consentResolve){ const r=_consentResolve; _consentResolve=null; r(false); } }
+  if(_consentResolve){ const r=_consentResolve; _consentResolve=null; r(false); }
+  // ⚠️ v8.318 — `revealGate` N'A PAS DE « NON » : fermer par le fond veut dire la même chose que
+  // cliquer le bouton (la journée est résolue de toute façon), donc on résout à `true` ici aussi —
+  // seule cette ligne diffère du même geste pour `_confirmResolve`/`_consentResolve` juste au-dessus.
+  if(_revealResolve){ const r=_revealResolve; _revealResolve=null; r(true); } }
 /* Choix de la durée d'une ligue à DEUX humains, posé au moment de clôturer les inscriptions.
    ⚠️ v8.05 (signalé par Hervé) — CHOISIR N'EST PAS VALIDER. Ma première version faisait des deux
    durées des BOUTONS D'ACTION : toucher « 2 journées » clôturait la ligue sur-le-champ. Hervé a
@@ -8603,6 +8629,7 @@ function viewTreve(){
    ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`:''}`;
 }
 async function saveTreve(){ if(busy)return; busy=true; showErr("");
+  const lidT=L.id;   // capturé AVANT tout await, même garde que `lid` dans refresh()/submitBet()
   try{
     const sum = Object.assign({}, L.prep_summary||{});
     const st=sum.treve_st; if(!st){ busy=false; return; }
@@ -8613,8 +8640,25 @@ async function saveTreve(){ if(busy)return; busy=true; showErr("");
     if(st.bidTs[S.myId]==null) st.bidTs[S.myId]=Date.now();
     st.bids[S.myId]=Object.assign({},bidL); st.done[S.myId]=true;
     sum.treve_st=st;
-    await q(db.from("leagues").update({prep_summary:sum}).eq("id",L.id));
-    busy=false; await refresh(); toast(t("Enchères enregistrées ✓"));
+    await q(db.from("leagues").update({prep_summary:sum}).eq("id",lidT));
+    if(S.leagueId!==lidT){ busy=false; return; }   // parti pendant l'écriture : rien à faire ici
+    /* ⚠️ v8.318 (demandé par Hervé) — SUIS-JE LE DERNIER ? Vérifié ICI, sur `st.done` qu'on vient
+       tout juste d'écrire — même principe que `allHumansSubmitted()` côté pronos, pas d'attente
+       d'un futur `refresh()` pour le savoir. `resolveTreve()` (déclenché PAR ce `refresh()`, plus
+       bas) ne fait qu'attribuer les bonus ; le repère « vu » (`treveResultSeen`) n'existant qu'une
+       fois `closed_at` posé, `viewTreveSummary()` ne s'affichera QU'APRÈS — le clic sur ce bouton
+       revient donc à dire « oui, résous et montre-moi », exactement comme `openResults` côté pronos. */
+    const humansT=players.filter(p=>!p.is_ai);
+    const jeSuisDernier = humansT.length>=1 && humansT.every(p=>st.done[p.id]);
+    busy=false;
+    if(jeSuisDernier){
+      await revealGate("🔔", t("Résultat des enchères à découvrir"),
+        `<div class="mini" style="text-align:center">${t("Tout le monde a misé — les bonus sont attribués.")}</div>`,
+        "👀 "+t("Découvrir le résultat"));
+      if(S.leagueId!==lidT) return;   // parti pendant l'attente : rien à recharger sur une ligue qui n'est plus la sienne
+    }
+    await refresh();
+    if(!jeSuisDernier) toast(t("Enchères enregistrées ✓"));
   }catch(e){ showErr("Enchères : "+e.message); busy=false; }
 }
 function prepEncheresTab(){
@@ -9370,7 +9414,13 @@ async function submitBet(){
          ce court délai, `L` peut être devenu `null` — on ne rappelle alors ni `resolving` (déjà
          fait) ni `openResults`, qui planterait sur une ligue qui n'est plus la sienne. */
       let tries=0; while(resolving && tries<60 && S.leagueId===lid){ await new Promise(r=>setTimeout(r,50)); tries++; }
-      if(S.leagueId===lid) openResults(playedDay);
+      if(S.leagueId===lid){
+        // v8.318 (demandé par Hervé) : temps d'arrêt avant la révélation, cf. `revealGate`.
+        await revealGate("🔔", t("Résultat à découvrir"),
+          `<div class="mini" style="text-align:center">${t("Tout le monde a validé — la journée est résolue.")}</div>`,
+          "👀 "+t("Découvrir les résultats"));
+        if(S.leagueId===lid) openResults(playedDay);
+      }
     }
   }catch(e){ showErr("Validation : "+e.message); } busy=false;
 }
