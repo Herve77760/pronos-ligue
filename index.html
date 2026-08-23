@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.321";
+const APP_VERSION = "v8.322";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -10441,7 +10441,13 @@ function recapBody(D){
     /* ⚠️ Variante du libellé pour les TEMPS FORTS : elle emporte les chiffres du coup joué.
        `cardLbl` (au-dessus) reste utilisé partout où l'on parle d'un bonus SANS l'avoir joué —
        la boutique, une main, une enchère : là, seule la règle a un sens. */
-    const cardLblJoue=(c,qui,adv,cible,self,opp)=>`<span class="clik" onclick="showBonusJoue('${c.id}','${c.cloned||''}','${esc2(qui)}','${esc2(adv)}','${esc2(cible)}',${+self||0},${+opp||0})" title="${t("Voir le détail de ce coup")}">${cardEmoji(c)} ${esc(cardName(c))}</span>`;
+    /* ⚠️ v8.322 (bug vécu par Hervé) — `esc2` REMPLACE UNE VALEUR VIDE PAR "?", pensé pour `qui`/
+       `adv` (un nom de joueur manquant serait suspect). Appliqué à `cible`, ça transformait un
+       bonus SANS match ciblé (❄️ Effet Kiss Cool, ✂️ Demi-portion — `t:false` dans CARDS) en
+       « sur ? » au lieu de ne rien afficher : `showBonusJoue` teste déjà `cible?...:''`, mais
+       une chaîne vide devenue "?" via `esc2` est VRAIE, donc jamais reconnue comme absente. */
+    const escCible=n=>esc((n||'').replace(/'/g,"\\'"));
+    const cardLblJoue=(c,qui,adv,cible,self,opp)=>`<span class="clik" onclick="showBonusJoue('${c.id}','${c.cloned||''}','${esc2(qui)}','${esc2(adv)}','${escCible(cible)}',${+self||0},${+opp||0})" title="${t("Voir le détail de ce coup")}">${cardEmoji(c)} ${esc(cardName(c))}</span>`;
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, im=c.impact||{};
     const self=+im.self||0, opp=+im.opp||0;
     // ⚠️ `wp` SERT ENCORE PLUS BAS, en COMPLÉMENT (« contre toi », « pour toi ») — emplois
