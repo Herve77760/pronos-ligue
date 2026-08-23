@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.316";
+const APP_VERSION = "v8.317";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2595,6 +2595,18 @@ function koOuEtat(f){
 }
 // Le match i porte-t-il le logo du bonus ? (gère les bonus à 2 cibles comme le Coup Double → logo sur les 2 matchs)
 function cardOnMatch(card,i){ return !!(card&&card.id&&(card.target===i||(CARDS[card.id]&&CARDS[card.id].two&&card.target2===i))); }
+/* ⚠️ v8.317 (bug vécu par Hervé) — UN 🧬 CLONE RÉSOLU EST ENREGISTRÉ AVEC L'ID DU BONUS COPIÉ
+   (cf. v8.313, pour que le calcul du gain/perte affiché reconnaisse le bon multiplicateur — voir
+   `resolveDay`). Mais tout ce qui NOMME le bonus à l'écran lisait ce même `id` : le joueur voyait
+   « tu as joué 🔥 Ça passe ou ça casse » alors qu'il a joué 🧬 Clone — c'est CE bonus qu'il a
+   choisi en main, l'autre n'explique que l'impact chiffré (déjà distingué correctement dans
+   `showBonusImpact`, qui a servi de modèle ici). Une seule paire de fonctions pour tous les
+   endroits qui NOMMENT un bonus RÉSOLU (résultats, temps forts, détail d'impact) — les recopier
+   aurait fini par en dire deux versions différentes, comme `riskyMsg`/`lossMult` plus haut. */
+function cardEmoji(c){ if(!c||!c.id) return ''; return (c.cloned&&CARDS.clone)?CARDS.clone.e:((CARDS[c.id]||{}).e||''); }
+function cardName(c){ if(!c||!c.id) return '';
+  if(c.cloned&&CARDS[c.cloned]) return t(CARDS.clone.n)+" ("+CARDS[c.cloned].e+" "+t(CARDS[c.cloned].n)+")";
+  return (CARDS[c.id]||{}).n?t(CARDS[c.id].n):''; }
 function selLineHTML(){ const dt=dayTimes(); return dt.ok?`<div class="mini muted" style="margin-top:4px">⏳ ${t("Choix des matchs avant {a}",{a:'<b>'+fmtWhen(dt.sel)+'</b>'})} · ${leagueFormula().n}</div>`:''; }
 /* ⚠️ v7.43 — CETTE LIGNE ANNONÇAIT LA MAUVAISE HEURE (signalé par Hervé sur la ligue DRDJ3).
    Elle affichait l'échéance de la FORMULE (« demain 10h ») alors que la clôture réelle est, en
@@ -3708,9 +3720,9 @@ const EN={
   "🎁 <b>Chérie c'est cadeau</b> : choix initial <s class=\"red\">{a}</s> inversé en <b>{b}</b>.":"🎁 <b>Sweetie It's a Gift</b>: original pick <s class=\"red\">{a}</s> flipped to <b>{b}</b>.",
   "a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}€":"bet <b>{a}</b> ({b}€ @{c}) → won: {b}×({c}−1)={d}€",
   "a parié <b>{a}</b> ({b}€) → perdu : −{b}€":"bet <b>{a}</b> ({b}€) → lost: −{b}€",
-  "👑 Match favori ×2 → {a}€":"👑 Favourite match ×2 → {a}€", "🐗 {n} ×2 → {a}€":"🐗 {n} ×2 → {a}€",
-  "🔥 {n} {m} → {a}€":"🔥 {n} {m} → {a}€", "🃏 Joker ×2 → {a}€":"🃏 Joker ×2 → {a}€",
-  "🛡 {n} : moitié de la mise remboursée → {a}€":"🛡 {n}: half the stake refunded → €{a}",
+  "👑 Match favori ×2 → {a}€":"👑 Favourite match ×2 → {a}€", "{n} ×2 → {a}€":"{n} ×2 → {a}€",
+  "{n} {m} → {a}€":"{n} {m} → {a}€",
+  "{n} : moitié de la mise remboursée → {a}€":"{n}: half the stake refunded → €{a}",
   "🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}€":"🤛 Opponent's In Your Face: gain <b>halved</b> → {a}€",
   "Gain réduit de moitié par « Dans ta face » adverse":"Gain halved by the opponent's In Your Face",
   // — Phase 4c : noms & descriptions des bonus —
@@ -4605,14 +4617,17 @@ function infoModal(emoji,title,bodyHTML,sansOk){ closeCardInfo();
    qui le joue et 10 € à son adversaire lui a coûté le duel. C'est le raisonnement posé en
    v7.62 (`self − opp`) après un cas vécu sur HR98Z ; la fiche le montre au lieu de le laisser
    déduire. Les trois lignes sont donc données ensemble, jamais l'une sans les autres. */
-function showBonusJoue(id, qui, adv, cible, self, opp){
+function showBonusJoue(id, cloned, qui, adv, cible, self, opp){
   const c=CARDS[id]; if(!c) return;
   const ecart=(+self||0)-(+opp||0);
   /* `fmt()` : le formateur SIGNÉ déjà utilisé partout pour les gains. Refaire le signe à la
      main aurait donné un « +0.00 » là où le reste de l'app écrit « 0.00 ». */
   const mnt=v=>`<b class="${v>0?'green':(v<0?'red':'muted')}">${fmt(v)} €</b>`;
   const ligne=(lab,val)=>`<div class="row" style="margin:3px 0"><span class="mini">${lab}</span>${mnt(val)}</div>`;
-  infoModal(c.e, t(c.n),
+  // v8.317 : titre clone-aware, même principe que `cardEmoji`/`cardName` — un 🧬 Clone qui a copié
+  // ce bonus se présente comme tel, la règle affichée plus bas reste celle qui a produit les chiffres.
+  const disp = (cloned&&CARDS[cloned]) ? {e:CARDS.clone.e, n:t(CARDS.clone.n)+" ("+CARDS[cloned].e+" "+t(CARDS[cloned].n)+")"} : {e:c.e, n:t(c.n)};
+  infoModal(disp.e, disp.n,
     `<div class="mini" style="text-align:left;line-height:1.6">
        <b>⚡ ${t("Ce que le bonus a changé")}</b>
        <div class="muted" style="margin-top:2px">${t("Joué par {a}",{a:qui})}${cible?' · '+t("sur {a}",{a:cible}):''}</div>
@@ -5436,7 +5451,7 @@ function showBonusImpact(pid,day){
   if(hasSelf){ const wo=r2(net-im.self); body+=`<div class="mini" style="text-align:left;margin-top:7px">🧑 <b>${t("Sur son gain du jour :")}</b><br>${t("• avec le bonus :")} <b>${fmt(net)}€</b><br>${t("• sans le bonus :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b></div>`; }
   if(hasOpp){ const wo=r2(oppNet-im.opp); body+=`<div class="mini" style="text-align:left;margin-top:7px">🥊 <b>${t("Sur le gain de l'adversaire :")}</b><br>${t("• avec le bonus :")} <b>${fmt(oppNet)}€</b><br>${t("• sans le bonus :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b></div>`; }
   if(!hasSelf&&!hasOpp) body+=`<div class="mini muted" style="text-align:left;margin-top:8px">${t("Aucun effet chiffré ce jour-là.")}</div>`;
-  infoModal(C.e, esc(t(C.n))+" — "+t("l'effet"), body);
+  infoModal(cardEmoji(c), esc(cardName(c))+" — "+t("l'effet"), body);
 }
 /* ---- FENÊTRE DE CONFIRMATION À LA CHARTE DU JEU (v7.53, demandé par Hervé) -----------------
    `confirm()` du navigateur ne peut pas être mis en forme : ni emoji mis en valeur, ni couleur,
@@ -10204,7 +10219,7 @@ function recapBody(D){
     if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g*=(1-ASSURANCE_REMB); if(c.id==="joker")g*=2; }
     let faceCut=false; if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; faceCut=true; }
     const selTxt = isDC ? `<b>${esc(labelSel(f,b.sel))}</b>/<b>${esc(labelSel(f,c.sel2))}</b>` : (b.orig!=null ? `<s class="red">${esc(labelSel(f,b.orig))}</s> → <b>${esc(labelSel(f,b.sel))}</b> <span class="bem clik" onclick="event.stopPropagation();showCardInfo('cadeau')">🎁</span>` : esc(labelSel(f,b.sel)));
-    return `${selTxt} · ${b.stake}€ @${cote(odd)}${i===bt.captain?' <span class="bem clik" onclick="event.stopPropagation();showCaptainInfo()">👑</span>':''}${cardOnMatch(c,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.id}')">${CARDS[c.id].e}</span>`:''}${faceCut?` <span class="mini red" title="${t("Gain réduit de moitié par « Dans ta face » adverse")}">↓½ 🤛</span>`:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
+    return `${selTxt} · ${b.stake}€ @${cote(odd)}${i===bt.captain?' <span class="bem clik" onclick="event.stopPropagation();showCaptainInfo()">👑</span>':''}${cardOnMatch(c,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.cloned?'clone':c.id}')">${cardEmoji(c)}</span>`:''}${faceCut?` <span class="mini red" title="${t("Gain réduit de moitié par « Dans ta face » adverse")}">↓½ 🤛</span>`:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
   const explain=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return t("pari non enregistré pour ce match.");
     const b=bt.picks[i]; const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;  // bonus volé → neutralisée (cf. line())
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
@@ -10220,10 +10235,14 @@ function recapBody(D){
       txt= flip + (win?t("a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}€",{a:esc(labelSel(f,b.sel)),b:b.stake,c:odd,d:fmt(base)})
              :t("a parié <b>{a}</b> ({b}€) → perdu : −{b}€",{a:esc(labelSel(f,b.sel)),b:b.stake})); }
     if(i===bt.captain){ g=base*2; txt+=' · '+t("👑 Match favori ×2 → {a}€",{a:fmt(g)}); }
-    if(c&&c.target===i&&!isDC){ if(c.id==="double"&&win){g*=2;txt+=' · '+t("🐗 {n} ×2 → {a}€",{n:t(CARDS.double.n),a:fmt(g)});} else if(c.id==="tout"){g*=(win?3:2);txt+=' · '+t("🔥 {n} {m} → {a}€",{n:t(CARDS.tout.n),m:win?'×3':'×2',a:fmt(g)});} else if(c.id==="joker"){g*=2;txt+=' · '+t("🃏 Joker ×2 → {a}€",{a:fmt(g)});} else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);txt+=' · '+t("🛡 {n} : moitié de la mise remboursée → {a}€",{n:t(CARDS.assurance.n),a:fmt(g)});} }
+    if(c&&c.target===i&&!isDC){ const ce=cardEmoji(c), cn=cardName(c);   // v8.317 : emoji/nom clone-aware, cf. leur définition
+      if(c.id==="double"&&win){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}€",{n:cn,a:fmt(g)});}
+      else if(c.id==="tout"){g*=(win?3:2);txt+=' · '+ce+' '+t("{n} {m} → {a}€",{n:cn,m:win?'×3':'×2',a:fmt(g)});}
+      else if(c.id==="joker"){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}€",{n:cn,a:fmt(g)});}
+      else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);txt+=' · '+ce+' '+t("{n} : moitié de la mise remboursée → {a}€",{n:cn,a:fmt(g)});} }
     if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; txt+=' · '+t("🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}€",{a:fmt(g)}); }
     txt+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; return txt; };
-  const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Match favori : gain et perte doublés">👑 Match favori (${esc(who)})</span> `; if(cardOnMatch(bt.card,i)) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.id}')">${CARDS[bt.card.id].e} ${esc(CARDS[bt.card.id].n)} (${esc(who)})</span> `; return s; };
+  const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Match favori : gain et perte doublés">👑 Match favori (${esc(who)})</span> `; if(cardOnMatch(bt.card,i)) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.cloned?'clone':bt.card.id}')">${cardEmoji(bt.card)} ${esc(cardName(bt.card))} (${esc(who)})</span> `; return s; };
   const fxRecap = (myD && myD.fixtures) || [];
   const impactTxt=(who,bt,vb)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card; const C=CARDS[c.id]; const im=c.impact||{}; let detail='';
     if(c.stolenBy){ const th=pById(c.stolenBy); detail=t("🥷 Ce bonus a été <b>pris</b> par {a} : il ne s'est pas appliqué.",{a:th?avaName(th):'?'}); }
@@ -10262,7 +10281,7 @@ function recapBody(D){
     const bits=[];
     if(im.self!=null&&Math.abs(im.self)>=1) bits.push(`gain de ${esc(who)} : <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`);
     if(im.opp!=null&&Math.abs(im.opp)>=1) bits.push(`gain adverse : <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
-    return `<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>🃏 ${esc(who)} a joué ${C.e} ${esc(C.n)}</b></div>
+    return `<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>🃏 ${esc(who)} a joué ${cardEmoji(c)} ${esc(cardName(c))}</b></div>
       <div class="mini muted" style="margin-top:3px">${esc(C.d)}</div>${detail?`<div class="mini" style="margin-top:4px">${detail}</div>`:''}
       ${bits.length?`<div class="mini" style="margin-top:4px"><span class="muted">Effet du bonus (vs sans le bonus)</span> — ${bits.join(' · ')}</div>`:''}</div>`; };
   let detail="";
@@ -10282,9 +10301,9 @@ function recapBody(D){
        0-0 — seul CE récapitulatif de duel, calculé à part avec la mauvaise fonction, se
        contredisait avec le total juste au-dessus de lui. */
     const rr=duelPtsF(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)), forgot(homeId), forgot(awayId), isScoring2());
-    const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,C=CARDS[c.id],im=c.impact||{};
+    const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
-      return `<div class="duel-bonus-line clik" onclick="showBonusImpact('${bt.player_id}',${D})" title="${t("Toucher pour le détail : gain avec le bonus vs sans le bonus")}"><span class="duel-bonus-ic">${C.e}</span><span class="duel-bonus-txt"><b>🃏 ${esc(t(C.n))}</b>${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</span></div>`; };
+      return `<div class="duel-bonus-line clik" onclick="showBonusImpact('${bt.player_id}',${D})" title="${t("Toucher pour le détail : gain avec le bonus vs sans le bonus")}"><span class="duel-bonus-ic">${cardEmoji(c)}</span><span class="duel-bonus-txt"><b>🃏 ${esc(cardName(c))}</b>${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</span></div>`; };
     // 🏠/✈️ (qui a choisi les 5 matchs) porté par chaque .pick plutôt que par un bandeau séparé —
     // la maquette n'a pas de bandeau domicile/extérieur (elle n'affiche qu'un seul duel à la fois,
     // pas de bascule de focus), donc pas d'équivalent direct à reprendre pour cette info réelle.
@@ -10362,8 +10381,8 @@ function recapBody(D){
     /* ⚠️ Variante du libellé pour les TEMPS FORTS : elle emporte les chiffres du coup joué.
        `cardLbl` (au-dessus) reste utilisé partout où l'on parle d'un bonus SANS l'avoir joué —
        la boutique, une main, une enchère : là, seule la règle a un sens. */
-    const cardLblJoue=(id,qui,adv,cible,self,opp)=>`<span class="clik" onclick="showBonusJoue('${id}','${esc2(qui)}','${esc2(adv)}','${esc2(cible)}',${+self||0},${+opp||0})" title="${t("Voir le détail de ce coup")}">${CARDS[id].e} ${esc(t(CARDS[id].n))}</span>`;
-  bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, C=CARDS[c.id], im=c.impact||{};
+    const cardLblJoue=(c,qui,adv,cible,self,opp)=>`<span class="clik" onclick="showBonusJoue('${c.id}','${c.cloned||''}','${esc2(qui)}','${esc2(adv)}','${esc2(cible)}',${+self||0},${+opp||0})" title="${t("Voir le détail de ce coup")}">${cardEmoji(c)} ${esc(cardName(c))}</span>`;
+  bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, im=c.impact||{};
     const self=+im.self||0, opp=+im.opp||0;
     // ⚠️ `wp` SERT ENCORE PLUS BAS, en COMPLÉMENT (« contre toi », « pour toi ») — emplois
     // parfaitement corrects que la v7.91 ne touche pas. Le retirer avec l'ancien `whoNm` a
@@ -10376,7 +10395,7 @@ function recapBody(D){
     const fxD=(dd&&Array.isArray(dd.fixtures))?dd.fixtures:[];
     const fCib=(c.target!=null&&fxD[c.target])?fxD[c.target]:null;
     const cibTxt=fCib?(fCib.home+' – '+fCib.away):'';
-    const lbl=cardLblJoue(c.id,quiTxt,advTxt,cibTxt,self,opp);
+    const lbl=cardLblJoue(c,quiTxt,advTxt,cibTxt,self,opp);
     /* ⚠️ v7.62 — ON JUGE SUR L'EFFET DANS LE DUEL (`self − opp`), plus sur `self` seul.
        Signalé par Hervé sur HR98Z J3 : une ✂️ Demi-portion du joueur IA s'était retournée contre
        lui et n'apparaissait NULLE PART. Normal — ce bonus ne touche pas le net de celui qui le
@@ -10716,7 +10735,7 @@ function showGainDetail(pid){
        ce qui est tout l'objet de cette fenêtre. */
     const adj=net-sumG;
     rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("Somme des paris :")} <b>${fmt(sumG)} €</b></div>`;
-    if(Math.abs(adj)>=0.005) rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${c&&CARDS[c.id]?' ('+CARDS[c.id].e+' '+esc(t(CARDS[c.id].n))+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
+    if(Math.abs(adj)>=0.005) rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${c&&CARDS[c.id]?' ('+cardEmoji(c)+' '+esc(cardName(c))+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
   } else rows=`<div class="mini muted">${t("Pas de détail disponible pour ce joueur.")}</div>`;
   infoModal("🧮", t("Détail — {a}",{a:(p.name||'?')}), `<div style="text-align:left">${rows}<div class="mini" style="margin-top:8px;border-top:2px solid var(--border);padding-top:6px"><b>${t("Total net :")} <span class="${net>=0?'green':'red'}">${fmt(net)}€</span></b></div></div>`);
   } finally { if(_r){ bets=_sb; duels=_sd; } }
