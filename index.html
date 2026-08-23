@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.314";
+const APP_VERSION = "v8.315";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2902,6 +2902,8 @@ const EN={
   "Créer ma première ligue":"Create my first league",
   "Rejoindre avec un code":"Join with a code",
   "Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.":"No ongoing league. Create one, or join a friend's with their code.",
+  "Toutes tes ligues sont terminées. Crée-en une nouvelle, ou rejoins celle d'un ami avec son code.":"All your leagues are over. Create a new one, or join a friend's with their code.",
+  "Créer une nouvelle ligue":"Create a new league",
   "Un code de ligue fait {a} caractères.":"A league code is {a} characters long.",
   "Code de ligue introuvable — vérifie le code saisi.":"League code not found — check the code you entered.",
   "aujourd'hui":"today", "demain":"tomorrow",
@@ -7243,17 +7245,30 @@ function viewHome(){
         <div class="mt">${t("Code")} ${esc(m.lg.code)} · ${(()=>{ const p=(m.lg.status==='running')?homePhase[m.lg.id]:phasePrep(m.lg,m.pid,m.shopDone); return p?(p.e+' '+p.t):statusLabel(m.lg); })()}${m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):''}</div></div>
       <div class="sd"><button class="ticon" title="${t("Caractéristiques de la ligue")}" onclick="event.stopPropagation();showLeagueInfo('${m.lg.id}')">⚙️</button>${(m.lg.status==='running'&&homeTodoLoaded&&!doitJouer(m.lg.id))?`<span class="chip g">${t("✅ à jour")}</span>`:''}<span class="chip b">${t("Ouvrir →")}</span></div></div>`).join("");
 
+  /* ⚠️ v8.315 (bug vécu par Hervé) — « Créer MA PREMIÈRE ligue » S'AFFICHAIT MÊME AVEC UN HISTORIQUE
+     DE LIGUES TERMINÉES, tant qu'aucune n'était EN COURS (`act` exclut `status==="done"`, cf. plus
+     haut) : un joueur qui vient de finir sa dernière ligue se voyait proposer de créer sa
+     « première », comme si de rien n'était. `dejaJoue` distingue ce cas (déjà joué, juste plus de
+     ligue active) du vrai compte neuf — même distinction que `tuto` juste en dessous, qui l'avait
+     déjà mais recalculait la même chose de son côté. */
+  const dejaJoue = !!(myLeagues && myLeagues.length);
   const bloc = act.length
     ? `<div class="listsec">${t("🏆 Tes ligues en cours")}<span class="n">· ${act.length}</span></div>${lignes}
        <div style="height:4px"></div><button class="btn ghost" onclick="backToLeagues()">🏆 ${t("Toutes mes ligues")}</button>`
-    /* Aucune ligue : on met les DEUX actions ici plutôt que de renvoyer vers un onglet. C'est le
-       premier écran d'un compte neuf — l'y envoyer chercher son point de départ est une étape de
-       trop. `backToLeagues()` ouvre l'onglet qui porte les deux formulaires. */
+    /* Aucune ligue EN COURS. Compte neuf : on met les DEUX actions ici plutôt que de renvoyer vers
+       un onglet — l'y envoyer chercher son point de départ est une étape de trop. `backToLeagues()`
+       ouvre l'onglet qui porte les deux formulaires. Déjà joué (ligues toutes terminées) : message
+       et bouton adaptés, + accès à l'historique. */
+    : dejaJoue
+    ? `<div class="empty-box"><div class="ic">🏆</div><p>${t("Toutes tes ligues sont terminées. Crée-en une nouvelle, ou rejoins celle d'un ami avec son code.")}</p></div>
+       <button class="cta-primary" onclick="backToLeagues()">➕ ${t("Créer une nouvelle ligue")}</button>
+       <div style="height:8px"></div><button class="btn ghost" onclick="backToLeagues()">🔑 ${t("Rejoindre avec un code")}</button>
+       <div style="height:8px"></div><button class="btn ghost" onclick="backToLeagues()">🏆 ${t("Toutes mes ligues")}</button>`
     : `<div class="empty-box"><div class="ic">🏆</div><p>${t("Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.")}</p></div>
        <button class="cta-primary" onclick="backToLeagues()">➕ ${t("Créer ma première ligue")}</button>
        <div style="height:8px"></div><button class="btn ghost" onclick="backToLeagues()">🔑 ${t("Rejoindre avec un code")}</button>`;
 
-  const tuto=(myLeagues&&myLeagues.length)
+  const tuto=dejaJoue
     ? `<div style="height:8px"></div><button class="btn ghost sm" style="width:100%" onclick="openTuto()">${t("🎓 Revoir le tuto")}</button>`
     : `<div style="height:8px"></div><button class="btn ghost" onclick="openTuto()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`;
   return salut+alerte+bloc+tuto;
