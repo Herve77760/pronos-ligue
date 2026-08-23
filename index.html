@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.320";
+const APP_VERSION = "v8.321";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -10795,7 +10795,24 @@ function showGainDetail(pid){
        ce qui est tout l'objet de cette fenêtre. */
     const adj=net-sumG;
     rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("Somme des paris :")} <b>${fmt(sumG)} €</b></div>`;
-    if(Math.abs(adj)>=0.005) rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${c&&CARDS[c.id]?' ('+cardEmoji(c)+' '+esc(cardName(c))+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
+    /* ⚠️ v8.321 (bug vécu par Hervé, ligue LYQ22 J1) — LA LIGNE D'AJUSTEMENT NOMMAIT TOUJOURS MA
+       PROPRE carte (`c`), même quand l'écart vient du bonus de l'ADVERSAIRE (🩸 Sangsue, ✂️ Demi-
+       portion : ils touchent MON total à MOI en jouant sur SA carte à LUI, pas sur la mienne).
+       Hervé jouait 🩸 Sangsue, Giulian 🎁 Chérie c'est cadeau (qui ne touche jamais son PROPRE
+       total, seulement celui de sa victime) — l'ajustement sur le total de Giulian affichait donc
+       « (🎁 Chérie c'est cadeau) » alors qu'il venait de la Sangsue d'Hervé.
+       ⚠️ ON NE DEVINE PAS AU NOM DU BONUS (aucun `oppT` fiable, cf. sangsue qui n'a pas ce
+       marqueur) : `impact.self`/`impact.opp`, déjà calculés par `resolveDay()` en comparant le
+       monde AVEC et SANS chaque carte, disent PRÉCISÉMENT qui a bougé mon total — le sien
+       (`c.impact.self`) ou celui de l'adversaire sur moi (`oppCard.impact.opp`). Les deux peuvent
+       cumuler (rare, mais possible) : on les liste alors tous les deux plutôt que d'en taire un. */
+    if(Math.abs(adj)>=0.005){
+      const imSelf=(c&&c.impact&&c.impact.self)||0, imOpp=(oppCard&&oppCard.impact&&oppCard.impact.opp)||0;
+      const sources=[];
+      if(c&&CARDS[c.id]&&Math.abs(imSelf)>=0.005) sources.push(cardEmoji(c)+' '+esc(cardName(c)));
+      if(oppCard&&CARDS[oppCard.id]&&Math.abs(imOpp)>=0.005) sources.push(cardEmoji(oppCard)+' '+esc(cardName(oppCard)));
+      rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${sources.length?' ('+sources.join(' + ')+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
+    }
   } else rows=`<div class="mini muted">${t("Pas de détail disponible pour ce joueur.")}</div>`;
   infoModal("🧮", t("Détail — {a}",{a:(p.name||'?')}), `<div style="text-align:left">${rows}<div class="mini" style="margin-top:8px;border-top:2px solid var(--border);padding-top:6px"><b>${t("Total net :")} <span class="${net>=0?'green':'red'}">${fmt(net)}€</span></b></div></div>`);
   } finally { if(_r){ bets=_sb; duels=_sd; } }
