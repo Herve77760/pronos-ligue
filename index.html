@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.312";
+const APP_VERSION = "v8.313";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9922,7 +9922,18 @@ async function resolveDay(){
     // On CONSERVE le bonus tel que le joueur l'a joué (on ne le reconstruit surtout pas champ par
     // champ : `target2` du Coup Double avait été oublié → 2ᵉ match perdu à la résolution). On retire
     // juste les champs calculés d'une résolution précédente, puis on les recalcule.
-    for(const pid in dayNet){ const c=PD[pid].card; const u2={net:dayNet[pid]};
+    for(const pid in dayNet){ let c=PD[pid].card; const u2={net:dayNet[pid]};
+      /* ⚠️ v8.313 (bug vécu par Hervé : perte 🧬 Clone-de-🔥 affichée SIMPLE au lieu de ×2) —
+         `runEngine` copie déjà la carte adverse SUR SA PROPRE copie de PD (Phase 0, plus haut) pour
+         calculer le net — c'est pourquoi le capital, lui, était correct. Mais CETTE boucle relit
+         `PD[pid].card` qui vit dans LA COPIE EXTÉRIEURE de `resolveDay()`, jamais mutée par
+         `runEngine` : elle valait donc encore `{id:"clone"}`, SANS `target`. L'écran Résultats
+         relit ensuite cette carte persistée pour son propre calcul d'affichage (`c.id==="tout"`,
+         `c.target===i`) — les deux ne matchaient jamais, et le multiplicateur restait invisible.
+         Même geste qu'à la Phase 0 (spread complet, jamais champ par champ, cf. commentaire
+         ci-dessus) : on applique ici la MÊME transformation à la carte qu'on s'apprête à persister. */
+      if(cloned[pid]){ const opp=PD[pid].oppId, src=(opp!=null&&PD[opp])?PD[opp].card:null;
+        if(src&&src.id===cloned[pid]) c={...src}; }
       if(c&&c.id){ const {impact,flip,...joue}=c; u2.card={...joue, impact:impacts[pid]}; if(cadeauFlips[pid]) u2.card.flip=cadeauFlips[pid];
         // 🥷 / 🧬 : on trace ce que le bonus a réellement fait, sinon le joueur voit un impact chiffré
         // sans savoir ce qui a été pris ou copié (« Clone : −12 € » n'explique rien tout seul).
