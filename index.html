@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.313";
+const APP_VERSION = "v8.314";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2909,8 +2909,8 @@ const EN={
   "Salon":"Lobby", "Journée {a}/{b}":"Day {a}/{b}",
   "Match favori et bonus doivent être sur des matchs différents.":"Favourite match and bonus must be on different matches.",
   "👑 Le match favori et le 🃏 bonus doivent viser des matchs différents. Exception : les bonus qui s'attaquent au pari de l'adversaire ({a}, {b}) peuvent, eux, partager ton match favori.":"👑 The favourite match and the 🃏 bonus must target different matches. Exception: bonuses that attack the opponent's bet ({a}, {b}) can share the favourite match.",
-  "⚠️ Trop risqué — baisse la mise de ton match favori":"⚠️ Too risky — lower your favourite match stake",
-  "⚠️ Trop risqué — baisse la mise de ton match favori 👑 ou de ton {e} {n}":"⚠️ Too risky — lower the stake on your favourite match 👑 or on your {e} {n}",
+  "⚠️ Trop risqué — baisse n'importe quelle mise (ton favori 👑 compte double)":"⚠️ Too risky — lower any stake (your favourite 👑 counts double)",
+  "⚠️ Trop risqué — baisse n'importe quelle mise (ton favori 👑 et ton {e} {n} comptent double)":"⚠️ Too risky — lower any stake (your favourite 👑 and your {e} {n} count double)",
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "Retour à mes stats":"Back to my stats",
   "Pari par pari":"Bet by bet", "Somme des paris :":"Bets total:",
@@ -4399,7 +4399,7 @@ const EN={
   "Une fois les matchs terminés, la journée est <b>résolue</b> : gains, points, classement.":"Once the matches are over, the matchday is <b>resolved</b>: winnings, points, standings.",
   "💰 Gains et pertes":"💰 Winnings and losses",
   "<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.":"<b>Bet won</b>: you pocket <b>stake × (odds − 1)</b>. <b>Bet lost</b>: you lose your <b>stake</b>.",
-  "<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton match favori (ou, si tu as joué 🔥 Ça passe ou ça casse / 🃏 Joker, celle du match ciblé par ce bonus : les deux comptent double). <b>Ton capital ne descend jamais sous 0.</b>":"<b>🛟 The safety net:</b> the matchday's <b>maximum possible loss</b> can never exceed your balance. The app refuses a bet that could leave you negative — if the button is blocked, lower your favourite match's stake (or, if you played 🔥 All or Nothing / 🃏 Joker, the stake on that bonus's target match: both count double). <b>Your balance never drops below 0.</b>",
+  "<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse n'importe quelle mise (celle de ton match favori ou, si tu as joué 🔥 Ça passe ou ça casse / 🃏 Joker, celle du match ciblé par ce bonus, sont les plus efficaces : les deux comptent double). <b>Ton capital ne descend jamais sous 0.</b>":"<b>🛟 The safety net:</b> the matchday's <b>maximum possible loss</b> can never exceed your balance. The app refuses a bet that could leave you negative — if the button is blocked, lower any stake (your favourite match's, or — if you played 🔥 All or Nothing / 🃏 Joker — that bonus's target match, are the most effective: both count double). <b>Your balance never drops below 0.</b>",
   "<b>💸 Recapitalisation :</b> si un joueur finit une journée sous <b>{a} €</b>, il n'a plus de quoi miser vraiment : son capital est <b>remonté à {b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).":"<b>💸 Top-up:</b> if a player ends a matchday below <b>€{a}</b>, they no longer have enough to bet meaningfully: their balance is <b>raised to €{b}</b> to stay in the race, in exchange for <b>−1 championship point</b> (only they are affected).",
   "On <b>remonte à</b> {b} €, on n'ajoute pas {b} € : que tu finisses à {c} € ou à 2 €, tu repars avec {b} €. Perdre davantage ne rapporte donc rien.":"It's a <b>raise to</b> €{b}, not a €{b} bonus: whether you end on €{c} or on €2, you restart with €{b}. So losing more gains you nothing.",
   "<b>{a}</b> étai{e}t sous <b>{c} €</b> — capital remonté à <b>{b} €</b> pour rester dans la course, en échange de <b>−1 pt</b> de championnat. 🤝":"<b>{a}</b> — below <b>€{c}</b>, balance raised to <b>€{b}</b> to stay in the race, in exchange for <b>−1 championship point</b>. 🤝",
@@ -6978,6 +6978,19 @@ async function loadHomeTodo(){
         homeTodo.push({lg:m.lg, pid:m.pid, kind:"resultats", jour:(m.lg.current_day|0)});
         return;                                             // une seule action par ligue à la fois
       }
+      /* ⚠️ v8.314 (bug vécu par Hervé) — LES COULISSES DE L'OUVERTURE (gage + résultat des enchères
+         de départ) NE PASSAIENT QU'EN RAPPEL DE DERNIER RANG (ancienne boucle à part, après celle-ci,
+         seulement si RIEN d'autre n'avait été poussé) : sur une ligue toute fraîche, le joueur à qui
+         il revenait de choisir ses matchs voyait « choisis tes matchs » AVANT d'avoir vu ce résumé —
+         Hervé voulait l'inverse. `viewCoulisses()` marque `pl_preps_` DÈS que l'écran s'affiche
+         (même juste en le traversant, cf. sa définition) : le faire passer devant ne bloque donc
+         rien de durable — un seul tour d'écran de plus, puis choix/pronos reprennent la main
+         normalement dès le rendu suivant. `current_day===0` UNIQUEMENT : passé la première journée,
+         cette priorité s'efface d'elle-même. */
+      if((m.lg.current_day|0)===0 && m.lg.prep_summary && localStorage.getItem("pl_preps_"+m.lg.id+"_"+m.pid)!=="1"){
+        homeTodo.push({lg:m.lg, pid:m.pid, kind:"coulisses"});
+        return;
+      }
       /* ⚠️ v8.240 (bug vécu par Hervé, ligue 66NW7, capture à l'appui) — MATCHS TERMINÉS MAIS
          JOURNÉE PAS ENCORE RÉSOLUE : rien ne déclenche la résolution en tâche de fond (aucune
          tâche planifiée côté serveur, cf. `resolveRealIfReady`) — seul le fait d'OUVRIR la ligue
@@ -7038,38 +7051,15 @@ async function loadHomeTodo(){
       if(b && Array.isArray(b.picks) && b.picks.length) return;
       homeTodo.push({lg:m.lg, pid:m.pid, kind:"pronos", deadline:t});
     });
-    /* ⚠️ (signalé par Hervé sur XXZQ3 : ouverte après coup, sans avoir vu la résolution des
-       enchères, la ligue emmenait direct sur les pronos) — LES COULISSES DE L'OUVERTURE N'AVAIENT
-       AUCUN RAPPEL. `viewGame()` ne renvoie dessus qu'EN DIRECT, pendant que la transition
-       prépa→running a lieu sous les yeux du joueur (`prevLeagueStatus`, cf. `refresh()`) — un
-       retour après coup n'affiche donc jamais rien. Même défaut que celui corrigé pour la trêve
-       en v8.93 (`viewPrepSummary`/`prepSeen` existaient déjà pour ce cas, mais n'étaient jamais
-       appelés — cf. leur définition, juste au-dessus de `viewPrepSummary`).
-       ⚠️ BOUCLE À PART, APRÈS COUP — PAS DANS LA BOUCLE `act.forEach` CI-DESSUS : celle-ci pousse
-       AU PLUS UN bandeau par ligue et sort dès qu'un cas matche (`return`). Si « coulisses » y
-       entrait au même rang, il gagnerait pour toute ligue où le joueur l'ignore, et masquerait
-       pour de bon les bandeaux réellement actionnables (choisir ses matchs, valider ses pronos).
-       On le rajoute donc SEULEMENT pour les ligues qui n'ont rien poussé d'autre — `doitJouer`
-       (posé plus bas dans `viewHome`) n'existe pas encore ici, on le réécrit donc par l'absence
-       d'une entrée déjà présente pour cette ligue.
-       ⚠️ `current_day===0` UNIQUEMENT : passé la première journée, on cesse de le rappeler — la
-       fenêtre se referme d'elle-même, comme le plafond de 3 jours pour une ligue terminée
-       (v8.110) plus haut. Coulisses reste consultable en tout temps, juste plus poussé ici. */
-    act.forEach(m=>{
-      if((m.lg.current_day|0)!==0 || !m.lg.prep_summary) return;
-      if(homeTodo.some(x=>x.lg.id===m.lg.id)) return;
-      if(localStorage.getItem("pl_preps_"+m.lg.id+"_"+m.pid)==="1") return;
-      homeTodo.push({lg:m.lg, pid:m.pid, kind:"coulisses"});
-    });
     // La trêve d'abord (c'est ce que `viewGame()` affiche en premier), puis les résultats à
-    // découvrir (vus ou juste prêts à déclencher — même bonne nouvelle), puis une préparation à
-    // démarrer, puis « choisir ses matchs », puis les pronos par urgence, puis un rappel discret
-    // pour les Coulisses jamais visitées.
+    // découvrir (vus ou juste prêts à déclencher — même bonne nouvelle), puis les Coulisses de
+    // l'ouverture jamais visitées (v8.314, cf. plus haut) et une préparation à démarrer, puis
+    // « choisir ses matchs », puis les pronos par urgence.
     // ⚠️ `declencher` MANQUAIT ICI (repéré le 2026-08-17, sur XXZQ3 — signalé par Hervé : aucun
     // bandeau n'apparaissait un matin où une journée finie attendait sa résolution). Sans entrée,
     // `rang["declencher"]` valait `undefined` et le tri comparait des `NaN` — pas ce qui a fait
     // disparaître le bandeau ce jour-là (voir plus bas), mais une vraie incohérence à corriger.
-    const rang={treve:0, trevedeclencher:0, resultats:1, declencher:1, prep:2, trevebid:2, choix:3, pronos:4, coulisses:5};
+    const rang={treve:0, trevedeclencher:0, resultats:1, declencher:1, coulisses:2, prep:2, trevebid:2, choix:3, pronos:4};
     homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
   }catch(e){
     // ⚠️ v8.256 (bug vécu par Hervé sur XXZQ3, 2026-08-17) — NE PLUS TOUT EFFACER ICI. Avant : la
@@ -9058,14 +9048,19 @@ function worstLoss(picks,captainIdx,card){
    / 🃏 Joker (si l'un des deux est joué — jamais les deux en même temps, ils sont forcément sur des
    matchs différents du Capitaine). Baisser la mise du Capitaine ne sert à rien si c'est en fait le
    match du bonus qui fait déborder le total : le message pointait le mauvais réglage à faire.
+   ⚠️ v8.314 (bug vécu par Hervé) — CE CORRECTIF ALLAIT TROP LOIN DANS L'AUTRE SENS : il ne citait
+   plus QUE ces deux matchs, laissant croire que baisser un AUTRE pari ne servirait à rien. Or
+   `worstLoss` (juste au-dessus) SOMME les 5 mises (×1 pour un match ordinaire, ×2 pour favori/bonus)
+   — baisser N'IMPORTE QUELLE mise réduit ce total. Favori/bonus restent le levier le plus EFFICACE
+   (ils comptent double), mais ne sont plus présentés comme les SEULS à pouvoir débloquer le bouton.
    ⚠️ UNE SEULE FONCTION pour les 3 endroits qui affichaient ce message (bouton, mise à jour live,
    blocage à la validation) — les recopier aurait fini par en dire deux versions différentes,
    exactement le défaut que ce fichier traque depuis des mois. */
 function riskyMsg(){
   const c=myCard;
   if(c && c.target!=null && (c.id==="tout"||c.id==="joker"))
-    return t("⚠️ Trop risqué — baisse la mise de ton match favori 👑 ou de ton {e} {n}",{e:CARDS[c.id].e,n:t(CARDS[c.id].n)});
-  return t("⚠️ Trop risqué — baisse la mise de ton match favori");
+    return t("⚠️ Trop risqué — baisse n'importe quelle mise (ton favori 👑 et ton {e} {n} comptent double)",{e:CARDS[c.id].e,n:t(CARDS[c.id].n)});
+  return t("⚠️ Trop risqué — baisse n'importe quelle mise (ton favori 👑 compte double)");
 }
 /* ---- GAIN POTENTIEL (v7.67, demandé par Hervé) --------------------------------------------
    L'écran de pari ne parlait QUE de risque : capital, misé/max, jauge, alerte des 30 €, blocage
@@ -15097,7 +15092,7 @@ function viewRulesFull(){
    </ol>`)}
 
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
-     ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse la mise de ton match favori (ou, si tu as joué 🔥 Ça passe ou ça casse / 🃏 Joker, celle du match ciblé par ce bonus : les deux comptent double). <b>Ton capital ne descend jamais sous 0.</b>")}<br>
+     ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse n'importe quelle mise (celle de ton match favori ou, si tu as joué 🔥 Ça passe ou ça casse / 🃏 Joker, celle du match ciblé par ce bonus, sont les plus efficaces : les deux comptent double). <b>Ton capital ne descend jamais sous 0.</b>")}<br>
      ${t("<b>💸 Recapitalisation :</b> si un joueur finit une journée sous <b>{a} €</b>, il n'a plus de quoi miser vraiment : son capital est <b>remonté à {b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).",{a:RECAP_THRESHOLD,b:RECAP_TARGET})} ${t("On <b>remonte à</b> {b} €, on n'ajoute pas {b} € : que tu finisses à {c} € ou à 2 €, tu repars avec {b} €. Perdre davantage ne rapporte donc rien.",{b:RECAP_TARGET,c:RECAP_THRESHOLD-1})} ${t("Cela n'arrive <b>pas sur la dernière journée</b> : il n'y a plus rien à miser ensuite.")}<br>
      ${t("🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé <b>{a} h</b> après son coup d'envoi prévu, il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.",{a:STALE_MATCH_H})}<br>
      ${t("⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.")}`)}
