@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.318";
+const APP_VERSION = "v8.319";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2625,6 +2625,13 @@ let S={ view:"auth", leagueId:null, myId:null, code:null, recap:false, dispDay:0
 let AUTH=null, myLeagues=[], showFinished=false, lastScreenSig="";
 let L=null, players=[], duels=[], bets=[], trades=[], myResolvedOut=[], tradeToasted=new Set();
 let poll=null, busy=false, resolving=false, chartBets=null, chartDay=-1, standDuels=null, standDay=null, standTrades=null;
+// v8.319 : le dernier validateur attend son propre clic sur `revealGate` — pendant ce temps,
+// AUCUN renvoi automatique ne doit basculer l'écran vers les résultats (cf. leurs usages plus
+// bas) : sinon le contenu apparaît DERRIÈRE la fenêtre de suspense, qui n'aurait plus rien caché.
+// Deux drapeaux séparés (pronos / enchères de trêve), pas un seul : ce sont deux écrans différents
+// et un chevauchement improbable (une trêve qui se déclenche pile pendant l'attente des pronos)
+// ne doit jamais faire dire « trêve » à l'écran des pronos, ou l'inverse.
+let awaitingReveal=false, awaitingTreveReveal=false;
 // ⚠️ v8.15 — « ai-je validé mes pronos de la JOURNÉE EN COURS ? ». Figé par refresh(), jamais
 // dérivé de `bets` au moment de l'affichage : `bets` change de journée quand on consulte les
 // résultats. Voir la note en tête de myBet().
@@ -6279,7 +6286,7 @@ async function refresh(){
        ⚠️ ON NE PERD RIEN : la trêve acquittée (`ackTreveResult`), `jourNonVu` reste posé et le
        prochain passage ici (tour de sondage suivant, ou reclic depuis l'accueil) déclenchera le
        renvoi normalement. */
-    else if(jourNonVu!=null && S.view==="game" && treveResultSeen()) openResults(jourNonVu);
+    else if(jourNonVu!=null && S.view==="game" && treveResultSeen() && !awaitingReveal) openResults(jourNonVu);
     /* ⚠️ v8.281 (bug vécu par Hervé, vidéo WhatsApp) — `maybeRecapModal` DOIT s'exécuter APRÈS
        le renvoi automatique ci-dessus, pas avant : depuis le bandeau d'accueil (clic sur
        « Découvrir »), `openLeague` pose `S.view="game"`, et à ce stade du premier `refresh()`
@@ -7704,6 +7711,9 @@ function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
   if(L.status==="lobby"||L.status==="prep") return viewPrepTabs();
   if(L.status==="truce") return viewTreve();
+  // v8.319 : le dernier à avoir enchéri attend son propre clic sur `revealGate` (cf. saveTreve) —
+  // même contenu que l'attente de "starting" juste en dessous, pour ne rien laisser deviner.
+  if(awaitingTreveReveal) return `<div class="box" style="text-align:center"><div style="font-size:30px">🔄</div><b>${t("Résolution de la trêve…")}</b><div class="mini muted" style="margin-top:6px">${t("Attribution des bonus de mi-saison.")}</div></div>`;
   if(!treveResultSeen()) return viewTreveSummary();
   if(L.status==="starting") return treveEnResolution(L)
     ? `<div class="box" style="text-align:center"><div style="font-size:30px">🔄</div><b>${t("Résolution de la trêve…")}</b><div class="mini muted" style="margin-top:6px">${t("Attribution des bonus de mi-saison.")}</div></div>`
@@ -8652,9 +8662,12 @@ async function saveTreve(){ if(busy)return; busy=true; showErr("");
     const jeSuisDernier = humansT.length>=1 && humansT.every(p=>st.done[p.id]);
     busy=false;
     if(jeSuisDernier){
-      await revealGate("🔔", t("Résultat des enchères à découvrir"),
-        `<div class="mini" style="text-align:center">${t("Tout le monde a misé — les bonus sont attribués.")}</div>`,
-        "👀 "+t("Découvrir le résultat"));
+      awaitingTreveReveal=true;
+      try{
+        await revealGate("🔔", t("Résultat des enchères à découvrir"),
+          `<div class="mini" style="text-align:center">${t("Tout le monde a misé — les bonus sont attribués.")}</div>`,
+          "👀 "+t("Découvrir le résultat"));
+      } finally { awaitingTreveReveal=false; }
       if(S.leagueId!==lidT) return;   // parti pendant l'attente : rien à recharger sur une ligue qui n'est plus la sienne
     }
     await refresh();
@@ -9413,14 +9426,18 @@ async function submitBet(){
          ⚠️ `S.leagueId===lid` REVÉRIFIÉ APRÈS L'ATTENTE : si le joueur a quitté la ligue pendant
          ce court délai, `L` peut être devenu `null` — on ne rappelle alors ni `resolving` (déjà
          fait) ni `openResults`, qui planterait sur une ligue qui n'est plus la sienne. */
-      let tries=0; while(resolving && tries<60 && S.leagueId===lid){ await new Promise(r=>setTimeout(r,50)); tries++; }
-      if(S.leagueId===lid){
-        // v8.318 (demandé par Hervé) : temps d'arrêt avant la révélation, cf. `revealGate`.
-        await revealGate("🔔", t("Résultat à découvrir"),
-          `<div class="mini" style="text-align:center">${t("Tout le monde a validé — la journée est résolue.")}</div>`,
-          "👀 "+t("Découvrir les résultats"));
-        if(S.leagueId===lid) openResults(playedDay);
-      }
+      awaitingReveal=true;   // v8.319 : posé AVANT l'attente déjà — un sondage ambiant pendant CE délai
+                              // pourrait sinon, lui aussi, déclencher le renvoi automatique trop tôt.
+      try{
+        let tries=0; while(resolving && tries<60 && S.leagueId===lid){ await new Promise(r=>setTimeout(r,50)); tries++; }
+        if(S.leagueId===lid){
+          // v8.318 (demandé par Hervé) : temps d'arrêt avant la révélation, cf. `revealGate`.
+          await revealGate("🔔", t("Résultat à découvrir"),
+            `<div class="mini" style="text-align:center">${t("Tout le monde a validé — la journée est résolue.")}</div>`,
+            "👀 "+t("Découvrir les résultats"));
+        }
+      } finally { awaitingReveal=false; }
+      if(S.leagueId===lid) openResults(playedDay);
     }
   }catch(e){ showErr("Validation : "+e.message); } busy=false;
 }
