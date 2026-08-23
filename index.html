@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.315";
+const APP_VERSION = "v8.316";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3019,6 +3019,7 @@ const EN={
   "Aucune journée terminée pour l'instant — les résultats arriveront après la clôture.":"No matchday finished yet — results will come after the close.",
   "Perte de capital ce jour-là : <b>{a}€</b>.":"Balance lost that day: <b>{a}€</b>.",
   "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
+  "⚠️ La journée s'est résolue pendant que tu modifiais tes pronos — ta modification n'a pas été prise en compte, c'est ton dernier prono validé qui compte.":"⚠️ The matchday resolved while you were editing your picks — your change was not applied, your last validated bet is the one that counted.",
   "⏰ Trop tard — pronos non validés":"⏰ Too late — picks not submitted",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>−2 pts</b> au classement et <b>−25 %</b> de ton capital. Tu peux quand même suivre les paris des autres ci-dessous.":"You didn't submit your picks before the close: <b>no bet</b> counts for that day → <b>−2 pts</b> in the standings and <b>−25%</b> of your balance. You can still follow everyone else's bets below.",
   "Si… gagne":"If… wins", "Gage infligé au dernier":"Forfeit for the last-placed player",
@@ -6010,6 +6011,19 @@ async function refresh(){
     if(!L){ // ligue introuvable (supprimée) : on nettoie et on retourne à l'accueil au lieu de planter
       if(S.leagueId===lid){ if(poll)clearInterval(poll); S.leagueId=null; S.myId=null; S.view="leagues"; loadMyLeagues(); }
       return; }
+    /* ⚠️ v8.316 (bug vécu par Hervé) — MODIFIER UN PRONO SANS REVALIDER NE TOUCHE JAMAIS LA BASE
+       (`editBet()` ne fait que précharger `bet` en local) : si l'adversaire valide entre-temps et
+       que la journée se résout, la modification en cours est silencieusement abandonnée — le prono
+       RÉELLEMENT compté est le dernier VALIDÉ, ce qui est le comportement voulu (cf. discussion),
+       mais rien ne le disait au joueur resté en édition. `saisieEnCours()` coupe en plus SON PROPRE
+       sondage tant qu'il édite : c'est donc CE premier `refresh()` qui reprend, une fois qu'il quitte
+       l'écran d'édition, qui doit le repérer — jamais un tour de sondage pendant l'édition elle-même.
+       `S.editingDay` (posé par `editBet()`) dit quelle journée était en cours d'édition ; si
+       `current_day` a avancé au-delà, cette journée est résolue et la modif est caduque. */
+    if(S.editingBet && S.editingDay!=null && L.current_day>S.editingDay){
+      S.editingBet=false; bet={picks:null,captain:-1}; myCard=null; S.editingDay=null;
+      infoWin(t("⚠️ La journée s'est résolue pendant que tu modifiais tes pronos — ta modification n'a pas été prise en compte, c'est ton dernier prono validé qui compte."),"⚠️");
+    }
     players = await q(db.from("players").select("*").eq("league_id",lid).order("join_order"));
     if(stale()) return;
     try{ trades = await q(db.from("trades").select("*").eq("league_id",lid).eq("status","pending")); }catch(e){ trades=[]; } // rachats en attente (badge 🤝 + écran)
@@ -9348,7 +9362,9 @@ async function submitBet(){
 // Rouvrir ses pronos pour les modifier (tant que la clôture n'est pas passée). Précharge le pari existant.
 function editBet(){ const mine=myBet(); if(!mine||deadlinePassed())return;
   bet={picks:JSON.parse(JSON.stringify(mine.picks||[])), captain:(mine.captain!=null?mine.captain:-1)};
-  myCard = mine.card? JSON.parse(JSON.stringify(mine.card)) : null; S.editingBet=true; render(); }
+  myCard = mine.card? JSON.parse(JSON.stringify(mine.card)) : null; S.editingBet=true;
+  S.editingDay=L.current_day;   // v8.316 : repère la journée éditée, cf. l'avertissement dans refresh()
+  render(); }
 // Organisateur : clôturer les pronos immédiatement (recule la deadline dans le passé) → verrouillage + révélation + résolution.
 // Garde DANS la fonction, pas seulement sur le bouton : désactiver un bouton ne protège rien,
 // la fonction reste appelable. Clôturer avant que tous les duels aient leurs matchs bloquerait
