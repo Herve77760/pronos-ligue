@@ -964,7 +964,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.323";
+const APP_VERSION = "v8.324";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -1740,28 +1740,23 @@ function afficheScore(f){ const fav=Math.min(f.oh||99, f.oa||99);
 // spéciale : un samedi, les 5 grands championnats jouent → panachage naturel ; un soir de Ligue des
 // Champions, elle seule a des matchs → elle prend toutes les places, avec ses plus belles affiches.
 // (Avant : tri à plat par prestige de compétition → 7 matchs du MÊME championnat un samedi.)
-// `decalage` (facultatif) : décale le point de DÉPART du tour de rôle. Deux ligues créées le même
-// jour puisent dans la même réserve commune et recevaient donc exactement la même liste (signalé
-// par Hervé). En décalant selon la ligue, chacune reçoit un mélange différent — SANS perdre en
-// qualité : chaque compétition propose toujours sa plus belle affiche d'abord, seul l'ordre de
-// service change, donc ce qui varie c'est QUI obtient la place en plus quand le compte ne tombe
-// pas juste. Variation volontairement modérée : privilégier les plus belles affiches limite par
-// construction la diversité possible.
-function tourDeRole(list,n,decalage){
+// ⚠️ v8.324 (demandé par Hervé) — LE DÉCALAGE PAR LIGUE (`ligueDecalage`, v6.94) EST RETIRÉ.
+// Il avait été ajouté pour que deux ligues du même jour ne reçoivent pas exactement la même
+// liste — mais il a un coût réel : les résultats sont facturés PAR COMPÉTITION interrogée (cf.
+// `appels++` plus haut), avec un cache partagé PAR COMPÉTITION entre ligues. En faisant piocher
+// deux ligues dans des compétitions différentes, le décalage pouvait multiplier le nombre de
+// compétitions distinctes à interroger pour les résultats — donc de vrais crédits en plus, pas
+// juste un affichage différent. Hervé préfère désormais le maximum de recouvrement entre ligues
+// (même liste de compétitions, donc mêmes appels résultats partagés) à la variété entre ligues.
+function tourDeRole(list,n){
   const parComp={}; list.forEach(e=>{ const k=e.compKey||"?"; (parComp[k]=parComp[k]||[]).push(e); });
   let comps=Object.keys(parComp).sort((a,b)=>(parComp[b][0].prio||0)-(parComp[a][0].prio||0));
   comps.forEach(k=>parComp[k].sort((x,y)=>afficheScore(y)-afficheScore(x)));
-  if(decalage && comps.length>1){ const o=((decalage%comps.length)+comps.length)%comps.length;
-    comps=comps.slice(o).concat(comps.slice(0,o)); }
   const out=[]; let encore=true;
   while(out.length<n && encore){ encore=false;
     for(const k of comps){ const arr=parComp[k];
       if(arr.length){ out.push(arr.shift()); encore=true; if(out.length>=n) break; } } }
   return out; }
-// Empreinte stable d'une ligue+journée → sert de décalage. Stable = la même ligue revoit la même
-// liste si elle recharge la page (sinon les affiches changeraient sous les yeux du joueur).
-function ligueDecalage(){ const s=((L&&L.id)||"")+":"+((L&&L.current_day)||0);
-  let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))|0; return Math.abs(h); }
 async function fetchRealPool(){
   const sr=await oddsFetch("sports"); if(!sr.ok) throw new Error("sports "+sr.status);
   const sports=await sr.json(); const grp={}; sports.forEach(s=>grp[s.key]=s.group);
@@ -1935,7 +1930,6 @@ function selectPool(all){
   const dispo=(all||[]).filter(e=>{ const t=new Date(e&&e.commence).getTime();
     return !isNaN(t) && t>=cutoffMin && REAL_GROUPS.includes(e.grp); });
   const N=POOL_N, socTarget=POOL_FOOT; // ~75% de foot, 25% pour la variété (basket/tennis)
-  const dec=ligueDecalage();   // deux ligues du même jour ne reçoivent pas la même liste
   // Construit un lot de N affiches À PARTIR D'UN VIVIER DONNÉ. Sorti en fonction (v7.10) pour
   // pouvoir être rejoué sur un vivier plus étroit — voir le resserrement plus bas.
   // Créneau serré = rythme de la formule : les matchs du jour se jouent groupés, donc les résultats
@@ -1964,10 +1958,10 @@ function selectPool(all){
     const primary=(tight.length>=5)?tight:cand;
     // Football et variété remplis SÉPARÉMENT (pour tenir le quota 75/25), chacun par tour de rôle
     // entre ses compétitions → panachage des championnats un samedi, concentration un soir de C1.
-    const pool=[...tourDeRole(primary.filter(e=>e.grp==="Soccer"), socTarget, dec),
-                ...tourDeRole(primary.filter(e=>e.grp!=="Soccer"), N-socTarget, dec)];
+    const pool=[...tourDeRole(primary.filter(e=>e.grp==="Soccer"), socTarget),
+                ...tourDeRole(primary.filter(e=>e.grp!=="Soccer"), N-socTarget)];
     const completer=src=>{ const reste=src.filter(e=>pool.indexOf(e)<0);
-      tourDeRole(reste, N-pool.length, dec).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
+      tourDeRole(reste, N-pool.length).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
     if(pool.length<N) completer(primary);
     if(pool.length<N) completer(cand);
     return quotaFavoris(pool.slice(0,N), primary, cand);
