@@ -977,7 +977,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.331";
+const APP_VERSION = "v8.332";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6201,6 +6201,14 @@ async function refresh(){
     S.dispDay = dispDay;
     duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay));
     bets  = await q(db.from("bets").select("*").eq("league_id",lid).eq("day",dispDay));
+    /* ⚠️ v8.332 (bug vécu par Hervé, régulièrement : « Connexion : null is not an object
+       (evaluating 'L.current_day') » sur l'accueil) — DEUX `await` D'AFFILÉE SANS GARDE. Comme
+       documenté en tête de fonction, l'utilisateur peut quitter la ligue (bandeau « Mes ligues »,
+       🏠) PENDANT ces deux requêtes : `backToLeagues()` pose `L=null`, et la ligne `myBetToday`
+       juste en dessous lisait encore `L.current_day` sans l'avoir revérifié depuis le dernier
+       `stale()` (celui d'avant `duels`/`bets`, trop loin). Devenu bien plus facile à déclencher
+       depuis que le bandeau « Mes ligues » (v8.325) permet de sortir d'une ligue en un clic. */
+    if(stale()) return;
     loadedDay = dispDay;   // journée effectivement chargée dans `duels`/`bets` (cf. flash Pronos, D5)
     /* ⚠️ v8.15 — ON FIGE ICI, et seulement ici : c'est le seul instant où `bets` porte à coup sûr
        la journée en cours. `dispDay` peut être INFÉRIEUR à `current_day` quand la ligue est finie
