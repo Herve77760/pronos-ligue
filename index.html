@@ -973,7 +973,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.327";
+const APP_VERSION = "v8.328";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3605,6 +3605,10 @@ const EN={
   "Trêve terminée":"Truce over",
   "tes enchères sont validées, le délai est passé : ouvre la ligue pour découvrir les bonus et reprendre la saison.":"your bids are locked in, the deadline has passed: open the league to discover the bonuses and resume the season.",
   "Conclure la trêve":"Close the truce",
+  // v8.328 — même correctif que v8.273, mais sur la toute première phase d'enchères (départ de saison).
+  "Préparation terminée":"Prep finished",
+  "ta préparation est validée, le délai est passé : ouvre la ligue pour lancer le championnat.":"your prep is locked in, the deadline has passed: open the league to start the championship.",
+  "Démarrer le championnat":"Start the championship",
   "— aucun":"— none",
   // v8.112 (relevé par Hervé sur FA8GL) — « Au départ — aucun » MENTAIT quand tout avait été perdu
   // à la trêve : le joueur avait bien gagné des bonus au lancement, il les a juste tous perdus,
@@ -6943,6 +6947,17 @@ async function loadHomeTodo(){
     const ph=phasePrep(m.lg, m.pid, m.shopDone);
     if(ph) homeTodo.push({lg:m.lg, pid:m.pid, kind:"prep", label:ph});
   });
+  /* ⚠️ v8.328 (bug vécu par Hervé : deux ligues affichaient « ✅ prêt · on attend les autres »
+     sans un mot, alors que le délai de préparation était largement dépassé) — MÊME DÉFAUT QUE
+     v8.273 SUR LA TRÊVE, jamais reporté ici sur la TOUTE PREMIÈRE phase d'enchères (départ de
+     saison). Le commentaire ci-dessus (v8.103) affirmait que `phasePrep()` suffisait une fois
+     `shopDone` vrai — faux : `resolvePrep()` (cf. `refresh()`) ne se déclenche que si quelqu'un a
+     la ligue OUVERTE au moment où le délai est dû, donc un joueur qui a fini sa prépa et n'ouvre
+     plus la ligue ne voit plus rien ici, alors qu'un simple clic suffirait à lancer le championnat. */
+  (myLeagues||[]).filter(m=>m.lg && m.lg.status==="prep" && m.pid && m.shopDone).forEach(m=>{
+    let o={}; try{ o=JSON.parse(m.lg.gage)||{}; }catch(e){}
+    if(o.deadline && new Date(o.deadline).getTime()<=Date.now()) homeTodo.push({lg:m.lg, pid:m.pid, kind:"prepdeclencher"});
+  });
   /* ⚠️ v8.104 (relevé par Hervé sur XLRSR : toujours aucun bandeau, cette fois la ligue n'était
      plus en préparation mais EN TRÊVE — même étiquette « 🔄 trêve — enchères à faire » que
      `phasePrep()` renvoie déjà, juste au-dessus du bloc ci-dessus) — LE CORRECTIF v8.103 NE
@@ -7134,7 +7149,7 @@ async function loadHomeTodo(){
     // bandeau n'apparaissait un matin où une journée finie attendait sa résolution). Sans entrée,
     // `rang["declencher"]` valait `undefined` et le tri comparait des `NaN` — pas ce qui a fait
     // disparaître le bandeau ce jour-là (voir plus bas), mais une vraie incohérence à corriger.
-    const rang={treve:0, trevedeclencher:0, resultats:1, declencher:1, coulisses:2, prep:2, trevebid:2, choix:3, pronos:4};
+    const rang={treve:0, trevedeclencher:0, prepdeclencher:0, resultats:1, declencher:1, coulisses:2, prep:2, trevebid:2, choix:3, pronos:4};
     homeTodo.sort((a,b)=> (rang[a.kind]!==rang[b.kind]) ? (rang[a.kind]-rang[b.kind]) : ((a.deadline||0)-(b.deadline||0)));
   }catch(e){
     // ⚠️ v8.256 (bug vécu par Hervé sur XXZQ3, 2026-08-17) — NE PLUS TOUT EFFACER ICI. Avant : la
@@ -7293,6 +7308,10 @@ function viewHome(){
     ? `<div class="alert-card good"><div class="ttl">🔄 ${t("Trêve terminée")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tes enchères sont validées, le délai est passé : ouvre la ligue pour découvrir les bonus et reprendre la saison.")}</div>
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Conclure la trêve")}</button></div>`
+    : x.kind==="prepdeclencher"
+    ? `<div class="alert-card good"><div class="ttl">🚀 ${t("Préparation terminée")}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("ta préparation est validée, le délai est passé : ouvre la ligue pour lancer le championnat.")}</div>
+      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🚀 ${t("Démarrer le championnat")}</button></div>`
     : x.kind==="choix"
     ? `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${x.auto
