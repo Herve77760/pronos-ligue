@@ -973,7 +973,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.326";
+const APP_VERSION = "v8.327";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6388,9 +6388,24 @@ async function ensureFixtures(){
     if(Date.now()-lastRealFill < 300000) return false; lastRealFill=Date.now(); // throttle quota (5 min)
     let pool=[]; try{ pool=await getOrCreateDayPool(); }catch(e){}
     if(pool.length<5) return false; // pas assez de vrais matchs → on attend (jamais de simulé en réel)
-    for(const d of todo){ const cp=pool.slice(); for(let i=cp.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cp[i],cp[j]]=[cp[j],cp[i]];}
-      const fx=cp.slice(0,5);
-      try{ const r=await q(db.from("duels").update({fixtures:fx}).eq("id",d.id).is("fixtures",null).select()); if(r&&r.length) filled=true; }catch(e){} }
+    /* ⚠️ v8.327 (demandé par Hervé) — TIRAGE PRIORISÉ, PAS UNIFORME. Les résultats sont facturés PAR
+       COMPÉTITION interrogée (cf. `appels++` plus haut), avec un cache partagé PAR COMPÉTITION entre
+       ligues — même raisonnement que le décalage retiré en v8.324, appliqué cette fois au tirage
+       automatique : un duel non choisi qui pioche au hasard dans les 9 peut retomber sur des matchs
+       qu'AUCUN autre duel de la ligue ne suit déjà, ajoutant des compétitions distinctes à interroger
+       pour rien. On privilégie donc les matchs DÉJÀ choisis par d'autres duels de la ligue ce jour-là
+       (`duels`, déjà filtré sur cette ligue+journée par `refresh()`) ; le hasard ne comble que ce qui
+       manque. ⚠️ `d.fixtures=fx` MIS À JOUR EN MÉMOIRE dans la boucle : si `todo` contient plusieurs
+       duels à remplir d'un coup, chacun voit les choix des précédents et l'effet se cumule. */
+    for(const d of todo){
+      const dejaUtilises=new Set(duels.filter(x=>x.id!==d.id && Array.isArray(x.fixtures) && x.fixtures.length)
+        .flatMap(x=>x.fixtures.map(f=>f&&f.evId).filter(Boolean)));
+      const prioritaires=pool.filter(f=>dejaUtilises.has(f.evId));
+      const reste=pool.filter(f=>!dejaUtilises.has(f.evId));
+      for(let i=reste.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[reste[i],reste[j]]=[reste[j],reste[i]];}
+      const fx=[...prioritaires,...reste].slice(0,5);
+      try{ const r=await q(db.from("duels").update({fixtures:fx}).eq("id",d.id).is("fixtures",null).select());
+        if(r&&r.length){ filled=true; d.fixtures=fx; } }catch(e){} }
     return filled;
   }
   // v8.238 : pioche dans le tirage COMMUN de la journée (cf. `getOrCreateDayPool`), pas un tirage
