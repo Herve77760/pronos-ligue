@@ -977,7 +977,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.332";
+const APP_VERSION = "v8.333";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2899,6 +2899,8 @@ const EN={
   "tes pronos ne sont pas validés.":"your picks aren't locked in.",
   "Clôture {a} · <b>{b}</b>":"Closes {a} · <b>{b}</b>",
   "dans {c}":"in {c}",
+  // v8.333 — repli tant que la clôture des paris n'est pas encore confirmée (bet_started_at pas posé).
+  "Clôture des paris dès que tous les joueurs auront choisi leurs matchs":"Betting closes once every player has picked their matches",
   "Faire mes pronos":"Make my picks",
   "🏆 Tes ligues en cours":"🏆 Your leagues in progress",
   // v8.74 — phase de chaque ligue sur l'accueil (remplace le « En cours » indifférencié).
@@ -7142,7 +7144,7 @@ async function loadHomeTodo(){
         if(tbet && Date.now()>=tbet) return;                // journée perdue : plus rien à proposer
         const dts=dayTimes(m.lg), tsel=dts.ok?dts.sel:0;
         const auto=!!(tsel && Date.now()>=tsel);            // les matchs seront tirés d'office
-        if(duel.home_id===m.pid) homeTodo.push({lg:m.lg, pid:m.pid, kind:"choix", deadline:(auto?tbet:tsel)||0, auto});
+        if(duel.home_id===m.pid) homeTodo.push({lg:m.lg, pid:m.pid, kind:"choix", deadline:(auto?tbet:tsel)||0, auto, confirmed:!!m.lg.bet_started_at});
         return;
       }
       const t=duelDeadline(duel,m.lg);
@@ -7150,7 +7152,17 @@ async function loadHomeTodo(){
       const b=(bts||[]).find(x=>x.league_id===m.lg.id && x.day===d && x.player_id===m.pid);
       // Un pari SANS pronostic ne compte pas comme validé — même règle qu'à l'écran Résultats (v8.25).
       if(b && Array.isArray(b.picks) && b.picks.length) return;
-      homeTodo.push({lg:m.lg, pid:m.pid, kind:"pronos", deadline:t});
+      /* ⚠️ v8.333 (bug vécu par Hervé : « Clôture 11h30 » affiché la veille, résolution réelle
+         à 7h57 le lendemain) — TANT QUE `bet_started_at` N'EST PAS POSÉ, `duelDeadline()` RETOMBE
+         SUR LE REPLI `day_started_at + sel+bet` (cf. `dayTimes`) — un PLAFOND au pire des cas, pas
+         l'heure réelle : elle se resserre dès que le dernier duel de la ligue a ses matchs choisis
+         (`bet_started_at` se pose alors, une fois pour toute la ligue). Cet écran n'étant PAS
+         reconsulté en continu (il ne se recalcule qu'à l'ouverture ou au sondage de 4s tant que
+         l'onglet Accueil est affiché), Hervé a vu un chiffre correct AU MOMENT DE L'AFFICHAGE mais
+         devenu faux quelques heures plus tard sans qu'il rouvre l'écran. On ne promet donc plus
+         d'heure tant qu'elle n'est pas confirmée — la première heure affichée est alors forcément
+         la bonne, plus jamais un plafond provisoire. */
+      homeTodo.push({lg:m.lg, pid:m.pid, kind:"pronos", deadline:t, confirmed:!!m.lg.bet_started_at});
     });
     // La trêve d'abord (c'est ce que `viewGame()` affiche en premier), puis les résultats à
     // découvrir (vus ou juste prêts à déclencher — même bonne nouvelle), puis les Coulisses de
@@ -7328,11 +7340,15 @@ function viewHome(){
       <div class="body"><b>${esc(x.lg.name)}</b> — ${x.auto
         ? t("le délai pour choisir est passé : les 5 matchs seront tirés automatiquement. Tu peux encore valider tes pronos.")
         : t("c'est toi qui reçois : choisis les 5 matchs de la journée.")}</div>
-      ${x.deadline?`<div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>`:''}
+      ${x.deadline?(x.auto && !x.confirmed
+        ? `<div class="deadline">⏳ ${t("Clôture des paris dès que tous les joueurs auront choisi leurs matchs")}</div>`
+        : `<div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>`):''}
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">${x.auto?'⚽ '+t("Faire mes pronos"):'🎯 '+t("Choisir les matchs")}</button></div>`
     : `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tes pronos ne sont pas validés.")}</div>
-      <div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>
+      ${x.confirmed
+        ? `<div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>`
+        : `<div class="deadline">⏳ ${t("Clôture des paris dès que tous les joueurs auront choisi leurs matchs")}</div>`}
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">⚽ ${t("Faire mes pronos")}</button></div>`).join("");
 
   /* ⚠️ LES LIGNES DE LIGUE SONT UN RACCOURCI, PAS UNE COPIE DE L'ONGLET LIGUES. Elles ne portent
