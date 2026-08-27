@@ -977,7 +977,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.333";
+const APP_VERSION = "v8.334";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2892,8 +2892,8 @@ const EN={
   // v8.78 — bandeau « résultats à découvrir », prioritaire sur « pronos à faire ».
   "Résultats à découvrir":"Results to discover",
   "la journée {a} est jouée, tu n'as pas encore vu le verdict.":"matchday {a} has been played — you haven't seen the verdict yet.",
-  "Résultats prêts à être révélés":"Results ready to be revealed",
-  "tous les matchs de la journée {a} sont terminés : ouvre la ligue pour déclencher la résolution.":"every match of matchday {a} has finished: open the league to trigger the resolution.",
+  "Résultats bientôt disponibles":"Results coming soon",
+  "tous les matchs de la journée {a} semblent terminés : ouvre la ligue pour vérifier si la résolution peut être déclenchée.":"every match of matchday {a} looks finished: open the league to check whether the resolution can be triggered.",
   "Découvrir":"Reveal",
   "Voir les résultats":"See the results",
   "tes pronos ne sont pas validés.":"your picks aren't locked in.",
@@ -7316,8 +7316,14 @@ function viewHome(){
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("la journée {a} est jouée, tu n'as pas encore vu le verdict.",{a:x.jour})}</div>
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Voir les résultats")}</button></div>`
     : x.kind==="declencher"
-    ? `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats prêts à être révélés")}</div>
-      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tous les matchs de la journée {a} sont terminés : ouvre la ligue pour déclencher la résolution.",{a:(x.jour|0)+1})}</div>
+    // v8.334 (bug vécu par Hervé) — `matchEtat`="fini" ICI NE VEUT PAS DIRE SCORE CONFIRMÉ :
+    // l'accueil ne va jamais chercher les résultats live (ça n'arrive qu'à l'ouverture de la
+    // ligue, via resolveRealIfReady), donc ce "fini" vient presque toujours du seul temps écoulé
+    // depuis le coup d'envoi. Le bandeau annonçait "sont terminés... déclencher la résolution"
+    // comme une certitude, alors que le score d'un match pouvait encore manquer une fois la ligue
+    // ouverte (affiché "score en attente"). On reformule en hypothèse, pas en promesse.
+    ? `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats bientôt disponibles")}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tous les matchs de la journée {a} semblent terminés : ouvre la ligue pour vérifier si la résolution peut être déclenchée.",{a:(x.jour|0)+1})}</div>
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Découvrir")}</button></div>`
     : x.kind==="prep"
     ? `<div class="alert-card warn"><div class="ttl">⚠️ ${t("À toi de jouer")}</div>
