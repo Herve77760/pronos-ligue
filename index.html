@@ -6128,14 +6128,14 @@ async function refresh(){
     /* Fin de TRÊVE automatique — même règle que la préparation : dès que tous les humains ont
        validé, ou à l'échéance de 24 h. ⚠️ Placé AVANT le bloc `prep` : les deux ne peuvent pas
        coexister, mais l'ordre rend la lecture sans ambiguïté. */
-    if(L.status==="truce" && !resolvingTreve && !LECTURE_SEULE){
+    if(L.status==="truce" && !resolvingTreve && !LECTURE_SEULE && L.engine!=="server"){
       const st=treveState()||{}; const humans=players.filter(p=>!p.is_ai);
       const tous=humans.length>=1 && humans.every(p=>(st.done||{})[p.id]);
       const dl=st.deadline && new Date(st.deadline).getTime()<=Date.now();
       if(tous||dl){ resolveTreve(); return; }
     }
     // fin de préparation AUTOMATIQUE : dès que tous ont validé (ou délai écoulé), on démarre sans clic
-    if(L.status==="prep" && !resolving){
+    if(L.status==="prep" && !resolving && L.engine!=="server"){
       const humans=players.filter(p=>!p.is_ai); const allDone=humans.length>=1 && humans.every(p=>p.shop_done); // >=1 : le SOLO doit pouvoir démarrer
       const st=prepState(); const dlPassed=st.deadline && new Date(st.deadline).getTime()<=Date.now();
       if(allDone||dlPassed){ resolvePrep(); return; }
@@ -6222,7 +6222,11 @@ async function refresh(){
     // ⚠️ `!LECTURE_SEULE` : en consultation, la visite de l'admin ne doit RIEN faire avancer —
     // ni choisir des matchs, ni faire parier l'IA, ni résoudre la journée d'un autre groupe.
     // Le verrou de `q()` les bloquerait de toute façon, mais autant ne pas les déclencher.
-    if(L.status==="running" && !S.recap && !resolving && !LECTURE_SEULE){
+    // ⚠️ 2026-08-28 (demandé par Hervé) — `L.engine==="server"` : cette ligue est prise en charge par
+    // la fonction serveur planifiée (cron, cf. supabase/functions/resolve) — le client ne doit plus
+    // agir dessus (tirage des matchs, paris IA, résolution) pour éviter une double résolution.
+    // N'est jamais posé sur une ligue `data_mode==="real"` (cf. MIGRATION-server-resolve.sql).
+    if(L.status==="running" && !S.recap && !resolving && !LECTURE_SEULE && L.engine!=="server"){
       if(await ensureFixtures()){ duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay)); }
       // tous les matchs choisis → on démarre le compte à rebours des paris (max 24h / 12h fast), une seule fois
       if(!L.bet_started_at && duels.length && duels.every(d=>d.fixtures)){
@@ -7693,7 +7697,11 @@ async function createLeague(){
       if(both) st.optionsR = drawItems("reward", mode);
       st.votes={}; st.voteTs={}; st.bids={}; st.bidTs={}; if(both){ st.votesR={}; st.voteTsR={}; }
     }
-    const lg=await insertLeagueCodeUnique({name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,gage:JSON.stringify(st)});
+    // v8.334 (résolution serveur des ligues fictives) — `engine` fixé DÈS LA CRÉATION,
+    // pas juste sur les ligues déjà existantes basculées à la main : une ligue fictive
+    // avance désormais toute seule sans qu'on ait à y repenser à chaque création.
+    // Les ligues réelles restent au client (cf. MIGRATION-server-resolve.sql).
+    const lg=await insertLeagueCodeUnique({name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,engine:(data==='real'?'client':'server'),gage:JSON.stringify(st)});
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||defaultAvatar(0),is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     newLg=null;
     if(solo){ await startLeagueCore(lg); openLeague(lg.id, pl.id, true); }  // SOLO : démarre direct (pas de lobby)
@@ -8391,7 +8399,7 @@ async function relaunchLeague(){
     // ligue précédente sur la nouvelle, sinon l'organisateur n'aurait aucun moyen de les définir.
     let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
     const st={ mode:(o.mode||'simple') }; if(o.soloAR!=null) st.soloAR=o.soloAR; else st.enjeu=o.enjeu||'gage';
-    const lg=await insertLeagueCodeUnique({name:L.name,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula:(L.formula||'classique'),data_mode:(L.data_mode||'sim'),gage:JSON.stringify(st)});
+    const lg=await insertLeagueCodeUnique({name:L.name,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula:(L.formula||'classique'),data_mode:(L.data_mode||'sim'),engine:((L.data_mode||'sim')==='real'?'client':'server'),gage:JSON.stringify(st)});
     const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:p.emoji||EMOJIS[i]||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
     const inserted=await q(db.from("players").insert(rows).select());
     const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
