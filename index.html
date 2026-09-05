@@ -42,6 +42,18 @@
     -webkit-font-smoothing:antialiased;
     /* un pseudo ou un gage personnalise sans espace ne doit pas elargir la page */
     overflow-wrap:break-word;}
+  /* ⚠️ Correctif (2026-09-05, demandé par Hervé, test iPhone réel) — ZOOM AUTOMATIQUE iOS AU FOCUS
+     D'UN CHAMP. Règle du navigateur, pas du design : Safari zoome la page si un champ de saisie a
+     une taille de police EFFECTIVE < 16px au focus. `body` reste à 15px (`font:15px/1.55` ci-dessus)
+     — RIEN NE GARANTISSAIT que chaque champ dépasse 16px : `.a2-field input` était même explicitement
+     descendu à 14.5px (Bloc 1), et un `<input type=number>` sans font-size déclaré (Enchères)
+     héritait tel quel des 15px de `body`. Déjà corrigé une fois pour un champ précis (l'ancien
+     correctif visé par Hervé) ; cette fois la règle est GLOBALE et vise le contrôle, pas l'écran —
+     elle couvre donc aussi tout futur champ (Pronos…) sans qu'il y ait à y repenser.
+     `!important` : nécessaire pour battre `.a2-field input`/`.a2-wrap input[type=…]` (plus
+     spécifiques) sans devoir les traquer un par un ni deviner ceux d'un futur écran. Ne touche QUE
+     les contrôles de saisie, jamais le corps du texte (`body` reste 15px) — demandé explicitement. */
+  input, textarea, select { font-size: 16px !important; }
   .num,td.num,.big,.code{font-variant-numeric:tabular-nums;}
   /* ⚠️ v8.108, recalculé en v8.135 — MARGE EN HAUT : compense le bandeau `.bar` en `position:fixed`
      juste plus bas (même principe que les 92px du bas pour `#bottomnav`). Depuis la v8.135, `.bar`
@@ -1021,7 +1033,7 @@
   .a2-field:last-of-type{margin-bottom:0}
   .a2-field label{display:block;font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--a2-purple-light);margin-bottom:7px}
   .a2-field input{width:100%;padding:13px 14px;border-radius:12px;background:var(--a2-panel-2);border:1px solid var(--a2-border);
-    color:var(--a2-ink);font:inherit;font-size:14.5px;font-family:inherit}
+    color:var(--a2-ink);font:inherit;font-size:16px;font-family:inherit}
   .a2-field input::placeholder{color:var(--a2-faint)}
   .a2-field input:focus{outline:none;border-color:var(--a2-purple)}
   .a2-field.err input{border-color:var(--a2-red)}
@@ -1241,7 +1253,12 @@
      `max-width` en px sur le texte lui-même (calc(100% - 170px), 130px de haut × ratio ≈ 164px de
      large + marge) : le texte ne peut plus jamais entrer sous l'image, il revient à la ligne à la
      place — sans toucher à la taille de police.  */
-  .a2-hero-maestro-text{max-width:calc(100% - 170px)}
+  /* ⚠️ Correctif (2026-09-05, demandé par Hervé, test iPhone réel) — 170px LAISSAIT ~30PX DE VIDE
+     inutile avant le Maestro (mesuré : image ~164px de large, ancrée à right:-6px → elle commence
+     réellement à ~158px du bord droit de la carte, pas 170). 147px donne le même filet de sécurité
+     (~8px de marge avant l'image, jamais de texte dessous) tout en récupérant la largeur perdue —
+     recalculé pour "Prépare ta saison" (le plus long des deux titres) sur une seule ligne à 375px. */
+  .a2-hero-maestro-text{max-width:calc(100% - 147px)}
   .a2-time-note{margin-top:10px;font-size:11px;color:var(--a2-muted)}
   .a2-invite-card{position:relative;border-radius:16px;padding:17px;margin-bottom:16px;overflow:hidden;
     background:linear-gradient(155deg, rgba(236,211,130,.14), rgba(205,164,58,.05));
@@ -1269,6 +1286,10 @@
   .a2-step-card.primary{padding:16px;border-color:rgba(236,211,130,.6);
     background:linear-gradient(155deg, rgba(236,211,130,.16), rgba(205,164,58,.05))}
   .a2-step-cta{color:var(--a2-brass-light);font-weight:800;font-size:13.5px;white-space:nowrap;flex:0 0 auto}
+  /* ⚠️ Correctif (2026-09-05) — Enchères verrouillées tant que l'Enjeu (quand requis) n'est pas
+     terminé : dépendance déjà réelle (votesManquants() bloquait déjà la validation), juste rendue
+     visible dès le hub. Reste cliquable (toast explicatif), jamais totalement désactivée. */
+  .a2-step-card.locked{opacity:.55}
 </style>
 <!-- ⚠️ v8.344 (Tactizo V2) — THÈME CLAIR RETIRÉ, SOMBRE FORCÉ AVANT LE PREMIER RENDU (anti-flash).
      Avant : lisait pl_theme (défaut "light" si absent) — un ancien "light" en localStorage
@@ -1317,7 +1338,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.351";
+const APP_VERSION = "v8.352";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3350,6 +3371,11 @@ const EN={
   "Commencer":"Start",
   "Répartis ton budget sur les bonus que tu veux utiliser cette saison.":"Split your budget across the bonuses you want to use this season.",
   "Tout est prêt de ton côté. L'organisateur lancera la préparation quand les inscriptions seront terminées.":"You're all set. The organizer will start preparation once sign-ups are closed.",
+  "Verrouillé":"Locked",
+  "Termine d'abord l'Enjeu de la ligue.":"Finish the league stakes first.",
+  "✓ Prêt":"✓ Ready", "Pas commencé":"Not started",
+  "Gage choisi":"Forfeit chosen", "Récompense choisie":"Reward chosen", "Enjeu terminé":"Stakes done",
+  "En cours · {a}":"In progress · {a}",
   // Mes ligues
   "➕ Créer une ligue":"➕ Create a league", "Rejoindre avec un code":"Join with a code",
   "Rejoindre →":"Join →", "🏆 Palmarès général":"🏆 Overall hall of fame", "🛠 Admin":"🛠 Admin",
@@ -8101,15 +8127,22 @@ function bandeauMesLigues(){ if(!S.leagueId) return "";
   // ⚠️ Bloc 3A (2026-09-05) — RENOMMAGE DE LIGUE : seul point d'entrée pour l'instant, en attendant
   // le futur menu « ⋯ » (demandé par Hervé). Placé ici plutôt que dans un écran précis parce que ce
   // bandeau est le SEUL endroit qui affiche le nom sur TOUT écran de ligue (Lobby, onglets Prépa) —
-  // renameLeague() se charge lui-même de refuser hors Lobby/hors organisateur, donc l'icône ne
+  // renameLeague() se charge lui-même de refuser hors Lobby/Prépa/hors organisateur, donc l'icône ne
   // s'affiche que quand l'action est réellement possible.
-  const canRename = !!(L && L.status==="lobby" && me() && me().is_organizer);
+  // ⚠️ Correctif (2026-09-05, règle cible actée par Hervé) — LE NOM RESTE MODIFIABLE JUSQU'À LA FIN
+  // DE LA PRÉPARATION (donc jusqu'à la finalisation des enchères), pas seulement pendant le Lobby :
+  // "lobby" ET "prep" sont autorisés, tout statut ultérieur (saison réellement démarrée) fige le nom.
+  // Vrai en Solo comme en Entre amis — `me().is_organizer` couvre déjà les deux (en solo, le seul
+  // joueur EST l'organisateur ; en amis, seul l'organisateur l'est) : aucune distinction à ajouter.
+  const canRename = !!(L && (L.status==="lobby"||L.status==="prep") && me() && me().is_organizer);
   const editBtn = canRename ? `<button type="button" class="mesligues-edit" title="${t("Renommer la ligue")}" onclick="renameLeague()">✏️</button>` : '';
   return `<div class="mesligues-row"><div class="mesligues" onclick="backToLeagues()">🏆 ${t("Mes ligues")}</div>${nom?`<div class="mesligues-nom">${nom}</div>${editBtn}`:''}</div>`; }
-// ⚠️ Même idiome que kickPlayer()/setEnjeu() (garde organisateur + statut Lobby) — voir ces deux
-// fonctions pour la référence. Même style que changeMyUsername() (prompt() natif, pas de modale
-// dédiée) : cohérent avec l'unique autre "renommage" déjà présent dans l'app.
-async function renameLeague(){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
+// ⚠️ Même idiome que kickPlayer()/setEnjeu() (garde organisateur + statut) — voir ces deux fonctions
+// pour la référence. Même style que changeMyUsername() (prompt() natif, pas de modale dédiée) :
+// cohérent avec l'unique autre "renommage" déjà présent dans l'app.
+// ⚠️ Correctif (2026-09-05) — "lobby"/"prep" autorisés (voir bandeauMesLigues() ci-dessus) : le nom
+// reste modifiable jusqu'à la fin de la Préparation, plus seulement pendant le Lobby.
+async function renameLeague(){ if(busy||!L||(L.status!=="lobby"&&L.status!=="prep"))return; if(!(me()&&me().is_organizer))return;
   const nv=(prompt(t("Nouveau nom de la ligue ({a} caractères max.) :",{a:LEAGUE_NAME_MAX}), L.name||"")||"").trim().replace(/\s+/g," ").slice(0,LEAGUE_NAME_MAX);
   if(!nv || nv===L.name) return;
   busy=true;
@@ -9282,34 +9315,31 @@ function viewPrep(){
 // === v6 (Lot A2) — Préparation présentée en ONGLETS (Infos / Joueurs / Gages / Enchères) ========
 // Réutilise toute la logique existante (voteSectionHTML, savePrep, setBid, editPrep, closeRegistration…).
 // L'onglet actif est S.ptab ; la barre du bas (prepTabs) le pilote.
-function showPrepStatusInfo(){ infoModal("📋", t("Statuts de préparation"),
-  `<div class="mini muted" style="text-align:left;line-height:1.7">${t("Ce que veulent dire les pastilles :")}<br><br>
-   <b>🎭</b> ${t("choix du gage")} · <b>🏆</b> ${t("choix de la récompense (mode « les deux »)")} · <b>💰</b> ${t("enchères sur les bonus")}<br>
-   <b>✓</b> = ${t("fait")} · <b>·</b> = ${t("à faire")}<br><br>
-   <b>✅ ${t("prêt")}</b> — ${t("tout est validé (choix + enchères).")}<br>
-   <b>📝</b> — ${t("commencé, mais pas encore validé (le joueur doit revenir valider).")}<br>
-   <b>⏳ ${t("pas commencé")}</b> — ${t("le joueur n'a encore rien saisi.")}</div>`); }
-function prepRosterHTML(lobby){ const org=me()&&me().is_organizer; const st=prepState();
-  // 3 statuts (hors lobby) : ✅ validé (gage + enchères validés) · 📝 sauvegardé (a commencé mais pas
-  // encore validé) · ⏳ pas commencé (n'a rien saisi). « Commencé » = a voté un gage OU posé une enchère.
-  const started=p=>((st.votes&&st.votes[p.id]!=null)||(st.votesR&&st.votesR[p.id]!=null)||(st.bids&&st.bids[p.id]&&Object.keys(st.bids[p.id]).length>0));
-  // Détail des votes : 🎭 gage (✓ voté / · à faire) et, en mode « both », 🏆 récompense. Permet de voir
-  // qu'un joueur n'a voté QU'UN des deux et qu'il lui reste une action (signalé par Hervé).
-  const voteBits=p=>{ const g=(st.votes&&st.votes[p.id]!=null), rw=(st.votesR&&st.votesR[p.id]!=null);
-    return `🎭${g?'✓':'·'}`+(isBoth()?` 🏆${rw?'✓':'·'}`:''); };
-  const voteComplete=p=>((st.votes&&st.votes[p.id]!=null) && (!isBoth() || (st.votesR&&st.votesR[p.id]!=null)));
-  // Statut DÉTAILLÉ (hors lobby) : ✅ tout validé ; sinon 🎭/🏆 (votes) + 💰 (enchères, validées à la fin).
-  const statusChip=p=>{
-    if(p.shop_done) return `<span class="chip g clik" onclick="showPrepStatusInfo()" title="${t("Gage/récompense votés + enchères validées")}">${t("✅ prêt")}</span>`;
-    if(!started(p)) return `<span class="chip clik" onclick="showPrepStatusInfo()">${t("⏳ pas commencé")}</span>`;
-    return `<span class="chip b clik" onclick="showPrepStatusInfo()" title="${t("🎭 gage · 🏆 récompense · 💰 enchères — ✓ fait / · à faire")}">📝 ${voteBits(p)} 💰·</span>`;
-  };
+// ⚠️ Correctif (2026-09-05, demandé par Hervé, test iPhone réel) — REMPLACE L'ANCIEN PICTOGRAMME
+// CRYPTIQUE (📝 🎭✓ 🏆· 💰·, qui nécessitait sa propre notice ⓘ — showPrepStatusInfo(), retirée avec
+// lui) PAR UN STATUT TEXTUEL, calculé à partir des mêmes données réelles (prepState(), p.shop_done)
+// — même logique de fond, aucune nouvelle règle. S'adapte à la config réelle de l'enjeu (isBoth()) :
+// ne mentionne "Récompense" que si la ligue l'utilise vraiment. Même statut en Lobby et en Prépa
+// (le vote de l'enjeu est ouvert dès le Lobby, la donnée a le même sens aux deux endroits).
+function prepPlayerStatusChip(p){
+  const st=prepState(); const both=isBoth();
+  if(p.shop_done) return `<span class="chip g">${t("✓ Prêt")}</span>`;
+  const gageDone = !!(st.votes && st.votes[p.id]!=null);
+  const rewardDone = both && !!(st.votesR && st.votesR[p.id]!=null);
+  const enjeuDone = both ? (gageDone && rewardDone) : gageDone;
+  if(!enjeuDone){
+    if(both && (gageDone||rewardDone)){
+      return `<span class="chip b">${t("En cours · {a}",{a: gageDone?t("Gage choisi"):t("Récompense choisie")})}</span>`;
+    }
+    return `<span class="chip">${t("Pas commencé")}</span>`;
+  }
+  return `<span class="chip b">${t("En cours · {a}",{a:t("Enjeu terminé")})}</span>`;
+}
+function prepRosterHTML(lobby){ const org=me()&&me().is_organizer;
   return players.map(p=>{
     const canKick=(lobby&&org&&p.id!==S.myId&&!p.is_organizer);
     // Statut affiché pour TOUS (y compris les autres joueurs vus par l'organisateur) — pas seulement soi.
-    const status = lobby
-      ? (started(p)?`<span class="chip ${voteComplete(p)?'g':'b'} clik" onclick="showPrepStatusInfo()" title="${t("🎭 gage · 🏆 récompense — ✓ voté / · à faire")}">📝 ${voteBits(p)}</span>`:`<span class="chip clik" onclick="showPrepStatusInfo()">${t("inscrit")}</span>`)
-      : statusChip(p);
+    const status = prepPlayerStatusChip(p);
     const kick = canKick?`<button class="btn ghost sm" title="${t("Retirer")}" onclick="kickPlayer('${p.id}')" style="flex:0 0 auto;padding:4px 8px">✕</button>`:'';
     // Nom + tags à gauche (s'enroulent dans leur zone, le nom ne se coupe pas) · statut + ✕ à droite.
     return `<div class="box row" style="align-items:center;gap:8px">
@@ -9582,7 +9612,15 @@ function viewPrepHub(){
   const meP=me(); const shopDone=meP&&meP.shop_done;
   const miss=solo?[]:votesManquants();
   const enjeuStatus = miss.length?'todo':'done';
-  const bonusStatus = shopDone?'done':'todo';
+  // ⚠️ Correctif (2026-09-05, demandé par Hervé, test iPhone réel) — LA DÉPENDANCE RÉELLE DEVIENT
+  // EXPLICITE DÈS LE HUB. Rien de nouveau côté règle : on ne pouvait déjà pas VALIDER les enchères
+  // avant l'Enjeu (votesManquants() bloquait déjà le bouton dans prepEncheresTab()) — les deux
+  // cartes affichaient pourtant `À faire` en parallèle, laissant croire qu'on pouvait les faire dans
+  // n'importe quel ordre. `enjeuRequired` (= pas solo) garde le cas "aucun Enjeu requis" (solo)
+  // parfaitement libre — jamais verrouillé artificiellement, comme demandé.
+  const enjeuRequired = !solo;
+  const bonusLocked = enjeuRequired && enjeuStatus!=='done';
+  const bonusStatus = bonusLocked ? 'locked' : (shopDone?'done':'todo');
   const steps=(solo?[]:[{k:'gages',label:t("Enjeu de la ligue"),status:enjeuStatus}])
     .concat([{k:'encheres',label:t("Enchères de bonus"),status:bonusStatus}]);
   const stepIcons={gages:"icone-enjeu.png",encheres:"icone-encheres.png"};
@@ -9597,7 +9635,12 @@ function viewPrepHub(){
         <img src="img/icone-encheres.png" alt="" style="width:40px;height:40px;object-fit:contain;flex:0 0 auto">
         <div class="a2-step-main"><div class="a2-step-name">${t("Enchères de bonus")}</div></div>
         <span class="a2-step-cta">${t("Commencer")} →</span></button>`
-    : steps.map(s=>`<button type="button" class="a2-step-card ${s.status}" onclick="setPtab('${s.k}')">
+    : steps.map(s=>s.status==='locked'
+        ? `<button type="button" class="a2-step-card locked" onclick="toast('${esc2(t("Termine d'abord l'Enjeu de la ligue."))}')">
+            <img src="img/${stepIcons[s.k]}" alt="" style="width:36px;height:36px;object-fit:contain;flex:0 0 auto">
+            <div class="a2-step-main"><div class="a2-step-name">${s.label}</div><div class="a2-step-state">🔒 ${t("Verrouillé")}</div></div>
+            <span class="a2-step-chev">›</span></button>`
+        : `<button type="button" class="a2-step-card ${s.status}" onclick="setPtab('${s.k}')">
       <img src="img/${stepIcons[s.k]}" alt="" style="width:36px;height:36px;object-fit:contain;flex:0 0 auto">
       <div class="a2-step-main"><div class="a2-step-name">${s.label}</div><div class="a2-step-state"><span class="a2-step-dot ${s.status}"></span> ${s.status==='done'?t("Terminé"):t("À faire")}</div></div>
       <span class="a2-step-chev">›</span></button>`).join('');
@@ -13685,7 +13728,7 @@ function showLeagueInfo(lid){
         à ceux que j'avais sous les yeux. */
   const f=leagueFormula(lg);
   let mode="complet", enjeu="gage"; try{ const o=JSON.parse(lg.gage); if(o){ if(o.mode)mode=o.mode; if(o.enjeu)enjeu=o.enjeu; } }catch(e){}
-  if(lg.prep_summary&&lg.prep_summary.enjeu) enjeu=lg.prep_summary.enjeu; const rew=(enjeu==="reward");
+  if(lg.prep_summary&&lg.prep_summary.enjeu) enjeu=lg.prep_summary.enjeu; const rew=(enjeu==="reward"); const both=(enjeu==="both");
   const real=(lg.data_mode==="real");
   /* v8.144 (demandé par Hervé sur capture) — CHAQUE LIGNE PEUT SE DÉPLIER, PAS SEULEMENT « Format ».
      `desc` masquée par défaut (.hide), révélée au clic sur la ligne — même geste que les bulles ⓘ
@@ -13696,7 +13739,13 @@ function showLeagueInfo(lid){
   let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
     ${row(t("⏱️ Rythme"), t(f.n), t(f.d))}
     ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"), t(MODES[mode].d))}
-    ${row(t("🎭 Enjeu"), rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)"), rew?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur."))}
+    ${/* ⚠️ Bloc 3A, correctif (2026-09-05, signalé par Hervé) — LE CAS "both" (Gage + Récompense)
+         N'ÉTAIT JAMAIS TESTÉ : le ternaire `rew?...:...` ne distinguait que reward vs pas-reward,
+         donc une ligue "both" retombait silencieusement sur le libellé "Gage (au dernier)" — bug
+         d'affichage pré-existant (pas introduit ici), jamais remarqué avant que ce panneau devienne
+         un point de passage régulier. Pas de donnée touchée : `enjeu` reste lu tel quel. */''}
+    ${row(t("🎭 Enjeu"), both?t("Gage + récompense"):(rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)")),
+      both?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(rew?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur.")))}
     ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"), real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."))}
     ${/* ⚠️ v8.85 (demandé par Hervé) — LES ENCHÈRES FIGURENT DANS LES CARACTÉRISTIQUES. C'est un
          réglage figé au même titre que le mode ou l'enjeu, et il change la façon de jouer toute
