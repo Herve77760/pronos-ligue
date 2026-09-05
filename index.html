@@ -1342,7 +1342,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.354";
+const APP_VERSION = "v8.355";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3304,6 +3304,7 @@ const EN={
   "← Retour à la connexion":"← Back to login",
   "Cette adresse est déjà utilisée.":"This address is already in use.",
   "Mot de passe oublié ?":"Forgot your password?", "Mot de passe oublié":"Forgot password",
+  "Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.":"If an account exists for this address, a reset link has just been sent.",
   "On enverra un lien de réinitialisation à l'adresse e-mail associée à ce compte.":"We'll send a reset link to the email address linked to this account.",
   "Envoyer le lien":"Send the link", "Pseudo ou e-mail requis.":"Username or email required.",
   "Pseudo ou e-mail":"Username or email", "ex : herve ou herve@exemple.fr":"e.g. herve or herve@example.com",
@@ -3392,6 +3393,8 @@ const EN={
   "Pioche une idée si tu manques d'inspiration — tu pourras toujours la modifier ensuite.":"Pick an idea if you're short on inspiration — you can always tweak it afterwards.",
   // Mes ligues
   "➕ Créer une ligue":"➕ Create a league", "Rejoindre avec un code":"Join with a code",
+  "Créer une ligue":"Create a league",
+  "C'est le nom que verront les autres joueurs.":"This is the name other players will see.",
   "Rejoindre →":"Join →", "🏆 Palmarès général":"🏆 Overall hall of fame", "🛠 Admin":"🛠 Admin",
   "🔔 Activer les notifications":"🔔 Enable notifications",
   "Pour être prévenu quand c'est à toi de jouer (onglet ouvert).":"To be notified when it's your turn (tab open).",
@@ -4855,7 +4858,7 @@ const EN={
   "💰 <b>L'économe :</b> {N} a serré les cordons — <b>{tot}€</b> dépensés, point final.":"💰 <b>The saver:</b> {N} kept the purse tight — <b>{tot}€</b> spent, end of story.",
   "🐭 <b>Le prudent :</b> <b>{tot}€</b> misés par {N}. On ne se refait pas.":"🐭 <b>The cautious one:</b> <b>{tot}€</b> wagered by {N}. Old habits die hard.",
   "🧊 <b>Le pingre :</b> {N} garde son magot — à peine <b>{tot}€</b> de mises.":"🧊 <b>The tightwad:</b> {N} guards the stash — barely <b>{tot}€</b> in bids.",
-  "Identifiant : 2 à 20 caractères — lettres, chiffres, . _ - (sans espace ni accent).":"Username: 2 to 20 characters — letters, digits, . _ - (no spaces or accents).",
+  "Identifiant : 2 à 20 caractères — lettres, chiffres, . _ - (sans espace).":"Username: 2 to 20 characters — letters, digits, . _ - (no spaces).",
   "🌧️ <b>La guigne :</b> {N} — {b} tentatives, <b>{w}</b> bonus. Le ciel lui est tombé dessus.":"🌧️ <b>Bad luck:</b> {N} — {b} attempts, <b>{w}</b> bonuses. The sky fell on them.",
   "👻 <b>Le fantôme des enchères :</b> {N} était partout — {b} mises — et repart avec <b>{w}</b>.":"👻 <b>The auction ghost:</b> {N} was everywhere — {b} bids — and walks away with <b>{w}</b>.",
   "🙃 <b>Le mal inspiré :</b> {b} enchères, <b>{w}</b> bonus. {N} révisera ses calculs.":"🙃 <b>Poorly inspired:</b> {b} bids, <b>{w}</b> bonuses. {N} will redo the maths.",
@@ -5448,10 +5451,9 @@ const PITCHES={
     "Le rendement réel de ton <b>👑 match favori</b> et de chacun de tes bonus : lesquels te rapportent vraiment.",
     "La <b>courbe de ta progression</b>, tes records, ta régularité, ton face-à-face contre chaque pote.",
     "Chaque chiffre est expliqué : ce qu'il mesure, et ce qu'un bon chiffre veut dire."]},
-  recap:{e:"📤",t:"Partager ma saison",hook:"Ta saison, prête à balancer sur le groupe.",pts:[
-    "Un résumé stylé — classement, points, coups d'éclat — envoyé en un tap sur WhatsApp.",
-    "Pour immortaliser ton titre… ou chambrer le dernier (on sait tous qui c'est).",
-    "L'excuse parfaite pour relancer la bande dans la foulée."]},
+  // ⚠️ `recap` ("Partager ma saison") a été retiré d'ici (audit QA 2026-09-05) : plus dans
+  // SHOP_ORDER depuis la v6.65 (gratuit par défaut), et plus référencé nulle part ailleurs
+  // (showPremiumInfo/premBadge/hasOpt/requireOpt/ownsOpt) — cette entrée n'était plus atteignable.
   // ⚠️ `direct` et `live` sont DEUX OPTIONS DISTINCTES depuis la v6.99 (tranché par Hervé).
   // Elles étaient un seul achat, présenté sous deux noms — ce qui semait la confusion, à juste
   // titre : parier sur de vrais matchs et suivre les résultats au fil de l'eau ne sont pas la
@@ -5700,6 +5702,12 @@ function consentementAchat(key){
 async function subscribeOpt(key){
   const p=PITCHES[key]; if(!p) return;
   if(ownsOpt(key)) return;                              // déjà active
+  // ⚠️ Correctif audit QA (2026-09-05) — sans ce garde, deux confirmations DISTINCTES lancées coup
+  // sur coup (fermer/rouvrir la fiche assez vite) pouvaient toutes deux passer le test `ownsOpt(key)`
+  // avant que `loadOpts()` de la première n'ait rafraîchi les droits, et écrire deux fois la même
+  // ligne `entitlements`. Même idiome que les autres actions protégées du fichier (busy/finally).
+  if(busy) return; busy=true;
+  try{
   if(!await confirmTxt("🛒",t("Souscrire à cette option"),t("Souscrire à « {a} » ?",{a:t(p.t)}),t("Souscrire"))) return;
   /* ⚠️ La leçon de la v7.45 reste valable sous la nouvelle forme : on efface l'ancienne ligne de
      cette option avant d'en écrire une neuve. Sinon, réactiver une option périmée laisserait la
@@ -5743,6 +5751,7 @@ async function subscribeOpt(key){
       window.location.href = j.url;   // redirection vers Stripe — la suite se joue côté Stripe puis `stripe-webhook`
     }catch(e2){ showErr("Souscription : "+e2.message); }
   }
+  } finally { busy=false; }
 }
 // 🛒 BOUTIQUE — toutes les options premium en un endroit + le Pack complet (souscrire à tout d'un coup).
 const SHOP_ORDER=["rachat","bonuscomplets","treve","ia","stats","direct","live","gageperso","voiradv"];   // "recap" (Partager ma saison) retiré : gratuit par défaut (v6.65) ; "live" séparé de "direct" en v6.99
@@ -8275,20 +8284,21 @@ function viewCreate(){
         <input id="newName" maxlength="${LEAGUE_NAME_MAX}" value="${esc(g.name||'')}" oninput="if(newLg)newLg.name=this.value"></div>
       <div class="a2-sec-title">${t("👥 Type de partie")}</div>
       ${opt(g.type==='amis',false,"setNew('type','amis')",'👥',t("Entre amis"),t("Avec un code"))}
-      ${opt(solo,false,"setNew('type','solo')",'🤖',t("Solo"),t("Jouer contre l'IA."),premBadge('ia'))}`;
+      ${opt(solo,false,"setNew('type','solo')",'<img src="img/icone-ia.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Solo"),t("Jouer contre l'IA."),premBadge('ia'))}`;
   } else if(createStep===2){
     eyebrow=t("Étape 2 sur 3"); title=t("Ton expérience"); sub=t("Trois réglages indépendants, à ton goût.");
-    body=`<div class="a2-sec-title">${t("Matchs")}</div>
+    const secIc=src=>`<img src="img/${src}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-right:7px">`;
+    body=`<div class="a2-sec-title">${secIc('icone-donnees.png')}${t("Matchs")}</div>
       <div class="a2-pair-row">
         ${pair(g.data==='sim',"setNew('data','sim')",t("🎮 Simulé"),t("Résultats immédiats, sans vrais matchs."))}
         ${pair(g.data==='real',"setNew('data','real')",t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes."),premBadge('direct'))}
       </div>
-      <div class="a2-sec-title">${t("Bonus")}</div>
+      <div class="a2-sec-title">${secIc('icone-mode.png')}${t("Bonus")}</div>
       <div class="a2-pair-row">
         ${pair(g.mode==='simple',"setNew('mode','simple')",t(MODES.simple.n),t("6 bonus essentiels."))}
         ${pair(g.mode==='complet',"setNew('mode','complet')",t(MODES.complet.n),t("14 bonus, plus de stratégie."),premBadge('bonuscomplets'))}
       </div>
-      <div class="a2-sec-title">${t("Rythme")}</div>
+      <div class="a2-sec-title">${secIc('icone-rythme.png')}${t("Rythme")}</div>
       <div class="a2-pair-row">
         ${pair(g.formula==='classique',"setNew('formula','classique')",t(FORMULAS.classique.n),t("24h par étape."))}
         ${pair(g.formula==='fast',"setNew('formula','fast')",t(FORMULAS.fast.n),t("12h par étape."))}
@@ -8299,8 +8309,8 @@ function viewCreate(){
   } else if(createStep===3){
     eyebrow=t("Étape 3 sur 3"); title=t("Pimente ta ligue"); sub=t("L'enjeu qui donne envie de gagner (ou de ne pas perdre).");
     body = !solo ? `<div class="a2-sec-title">${t("Enjeu")}</div>
-        ${opt(g.enjeu==='gage',false,"setNew('enjeu','gage')",'🎭',t("Gage"),t("Le dernier du classement final réalise un gage voté par le vainqueur."))}
-        ${opt(g.enjeu==='reward',false,"setNew('enjeu','reward')",'🏆',t("Récompense"),t("Le champion reçoit une récompense votée par le dernier (aucun gage)."))}
+        ${opt(g.enjeu==='gage',false,"setNew('enjeu','gage')",'<img src="img/enjeu-gage.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Gage"),t("Le dernier du classement final réalise un gage voté par le vainqueur."))}
+        ${opt(g.enjeu==='reward',false,"setNew('enjeu','reward')",'<img src="img/enjeu-recompense.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Récompense"),t("Le champion reçoit une récompense votée par le dernier (aucun gage)."))}
         ${opt(g.enjeu==='both',false,"setNew('enjeu','both')",'⚔️',t("Gage + Récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."))}`
       : `<div class="a2-note"><span>${t("🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça.")}</span></div>`;
     body+=`<div class="a2-sec-title">${t("🃏 Enchères de bonus")}</div>
@@ -9717,13 +9727,14 @@ function viewLobbyA2(){
       <div class="a2-invite-label">${t("Code de la ligue")}</div>
       <div class="a2-invite-code">${esc(L.code)}</div>
       <div class="a2-invite-row">
-        <div class="a2-invite-joined"><b>${n}</b> ${n>1?t("joueurs inscrits"):t("joueur inscrit")}</div>
+        <div class="a2-invite-joined"><b>${n}</b>/${MAX_PLAYERS} ${n>1?t("joueurs inscrits"):t("joueur inscrit")}</div>
         <button type="button" class="a2-invite-copy" onclick="copyCode()">📋 ${t("Copier le code")}</button>
       </div>
+      ${n<MAX_PLAYERS?`<div class="mini muted" style="margin-top:6px">${(MAX_PLAYERS-n)===1?t("1 place max"):t("{a} places max",{a:MAX_PLAYERS-n})}</div>`:''}
     </div>
     <div class="a2-sec-title">${t("Qui est déjà là")}</div>
     ${prepRosterHTML(true)}
-    ${addAI?`<div class="a2-note"><img src="img/icone-ia.png" alt="" style="width:28px;height:28px;object-fit:contain;flex:0 0 auto"><span>${t("Vous êtes en nombre impair : une IA rejoindra pour équilibrer (selon l'option disponible).")}</span></div>`:''}
+    ${(addAI&&!solo)?`<div class="a2-note"><img src="img/icone-ia.png" alt="" style="width:28px;height:28px;object-fit:contain;flex:0 0 auto"><span>${t("Vous êtes en nombre impair : une IA rejoindra pour équilibrer (selon l'option disponible).")}</span></div>`:''}
     <button type="button" class="a2-cta-ghost" onclick="openLeagueParamsModal()">${t("Voir les paramètres de la ligue")} →</button>
     <div style="height:6px"></div>
     ${cta}
@@ -9800,7 +9811,7 @@ function viewPrepHub(){
     ${stepsHTML}
     ${playersSection}
     <button type="button" class="a2-cta-ghost" onclick="openLeagueParamsModal()">${t("Voir les paramètres de la ligue")} →</button>
-    ${(org&&!solo)?`<div style="height:8px"></div><button type="button" class="a2-cta-ghost" style="opacity:.75" onclick="forcePrepEnd()">🔒 ${t("Clôturer la préparation maintenant (organisateur)")}</button>`:''}
+    ${(org&&!solo)?`<div style="height:8px"></div><button type="button" class="a2-cta-ghost" style="opacity:.75" onclick="forcePrepEnd()">${t("🔒 Clôturer la préparation maintenant (organisateur)")}</button>`:''}
   </div>`;
 }
 // Enjeu — reskin de prepGagesTab() (voteSectionHTML() intact : vote immédiat au tap, gageperso
@@ -12404,10 +12415,21 @@ function classe(arr,lg){
   return res;
 }
 // Reconstruit l'historique du classement (état cumulé APRÈS chaque journée résolue) en rejouant les résultats stockés.
+// ⚠️ Correctif audit QA (2026-09-05) — cette fonction rejoue tout l'historique de la ligue et était
+// appelée 3× par rendu (viewStandings/starCumul/ptsChart), donc 3× toutes les 4s pendant tout le
+// temps passé sur Classement (startPoll() → refresh() → render(), cf. commentaire v8.206 plus bas).
+// Memoïsation simple : mêmes tableaux sources (référence) + mêmes compteurs de lignes + même journée
+// courante → on renvoie le résultat déjà calculé au lieu de tout rejouer.
+let _standHistCache=null;
 function computeStandHist(){
   if(!chartBets || !standDuels) return [];
   const N = (L.status==="done" ? (L.num_days||0) : (L.current_day||0)); // journées résolues
   if(N<1) return [];
+  const cacheKey = (L?L.id:null)+'|'+L.status+'|'+N+'|'+chartBets.length+'|'+standDuels.length+'|'+((standTrades||[]).length)+'|'+players.length;
+  if(_standHistCache && _standHistCache.key===cacheKey && _standHistCache.chartBets===chartBets && _standHistCache.standDuels===standDuels && _standHistCache.players===players && _standHistCache.standTrades===standTrades){
+    STAND_H2H=_standHistCache.h2h; STAND_H2H_LG=L?L.id:null;
+    return _standHistCache.result;
+  }
   const sp = L.prep_summary||{};
   const st={}; players.forEach(p=>{ const psx=(sp.players||[]).find(x=>x.pid===p.id); st[p.id]={points:0, capital: psx?psx.capital:100, duel_wins:0, best_day:0, best_odd:0, streak_w:0, streak_l:0, star:0, penOubli:0, penRecap:0, penJours:[], recapJours:[]}; });
   const betAt={}; chartBets.forEach(b=>{ betAt[b.day+'|'+b.player_id]=b; });
@@ -12505,6 +12527,7 @@ function computeStandHist(){
       points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star, penOubli:st[p.id].penOubli, penRecap:st[p.id].penRecap, penJours:st[p.id].penJours.slice(), recapJours:st[p.id].recapJours.slice() })));
   }
   STAND_H2H=h2h; STAND_H2H_LG=L?L.id:null; // dispo pour le départage du classement
+  _standHistCache={key:cacheKey, chartBets, standDuels, players, standTrades, h2h, result:snaps};
   return snaps;
 }
 // ✨ FICHE STATS PERSO (premium, offert en test) — calculée depuis chartBets + standDuels (données déjà chargées).
@@ -14847,8 +14870,12 @@ function render(){
   // AUCUNE mécanique ni structure DOM interne changée, seule la couche visuelle est unifiée avec
   // le reste de Tactizo 2.0. Le lobby/la préparation (viewLobbyA2/viewPrepHub/…) se wrappent déjà
   // eux-mêmes, donc "game" n'est ré-enveloppé ici que pour running/truce (Pronos), jamais lobby/prep.
+  // ⚠️ Correctif audit QA (2026-09-05) — "starting"/"resolving" (statuts DB transitoires posés par
+  // resolveTreve()/resolveDay() pendant la résolution d'une journée ou de la trêve, ~4s de polling)
+  // manquaient : un joueur dont refresh() retombait sur l'un de ces statuts voyait l'écran repasser
+  // en `.box` non stylé le temps de la résolution, à CHAQUE changement de journée de CHAQUE ligue.
   if(["standings","coulisses","results","palmares","stats","leaguestats","shop"].includes(S.view)
-     || (S.view==="game" && L && (L.status==="running"||L.status==="truce"))){
+     || (S.view==="game" && L && (L.status==="running"||L.status==="truce"||L.status==="starting"||L.status==="resolving"))){
     html = `<div class="a2-theme">${html}</div>`;
   }
   // Bandeau de consultation en TÊTE DE CHAQUE ÉCRAN (v7.11) : quel que soit l'onglet où l'admin
