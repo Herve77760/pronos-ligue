@@ -65,6 +65,12 @@
      débordement horizontal constaté sur iPhone réel : .a2-wrap n'a plus besoin d'aucune marge
      négative, juste le padding sûr de .app + le sien, en largeur normale (100%). */
   .app.a2-mode{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — Lobby/Prépa : la barre du haut reste affichée (elle
+     n'est pas dans A2_VIEWS) mais tient sur une seule ligne (~59px mesurés) avec les seuls boutons
+     qui y restent visibles sur ces deux écrans, alors que le padding-top fixe de .app (93px) réserve
+     la place d'une barre à deux lignes. Un seul point commun (voir render()) réduit ce padding pour
+     ce cas précis — le 93px global n'est pas touché, ni le style de la barre elle-même. */
+  .app.lp-mode{padding-top:calc(66px + env(safe-area-inset-top))}
   h1{font-size:21px;margin:0;letter-spacing:-.4px;font-weight:800;}
   h2{font-size:15px;margin:22px 4px 10px;letter-spacing:.01em;}
   .sub{color:var(--muted);font-size:13.5px;}
@@ -972,6 +978,15 @@
       var(--a2-navy-deep);
     color:var(--a2-ink); width:100%; max-width:100%; padding:20px 0 26px;
     min-height:calc(100vh - 40px);}
+  /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — Lobby/Hub Prépa : `.a2-wrap` garde son propre fond
+     dégradé (navy) ET son padding-top de 20px habituel — correct pour les écrans qui masquent la
+     barre du haut (Auth/Profil/Create/Join), où ce padding EST l'unique respiration sous l'écran.
+     Ici la barre reste visible et `bandeauMesLigues()` (hors de `.a2-wrap`, son propre margin-bottom
+     de 12px) fait déjà cette respiration : le padding de 20px s'ajoutait par-dessus, laissant une
+     bande de fond sombre vide avant le hero. Un seul point commun (cette classe, posée par les deux
+     écrans) ramène ce padding-top à 0 sans toucher au reste de `.a2-wrap` (padding bas, fond, largeur)
+     ni à l'image/au cadrage du hero. */
+  .a2-wrap.a2-wrap-tight{padding-top:0}
   .a2-wrap *{box-sizing:border-box; min-width:0}
   .a2-topbar{display:flex;align-items:center;gap:10px;padding:16px 0 14px}
   .a2-back{width:34px;height:34px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
@@ -1196,9 +1211,22 @@
   .a2-hero-img-wrap{width:100%;aspect-ratio:5/4;overflow:hidden;display:block}
   .a2-hero-img-wrap img{width:100%;height:100%;object-fit:cover;object-position:100% center;display:block}
   .a2-hero-text{padding:14px 16px 16px}
-  .a2-hero-maestro{position:relative;overflow:visible;margin-top:56px;padding-right:34%}
-  .a2-hero-maestro-img{position:absolute;right:-6px;bottom:-18px;height:150px;z-index:1;pointer-events:none}
+  /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — `margin-top:56px` réservait de la place pour laisser
+     le Maestro DÉBORDER au-dessus de la carte (effet repris de la maquette) : sur Lobby/Prépa, la
+     barre du haut restant visible (contrairement à Auth/Profil), ce débord tombait dans le vide
+     laissé par ce même correctif — cause commune avec la bande vide déjà identifiée. Choix retenu :
+     le Maestro reste CONTENU dans sa carte (`overflow:hidden`, `bottom:0`) au lieu d'en déborder —
+     plus besoin d'aucune marge réservée, ni ici ni sur `.a2-hero-card` (Lobby, non touché). */
+  .a2-hero-maestro{position:relative;overflow:hidden}
+  .a2-hero-maestro-img{position:absolute;right:-6px;bottom:0;height:130px;z-index:1;pointer-events:none}
   .a2-hero-maestro-img img{height:100%;width:auto;display:block}
+  /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — LE TEXTE PASSAIT SOUS LE MAESTRO. Cause : un
+     `padding-right:34%` sur toute la carte, une approximation qui ne suit pas la largeur RÉELLE de
+     l'image (fixée en `height` px, donc en largeur px constante, pas en %). Remplacé par un
+     `max-width` en px sur le texte lui-même (calc(100% - 170px), 130px de haut × ratio ≈ 164px de
+     large + marge) : le texte ne peut plus jamais entrer sous l'image, il revient à la ligne à la
+     place — sans toucher à la taille de police.  */
+  .a2-hero-maestro-text{max-width:calc(100% - 170px)}
   .a2-time-note{margin-top:10px;font-size:11px;color:var(--a2-muted)}
   .a2-invite-card{position:relative;border-radius:16px;padding:17px;margin-bottom:16px;overflow:hidden;
     background:linear-gradient(155deg, rgba(236,211,130,.14), rgba(205,164,58,.05));
@@ -1274,7 +1302,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.348";
+const APP_VERSION = "v8.349";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9497,7 +9525,7 @@ function viewLobbyA2(){
     ? `<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'} style="width:100%">${canLaunch?((solo?t("Lancer la partie solo"):t("Clôturer les inscriptions"))+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 1 joueur")}</button>
        <div class="mini muted" style="text-align:center;margin-top:8px">${solo?t("Tu joues seul contre l'IA. Invite des amis avec le code {a} — dès qu'un 2ᵉ joueur rejoint, la partie redevient normale.",{a:esc(L.code)}):t("Clôture quand le nombre te convient — ensuite : choix du gage + enchères, puis le championnat démarre.")}</div>`
     : `<div class="box mini muted" style="text-align:center">⏳ ${t("En attente que l'organisateur clôture les inscriptions…")}</div>`;
-  return `<div class="a2-wrap">
+  return `<div class="a2-wrap a2-wrap-tight">
     <div class="a2-hero-card">
       <div class="a2-hero-img-wrap"><img src="img/lobby-tactizo-table.png" alt=""></div>
       <div class="a2-hero-text"><div class="a2-hero-kicker">${t("La table se prépare")}</div>
@@ -9563,12 +9591,14 @@ function viewPrepHub(){
   // — aucune action, aucune info utile, seulement de la confusion (demandé par Hervé, test iPhone).
   // Entre amis, elle reste utile pour suivre l'avancement des autres : inchangée.
   const playersSection = solo ? '' : `<div class="a2-sec-title">${t("Préparation des joueurs")}</div>${prepRosterHTML(false)}`;
-  return `<div class="a2-wrap">
+  return `<div class="a2-wrap a2-wrap-tight">
     <div class="a2-card a2-hero-maestro">
       <div class="a2-hero-maestro-img"><img src="img/qg-tactizo-maestro-mains-jointes-complet.png" alt=""></div>
-      <div class="a2-hero-kicker">${heroKicker}</div>
-      <div class="a2-hero-sub">${heroSub}</div>
-      <div class="a2-time-note">⏳ ${t("Clôture dans {a} au plus tard.",{a:fmtLeft(st.deadline)})}</div>
+      <div class="a2-hero-maestro-text">
+        <div class="a2-hero-kicker">${heroKicker}</div>
+        <div class="a2-hero-sub">${heroSub}</div>
+        <div class="a2-time-note">⏳ ${t("Clôture dans {a} au plus tard.",{a:fmtLeft(st.deadline)})}</div>
+      </div>
     </div>
     ${readyBanner}
     <div class="a2-sec-title">${t("Mes étapes")}</div>
@@ -14522,6 +14552,14 @@ function render(){
   const A2_VIEWS = ["auth","login","signup","checkEmail","resetPassword","newPassword","choosePseudo","profil","create","join"];
   $("topBar").classList.toggle("hide", A2_VIEWS.includes(S.view));
   $("appShell").classList.toggle("a2-mode", A2_VIEWS.includes(S.view));
+  // ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — Lobby/Prépa gardent l'ancienne barre du haut visible
+  // (pas dans A2_VIEWS : elle reste utile — 🏠/📖/🐛/👤 — et sa refonte est reportée à la nav V2), mais
+  // avec MOINS de boutons affichés qu'ailleurs elle ne tient plus qu'une seule ligne (~59px mesurés)
+  // alors que le padding-top fixe de .app (93px) réserve la place d'une barre à deux lignes — d'où le
+  // grand vide constaté au-dessus de « Mes ligues » sur ces deux écrans. Un SEUL point commun (ici,
+  // pas dans viewLobbyA2()/viewPrepHub() séparément) : `.app.lp-mode` réduit ce padding pour ce cas
+  // précis, sans toucher au 93px global (qui reste correct partout ailleurs) ni au style de la barre.
+  $("appShell").classList.toggle("lp-mode", S.view==="game" && !!L && (L.status==="lobby"||L.status==="prep"));
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   /* ⚠️ v8.193 — LES DEUX PAGES LÉGALES SONT ATTEIGNABLES DEPUIS L'APP.
