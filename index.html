@@ -977,7 +977,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.336";
+const APP_VERSION = "v8.337";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6137,15 +6137,11 @@ async function refresh(){
         try{ await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",lid)); L.gage=JSON.stringify(o); }catch(e){}
       }
     }
-    /* ⚠️ v8.133 (demandé par Hervé) — REPÈRE « VISITÉ », posé dès que la ligue se charge ici, sans
-       attendre le clic sur « La saison reprend » (qui reste requis pour faire disparaître l'écran
-       bloquant DANS la ligue, cf. `treveResultSeen`/`ackTreveResult`). Sert UNIQUEMENT à éteindre le
-       bandeau de l'accueil : ouvrir la ligue et voir l'écran de la trêve une fois a déjà rempli ce
-       que ce bandeau-là promettait ("va voir"). Écrit à CHAQUE refresh tant que l'état tient — sans
-       risque, une même valeur réécrite ne casse rien, et ça couvre le cas d'un premier chargement
-       trop rapide pour que l'utilisateur ait eu le temps de cliquer quoi que ce soit. */
-    { const stt=L.prep_summary&&L.prep_summary.treve_st, clos=stt&&stt.closed_at;
-      if(clos){ try{ localStorage.setItem("pl_treveu_visite_"+lid+"_"+(S.myId||"?")+"_"+clos,"1"); }catch(e){} } }
+    /* ⚠️ v8.337 — LE REPÈRE « VISITÉ » LOCAL (`pl_treveu_visite_`, v8.133) A ÉTÉ RETIRÉ D'ICI : il
+       ne servait qu'à éteindre le bandeau d'accueil plus tôt que l'écran bloquant, et vivait dans
+       le même `localStorage` par appareil que le bug corrigé sur `treveResultSeen`/`ackTreveResult`
+       (cf. leur commentaire). Le bandeau (`loadHomeTodo`) compare désormais directement au repère
+       serveur `treve_seen_at`, plus besoin de le pré-poser ici. */
     /* Fin de TRÊVE automatique — même règle que la préparation : dès que tous les humains ont
        validé, ou à l'échéance de 24 h. ⚠️ Placé AVANT le bloc `prep` : les deux ne peuvent pas
        coexister, mais l'ordre rend la lecture sans ambiguïté. */
@@ -6859,10 +6855,12 @@ async function loadMyLeagues(){
   // pour dire si TA préparation est faite. Une colonne de plus sur une requête déjà lancée.
   // ⚠️ v8.123 : `last_seen_day` AJOUTÉ, même logique — c'est ce que lit `getSeen` pour toutes les
   // ligues autres que celle ouverte (cf. la note sur `getSeen`/`setSeen`).
-  try{ const mine=await q(db.from("players").select("id,league_id,is_organizer,shop_done,last_seen_day").eq("user_id",AUTH.id));
+  // ⚠️ v8.337 : `treve_seen_at` AJOUTÉ, même principe — c'est ce que lit le bandeau « trêve
+  // terminée » de l'accueil (cf. la note sur `treveResultSeen`/`ackTreveResult`).
+  try{ const mine=await q(db.from("players").select("id,league_id,is_organizer,shop_done,last_seen_day,treve_seen_at").eq("user_id",AUTH.id));
     if(mine.length){ const ids=[...new Set(mine.map(m=>m.league_id))];
       const lgs=await q(db.from("leagues").select("*").in("id",ids));
-      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id, org:!!(mine.find(m=>m.league_id===l.id)||{}).is_organizer, shopDone:!!(mine.find(m=>m.league_id===l.id)||{}).shop_done, lastSeen:(mine.find(m=>m.league_id===l.id)||{}).last_seen_day|0}))
+      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id, org:!!(mine.find(m=>m.league_id===l.id)||{}).is_organizer, shopDone:!!(mine.find(m=>m.league_id===l.id)||{}).shop_done, lastSeen:(mine.find(m=>m.league_id===l.id)||{}).last_seen_day|0, treveSeen:(mine.find(m=>m.league_id===l.id)||{}).treve_seen_at||null}))
         .sort((a,b)=> (a.lg.created_at<b.lg.created_at?1:-1));
     } else myLeagues=[];
   }catch(e){ showErr(/issued.*future|future.*issued/i.test(e.message||"")
@@ -7079,16 +7077,14 @@ async function loadHomeTodo(){
          trêve vient de se clore et n'est pas encore acquittée — avant même le renvoi vers les
          résultats non vus (désormais mis en garde par `treveResultSeen()`, cf. `refresh()`). Le
          bandeau doit donc annoncer CET écran-là, pas les résultats, tant qu'il n'a pas été vu. */
-      /* ⚠️ v8.133 (demandé par Hervé) — CE BANDEAU LIT UN REPÈRE À PART, PAS `pl_treveu_`. Le
-         bandeau d'accueil dit « va voir » ; `pl_treveu_` (posé par le bouton « La saison reprend »
-         dans `viewTreveSummary`) dit « j'ai lu et je valide, je peux reprendre ». Les confondre
-         obligeait à cliquer CE bouton juste pour faire taire l'accueil, alors qu'ouvrir la ligue et
-         voir l'écran une fois avait déjà rempli la promesse du bandeau. `pl_treveu_visite_` est
-         posé par `refresh()` dès que la ligue se charge dans cet état (voir la-bas) — sans clic. Le
-         geste À L'INTÉRIEUR de la ligue (le bouton, l'écran bloquant tant qu'il n'est pas cliqué)
-         reste inchangé : seul CE bandeau-ci s'éteint plus tôt. */
+      /* ⚠️ v8.337 — CE BANDEAU LIT DÉSORMAIS LE MÊME REPÈRE SERVEUR QUE L'ÉCRAN BLOQUANT
+         (`m.treveSeen`, cf. `loadMyLeagues`/`treveResultSeen`), À LA PLACE DE `pl_treveu_visite_`.
+         Avant (v8.133), un repère local à part éteignait ce bandeau dès l'OUVERTURE de la ligue, sans
+         attendre le clic — ce repère vivait dans le `localStorage` du navigateur, donc par
+         appareil, comme le bug corrigé ci-dessus. Nuance assumée : le bandeau reste affiché
+         jusqu'au clic sur « La saison reprend », pas juste jusqu'à l'ouverture de la ligue. */
       { const stt=m.lg.prep_summary&&m.lg.prep_summary.treve_st, clos=stt&&stt.closed_at;
-        if(clos && localStorage.getItem("pl_treveu_visite_"+m.lg.id+"_"+m.pid+"_"+clos)!=="1"){
+        if(clos && !memeInstant(m.treveSeen,clos)){
           homeTodo.push({lg:m.lg, pid:m.pid, kind:"treve"});
           return;
         } }
@@ -8077,12 +8073,37 @@ function prepSummaryBody(){
    `resolveTreve()` ne s'ouvrirait que dans le navigateur du client qui a gagné la course de
    résolution. Ce nouvel écran se déclenche donc à l'AFFICHAGE (comme `jourNonVu` pour les
    résultats non vus), pas à la résolution : chacun le voit à sa prochaine visite, quel que soit
-   qui a résolu. Repère : `pl_treveu_<ligue>_<joueur>`, sur le modèle de `pl_preps_`/`pl_seen_`. */
+   qui a résolu.
+   ⚠️ v8.337 (bug vécu par Hervé, ligue DTT3M : « va voir les résultats de la trêve » réaffiché
+   alors qu'il les avait déjà vus et acquittés) — CE REPÈRE VIVAIT DANS LE `localStorage` DU
+   NAVIGATEUR (`pl_treveu_<ligue>_<joueur>_<clos>`), DONC PAR APPAREIL/NAVIGATEUR : exactement le
+   défaut déjà corrigé en v8.123 pour `last_seen_day` (« vu sur le téléphone » réapparaissait
+   « à découvrir » sur l'ordinateur), mais jamais reporté ici quand ce repère a été ajouté ensuite
+   (v8.93/v8.133). Passé en base (`players.treve_seen_at`), sur le modèle de `getSeen`/`setSeen` :
+   ça suit le COMPTE, pas l'appareil.
+   ⚠️ ON COMPARE À `clos` (le `closed_at` de CETTE trêve précise), pas un simple booléen : une
+   ligue relancée peut revivre une trêve plus tard, et un booléen resterait bloqué à « déjà vu ».
+   ⚠️ LE REPÈRE « VISITÉ » SÉPARÉ (`pl_treveu_visite_`, v8.133, qui n'éteignait que le bandeau
+   d'accueil sans exiger le clic) A ÉTÉ RETIRÉ, PAS MIGRÉ : il vivait dans le même `localStorage`
+   fragile, et sa seule raison d'être était d'éteindre le bandeau un peu plus tôt que l'écran
+   bloquant lui-même. Un seul repère serveur, posé au clic, couvre l'écran ET le bandeau — au prix
+   d'une nuance mineure assumée (le bandeau reste affiché jusqu'au clic, pas dès l'ouverture).
+   ⚠️ COMPARAISON PAR INSTANT (`memeInstant`), JAMAIS PAR ÉGALITÉ DE TEXTE : `clos` est écrit par du
+   JS (`new Date().toISOString()`, ex. "…T10:00:00.000Z") mais ressort de la colonne `timestamptz`
+   reformaté par Postgres (ex. "…T10:00:00+00:00") — même instant, texte différent. Un `===` entre
+   les deux resterait bloqué sur « jamais vu » y compris juste après le clic qui vient de l'écrire. */
+function memeInstant(a,b){ if(!a||!b) return false; const ta=new Date(a).getTime(), tb=new Date(b).getTime(); return !isNaN(ta) && ta===tb; }
 function treveResultSeen(){ const s=L&&L.prep_summary; const clos=s&&s.treve_st&&s.treve_st.closed_at;
   if(!clos) return true;   // rien à montrer → jamais bloquant
-  return localStorage.getItem("pl_treveu_"+L.id+"_"+(S.myId||"?")+"_"+clos)==="1"; }
-function ackTreveResult(){ const s=L&&L.prep_summary; const clos=s&&s.treve_st&&s.treve_st.closed_at;
-  if(clos) localStorage.setItem("pl_treveu_"+L.id+"_"+(S.myId||"?")+"_"+clos,"1"); render(); }
+  const pl=pById(S.myId); return !!(pl && memeInstant(pl.treve_seen_at,clos)); }
+async function ackTreveResult(){ const s=L&&L.prep_summary; const clos=s&&s.treve_st&&s.treve_st.closed_at;
+  if(clos){ const pl=pById(S.myId); if(pl) pl.treve_seen_at=clos;
+    // même principe que `setSeen()` : cache `myLeagues` mis à jour ICI, avant même la fin de
+    // l'écriture réseau — sinon le bandeau d'accueil (qui lit CE cache) rezafficherait « va voir »
+    // en revenant à l'accueil juste après avoir cliqué, le temps qu'un `loadMyLeagues()` recharge.
+    const m=myLeagues.find(x=>x.lg.id===L.id && x.pid===S.myId); if(m) m.treveSeen=clos;
+    try{ await q(db.from("players").update({treve_seen_at:clos}).eq("id",S.myId)); }catch(e){} }
+  render(); }
 function viewTreveSummary(){
   const s=L.prep_summary||{}; const st=s.treve_st||{};
   const pName=pid=>{const p=pById(pid)||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
@@ -8103,7 +8124,7 @@ function viewCoulisses(){
   // Repère « vu » pour le bandeau d'accueil (cf. `loadHomeTodo`, kind:"coulisses") — posé dès que
   // cet écran s'affiche réellement, quel que soit le chemin emprunté pour y arriver (onglet,
   // bandeau, ou l'ancien renvoi automatique de `refresh()`). Réécrire la même valeur à chaque
-  // rendu ne casse rien (même principe que `pl_treveu_visite_`, v8.133).
+  // rendu ne casse rien.
   if(L && L.prep_summary){ try{ localStorage.setItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"),"1"); }catch(e){} }
   /* CODE DE LA LIGUE (v7.59, demandé par Hervé : « il est parfois difficile de retrouver le code
      d'une ligue une fois créée, je dois ressortir sur la liste de toutes les ligues »). Le code
