@@ -1184,8 +1184,18 @@
   .a2-hero-sub{margin-top:6px;font-size:12.5px;line-height:1.4;color:var(--a2-ink);opacity:.9}
   /* ---- Bloc 3A, correctif (2026-09-05) : héros illustrés réels (assets copiés depuis maquettes/img/
      vers app/img/, voir le rapport de fin de bloc) ---- */
-  .a2-hero-img-wrap{border-radius:16px;overflow:hidden;aspect-ratio:5/4;margin:-16px -16px 14px;max-height:180px}
+  /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — L'IMAGE NE REMPLISSAIT QUE LA MOITIÉ DE LA CARTE SUR
+     SAFARI RÉEL (jamais reproduit dans l'outil de test Chromium). Cause : `.a2-hero-img-wrap` vivait
+     DANS `.a2-card` (qui a son propre padding) et compensait avec des MARGES NÉGATIVES pour revenir
+     bord à bord — exactement la technique déjà identifiée comme fragile sur Safari lors du correctif
+     iPhone du Bloc 1 (v8.344), et déjà retirée de `.a2-wrap` pour cette raison. Solution : `.a2-hero-
+     card` ne porte AUCUN padding — l'image est un enfant de largeur 100% directement dedans (comme
+     `.hero-b`/`.hero-b-img-wrap` dans la maquette), le texte vit dans `.a2-hero-text`, séparément
+     paddé. Plus aucune marge négative nulle part dans ce bloc. */
+  .a2-hero-card{border-radius:16px;overflow:hidden;background:var(--a2-panel);border:1.5px solid var(--a2-border);margin-bottom:16px}
+  .a2-hero-img-wrap{width:100%;aspect-ratio:5/4;overflow:hidden;display:block}
   .a2-hero-img-wrap img{width:100%;height:100%;object-fit:cover;object-position:100% center;display:block}
+  .a2-hero-text{padding:14px 16px 16px}
   .a2-hero-maestro{position:relative;overflow:visible;margin-top:56px;padding-right:34%}
   .a2-hero-maestro-img{position:absolute;right:-6px;bottom:-18px;height:150px;z-index:1;pointer-events:none}
   .a2-hero-maestro-img img{height:100%;width:auto;display:block}
@@ -1210,6 +1220,12 @@
   .a2-step-name{font-weight:700;font-size:14px;color:var(--a2-ink)}
   .a2-step-state{font-size:11.5px;color:var(--a2-muted);margin-top:2px;display:flex;align-items:center;gap:5px}
   .a2-step-chev{color:var(--a2-faint);font-weight:800;flex:0 0 auto}
+  /* ⚠️ Bloc 3A, correctif UX Solo (2026-09-05) — variante "action principale" : en Solo, l'unique
+     étape restante (Enchères) n'est plus une carte parmi d'autres mais LE geste attendu — traitement
+     plus affirmé (fond doré, plus grand), libellé d'état remplacé par un CTA "Commencer →". */
+  .a2-step-card.primary{padding:16px;border-color:rgba(236,211,130,.6);
+    background:linear-gradient(155deg, rgba(236,211,130,.16), rgba(205,164,58,.05))}
+  .a2-step-cta{color:var(--a2-brass-light);font-weight:800;font-size:13.5px;white-space:nowrap;flex:0 0 auto}
 </style>
 <!-- ⚠️ v8.344 (Tactizo V2) — THÈME CLAIR RETIRÉ, SOMBRE FORCÉ AVANT LE PREMIER RENDU (anti-flash).
      Avant : lisait pl_theme (défaut "light" si absent) — un ancien "light" en localStorage
@@ -1258,7 +1274,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.347";
+const APP_VERSION = "v8.348";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3281,6 +3297,9 @@ const EN={
   "À faire":"To do",
   "Enchères de bonus":"Bonus auction",
   "Préparation des joueurs":"Players' preparation",
+  // ⚠️ Bloc 3A, correctifs UX test iPhone (2026-09-05)
+  "Commencer":"Start",
+  "Répartis ton budget sur les bonus que tu veux utiliser cette saison.":"Split your budget across the bonuses you want to use this season.",
   // Mes ligues
   "➕ Créer une ligue":"➕ Create a league", "Rejoindre avec un code":"Join with a code",
   "Rejoindre →":"Join →", "🏆 Palmarès général":"🏆 Overall hall of fame", "🛠 Admin":"🛠 Admin",
@@ -9479,10 +9498,11 @@ function viewLobbyA2(){
        <div class="mini muted" style="text-align:center;margin-top:8px">${solo?t("Tu joues seul contre l'IA. Invite des amis avec le code {a} — dès qu'un 2ᵉ joueur rejoint, la partie redevient normale.",{a:esc(L.code)}):t("Clôture quand le nombre te convient — ensuite : choix du gage + enchères, puis le championnat démarre.")}</div>`
     : `<div class="box mini muted" style="text-align:center">⏳ ${t("En attente que l'organisateur clôture les inscriptions…")}</div>`;
   return `<div class="a2-wrap">
-    <div class="a2-card">
+    <div class="a2-hero-card">
       <div class="a2-hero-img-wrap"><img src="img/lobby-tactizo-table.png" alt=""></div>
-      <div class="a2-hero-kicker">${t("La table se prépare")}</div>
-      <div class="a2-hero-sub">${t("Les joueurs arrivent. Quand tout le monde est là, lance la préparation.")}</div></div>
+      <div class="a2-hero-text"><div class="a2-hero-kicker">${t("La table se prépare")}</div>
+        <div class="a2-hero-sub">${t("Les joueurs arrivent. Quand tout le monde est là, lance la préparation.")}</div></div>
+    </div>
     <div class="a2-invite-card">
       <div class="a2-invite-label">${t("Code de la ligue")}</div>
       <div class="a2-invite-code">${esc(L.code)}</div>
@@ -9516,27 +9536,44 @@ function viewPrepHub(){
   const steps=(solo?[]:[{k:'gages',label:t("Enjeu de la ligue"),status:enjeuStatus}])
     .concat([{k:'encheres',label:t("Enchères de bonus"),status:bonusStatus}]);
   const stepIcons={gages:"icone-enjeu.png",encheres:"icone-encheres.png"};
-  const stepsHTML=steps.map(s=>`<button type="button" class="a2-step-card ${s.status}" onclick="setPtab('${s.k}')">
+  const allMineDone = steps.every(s=>s.status==='done');
+  // ⚠️ Bloc 3A, correctif UX Solo (2026-09-05, test iPhone réel) — en Solo, une seule étape reste
+  // (Enchères) : la présenter comme une carte parmi d'autres dans une liste "Mes étapes" manquait de
+  // clarté ("on ne comprend pas ce qu'on doit faire"). Tant qu'elle n'est pas faite, elle devient
+  // l'action principale de l'écran — carte agrandie, CTA "Commencer →" au lieu d'un simple libellé
+  // d'état. Une fois faite (allMineDone), on repasse à la carte "Terminé" standard : rien à pousser.
+  const stepsHTML = (solo && !allMineDone)
+    ? `<button type="button" class="a2-step-card primary" onclick="setPtab('encheres')">
+        <img src="img/icone-encheres.png" alt="" style="width:40px;height:40px;object-fit:contain;flex:0 0 auto">
+        <div class="a2-step-main"><div class="a2-step-name">${t("Enchères de bonus")}</div></div>
+        <span class="a2-step-cta">${t("Commencer")} →</span></button>`
+    : steps.map(s=>`<button type="button" class="a2-step-card ${s.status}" onclick="setPtab('${s.k}')">
       <img src="img/${stepIcons[s.k]}" alt="" style="width:36px;height:36px;object-fit:contain;flex:0 0 auto">
       <div class="a2-step-main"><div class="a2-step-name">${s.label}</div><div class="a2-step-state"><span class="a2-step-dot ${s.status}"></span> ${s.status==='done'?t("Terminé"):t("À faire")}</div></div>
       <span class="a2-step-chev">›</span></button>`).join('');
-  const allMineDone = steps.every(s=>s.status==='done');
   const humansN=players.filter(p=>!p.is_ai).length; const validated=players.filter(p=>!p.is_ai&&p.shop_done).length;
   const readyBanner = allMineDone ? `<div class="box" style="border-color:var(--green)">
       <b class="mini">${t("✅ Ta préparation est validée")}</b>
       <div class="mini muted" style="margin-top:4px">${validated>=humansN?t("🚀 Tout le monde est prêt — lancement imminent…"):t("En attente des autres — <b>{a}/{b}</b> prêts. Tu peux encore modifier tes gages / enchères.",{a:validated,b:humansN})}</div></div>` : '';
+  const heroKicker = (solo && !allMineDone) ? t("À toi de jouer") : t("Prépare ta saison");
+  const heroSub = allMineDone
+    ? t("Ta part est jouée — profites-en pour relire les paramètres ou patienter.")
+    : (solo ? t("Répartis ton budget sur les bonus que tu veux utiliser cette saison.") : t("Fais tes choix, mise sur tes bonus. La saison démarre dès que tout le monde est prêt."));
+  // Solo : la liste "Préparation des joueurs" ne montrerait que Toi + une IA systématiquement "Prête"
+  // — aucune action, aucune info utile, seulement de la confusion (demandé par Hervé, test iPhone).
+  // Entre amis, elle reste utile pour suivre l'avancement des autres : inchangée.
+  const playersSection = solo ? '' : `<div class="a2-sec-title">${t("Préparation des joueurs")}</div>${prepRosterHTML(false)}`;
   return `<div class="a2-wrap">
     <div class="a2-card a2-hero-maestro">
       <div class="a2-hero-maestro-img"><img src="img/qg-tactizo-maestro-mains-jointes-complet.png" alt=""></div>
-      <div class="a2-hero-kicker">${t("Prépare ta saison")}</div>
-      <div class="a2-hero-sub">${allMineDone ? t("Ta part est jouée — profites-en pour relire les paramètres ou patienter.") : (solo?t("Mise sur tes bonus pour la saison — aucun enjeu en solo."):t("Fais tes choix, mise sur tes bonus. La saison démarre dès que tout le monde est prêt."))}</div>
+      <div class="a2-hero-kicker">${heroKicker}</div>
+      <div class="a2-hero-sub">${heroSub}</div>
       <div class="a2-time-note">⏳ ${t("Clôture dans {a} au plus tard.",{a:fmtLeft(st.deadline)})}</div>
     </div>
     ${readyBanner}
     <div class="a2-sec-title">${t("Mes étapes")}</div>
     ${stepsHTML}
-    <div class="a2-sec-title">${t("Préparation des joueurs")}</div>
-    ${prepRosterHTML(false)}
+    ${playersSection}
     <button type="button" class="a2-cta-ghost" onclick="openLeagueParamsModal()">${t("Voir les paramètres de la ligue")} →</button>
     ${(org&&!solo)?`<div style="height:8px"></div><button type="button" class="a2-cta-ghost" style="opacity:.75" onclick="forcePrepEnd()">🔒 ${t("Clôturer la préparation maintenant (organisateur)")}</button>`:''}
   </div>`;
