@@ -947,7 +947,7 @@
 </head>
 <body>
 <div class="app">
-  <div class="bar">
+  <div class="bar" id="topBar">
     <div class="barTop">
     <div class="barId"><img id="headerLogo" alt="" width="30" height="30" style="flex:0 0 auto;border-radius:50%;object-fit:cover;background:#0d0a1f"><h1 style="min-width:0;overflow:hidden"><span style="color:var(--brand)">Tactizo</span></h1></div>
     <div class="topbtns">
@@ -985,11 +985,16 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.341";
+const APP_VERSION = "v8.342";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
 const ADMIN_ID = "87c0be26-7fe8-4909-8be2-aa38c6db06e0"; // compte administrateur (Hervé) — uid Supabase Auth
+
+// ⚠️ MAINTENANCE TEMPORAIRE (2026-09-05) — bloque l'accès au jeu pour tout compte SAUF ADMIN_ID,
+// le temps de l'intégration Tactizo V2. Ne touche à aucune donnée (ni compte, ni ligue) : c'est un
+// simple écran de blocage côté client, dans render(). Réversible en un mot : repasser à `false`.
+const MAINTENANCE_MODE = true;
 const AUTH_DOMAIN = "bbb.app"; // e-mail synthétique invisible pour l'utilisateur (Supabase Auth) : pseudo@bbb.app
 // ⚠️ NE PAS normaliser les accents ici : l'email technique dérive du pseudo de CRÉATION du compte.
 // La normalisation (v6.52) cassait la connexion des comptes créés avec un accent (« Hervé » →
@@ -13815,7 +13820,25 @@ function viewAdmin(){
 
 /* ============ render / poll ============ */
 let rootAffiche=null;   // dernier HTML réellement posé dans #root (cf. la note dans render)
+// Écran affiché à tout compte non-admin tant que MAINTENANCE_MODE est actif — voir sa définition.
+function maintenanceHTML(){
+  return '<div style="max-width:420px;margin:60px auto;padding:28px 22px;text-align:center;color:#f4ecd8;'
+    +'background:#161221;border-radius:16px;border:1px solid rgba(255,255,255,.08)">'
+    +'<h2 style="margin:0 0 14px;font-size:20px;color:#f4ecd8">Tactizo évolue</h2>'
+    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">Une nouvelle version est en cours de préparation.</p>'
+    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">Le jeu est temporairement indisponible pendant la mise à jour.</p>'
+    +'<p style="margin:0;line-height:1.5;font-weight:600;color:#f4ecd8">Reviens très bientôt !</p>'
+    +'</div>';
+}
+
 function render(){
+  if(MAINTENANCE_MODE && AUTH && AUTH.id!==ADMIN_ID){
+    $("topBar").classList.add("hide");
+    $("root").innerHTML = maintenanceHTML();
+    const bn=$("bottomnav"); if(bn){ bn.innerHTML=""; bn.classList.add("hide"); }
+    const fo=$("foot"); if(fo) fo.innerHTML="Tactizo · "+APP_VERSION;
+    return;
+  }
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   /* ⚠️ v8.193 — LES DEUX PAGES LÉGALES SONT ATTEIGNABLES DEPUIS L'APP.
