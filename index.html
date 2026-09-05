@@ -985,7 +985,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.339";
+const APP_VERSION = "v8.340";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6152,15 +6152,25 @@ async function refresh(){
        serveur `treve_seen_at`, plus besoin de le pré-poser ici. */
     /* Fin de TRÊVE automatique — même règle que la préparation : dès que tous les humains ont
        validé, ou à l'échéance de 24 h. ⚠️ Placé AVANT le bloc `prep` : les deux ne peuvent pas
-       coexister, mais l'ordre rend la lecture sans ambiguïté. */
-    if(L.status==="truce" && !resolvingTreve && !LECTURE_SEULE && L.engine!=="server"){
+       coexister, mais l'ordre rend la lecture sans ambiguïté.
+       ⚠️ v8.340 (bug vécu par Hervé sur DTT3M : bandeau « résultats bientôt disponibles », clic
+       sans effet) — LE GARDE-FOU `L.engine!=="server"` (v8.335) EST RETIRÉ ICI. Il rendait
+       INSTANTANÉ un cas qui ne l'était plus : le joueur ouvrant la ligue pile à l'échéance ne
+       déclenchait plus rien lui-même, et devait attendre le prochain passage du cron (jusqu'à
+       5 min) sans que rien à l'écran ne le lui dise — alors qu'en simulé, « la clôture suffit »
+       (cf. v8.262) est la promesse même du jeu : aucune attente n'a de sens, rien de réel ne
+       tarde à se jouer. ⚠️ SANS RISQUE DE DOUBLE RÉSOLUTION : `resolvePrep`/`resolveTreve`
+       réclament le même verrou atomique (`update ... where status=eq.'…'`) que le cron — un seul
+       des deux gagne la course, l'autre constate `claim.length===0` et se contente de rafraîchir.
+       Le cron garde son rôle d'origine : faire avancer une ligue que PERSONNE n'a ouverte. */
+    if(L.status==="truce" && !resolvingTreve && !LECTURE_SEULE){
       const st=treveState()||{}; const humans=players.filter(p=>!p.is_ai);
       const tous=humans.length>=1 && humans.every(p=>(st.done||{})[p.id]);
       const dl=st.deadline && new Date(st.deadline).getTime()<=Date.now();
       if(tous||dl){ resolveTreve(); return; }
     }
     // fin de préparation AUTOMATIQUE : dès que tous ont validé (ou délai écoulé), on démarre sans clic
-    if(L.status==="prep" && !resolving && L.engine!=="server"){
+    if(L.status==="prep" && !resolving){
       const humans=players.filter(p=>!p.is_ai); const allDone=humans.length>=1 && humans.every(p=>p.shop_done); // >=1 : le SOLO doit pouvoir démarrer
       const st=prepState(); const dlPassed=st.deadline && new Date(st.deadline).getTime()<=Date.now();
       if(allDone||dlPassed){ resolvePrep(); return; }
@@ -6247,11 +6257,11 @@ async function refresh(){
     // ⚠️ `!LECTURE_SEULE` : en consultation, la visite de l'admin ne doit RIEN faire avancer —
     // ni choisir des matchs, ni faire parier l'IA, ni résoudre la journée d'un autre groupe.
     // Le verrou de `q()` les bloquerait de toute façon, mais autant ne pas les déclencher.
-    // ⚠️ 2026-08-28 (demandé par Hervé) — `L.engine==="server"` : cette ligue est prise en charge par
-    // la fonction serveur planifiée (cron, cf. supabase/functions/resolve) — le client ne doit plus
-    // agir dessus (tirage des matchs, paris IA, résolution) pour éviter une double résolution.
-    // N'est jamais posé sur une ligue `data_mode==="real"` (cf. MIGRATION-server-resolve.sql).
-    if(L.status==="running" && !S.recap && !resolving && !LECTURE_SEULE && L.engine!=="server"){
+    // ⚠️ v8.340 — LE GARDE-FOU `L.engine!=="server"` (2026-08-28) EST RETIRÉ : voir le commentaire
+    // détaillé au bloc trêve/préparation ci-dessus, même raisonnement et même bug vécu (DTT3M).
+    // Le client redevient un déclencheur immédiat pour toute ligue qu'il a ouverte ; le cron
+    // (`supabase/functions/resolve`) reste le filet pour celles que personne ne regarde.
+    if(L.status==="running" && !S.recap && !resolving && !LECTURE_SEULE){
       if(await ensureFixtures()){ duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay)); }
       // tous les matchs choisis → on démarre le compte à rebours des paris (max 24h / 12h fast), une seule fois
       if(!L.bet_started_at && duels.length && duels.every(d=>d.fixtures)){
