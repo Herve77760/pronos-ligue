@@ -1302,16 +1302,22 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.349";
+const APP_VERSION = "v8.350";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
 const ADMIN_ID = "87c0be26-7fe8-4909-8be2-aa38c6db06e0"; // compte administrateur (Hervé) — uid Supabase Auth
 
-// ⚠️ MAINTENANCE TEMPORAIRE (2026-09-05) — bloque l'accès au jeu pour tout compte SAUF ADMIN_ID,
-// le temps de l'intégration Tactizo V2. Ne touche à aucune donnée (ni compte, ni ligue) : c'est un
-// simple écran de blocage côté client, dans render(). Réversible en un mot : repasser à `false`.
+// ⚠️ MAINTENANCE TEMPORAIRE (2026-09-05) — bloque l'accès au jeu pour tout compte SAUF ceux listés
+// dans MAINTENANCE_ALLOWED_IDS, le temps de l'intégration Tactizo V2. Ne touche à aucune donnée (ni
+// compte, ni ligue) : c'est un simple écran de blocage côté client, dans render(). Réversible en un
+// mot : repasser MAINTENANCE_MODE à `false`.
 const MAINTENANCE_MODE = true;
+// ⚠️ (2026-09-05, demandé par Hervé) — Giulian ajouté pour pouvoir tester les ligues Entre amis
+// pendant la maintenance. uid retrouvé par requête SQL en lecture seule sur auth.users (pseudo
+// "Giulian" → giulian@bbb.app, compte existant depuis 2026-07-14) — jamais par pseudo/email au
+// runtime : seul cet uid, déjà résolu, compte ici. Même idée qu'ADMIN_ID, juste une petite liste.
+const MAINTENANCE_ALLOWED_IDS = [ADMIN_ID, "4716935b-9023-4737-a3b3-e9326b6a93fa"];
 const AUTH_DOMAIN = "bbb.app"; // e-mail synthétique invisible pour l'utilisateur (Supabase Auth) : pseudo@bbb.app
 // ⚠️ NE PAS normaliser les accents ici : l'email technique dérive du pseudo de CRÉATION du compte.
 // La normalisation (v6.52) cassait la connexion des comptes créés avec un accent (« Hervé » →
@@ -14525,7 +14531,7 @@ function viewAdmin(){
 
 /* ============ render / poll ============ */
 let rootAffiche=null;   // dernier HTML réellement posé dans #root (cf. la note dans render)
-// Écran affiché à tout compte non-admin tant que MAINTENANCE_MODE est actif — voir sa définition.
+// Écran affiché à tout compte hors MAINTENANCE_ALLOWED_IDS tant que MAINTENANCE_MODE est actif.
 function maintenanceHTML(){
   return '<div style="max-width:420px;margin:60px auto;padding:28px 22px;text-align:center;color:#f4ecd8;'
     +'background:#161221;border-radius:16px;border:1px solid rgba(255,255,255,.08)">'
@@ -14537,7 +14543,7 @@ function maintenanceHTML(){
 }
 
 function render(){
-  if(MAINTENANCE_MODE && AUTH && AUTH.id!==ADMIN_ID){
+  if(MAINTENANCE_MODE && AUTH && !MAINTENANCE_ALLOWED_IDS.includes(AUTH.id)){
     $("topBar").classList.add("hide");
     $("root").innerHTML = maintenanceHTML();
     const bn=$("bottomnav"); if(bn){ bn.innerHTML=""; bn.classList.add("hide"); }
