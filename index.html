@@ -985,7 +985,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.338";
+const APP_VERSION = "v8.339";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -15570,7 +15570,17 @@ function brancherRetourAndroid(){
 // « je viens de cliquer un lien de réinitialisation » d'une reconnexion normale — les deux
 // donnent pourtant une session tout aussi valide, indiscernable autrement.
 let modeRecuperation=false;
-db.auth.onAuthStateChange((event)=>{ if(event==="PASSWORD_RECOVERY"){ modeRecuperation=true; S.view="newPassword"; render(); } });
+db.auth.onAuthStateChange((event,session)=>{
+  if(event==="PASSWORD_RECOVERY"){ modeRecuperation=true; S.view="newPassword"; render(); }
+  /* ⚠️ v8.339 (demandé par Hervé, déconnexions à répétition non expliquées malgré la version
+     figée de supabase-js en v8.338) — JOURNAL DE BORD DES ÉVÉNEMENTS D'AUTHENTIFICATION : chaque
+     évènement (connexion, déconnexion, jeton renouvelé…) est horodaté ici, avec l'id du compte
+     quand il est connu. Sans ça, une déconnexion vécue par le joueur ne laisse AUCUNE trace de CE
+     QUI l'a déclenchée côté client — best-effort, ne doit jamais gêner l'appli si l'écriture rate.
+     ⚠️ Réutilise `bet_log` (v8.338) plutôt qu'une nouvelle table : c'est déjà le journal de bord
+     générique de l'appli, une table de plus pour un seul type d'évènement aurait été superflue. */
+  try{ q(db.from("bet_log").insert({player_id:(session&&session.user&&session.user.id)||(AUTH&&AUTH.id)||null,kind:"auth_"+event})); }catch(e){}
+});
 (async function boot(){
   brancherRetourAndroid();
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
