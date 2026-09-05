@@ -970,14 +970,22 @@
   <nav id="bottomnav" class="hide"></nav>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- ⚠️ v8.338 (bug vécu par Hervé : déconnexions à répétition apparues du jour au lendemain, sans
+     aucun changement de code ici) — VERSION FIGÉE, PAS "@2". "@2" charge la TOUTE DERNIÈRE version
+     2.x publiée par Supabase à chaque ouverture de l'appli : elle peut changer de comportement du
+     jour au lendemain sans le moindre commit dans ce dépôt. Supabase a publié la 2.115.0 le
+     2026-09-03 à 16h21 UTC — 16 minutes avant deux déconnexions coup sur coup côté Hervé, et le
+     symptôme persiste depuis. Reculé sur la 2.112.4, la dernière stable AVANT cette rafale de
+     publications (stable du 24 août au 1er septembre, sans souci connu). Remonter la version un
+     jour : le faire exprès, jamais en la laissant filer sur "@2". -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.112.4"></script>
 <script>
 "use strict";
 /* ============ CONFIG ============ */
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.337";
+const APP_VERSION = "v8.338";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9529,8 +9537,15 @@ async function submitBet(){
   }
   busy=true;
   try{ const d=myDuel(); const playedDay=L.current_day; const lid=L.id;   // la journée qu'on vient de jouer (avant la résolution auto qui fait avancer current_day)
+    const nbPicks=(bet.picks||[]).length;
     await q(db.from("bets").upsert({league_id:L.id,day:L.current_day,player_id:S.myId,duel_id:d.id,
       picks:bet.picks,captain:bet.captain,card:myCard,submitted:true},{onConflict:"player_id,day"}));
+    /* ⚠️ v8.338 (demandé par Hervé, après un pari disparu sans trace sur 4XHGA) — JOURNAL DE BORD :
+       cette ligne prouve qu'un pari a bien atteint le serveur, et à quelle heure précise. Sans ça,
+       impossible de distinguer « le pari n'est jamais parti » de « il est arrivé puis a été
+       écrasé plus tard » — les deux ont EXACTEMENT le même symptôme côté joueur. Best-effort :
+       un échec d'écriture DU JOURNAL ne doit jamais faire échouer LA VALIDATION elle-même. */
+    try{ await q(db.from("bet_log").insert({league_id:lid,day:playedDay,player_id:S.myId,kind:"submit_ok",detail:{picks:nbPicks}})); }catch(e){}
     bet={picks:null,captain:-1}; myCard=null; S.editingBet=false; await refresh();
     // Après validation : on RESTE sur Pronos tant qu'il manque un joueur — sinon on verrait les résultats
     // de la journée PASSÉE, ce qui prête à confusion (Hervé v6.42). MAIS si je suis le DERNIER à valider
@@ -9570,7 +9585,9 @@ async function submitBet(){
       } finally { awaitingReveal=false; }
       if(S.leagueId===lid) openResults(playedDay);
     }
-  }catch(e){ showErr("Validation : "+e.message); } busy=false;
+  }catch(e){ showErr("Validation : "+e.message);
+    try{ await q(db.from("bet_log").insert({league_id:(L&&L.id)||null,day:(L&&L.current_day!=null)?L.current_day:null,player_id:S.myId,kind:"submit_error",detail:{message:String(e.message||e)}})); }catch(e2){} }
+  busy=false;
 }
 // Rouvrir ses pronos pour les modifier (tant que la clôture n'est pas passée). Précharge le pari existant.
 function editBet(){ const mine=myBet(); if(!mine||deadlinePassed())return;
@@ -10150,7 +10167,34 @@ async function resolveDay(){
       const opp=PD[pid].oppId;
       impacts[pid]={self:Math.round(((dayNet[pid]||0)-(wo[pid]||0))*100)/100, opp: opp!=null?Math.round(((dayNet[opp]||0)-(wo[opp]||0))*100)/100:0}; } }
     for(const d of dz){ await q(db.from("duels").update({fixtures:d.fixtures,resolved:true}).eq("id",d.id)); }
-    if(aiInserts.length) await q(db.from("bets").upsert(aiInserts,{onConflict:"player_id,day"}));
+    /* ⚠️ v8.338 (bug possible chez Hervé, ligue 4XHGA : un pari validé semble avoir disparu) —
+       DERNIÈRE VÉRIFICATION AVANT D'ÉCRIRE UN FORFAIT. `bz`, lu tout en haut de cette fonction,
+       n'est qu'un INSTANTANÉ — entre cette lecture et CETTE écriture, plusieurs `await` se sont
+       écoulés (joueurs, duels, calcul du moteur, mise à jour des duels juste au-dessus). C'est
+       largement assez pour qu'un pari légitime arrive entre-temps et se retrouve écrasé par le
+       forfait généré ici, SANS AUCUNE ERREUR visible pour le joueur : SON upsert à lui a réussi,
+       c'est CELUI-CI, exécuté après coup, qui écrase.
+       ⚠️ ON NE RE-VÉRIFIE QUE LES VRAIS FORFAITS HUMAINS (`submitted:false`) : un pari IA ne peut
+       jamais « arriver entre-temps », personne d'autre ne le soumet à sa place.
+       ⚠️ LIMITE ASSUMÉE, DOCUMENTÉE : le moteur (`runEngine`, juste au-dessus) a déjà tourné avec
+       ce joueur en forfait — son score du jour reste calculé comme s'il n'avait pas joué, même si
+       on sauve son pari ici. Un score à corriger à la main reste largement préférable à une preuve
+       perdue. Journalisé dans `bet_log` (`forgot`/`forgot_avoided`) pour qu'un prochain cas laisse
+       une trace, au lieu d'être découvert après coup comme celui-ci. */
+    const idsForfaitHumain = aiInserts.filter(ins=>ins.submitted===false).map(ins=>ins.player_id);
+    let sauves=[];
+    if(idsForfaitHumain.length){
+      try{
+        const relu=await q(db.from("bets").select("player_id,picks,submitted").eq("league_id",L.id).eq("day",D).in("player_id",idsForfaitHumain));
+        sauves=relu.filter(b=>b.submitted!==false && Array.isArray(b.picks) && b.picks.length).map(b=>b.player_id);
+      }catch(e){}
+    }
+    const aEcrire = aiInserts.filter(ins=>!sauves.includes(ins.player_id));
+    if(aEcrire.length) await q(db.from("bets").upsert(aEcrire,{onConflict:"player_id,day"}));
+    try{
+      const lignes=idsForfaitHumain.map(pid=>({league_id:L.id,day:D,player_id:pid,kind:sauves.includes(pid)?"forgot_avoided":"forgot"}));
+      if(lignes.length) await q(db.from("bet_log").insert(lignes));
+    }catch(e){}
     // "Chérie c'est cadeau" : détermine l'inversion du pari ciblé de la victime
     const cadeauFlips={};
     for(const pid in PD){ const pd=PD[pid]; if(pd.card&&pd.card.id==="cadeau"&&pd.card.target!=null){ const vId=pd.oppId; const opp=PD[vId]; const i=pd.card.target;
