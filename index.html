@@ -1222,6 +1222,34 @@
   .a2-wrap .red, .a2-theme .red{color:var(--a2-red)}
   .a2-wrap .green, .a2-theme .green{color:var(--a2-ready)}
   .a2-wrap .sport, .a2-theme .sport{filter:none}
+  /* ⚠️ Correctif audit V2 (2026-09-06) — .hero/.lb/.lb-pts/.lb-cap/.ranklist peignaient encore le
+     fond FONCÉ de l'ANCIEN thème (--panel/--panel2/--panel3/--border, ex. #131c33) alors que .box
+     et tout le reste sous .a2-theme utilisent déjà --a2-panel (#1f2635) : deux nuances de "carte
+     sombre" visiblement différentes empilées sur le même écran (Résultats via .hero, Classement/
+     Classement final via .lb + son propre .rankhero déjà en dégradé vert donc épargné, Palmarès via
+     .ranklist répété ~8×). Pas touché : .hero.win/.hero.loss/.rankhero (dégradés --green/--red,
+     couleurs d'accent déjà partagées entre les deux thèmes, pas des nuances de panneau neutre). */
+  .a2-wrap .hero, .a2-theme .hero{background:linear-gradient(155deg,var(--a2-panel-2) -10%,var(--a2-panel) 65%,var(--a2-navy-deep) 120%);border-color:var(--a2-border);color:var(--a2-ink)}
+  .a2-wrap .lb, .a2-theme .lb{background:var(--a2-panel);border-color:var(--a2-border)}
+  .a2-wrap .lb-pts, .a2-theme .lb-pts{background:var(--a2-panel-2);color:var(--a2-ink)}
+  .a2-wrap .lb-cap, .a2-theme .lb-cap{background:var(--a2-panel-2);color:var(--a2-muted)}
+  .a2-wrap .lb-cap:hover, .a2-theme .lb-cap:hover{color:var(--a2-ink)}
+  .a2-wrap .ranklist, .a2-theme .ranklist{background:var(--a2-panel);border-color:var(--a2-border)}
+  .a2-wrap .match, .a2-theme .match{background:var(--a2-panel);border-color:var(--a2-border)}
+  .a2-wrap .picks-card, .a2-theme .picks-card{background:var(--a2-panel);border-color:var(--a2-border)}
+  .a2-wrap .picks-total, .a2-theme .picks-total{background:var(--a2-panel-2)}
+  /* ⚠️ Correctif audit V2 (2026-09-06) — passe typographique : ces classes portaient un texte
+     RÉELLEMENT explicatif (règle d'enjeu, instruction obligatoire pour valider un prono) à une
+     taille de micro-label (10.5-11.5px, en dessous même de .mini à 13px). Distinction conservée :
+     les vrais micro-labels (badges, en-têtes de tableau, tags "perso"/"(toi)") ne sont PAS touchés.
+     .lb-cap (le capital sur chaque ligne du classement) était aussi nettement plus petit que son
+     voisin .lb-pts (11px vs 15px) pour deux nombres également importants sur la même ligne. */
+  .a2-wrap .enjeu-box .desc, .a2-theme .enjeu-box .desc{font-size:13px;line-height:1.4}
+  .a2-wrap .enjeu-votes .lead, .a2-theme .enjeu-votes .lead{font-size:13px;line-height:1.4}
+  .a2-wrap .enjeu-note, .a2-theme .enjeu-note{font-size:12.5px;line-height:1.4}
+  .a2-wrap .badge-hint, .a2-theme .badge-hint{font-size:13px;line-height:1.4}
+  .a2-wrap .lb-cap, .a2-theme .lb-cap{font-size:13px}
+  .a2-wrap .end-hero .champ-sub, .a2-theme .end-hero .champ-sub, .a2-wrap .end-hero .last .sub, .a2-theme .end-hero .last .sub{font-size:13px}
   .a2-hero-kicker{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:17px;color:var(--a2-brass-light)}
   .a2-hero-sub{margin-top:6px;font-size:12.5px;line-height:1.4;color:var(--a2-ink);opacity:.9}
   /* ---- Bloc 3A, correctif (2026-09-05) : héros illustrés réels (assets copiés depuis maquettes/img/
@@ -1396,7 +1424,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.357";
+const APP_VERSION = "v8.358";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3237,7 +3265,7 @@ const EN={
   "dans une vraie ligue, celui qui reçoit choisit 5 matchs, et on alterne à chaque journée.":"in a real league the home player picks 5 matches, and it alternates each matchday.",
   "C'est parti pour ton duel du jour face à 🦊 <b>Léa</b> — vous pariez sur <b>les mêmes matchs</b>.":"Here comes your duel of the day against 🦊 <b>Léa</b> — you both bet on <b>the same matches</b>.",
   "Cette fois tu joues ✈️ <b>à l'extérieur</b> : c'est 🐼 <b>Marco</b> qui reçoit, donc <b>lui</b> qui a choisi les 3 matchs. Mêmes règles : résultat, mise, 👑 match favori (obligatoire), bonus.":"This time you are playing ✈️ <b>away</b>: 🐼 <b>Marco</b> is at home, so <b>he</b> picked the 3 fixtures. Same rules: result, stake, 👑 favourite match (required), bonus.",
-  "— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.":"— you have staked <b>€{a}</b> for a maximum of <b>€{b}</b>. Lower your stakes by <b>€{c}</b> to be able to confirm.",
+  "— tu as misé <b>{a}</b> pour un maximum de <b>{b}</b>. Baisse tes mises de <b>{c}</b> pour pouvoir valider.":"— you have staked <b>{a}</b> for a maximum of <b>{b}</b>. Lower your stakes by <b>{c}</b> to be able to confirm.",
   "<b>Touche la 👑 sur ton match favori</b> — son gain <b>et</b> sa perte comptent double. C'est obligatoire pour valider.":"<b>Tap the 👑 on your favourite match</b> — its gain <b>and</b> its loss count double. It is required to confirm.",
   // v8.63 — variante du TUTO seul : elle dit OÙ appuyer (« ci-dessous » = la liste de matchs
   // qui suit). Le vrai jeu garde la ligne du dessus. Les deux coexistent volontairement.
@@ -3535,7 +3563,7 @@ const EN={
   "2 matchs ciblés — le gain supplémentaire est dans le <b>total</b>.":"2 matches targeted — the extra gain is in the <b>total</b>.",
   "cote combinée {a}":"combined odds {a}", "mise moyenne":"average stake",
   "Versé une seule fois, si les <b>deux</b> pronos ciblés passent.":"Paid once, if <b>both</b> targeted picks come in.",
-  "couvre aussi <b>{a}</b> @{b} → <b>{c} €</b> si c'est cette issue qui sort.":"also covers <b>{a}</b> @{b} → <b>€{c}</b> if that's the result.",
+  "couvre aussi <b>{a}</b> @{b} → <b>{c}</b> si c'est cette issue qui sort.":"also covers <b>{a}</b> @{b} → <b>{c}</b> if that's the result.",
   /* — v8.217 : la PROLONGATION COMPTE, les tirs au but non (mesuré le 11/08 sur Bodø/Glimt –
        Union Saint-Gilloise : 2-2 à la 90ᵉ, 3-2 remonté par l'API). La v7.96 affirmait l'inverse
        à partir d'un match de Coupe de la Ligue joué SANS prolongation — le relevé était juste,
@@ -3698,12 +3726,12 @@ const EN={
   // — v7.74 : la fiche du risque —
   "Le risque":"The risk",
   "C'est ce que tu perdrais <b>si tous tes pronos tombaient</b> — le pire cas.":"This is what you'd lose <b>if every pick failed</b> — the worst case.",
-  "Tu as misé <b>{a} €</b>, mais tu risques <b>{b} €</b> : certains paris comptent double à la perte.":"You staked <b>€{a}</b>, but you're risking <b>€{b}</b>: some bets count double on a loss.",
+  "Tu as misé <b>{a}</b>, mais tu risques <b>{b}</b> : certains paris comptent double à la perte.":"You staked <b>{a}</b>, but you're risking <b>{b}</b>: some bets count double on a loss.",
   "<b>Match favori</b> : sa mise est doublée — à la perte comme au gain.":"<b>Favourite match</b>: its stake is doubled — on a loss as on a win.",
   "la moitié de la mise du match ciblé t'est remboursée : ce match ne pèse plus que pour moitié dans le risque.":"half the stake on the targeted match is refunded: that match now weighs only half in the risk.",
   "perte doublée sur le match ciblé.":"loss doubled on the targeted match.",
   "Sous-total":"Subtotal", "Parachute — 30 % amortis":"Parachute — 30% cushioned",
-  "<b>Parachute</b> : <b>{a} €</b> économisés (30 % de la perte amortis) — déjà comptés dans le total ci-dessus.":"<b>Parachute</b>: <b>€{a}</b> saved (30% of the loss cushioned) — already included in the total above.",
+  "<b>Parachute</b> : <b>{a}</b> économisés (30 % de la perte amortis) — déjà comptés dans le total ci-dessus.":"<b>Parachute</b>: <b>{a}</b> saved (30% of the loss cushioned) — already included in the total above.",
   "⛔ L'app refuse un pari dont le pire cas dépasserait ton capital : tu ne peux jamais finir dans le négatif.":"⛔ The app refuses a bet whose worst case would exceed your capital: you can never end up negative.",
   "N'apparaissent pas ici, ils n'agissent qu'en cas de perte :":"Not shown here, they only act on a loss:",
   "gain doublé sur le match ciblé.":"win doubled on the targeted match.",
@@ -3723,7 +3751,7 @@ const EN={
   "il échange ton meilleur pari contre le sien.":"they swap your best bet for theirs.",
   "il inverse ton prono sur un match.":"they flip your pick on one match.",
   "il te siphonne 15 % de ton bénéfice.":"they siphon off 15% of your profit.",
-  "il t'annule ton bonus — ce total retomberait à {a} €.":"they cancel your bonus — this total would drop to €{a}.",
+  "il t'annule ton bonus — ce total retomberait à {a}.":"they cancel your bonus — this total would drop to {a}.",
   "En face, la jauge et l'alerte de capital te disent ce que tu <b>risques</b>. Les deux se lisent ensemble.":"Opposite, the gauge and the capital warning tell you what you're <b>risking</b>. Read the two together.",
   // — v8.60 : l'échéance de la journée, dite à ceux qui ATTENDENT (cf. `resolutionETALine`) —
   "Résolution attendue <b>{a}</b> — le dernier match de la ligue est {b}.":"Resolution expected <b>{a}</b> — the league's last match is {b}.",
@@ -4099,7 +4127,7 @@ const EN={
   // Fenêtres de confirmation à la charte du jeu (v7.53).
   "Attention à ton capital":"Careful with your balance", "Valider quand même":"Confirm anyway",
   "Annuler":"Cancel", "Confirmer":"Confirm",
-  "Si <b>tous</b> tes pronos sont faux, tu finirais la journée à <b>{a} €</b> — sous le seuil de <b>{b} €</b>.":"If <b>every</b> pick of yours is wrong, you'd end the day at <b>{a} €</b> — below the <b>{b} €</b> threshold.",
+  "Si <b>tous</b> tes pronos sont faux, tu finirais la journée à <b>{a}</b> — sous le seuil de <b>{b} €</b>.":"If <b>every</b> pick of yours is wrong, you'd end the day at <b>{a}</b> — below the <b>{b} €</b> threshold.",
   "Ton capital serait alors remonté à <b>{c} €</b>…":"Your balance would then be topped back up to <b>{c} €</b>…",
   "…mais tu perdrais <b>1 point</b> au classement.":"…but you'd lose <b>1 point</b> in the standings.",
   "C'est le pire cas : il ne se produira que si aucun de tes pronos ne passe.":"That's the worst case: it only happens if not a single pick of yours comes in.",
@@ -4498,6 +4526,8 @@ const EN={
   "→ touche le {e} du pari ciblé.":"→ tap the {e} on the targeted bet.", "→ touche {e} sur le match visé":"→ tap {e} on the target match", "→ touche les {e} de tes 2 matchs.":"→ tap the {e} on your 2 matches.",
   // Écran Pronos refondu (v6.17)
   "Pronos enregistrés":"Picks saved", "✅ validés":"✅ confirmed", "Paris clôturés 🔒":"Betting closed 🔒", "En attente de tes pronos…":"Waiting for your picks…",
+  // ⚠️ Audit V2 (2026-09-06) — hero Maestro de pronos-valides.html, réintégré (voir viewWait()).
+  "Pronostics envoyés":"Picks sent", "Place au match !":"Game time!", "Bonne chance face à {a} !":"Good luck against {a}!",
   "🃏 Bonus du jour :":"🃏 Bonus of the day:", "Prêts : {a}/{b}":"Ready: {a}/{b}", "clôture dans {a}":"closes in {a}",
   "✏️ Modifier (jusqu'à la clôture)":"✏️ Edit (until close)", "Ton duel":"Your duel",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.":"You didn't confirm your picks before close: <b>no bet</b> counts that day → <b>{b} pt</b> in the standings and <b>−{a}%</b> of your capital.",
@@ -4878,7 +4908,7 @@ const EN={
   "😅 <b>Motivation express :</b> le bon dernier s'y colle pour de vrai — photo ou vidéo à l'appui 📸. Une excellente raison de soigner tes pronos et de ne <b>pas</b> finir lanterne rouge !":"😅 <b>Quick motivation:</b> the last-placed player really has to do it — photo or video as proof 📸. A great reason to polish your predictions and <b>not</b> finish dead last!",
   "🃏 Enchères — bonus attribués":"🃏 Auction — bonuses awarded", "Enchères :":"Bids:",
   "✅ gagnée":"✅ won", " ⚡ le + rapide":" ⚡ fastest", "↩︎ remboursée":"↩︎ refunded",
-  "🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.":"🏁 Tie at {a}€ → settled by speed: the first to bid that amount wins.",
+  "🏁 Égalité à {a} → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.":"🏁 Tie at {a} → settled by speed: the first to bid that amount wins.",
   "Personne n'a misé sur les bonus — tout le monde démarre à 100 €.":"Nobody bid on the bonuses — everyone starts at 100 €.",
   "Personne n'a misé sur les bonus de la trêve — les {a} € de chacun sont perdus.":"Nobody bid on the truce bonuses — everyone's €{a} is lost.",
   "😶 Sans acquéreur":"😶 No takers",
@@ -5095,7 +5125,7 @@ const EN={
   "Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.":"It will be filed under <b>“Finished leagues”</b> on the home screen.",
   // — Phase 4d : palmarès —
   "Chargement du palmarès…":"Loading the hall of fame…", "4ᵉ":"4th", "5ᵉ":"5th", "Nul":"Draw",
-  "{lg} · J{d} · {np} joueurs · misé {st}€":"{lg} · D{d} · {np} players · staked {st}€", " · bonus {c}":" · bonus {c}",
+  "{lg} · J{d} · {np} joueurs · misé {st}":"{lg} · D{d} · {np} players · staked {st}", " · bonus {c}":" · bonus {c}",
   "Bonus &amp; ajustements":"Bonuses &amp; adjustments", "({c}…)":"({c}…)", "(bonus…)":"(bonuses…)",
   "Total journée :":"Day total:", "{lg} · J{d}":"{lg} · D{d}", "Pas encore de données.":"No data yet.",
   "🏆 Palmarès général":"🏆 Hall of fame",
@@ -5161,6 +5191,24 @@ const pick=a=>a[Math.floor(Math.random()*a.length)];
 const r2=n=>Math.round((+n||0)*100)/100;                       // arrondi à 2 décimales
 const fmt=n=>{ const r=r2(n); return (r>=0?"+":"")+r.toFixed(2); }; // gain signé, 2 décimales
 const eur=n=>r2(n).toFixed(2);                                 // montant non signé, 2 décimales
+// ⚠️ Correctif audit V2 (2026-09-06) — FORMAT MONÉTAIRE HARMONISÉ (demandé par Hervé) : `fmt`/`eur`
+// ci-dessus restent inchangées (trop de code hors du périmètre de cette passe en dépend, toujours
+// point-décimal + 2 décimales fixes + "€" ajouté séparément par l'appelant) — `euro()`/`euroSigned()`
+// sont NEUVES, à côté, et remplacent ces deux conventions uniquement sur les écrans audités
+// (capital, mises, enchères, risque/gain, résultats) : entier sans décimale ("25 €", jamais
+// "25,00 €"), virgule si de vrais centimes existent ("44,50 €"), point en anglais ("44.50 €"),
+// "€" et l'espace déjà inclus (l'appelant n'ajoute plus rien). Centimes calculés en entier (jamais
+// via .toFixed sur un flottant) pour ne jamais produire un artefact du type "12.339999999999998".
+function euroAmt(n, signed){
+  const v=+n||0; const totalCents=Math.round(Math.abs(v)*100); const neg=v<0;
+  const whole=Math.floor(totalCents/100), cents=totalCents%100;
+  const dec=(typeof lang!=="undefined" && lang==="en") ? "." : ",";
+  const body = cents ? (whole+dec+String(cents).padStart(2,"0")) : String(whole);
+  const sign = signed ? (neg?"-":"+") : (neg?"-":"");
+  return sign+body+" €";
+}
+const euro=n=>euroAmt(n,false);         // montant non signé : "25 €", "44,50 €"
+const euroSigned=n=>euroAmt(n,true);    // gain/perte signé : "+25 €", "-10 €", "+44,50 €"
 // Cote AFFICHÉE : toujours 2 décimales. Les cotes sont stockées arrondies au centième, mais
 // JavaScript supprime les zéros de fin — « 2.10 » sortait « 2.1 » et « 3.00 » sortait « 3 ».
 // À n'utiliser que pour l'affichage : les comparaisons doivent rester sur le nombre.
@@ -5196,6 +5244,10 @@ function infoWin(msg,emoji){ infoModal(emoji||"✅","", `<div style="text-align:
 // « Envoyer », et on ne sait plus lequel valide (signalé par Hervé). L'appelant fournit alors ses
 // propres boutons. ⚠️ Qui passe `sansOk` DOIT proposer une sortie (annuler), sinon la modale
 // n'aurait plus qu'un clic hors cadre pour se fermer — invisible pour la plupart des joueurs.
+// ⚠️ Correctif audit V2 (2026-09-06) — croix de fermeture explicite, réutilisable, même gabarit
+// (44×44, coin haut-droit) que celle déjà posée pour "Nos idées" (openEnjeuIdeas) ; ajoutée à
+// certains infoModal() en plus (pas à la place) de l'overlay-tap et du bouton OK existants.
+function closeXBtn(){ return `<button type="button" onclick="closeCardInfo()" aria-label="${t("Fermer")}" style="position:absolute;top:10px;right:10px;width:44px;height:44px;border-radius:50%;background:var(--panel2);border:1px solid var(--border);color:var(--muted);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer">✕</button>`; }
 function infoModal(emoji,title,bodyHTML,sansOk){ closeCardInfo();
   const o=document.createElement("div"); o.id="cardModal"; o.className="modal";
   o.addEventListener("click",e=>{ if(e.target===o) closeCardInfo(); });
@@ -5321,7 +5373,7 @@ function bilanPariHTML(bt){
   if(!bt || !Array.isArray(bt.picks) || !bt.picks.length) return '';
   const d=myDuel(); const fx=(d&&d.fixtures)||[]; if(!fx.length) return '';
   const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const cap=(bt.captain!=null?bt.captain:-1);
-  return `<div class="row mini" style="margin:8px 2px 2px"><span class="clik" onclick="showRisqueInfo()">⚠️ ${t("Risque")} <b class="red">-${eur(worstLoss(bt.picks,cap,c))} €</b> ⓘ</span><span class="clik" onclick="showGainInfo()">💰 ${t("Gain")} <b class="green">${fmt(bestGain(bt.picks,fx,cap,c))} €</b> ⓘ</span></div>`;
+  return `<div class="row mini" style="margin:8px 2px 2px"><span class="clik" onclick="showRisqueInfo()">⚠️ ${t("Risque")} <b class="red">-${euro(worstLoss(bt.picks,cap,c))}</b> ⓘ</span><span class="clik" onclick="showGainInfo()">💰 ${t("Gain")} <b class="green">${euroSigned(bestGain(bt.picks,fx,cap,c))}</b> ⓘ</span></div>`;
 }
 /* ⚠️ v7.74 — LE RISQUE S'EXPLIQUE AUSSI (demande d'Hervé). Le gain avait sa fiche, le risque non
    — alors que c'est le chiffre le plus surprenant des deux : on peut miser 30 € et risquer 50 €.
@@ -5363,23 +5415,23 @@ function showRisqueInfo(){
   const lignes=(p.picks||[]).map((b,i)=>{ const f=fx[i]; if(!f) return '';
     const st=+b.stake||0; const m=lossMult(i,p.captain,c);
     const marque=(i===p.captain)?' 👑':((c && c.target===i && RISQUE_MULTIPLIANTS.indexOf(c.id)>=0)?' '+CARDS[c.id].e:'');
-    const calc=(m===0)?`<s>${eur(st)} €</s> → <b>0 €</b>`:(m===1?`<b>${eur(st)} €</b>`:`${eur(st)} € ×${m} = <b>${eur(st*m)} €</b>`);
+    const calc=(m===0)?`<s>${euro(st)}</s> → <b>${euro(0)}</b>`:(m===1?`<b>${euro(st)}</b>`:`${euro(st)} ×${m} = <b>${euro(st*m)}</b>`);
     return `<tr><td>${esc(f.home)} – ${esc(f.away)}${marque}</td><td class="num">${calc}</td></tr>`; }).join('');
   const RISQ={ assurance:t("la moitié de la mise du match ciblé t'est remboursée : ce match ne pèse plus que pour moitié dans le risque."),
                tout:t("perte doublée sur le match ciblé."),
                joker:t("perte doublée sur le match ciblé.") };
   const cRisq=(c && RISQUE_MULTIPLIANTS.indexOf(c.id)>=0)?c.id:null;
   infoModal("⚠️", t("Le risque"),
-  `<div class="mini muted" style="text-align:left;line-height:1.6">${
+  closeXBtn()+`<div class="mini muted" style="text-align:left;line-height:1.6">${
      t("C'est ce que tu perdrais <b>si tous tes pronos tombaient</b> — le pire cas.")}
    <div style="overflow-x:auto;margin-top:8px"><table style="width:100%">${lignes}
-     ${eco>0?`<tr style="border-top:1px solid var(--border)"><td>${t("Sous-total")}</td><td class="num"><b>-${eur(rawTotal)} €</b></td></tr>
-       <tr><td>🪂 ${t("Parachute — 30 % amortis")}</td><td class="num"><b class="green">+${eur(eco)} €</b></td></tr>`:''}
-     <tr style="border-top:1px solid var(--border)"><td><b>${t("Total")}</b></td><td class="num"><b class="red">-${eur(total)} €</b></td></tr></table></div>
-   ${(total>mise+0.001)?`<div style="margin-top:8px">${t("Tu as misé <b>{a} €</b>, mais tu risques <b>{b} €</b> : certains paris comptent double à la perte.",{a:eur(mise),b:eur(total)})}</div>`:''}
+     ${eco>0?`<tr style="border-top:1px solid var(--border)"><td>${t("Sous-total")}</td><td class="num"><b>-${euro(rawTotal)}</b></td></tr>
+       <tr><td>🪂 ${t("Parachute — 30 % amortis")}</td><td class="num"><b class="green">+${euro(eco)}</b></td></tr>`:''}
+     <tr style="border-top:1px solid var(--border)"><td><b>${t("Total")}</b></td><td class="num"><b class="red">-${euro(total)}</b></td></tr></table></div>
+   ${(total>mise+0.001)?`<div style="margin-top:8px">${t("Tu as misé <b>{a}</b>, mais tu risques <b>{b}</b> : certains paris comptent double à la perte.",{a:euro(mise),b:euro(total)})}</div>`:''}
    <div style="margin-top:8px">👑 ${t("<b>Match favori</b> : sa mise est doublée — à la perte comme au gain.")}
      ${cRisq?`<br>${CARDS[cRisq].e} <b>${esc(t(CARDS[cRisq].n))}</b> : ${RISQ[cRisq]}`:''}</div>
-   ${eco>0?`<div style="margin-top:8px">🪂 ${t("<b>Parachute</b> : <b>{a} €</b> économisés (30 % de la perte amortis) — déjà comptés dans le total ci-dessus.",{a:eur(eco)})}</div>`:''}
+   ${eco>0?`<div style="margin-top:8px">🪂 ${t("<b>Parachute</b> : <b>{a}</b> économisés (30 % de la perte amortis) — déjà comptés dans le total ci-dessus.",{a:euro(eco)})}</div>`:''}
    <div style="margin-top:8px">${t("⛔ L'app refuse un pari dont le pire cas dépasserait ton capital : tu ne peux jamais finir dans le négatif.")}</div></div>`); }
 function showGainInfo(){
   const MIEN={ double:t("gain doublé sur le match ciblé."),
@@ -5407,8 +5459,8 @@ function showGainInfo(){
                 miroir:t("il échange ton meilleur pari contre le sien."),
                 cadeau:t("il inverse ton prono sur un match."),
                 sangsue:t("il te siphonne 15 % de ton bénéfice."),
-                voleur:t("il t'annule ton bonus — ce total retomberait à {a} €.",
-                         {a:fmt(bestGain(pariAffiche().picks,(myDuel()||{}).fixtures,pariAffiche().captain,null))}) };
+                voleur:t("il t'annule ton bonus — ce total retomberait à {a}.",
+                         {a:euro(bestGain(pariAffiche().picks,(myDuel()||{}).fixtures,pariAffiche().captain,null))}) };
   /* ⚠️ v7.99 (demandé par Hervé) — LE DÉTAIL PARI PAR PARI VIT ICI, PAS SUR LA LIGNE DU MATCH.
      Sa raison est juste et vaut d'être écrite : 🧈 Le beurre et l'argent du beurre couvre DEUX
      issues d'un même match, à deux cotes différentes. Un montant unique posé à côté du match
@@ -5430,10 +5482,10 @@ function showGainInfo(){
       let note='';
       if(c&&c.id==="chance"&&c.target===i&&c.sel2){ const o2=oddOf(f,c.sel2);
         note=`<div class="mini muted" style="margin-left:2px">${CARDS.chance.e} ${
-          t("couvre aussi <b>{a}</b> @{b} → <b>{c} €</b> si c'est cette issue qui sort.",
-            {a:esc(labelSel(f,c.sel2)),b:cote(o2),c:fmt(st*(o2-1)*mult)})}</div>`; }
-      return `<div style="margin:5px 0"><span class="mini">${esc(f.home)}–${esc(f.away)} · <b>${esc(labelSel(f,b.sel))}</b> · ${st}€ @${cote(od)}${
-        tags.length?' · '+tags.join(' · '):''}</span> <b class="mini green">${fmt(g)} €</b>${note}</div>`;
+          t("couvre aussi <b>{a}</b> @{b} → <b>{c}</b> si c'est cette issue qui sort.",
+            {a:esc(labelSel(f,c.sel2)),b:cote(o2),c:euro(st*(o2-1)*mult)})}</div>`; }
+      return `<div style="margin:5px 0"><span class="mini">${esc(f.home)}–${esc(f.away)} · <b>${esc(labelSel(f,b.sel))}</b> · ${euro(st)} @${cote(od)}${
+        tags.length?' · '+tags.join(' · '):''}</span> <b class="mini green">${euroSigned(g)}</b>${note}</div>`;
     }).join("");
     /* ⚠️ v8.00 — 🏷️ Deux pour le prix d'un A SA PROPRE LIGNE, et c'est indispensable : son gain
        est ADDITIF (versé une fois si les deux pronos passent), il n'appartient à aucun des deux
@@ -5447,13 +5499,13 @@ function showGainInfo(){
       if(fi&&fj){ const sI=+((bt.picks[c.target]||{}).stake)||0, sJ=+((bt.picks[c.target2]||{}).stake)||0;
         const O=oddOf(fi,bt.picks[c.target].sel)*oddOf(fj,bt.picks[c.target2].sel);
         supp=`<div style="margin:5px 0"><span class="mini">${CARDS.dbl.e} <b>${esc(t(CARDS.dbl.n))}</b> · ${
-          t("cote combinée {a}",{a:cote(O)})} · ${t("mise moyenne")} ${fmt((sI+sJ)/2).replace('+','')}€</span> <b class="mini green">${
-          fmt(((sI+sJ)/2*DBL_FACTOR)*(O-1))} €</b><div class="mini muted" style="margin-left:2px">${
+          t("cote combinée {a}",{a:cote(O)})} · ${t("mise moyenne")} ${euro((sI+sJ)/2)}</span> <b class="mini green">${
+          euroSigned(((sI+sJ)/2*DBL_FACTOR)*(O-1))}</b><div class="mini muted" style="margin-left:2px">${
           t("Versé une seule fois, si les <b>deux</b> pronos ciblés passent.")}</div></div>`; } }
     return `<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px"><b>${t("Pari par pari")}</b>${lignes}${supp}</div>`;
   })();
   infoModal("💰",t("Le gain potentiel"),
-  `<div class="mini muted" style="text-align:left;line-height:1.6">${
+  closeXBtn()+`<div class="mini muted" style="text-align:left;line-height:1.6">${
     t("C'est ce que tu gagnerais <b>si tous tes pronos passaient</b> — le meilleur cas, pas une prévision.")}
    <div style="margin-top:8px">${t("Pour chaque pari : <b>mise × (cote − 1)</b>. C'est un gain <b>net</b> : ta mise t'est rendue en plus.")}</div>
    ${detailParis}
@@ -8881,9 +8933,14 @@ function auctionRoundHTML(auction, pName, treve){
       <div class="auc-head">
         <div class="auc-ic clik" title="${esc(t(CARDS[a.card].d))}" onclick="showCardInfo('${a.card}')">${CARDS[a.card].e}</div>
         <div class="auc-mid"><div class="n clik" onclick="showCardInfo('${a.card}')">${esc(t(CARDS[a.card].n))} <span style="opacity:.55">ⓘ</span></div></div>
-        <div class="auc-win"><div class="who">${pName(a.winner)}</div><div class="amt">${a.amount} €</div></div>
+        <div class="auc-win"><div class="who">${pName(a.winner)}</div><div class="amt">${euro(a.amount)}</div></div>
       </div>
-      <div class="auc-bids">${t("Enchères :")} ${a.bids.map(bd=>`<span class="bid${bd.pid===a.winner?' win':''}">${pName(bd.pid)} <b>${bd.amt}€</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}</span>`).join('')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold">${t("🏁 Égalité à {a}€ → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:a.amount})}</span>`:''}</div></div>`).join("")
+      ${/* ⚠️ Correctif audit V2 (2026-09-06) — un seul enchérisseur = le gagnant lui-même : la ligne
+           "Enchères : {gagnant} {montant}€ ✅ gagnée" ne faisait alors que répéter mot pour mot
+           .auc-win juste au-dessus, sans rien ajouter. Supprimée dans ce cas précis seulement —
+           dès 2 enchérisseurs, la ligne reste (qui d'autre a misé, combien, remboursé) : c'est la
+           SEULE information qui dit comment le résultat a été obtenu, .auc-win ne le montre pas. */
+        a.bids.length<=1 ? '' : `<div class="auc-bids">${t("Enchères :")} ${a.bids.map(bd=>`<span class="bid${bd.pid===a.winner?' win':''}">${pName(bd.pid)} <b>${euro(bd.amt)}</b> ${bd.pid===a.winner?(t("✅ gagnée")+((a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?t(" ⚡ le + rapide"):'')):t("↩︎ remboursée")}</span>`).join('')}${(a.bids.length>1&&a.bids[0].amt===a.bids[1].amt)?`<br><span class="gold" style="font-size:13px;line-height:1.4">${t("🏁 Égalité à {a} → départagé par la rapidité : le premier à avoir misé ce montant l'emporte.",{a:euro(a.amount)})}</span>`:''}</div>`}</div>`).join("")
     /* ⚠️ v8.272 (demandé par Hervé) — LE TEXTE À VIDE DIFFÈRE SELON LE CONTEXTE, pas seulement le
        montant : à la trêve, personne ne « démarre » à 40 € — c'est une allocation en plus de la
        vraie cagnotte (cf. viewTreve). Et surtout, ne pas la dépenser ne la PRÉSERVE pas — cet
@@ -8907,7 +8964,7 @@ function treveCapTableHTML(auction, players){
   return `<div class="listsec">${t("💰 Bonus obtenus à la trêve")}</div>
    <div class="table-wrap"><table class="cap-table"><tr><th>${t("Joueur")}</th><th>${t("Dépensé")}</th><th>${t("Bonus")}</th></tr>
      ${players.map(p=>`<tr><td><span class="pname">${avaName(p)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</span></td>
-        <td class="muted">${spent[p.pid]||0}€</td>
+        <td class="muted">${euro(spent[p.pid]||0)}</td>
         <td><span class="hand">${(won[p.pid]||[]).length?(won[p.pid]||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(''):'<span class="none">–</span>'}</span></td></tr>`).join("")}</table></div>`;
 }
 function prepSummaryBody(){
@@ -8958,7 +9015,7 @@ function prepSummaryBody(){
    <div class="listsec">${t("💰 Capital de départ")}</div>
    <div class="table-wrap"><table class="cap-table"><tr><th>${t("Joueur")}</th><th>${t("Dépensé")}</th><th>${t("Capital")}</th><th>${t("Bonus")}</th></tr>
      ${(s.players||[]).map(p=>`<tr><td><span class="pname">${avaName(p)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</span></td>
-        <td class="muted">${p.spent}€</td><td><b>${eur(p.capital)}€</b></td>
+        <td class="muted">${euro(p.spent)}</td><td><b>${euro(p.capital)}</b></td>
         <td><span class="hand">${(p.hand||[]).length?(p.hand||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(''):'<span class="none">–</span>'}</span></td></tr>`).join("")}</table></div>
    ${prepSuperlatives(s)}`;
 }
@@ -9616,7 +9673,7 @@ function viewPrep(){
   return `${entete}
    <h2>${t("🃏 Enchères bonus")}</h2>
    <div class="box"><div class="mini muted">${t("Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.",{a:SHOP_CAP,b:maxCards})}</div>
-     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
+     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${euro(tot)}</b> / ${euro(SHOP_CAP)}</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
      <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px">${bonusIconHTML(id)}<div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
@@ -9790,7 +9847,7 @@ function prepEncheresTab(){
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards; const miss=votesManquants(); const noVote=miss.length>0;
   return `<div class="box"><h2 style="margin-top:0">🃏 ${t("Enchères bonus")}</h2><div class="mini muted">${t("Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.",{a:SHOP_CAP,b:maxCards})}</div>
-     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${Math.round(tot)}</b> € / ${SHOP_CAP} €</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
+     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${euro(tot)}</b> / ${euro(SHOP_CAP)}</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
      <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px">${bonusIconHTML(id)}<div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
@@ -10501,8 +10558,8 @@ function viewBet(d,dayLbl,opp,iAmHome){
   const oppHandInfo=(()=>{ if(!opp) return ''; const oc=((opp.hand)||[]).filter(id=>CARDS[id]&&!CARDS[id].retired);
     return `<div class="box" style="background:rgba(90,166,224,.06);border-color:var(--blue);padding:8px 10px"><div class="mini muted"><b>${t("ℹ️ Pour info")}</b> — ${oc.length?t("bonus encore en main de {a} (pas forcément joués aujourd'hui) :",{a:'<b>'+esc(opp.name)+'</b>'}):t("{a} n'a plus aucun bonus en main.",{a:esc(opp.name)})}</div>${oc.length?`<div class="cards" style="margin-top:5px">${oc.map(id=>`<div class="cardchip clik sm" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; })();
   return `${quickBar('')}${lastDayBanner(L.current_day)}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
-    <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${eur(cap)}</b> €</span></div>${betLineHTML()}
-    <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot" class="${over?'red':''}">${eur(tot)}</b> € / ${eur(max)} € ${t("max")}${derniereJournee()?' <span class="gold">(🏁 dernière journée)</span>':(invest?' <span class="blue">(📈 70%)</span>':'')} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Match favori ×2")} ⓘ</span></div>
+    <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${euro(cap)}</b></span></div>${betLineHTML()}
+    <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot" class="${over?'red':''}">${euro(tot)}</b> / ${euro(max)} ${t("max")}${derniereJournee()?' <span class="gold">(🏁 dernière journée)</span>':(invest?' <span class="blue">(📈 70%)</span>':'')} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Match favori ×2")} ⓘ</span></div>
     <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div>
     ${/* ⚠️ v8.38 (retour de testeur, via Hervé) — « LORSQUE LA MISE EST TROP ÉLEVÉE, CE N'EST PAS
          SUFFISAMMENT VISIBLE ». Il n'y avait que deux signaux, tous deux muets : une jauge de 8 px
@@ -10513,7 +10570,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
          apparaître SANS redessiner l'écran : `setStake` se déclenche à chaque frappe, et un
          `render()` ferait perdre le focus du champ en cours de saisie (piège déjà rencontré). */''}
     <div id="betOver" class="mini" style="${over?'':'display:none;'}margin-top:8px;color:var(--red);background:rgba(248,113,113,.12);border:1px solid #8a3b3b;border-radius:8px;padding:7px 9px">
-      <b>⚠️ ${t("Mise trop élevée")}</b> <span id="betOverTxt">${t("— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.",{a:eur(tot),b:eur(max),c:eur(Math.max(0,tot-max))})}</span></div>
+      <b>⚠️ ${t("Mise trop élevée")}</b> <span id="betOverTxt">${t("— tu as misé <b>{a}</b> pour un maximum de <b>{b}</b>. Baisse tes mises de <b>{c}</b> pour pouvoir valider.",{a:euro(tot),b:euro(max),c:euro(Math.max(0,tot-max))})}</span></div>
     ${/* ⚠️ v7.70 — PLUS DE GAIN POTENTIEL EN HAUT (demande d'Hervé). En arrivant sur l'écran, aucune
          mise n'est saisie : le chiffre valait 0,00 € et n'apprenait rien. Le haut ne porte donc que
          ce dont on a besoin AVANT de miser — le plafond de mise et le Capitaine. Le gain, lui, ne
@@ -10553,7 +10610,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
         ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">🏷️ ${t(CARDS.dbl.n)}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("2 matchs ciblés — le gain supplémentaire est dans le <b>total</b>."):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
         <div class="stake-row">
           <div class="stake-field"><input type="number" inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="${t("min 1")}" oninput="setStake(${i},this.value)"><span class="cur">€</span></div>
-          <div class="stake-gain">${t("si ce prono passe")}<b id="gain${i}">${fmt((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard))} €</b></div>
+          <div class="stake-gain">${t("si ce prono passe")}<b id="gain${i}">${euroSigned((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard))}</b></div>
         </div></div></div>`;}).join("")}
     <div class="box"><div class="row"><div class="boxttl" style="margin-bottom:0">${t("🃏 Bonus (1 max/jour)")}</div>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">${t("✕ retirer")}</span>`:`<span class="mini muted">${t("optionnel")}</span>`}</div>
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" title="${esc(t(CARDS[id].d))}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>
@@ -10569,8 +10626,8 @@ function viewBet(d,dayLbl,opp,iAmHome){
          ce qu'on espère. Le ⓘ est porté par le GAIN, parce que c'est lui qui se calcule (Capitaine,
          bonus, Coup Double) — le risque, lui, est la somme de ce qu'on vient de saisir. */''}
     <div class="rg-row">
-      <div class="rg-box risk clik" onclick="showRisqueInfo()"><div class="l">⚠️ ${t("Risque")}</div><div class="v" id="risqueBas">-${eur(worstLoss(bet.picks,bet.captain,myCard))} €</div><div class="hint">ⓘ ${t("toucher pour le détail")}</div></div>
-      <div class="rg-box gain clik" onclick="showGainInfo()"><div class="l">💰 ${t("Gain")}</div><div class="v" id="gainBas">${fmt(bestGain(bet.picks,fx,bet.captain,myCard))} €</div><div class="hint">ⓘ ${t("toucher pour le détail")}</div></div>
+      <div class="rg-box risk clik" onclick="showRisqueInfo()"><div class="l">⚠️ ${t("Risque")}</div><div class="v" id="risqueBas">-${euro(worstLoss(bet.picks,bet.captain,myCard))}</div><div class="hint">ⓘ ${t("toucher pour le détail")}</div></div>
+      <div class="rg-box gain clik" onclick="showGainInfo()"><div class="l">💰 ${t("Gain")}</div><div class="v" id="gainBas">${euroSigned(bestGain(bet.picks,fx,bet.captain,myCard))}</div><div class="hint">ⓘ ${t("toucher pour le détail")}</div></div>
     </div>
     ${(myCard && myCard.id!=="parachute" && GAIN_MULTIPLIANTS.indexOf(myCard.id)<0 && RISQUE_MULTIPLIANTS.indexOf(myCard.id)<0)?`<div class="mini muted" style="margin:0 2px 6px;text-align:right">${CARDS[myCard.id].e} ${t("ce bonus n'est compté dans aucun des deux montants")}</div>`:''}
     ${/* v8.38 — ROUGE quand c'est une FAUTE (dépassement, risque), gris quand c'est une étape. */''}
@@ -10585,22 +10642,22 @@ function refreshGains(){
   const fx=(myDuel()||{}).fixtures||[];
   // ⚠️ v7.70 : un seul affichage du gain, en bas — celui du haut a été retiré (il valait 0,00 €
   // à l'arrivée sur l'écran, avant toute mise).
-  const bas=$("gainBas"); if(bas) bas.textContent=fmt(bestGain(bet.picks,fx,bet.captain,myCard))+" €";
-  const rq=$("risqueBas"); if(rq) rq.textContent="-"+eur(worstLoss(bet.picks,bet.captain,myCard))+" €";
+  const bas=$("gainBas"); if(bas) bas.textContent=euroSigned(bestGain(bet.picks,fx,bet.captain,myCard));
+  const rq=$("risqueBas"); if(rq) rq.textContent="-"+euro(worstLoss(bet.picks,bet.captain,myCard));
   (bet.picks||[]).forEach((b,i)=>{ const g=document.getElementById("gain"+i); const f=fx[i]; if(!g||!f) return;
-    g.textContent=fmt((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard))+" €"; });
+    g.textContent=euroSigned((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard)); });
 }
 function setStake(i,v){ bet.picks[i].stake=Math.max(0,+v||0); refreshGains();
   const meP=me(); const invest=myCard&&myCard.id==="invest"; const max=Math.floor(meP.capital*stakeCapOf(myCard)*100)/100;
   const tot=bet.picks.reduce((a,b)=>a+(+b.stake||0),0); const depasse=tot>max+0.001;
-  const totEl=$("tot"); if(totEl){totEl.textContent=eur(tot); totEl.className=depasse?"red":""; // ⚠️ ne pas nommer cette variable `t` : ça masquerait la fonction de traduction t() utilisée plus bas
+  const totEl=$("tot"); if(totEl){totEl.textContent=euro(tot); totEl.className=depasse?"red":""; // ⚠️ ne pas nommer cette variable `t` : ça masquerait la fonction de traduction t() utilisée plus bas
     // Par ID également : aujourd'hui l'écran des pronos n'a qu'une jauge, mais en ajouter une
     // au-dessus casserait celle-ci en silence — exactement ce qui est arrivé à la préparation.
     const g=document.getElementById("betGauge"); if(g){g.querySelector("i").style.width=Math.min(100,max>0?tot/max*100:0)+"%"; g.classList.toggle("over",depasse);} }
   // v8.38 — le bandeau rouge du haut suit la frappe, SANS render() (qui ferait perdre le focus).
   const ov=$("betOver");
   if(ov){ ov.style.display=depasse?"":"none";
-    const tx=$("betOverTxt"); if(tx&&depasse) tx.innerHTML=t("— tu as misé <b>{a} €</b> pour un maximum de <b>{b} €</b>. Baisse tes mises de <b>{c} €</b> pour pouvoir valider.",{a:eur(tot),b:eur(max),c:eur(Math.max(0,tot-max))}); }
+    const tx=$("betOverTxt"); if(tx&&depasse) tx.innerHTML=t("— tu as misé <b>{a}</b> pour un maximum de <b>{b}</b>. Baisse tes mises de <b>{c}</b> pour pouvoir valider.",{a:euro(tot),b:euro(max),c:euro(Math.max(0,tot-max))}); }
   const targetCard=myCard&&CARDS[myCard.id].t; const twoCard=myCard&&CARDS[myCard.id].two; const oppCard=myCard&&CARDS[myCard.id].oppT;
   const needTarget=targetCard&&(myCard.target==null||(twoCard&&myCard.target2==null));
   const needSel2=myCard&&myCard.id==="chance"&&myCard.target!=null&&!myCard.sel2;
@@ -10648,7 +10705,7 @@ async function submitBet(){
     if(!derniereJournee() && capNow>=RECAP_THRESHOLD && pire<RECAP_THRESHOLD){
       const ok=await confirmModal("⚠️", t("Attention à ton capital"),
         `<div class="mini" style="text-align:left;line-height:1.7">
-           ${t("Si <b>tous</b> tes pronos sont faux, tu finirais la journée à <b>{a} €</b> — sous le seuil de <b>{b} €</b>.",{a:eur(Math.max(0,pire)),b:RECAP_THRESHOLD})}
+           ${t("Si <b>tous</b> tes pronos sont faux, tu finirais la journée à <b>{a}</b> — sous le seuil de <b>{b} €</b>.",{a:euro(Math.max(0,pire)),b:RECAP_THRESHOLD})}
            <div style="margin-top:8px">💸 ${t("Ton capital serait alors remonté à <b>{c} €</b>…",{c:RECAP_TARGET})}</div>
            <div style="margin-top:4px">📉 ${t("…mais tu perdrais <b>1 point</b> au classement.")}</div>
            <div class="muted" style="margin-top:10px">${t("C'est le pire cas : il ne se produira que si aucun de tes pronos ne passe.")}</div>
@@ -10837,7 +10894,7 @@ function afterCloseDuelHTML(){
       const jeNaiPasParie = !mine || (Array.isArray(mine.picks) && mine.picks.length===0);
       const myTxt = jeNaiPasParie
         ? `<span class="mini red"><b>🚫 ${t("tu n'as pas parié")}</b></span>`
-        : (mb?`${esc(labelSel(f,mb.sel))} · ${mb.stake}€${cd(mb.sel)}${(mine.captain===i)?' 👑':''}${marque}`:'—');
+        : (mb?`${esc(labelSel(f,mb.sel))} · ${euro(mb.stake)}${cd(mb.sel)}${(mine.captain===i)?' 👑':''}${marque}`:'—');
       /* ⚠️ v8.19 (relevé par Hervé) — « IL N'A PAS PARIÉ » DOIT SE VOIR. Un adversaire sans aucun
          pari tombait sur le même `—` discret qu'un match sans prono, alors que c'est l'information
          la plus lourde de l'écran : il perd le duel d'office. On la dit en clair et en rouge.
@@ -10847,7 +10904,7 @@ function afterCloseDuelHTML(){
       const advSansPari = !oppBet || (Array.isArray(oppBet.picks) && oppBet.picks.length===0);
       const opTxt = advSansPari
         ? (seeOpp?`<span class="mini red"><b>🚫 ${t("n'a pas parié")}</b></span>`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`)
-        : (ob?(seeOpp?`${esc(labelSel(f,ob.sel))} · ${ob.stake}€${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—');
+        : (ob?(seeOpp?`${esc(labelSel(f,ob.sel))} · ${euro(ob.stake)}${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—');
       return `<div class="two-col-card">
         <div class="match-lbl">${esc(f.home)} – ${esc(f.away)}${liveTag(f, mb?mb.sel:null)}</div>
         ${compBadge(f)?`<div class="match-lbl" style="text-transform:none;letter-spacing:0;font-weight:600;padding-top:4px">${compBadge(f)}</div>`:''}
@@ -10871,6 +10928,19 @@ function viewWait(dayLbl){
   const head = `<div class="box"><div class="submitted-head"><h3>${t("Pronos enregistrés")}</h3><span class="chip-ok">${t("✅ validés")}</span></div>
      ${md?`<div class="deadline-line">${t("Duel vs {a}",{a:'<b>'+avaName(opp)+'</b>'})} <span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>`:''}
      ${betLineHTML()}${cotesDatees()}</div>`;
+  // ⚠️ Audit V2 (2026-09-06) — Maestro manquant à ce stade : relu pronos-valides.html (maquette
+  // consolidée), qui prévoit une scène dédiée ICI (pronostics envoyés, avant clôture), absente du
+  // portage réel. Reprise fidèle : même asset (qg-tactizo-carte-valides-v2.png), même eyebrow/titre/
+  // texte ("Pronostics envoyés" / "Place au match !" / "Bonne chance face à {adversaire} !"), aucune
+  // variante inventée. Rendue avec le gabarit .a2-hero-card déjà utilisé ailleurs (Coulisses/Stats/
+  // Palmarès) plutôt que la mise en page "texte incrusté sur l'image" propre à ce fichier maquette,
+  // pour rester cohérent avec le seul système de hero déjà en place côté production — pas de nouveau
+  // redesign. N'apparaît que s'il y a un duel ce tour-ci (`md`) : la maquette ne prévoit pas de texte
+  // pour un tour sans adversaire (repos), donc aucun texte n'est inventé pour ce cas.
+  const maestroValide = md ? `<div class="a2-hero-card"><div class="a2-hero-img-wrap"><img src="img/qg-tactizo-carte-valides-v2.png" alt="${t("Le Maestro")}"></div>
+     <div class="a2-hero-text"><div class="mini" style="text-transform:uppercase;letter-spacing:.04em;font-weight:800;color:var(--a2-ready,var(--green))">${t("Pronostics envoyés")}</div>
+     <h1 style="margin:2px 0 4px;font-size:18px">${t("Place au match !")}</h1>
+     <p class="mini muted" style="margin:0">${t("Bonne chance face à {a} !",{a:'<b>'+esc(opp.name||'?')+'</b>'})}</p></div></div>` : '';
   const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}<div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
 
   // ── ÉTAT « VALIDÉS » (avant clôture) : la liste des 5 pronos + bouton Modifier (cf. maquette écran ⑥)
@@ -10953,10 +11023,10 @@ function viewWait(dayLbl){
          et les logos sont bloqués à leur taille (`flex:0 0 auto`). Ils ne peuvent plus se
          détacher du prono qu'ils qualifient, quelle que soit la longueur du nom des équipes.
          ⚠️ Ne pas remettre `flex-wrap:wrap` ici : c'est ce qui décrochait les logos. */
-      return `<div class="pick-row"><div class="sel-lbl">${mk?`<span style="margin-right:4px">${mk}</span>`:''}<span class="s">${esc(f.home)} – ${esc(f.away)}</span>${info?`<br><span class="o" style="margin-left:0">${info}</span>`:''}<br><span class="o" style="margin-left:0">${selD} @${oddD}</span></div><div class="stk">${b.stake}€</div></div>`;
+      return `<div class="pick-row"><div class="sel-lbl">${mk?`<span style="margin-right:4px">${mk}</span>`:''}<span class="s">${esc(f.home)} – ${esc(f.away)}</span>${info?`<br><span class="o" style="margin-left:0">${info}</span>`:''}<br><span class="o" style="margin-left:0">${selD} @${oddD}</span></div><div class="stk">${euro(b.stake)}</div></div>`;
     }).join("") : '';
     const picksTot = (mine&&mine.picks) ? mine.picks.reduce((s,b)=>s+(+b.stake||0),0) : 0;
-    const picksCard = picks ? `<div class="picks-card">${picks}</div><div class="picks-total"><span>${t("Total misé")}</span><span>${eur(picksTot)} €</span></div>` : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
+    const picksCard = picks ? `<div class="picks-card">${picks}</div><div class="picks-total"><span>${t("Total misé")}</span><span>${euro(picksTot)}</span></div>` : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
     const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
     const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
     // Statut des pronos de CHAQUE joueur (qui a validé, qui n'a pas encore) — demandé par Hervé.
@@ -10976,7 +11046,7 @@ function viewWait(dayLbl){
           sur `dt.bet` quand le duel n'a pas encore ses matchs, seul chemin qui puisse repasser
           une date dépassée. ⚠️ Ne pas composer « dans {a} » avec `fmtLeft` sans cette garde. */
     const pronosRoster = rosterDuelsHTML();
-    return `${head}${missingFx}
+    return `${maestroValide}${head}${missingFx}
       ${picksCard}${bonusLine}${bilanPariHTML(mine)}
       <div style="height:6px"></div><button class="btn ghost" onclick="editBet()">${t("✏️ Modifier (jusqu'à la clôture)")}</button>
       ${(org && L.data_mode!=="real")?`<div style="height:6px"></div><button class="btn ghost sm" ${tousMatchs?'':'disabled'} onclick="forceCloseBets()">${t("🔒 Clôturer les pronos maintenant (organisateur)")}</button>${tousMatchs?'':`<div class="mini muted" style="text-align:center;margin-top:5px">${t("⏳ Étape précédente d'abord : tous les duels doivent avoir leurs 5 matchs.")}</div>`}`:''}
@@ -11988,7 +12058,7 @@ function recapBody(D){
     ${oppId!=null?`<div class="hero-points${fpIsHome?'':' away'}"><span class="num" id="recapPtsVal">${Math.round(st0.pts)}</span><span class="lbl">${t("Points de duel")}</span></div>`:''}
     <div class="hero-reveal${st0.extra?' show':''}" id="recapExtra">
     <div class="hero-meta">
-      ${capInfo?`<span class="m">${t("capital")} <b>${eur(capInfo.cap)} €</b></span>`:''}
+      ${capInfo?`<span class="m">${t("capital")} <b>${euro(capInfo.cap)}</b></span>`:''}
       ${(!forgot(fp)&&pronosTotal>0)?`<span class="m">${t("{a} pronos justes sur {b}",{a:pronosCount,b:pronosTotal})}</span>`:''}
     </div>
     ${(capInfo&&capInfo.renfloue)?`<div class="mini" style="margin-top:6px;opacity:.9">💸 ${t("renfloué à {a} € · −1 pt",{a:RECAP_TARGET})}</div>`:''}
@@ -13543,8 +13613,8 @@ function showCapInfo(pid,idx){
     // ⚠️ Si la journée s'est terminée par un renflouement, la variation brute (capAv → capital)
     // mélange le résultat des paris et la remise à niveau. On reconstitue donc le résultat réel.
     const net=rec ? null : Math.round((c.capital-capAv)*100)/100;
-    tr.push(`<tr><td>J${d+1}</td><td class="num">${net==null?'<span class="muted">—</span>':`<b class="${net>=0?'green':'red'}">${fmt(net)} €</b>`}</td>
-      <td class="num"><b>${eur(c.capital)} €</b>${rec?` <span class="gold">💸</span>`:''}</td></tr>`);
+    tr.push(`<tr><td>J${d+1}</td><td class="num">${net==null?'<span class="muted">—</span>':`<b class="${net>=0?'green':'red'}">${euroSigned(net)}</b>`}</td>
+      <td class="num"><b>${euro(c.capital)}</b>${rec?` <span class="gold">💸</span>`:''}</td></tr>`);
   }
   infoModal("💰", t("Le capital"),
     `<div class="mini muted" style="text-align:left;line-height:1.6"><b>${esc(p.name||"?")}</b>
@@ -13643,7 +13713,10 @@ function viewStandings(){
   const nav = (R>=1) ? `<div class="row" style="margin:2px 0 8px;gap:8px"><button class="btn ghost sm ${offP?'off':''}" ${offP?'aria-disabled="true"':''} onclick="setStandDay(${shownIdx-1})">${t("◀ Préc.")}</button>
       <b class="mini" style="text-align:center;flex:1">${useLive?t("Classement actuel · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days}):t("Classement après J{a}/{b}",{a:sd+1,b:L.num_days})}</b>
       <button class="btn ghost sm ${offS?'off':''}" ${offS?'aria-disabled="true"':''} onclick="setStandDay(${shownIdx+1})">${t("Suiv. ▶")}</button></div>`
-    : `<h2>${t("Classement · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days})}</h2>`;
+    // ⚠️ Correctif audit V2 (2026-09-06) — même ligne compacte que le cas R>=1 (au lieu d'un <h2>,
+    // qui porte sa propre marge de 22px) : évitait une bande vide plus haute que partout ailleurs,
+    // uniquement visible sur une ligue dont aucune journée n'est encore résolue.
+    : `<div class="row" style="margin:2px 0 8px"><b class="mini" style="text-align:center;flex:1">${t("Classement · J{a}/{b}",{a:Math.min(L.current_day,L.num_days),b:L.num_days})}</b></div>`;
   // Hero "ma position" (v8.164, façon maquette) — pure lecture de `ord`/`ptsAvecPen`, déjà calculés
   // ci-dessus pour le tableau : aucun nouveau calcul, juste une autre vue de la même donnée.
   const myIdx=ord.findIndex(p=>p.id===S.myId);
@@ -13677,7 +13750,7 @@ function viewStandings(){
       <div class="ptsrow"><span class="ptsnum">${myPts}</span><span class="ptslbl">${t("points de saison")}</span></div>
       ${gapHTML}
       <div class="hmeta">
-        <span class="m">${t("capital")} ${eur(meRow.capital)} €</span>
+        <span class="m">${t("capital")} ${euro(meRow.capital)}</span>
         ${(starOn&&meRow.star>0)?`<span class="m">${t("{a}× meilleur gain de la ligue",{a:meRow.star})}</span>`:''}
       </div>
     </div>`;
@@ -13699,7 +13772,7 @@ function viewStandings(){
           <div class="lb-stats vert">
             ${starOn?`<span class="lb-substat clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})">⭐×${bp||0}</span>`:''}
             <span class="lb-pts clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen(p,shownIdx)} ${t("Pts")}</span>
-            <span class="lb-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',${shownIdx})" title="${t("Détail du capital")}">${eur(p.capital)}€</span>
+            <span class="lb-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',${shownIdx})" title="${t("Détail du capital")}">${euro(p.capital)}</span>
           </div>
         </div>`;}).join("")}
     </div>
@@ -13979,10 +14052,10 @@ function viewEnd(){
      <div class="box" style="border:2px solid var(--red);background:rgba(229,105,95,.10)"><div class="mini" style="line-height:1.7">${t("Cette ligue a été <b>fermée manuellement</b> par l'organisateur avant la fin du championnat. <b>Aucun vainqueur ni perdant n'est désigné</b>, et <b>ni gage ni récompense</b> ne s'appliquent.")}</div></div>`
     : `<div class="end-hero"><div class="big">🏆</div>
      <div class="champ-name">${avaName(champ,28)}${t(", Champion !")}</div>
-     <div class="champ-sub">${champ.points} pts · ${eur(champ.capital)} €</div>
+     <div class="champ-sub">${champ.points} pts · ${euro(champ.capital)}</div>
      ${showLast?`<div class="last"><div class="ic">🥄</div>
        <div class="nm">${avaName(last,22)}${t(", Dernier")}</div>
-       <div class="sub">${last.points} pts · ${eur(last.capital)} €</div></div>`:''}</div>`;
+       <div class="sub">${last.points} pts · ${euro(last.capital)}</div></div>`:''}</div>`;
   return `${heroHTML}
    ${myMsg}
    ${abandoned?'':enjeuFinalHTML()}
@@ -14017,7 +14090,7 @@ function viewEnd(){
          <div class="lb-stats vert">
            ${starOnF?`<span class="lb-substat clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})">⭐×${bp||0}</span>`:''}
            <span class="lb-pts clik" onclick="showPenInfo('${p.id}',-1,${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)} ${t("Pts")}</span>
-           <span class="lb-cap clik" onclick="showCapInfo('${p.id}',-1)" title="${t("Détail du capital")}">${eur(p.capital)}€</span>
+           <span class="lb-cap clik" onclick="showCapInfo('${p.id}',-1)" title="${t("Détail du capital")}">${euro(p.capital)}</span>
          </div>
        </div>`;}).join("")}</div>
      ${/* ⚠️ « un chiffre », PAS « un nom » : ici les noms ne s'ouvrent pas, les bonus de chacun
@@ -14434,11 +14507,11 @@ function viewPalmares(){
   if(!P) return back+`<div class="box">${t("Chargement du palmarès…")}</div>`;
   const medal=i=>["🥇","🥈","🥉",t("4ᵉ"),t("5ᵉ")][i]||(i+1);
   const dayDetail=r=>{ const sumL=r.lines.reduce((a,l)=>a+l.g,0); const adj=+(r.net-sumL).toFixed(2);
-    return `<div class="mini muted">${t("{lg} · J{d} · {np} joueurs · misé {st}€",{lg:esc(r.lname||'?'),d:r.day+1,np:r.np||'?',st:Math.round(r.staked)})}${r.cardId&&CARDS[r.cardId]?t(" · bonus {c}",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):''}</div>
-     ${r.lines.map(l=>`<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(t(l.sel))}${l.cap?' 👑':''} ${l.stake}€ @${cote(l.odd)} → <b class="${l.g>=0?'green':'red'}">${fmt(l.g)}€</b> ${l.win?'✓':'✗'}</div>`).join("")}
-     ${Math.abs(adj)>=1?`<div class="mini" style="margin-top:4px">🃏 ${t("Bonus &amp; ajustements")} ${r.cardId&&CARDS[r.cardId]?t("({c}…)",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):t("(bonus…)")} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`:''}
-     <div class="mini" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><b>${t("Total journée :")} <span class="${r.net>=0?'green':'red'}">${fmt(r.net)}€</span></b></div>`; };
-  const oddDetail=r=>`<div class="mini muted">${t("{lg} · J{d}",{lg:esc(r.lname||'?'),d:r.day+1})}</div><div class="mini" style="margin-top:3px">${esc(r.match)} — <b>${esc(t(r.sel))}</b> · ${r.stake}€ @${cote(r.odd)} ✓ → <b class="green">+${eur(r.stake*(r.odd-1))}€</b></div>`;
+    return `<div class="mini muted">${t("{lg} · J{d} · {np} joueurs · misé {st}",{lg:esc(r.lname||'?'),d:r.day+1,np:r.np||'?',st:euro(r.staked)})}${r.cardId&&CARDS[r.cardId]?t(" · bonus {c}",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):''}</div>
+     ${r.lines.map(l=>`<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(t(l.sel))}${l.cap?' 👑':''} ${euro(l.stake)} @${cote(l.odd)} → <b class="${l.g>=0?'green':'red'}">${euroSigned(l.g)}</b> ${l.win?'✓':'✗'}</div>`).join("")}
+     ${Math.abs(adj)>=1?`<div class="mini" style="margin-top:4px">🃏 ${t("Bonus &amp; ajustements")} ${r.cardId&&CARDS[r.cardId]?t("({c}…)",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):t("(bonus…)")} : <b class="${adj>=0?'green':'red'}">${euroSigned(adj)}</b></div>`:''}
+     <div class="mini" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><b>${t("Total journée :")} <span class="${r.net>=0?'green':'red'}">${euroSigned(r.net)}</span></b></div>`; };
+  const oddDetail=r=>`<div class="mini muted">${t("{lg} · J{d}",{lg:esc(r.lname||'?'),d:r.day+1})}</div><div class="mini" style="margin-top:3px">${esc(r.match)} — <b>${esc(t(r.sel))}</b> · ${euro(r.stake)} @${cote(r.odd)} ✓ → <b class="green">+${euro(r.stake*(r.odd-1))}</b></div>`;
   // Détail au clic : chaque chiffre est suivi d'une phrase en clair (demandé par Hervé — le
   // « rendement mise fixe » était incompris). Réussite = fréquence ; cote moyenne = niveau de risque
   // des paris gagnés ; rendement mise fixe = gagnerais-tu de l'argent à 1 € par prono, cotes comprises.
@@ -14473,10 +14546,10 @@ function viewPalmares(){
     ${secMe(t("💎 Meilleur rendement à mise fixe (bat les cotes)"), P.topFlat, r=>({txt:(r.flat>=0?'+':'')+(r.flat*100).toFixed(0)+"%",cls:r.flat>=0?'green':'red'}), statDetail, "pf", t("Pas encore assez de pronostics (min {a}).",{a:P.minP}))}
     ${secMe(t("💩 Pires pronostiqueurs — % de réussite"), P.worstHit, r=>({txt:(r.hit*100).toFixed(1)+"%",cls:'red'}), statDetail, "pw", t("Pas encore assez de pronostics (min {a}).",{a:P.minP}))}
     <div class="box"><div class="boxttl">${t("🏆 Autres records (en €)")}</div><div class="mini muted">${t("Les plus grosses perfs par journée, parmi les joueurs avec qui tu as déjà partagé une ligue.")}</div></div>
-    ${sec(t("💥 Plus gros gain sur une journée"), P.bigGain, r=>({txt:fmt(r.net)+"€",cls:r.net>=0?'green':'red'}), dayDetail, "g")}
+    ${sec(t("💥 Plus gros gain sur une journée"), P.bigGain, r=>({txt:euroSigned(r.net),cls:r.net>=0?'green':'red'}), dayDetail, "g")}
     ${sec(t("📈 Meilleur rendement d'une journée"), P.bestRet, r=>({txt:t("×{r} la mise",{r:r.ret.toFixed(2)}),cls:r.ret>=0?'green':'red'}), dayDetail, "r", t("Il faut avoir misé ≥ 5€."))}
     ${sec(t("🎯 Plus grosse cote gagnée"), P.bestOdd, r=>({txt:"@"+cote(r.odd),cls:'gold'}), oddDetail, "o")}
-    ${sec(t("💀 Pire dégringolade d'une journée"), P.bigLoss, r=>({txt:fmt(r.net)+"€",cls:'red'}), dayDetail, "l")}`;
+    ${sec(t("💀 Pire dégringolade d'une journée"), P.bigLoss, r=>({txt:euroSigned(r.net),cls:'red'}), dayDetail, "l")}`;
 }
 /* Relève du solde exact. Ne coûte AUCUN crédit (v8.189) : sert quand on veut le chiffre à la
    seconde près, par exemple avant d'ouvrir des ligues en données réelles. */
@@ -14968,14 +15041,17 @@ function render(){
   const A2_VIEWS = ["auth","login","signup","checkEmail","resetPassword","newPassword","choosePseudo","profil","create","join"];
   $("topBar").classList.toggle("hide", A2_VIEWS.includes(S.view));
   $("appShell").classList.toggle("a2-mode", A2_VIEWS.includes(S.view));
-  // ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — Lobby/Prépa gardent l'ancienne barre du haut visible
-  // (pas dans A2_VIEWS : elle reste utile — 🏠/📖/🐛/👤 — et sa refonte est reportée à la nav V2), mais
-  // avec MOINS de boutons affichés qu'ailleurs elle ne tient plus qu'une seule ligne (~59px mesurés)
-  // alors que le padding-top fixe de .app (93px) réserve la place d'une barre à deux lignes — d'où le
-  // grand vide constaté au-dessus de « Mes ligues » sur ces deux écrans. Un SEUL point commun (ici,
-  // pas dans viewLobbyA2()/viewPrepHub() séparément) : `.app.lp-mode` réduit ce padding pour ce cas
-  // précis, sans toucher au 93px global (qui reste correct partout ailleurs) ni au style de la barre.
-  $("appShell").classList.toggle("lp-mode", S.view==="game" && !!L && (L.status==="lobby"||L.status==="prep"));
+  // ⚠️ Bloc 3A (2026-09-05), généralisé lors de l'audit V2 (2026-09-06) — l'ancienne barre du haut
+  // reste visible sur tout écran de ligue (pas dans A2_VIEWS : 🏠/📖/🐛/👤(+🤝) — refonte reportée à
+  // la nav V2). Le NOMBRE d'icônes qu'elle affiche — donc sa hauteur réelle, une seule ligne (~59px)
+  // à 4 icônes contre deux (~89px, ce que le padding-top fixe de .app réserve) dès que 🤝 s'ajoute —
+  // dépend de `canTrade` (L.status==="running" &amp;&amp; pas en lecture seule), PAS de l'écran affiché.
+  // La condition précédente ne couvrait que S.view==="game" (Lobby/Prépa) : Coulisses/Résultats/
+  // Classement/Stats sont TOUS atteignables hors "running" (prep/truce/starting/resolving/done) avec
+  // la même topbar à 4 icônes — d'où le même grand vide constaté dessus, corrigé une seule fois ici
+  // plutôt que par écran. `canTrade` lui-même n'est calculé que plus bas : condition recopiée à
+  // l'identique pour ne pas dépendre de l'ordre des déclarations.
+  $("appShell").classList.toggle("lp-mode", !!S.leagueId && !(L && L.status==="running" && !LECTURE_SEULE));
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   /* ⚠️ v8.193 — LES DEUX PAGES LÉGALES SONT ATTEIGNABLES DEPUIS L'APP.
@@ -14986,8 +15062,14 @@ function render(){
      connexion, le moment où l'on accepte les conditions, et le profil. Un seul endroit à maintenir.
      ⚠️ `textContent` est devenu `innerHTML` : il fallait des liens. Le seul contenu injecté vient de
      `t()` et d'`APP_VERSION`, jamais d'une saisie de joueur — pas de risque d'injection. */
+  // ⚠️ Correctif audit V2 (2026-09-06) — le pied de page (texte "prototype de test" + liens légaux)
+  // s'affichait aussi sur les écrans de jeu V2 (Coulisses/Pronos/Résultats/Classement/Stats), entre
+  // le contenu et la nav du bas — jamais voulu là, juste hérité du fait qu'il était pensé pour un
+  // SEUL endroit commun. `inLeague` (calculé juste au-dessus) le masque désormais pendant qu'une
+  // ligue est ouverte ; il reste affiché PARTOUT ailleurs (Auth, Accueil, Profil…), donc les liens
+  // légaux restent atteignables depuis l'app pour la revue des stores, exactement comme avant.
   const fo=$("foot");
-  if(fo) fo.innerHTML="Tactizo · "+esc(t("prototype de test"))+" · "+esc(APP_VERSION)
+  if(fo) fo.innerHTML = inLeague ? "" : "Tactizo · "+esc(t("prototype de test"))+" · "+esc(APP_VERSION)
     +'<br><a href="confidentialite.html" target="_blank" rel="noopener">'+esc(t("Confidentialité"))+'</a>'
     +' · <a href="cgu.html" target="_blank" rel="noopener">'+esc(t("Conditions d'utilisation"))+'</a>';
   /* ⚠️ v8.213 — LE 📖 RESTE MASQUÉ SUR LA CONNEXION (arbitrage d'Hervé : « pas besoin de voir
