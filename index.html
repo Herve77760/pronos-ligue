@@ -1346,16 +1346,17 @@
   .a2-maestro-valide-text{font-size:9.5px;line-height:1.18;color:var(--a2-ink,#f4ecd8);opacity:.92;
     text-shadow:0 1px 4px rgba(0,0,0,.7);
     display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-  /* ⚠️ Un pseudo réel va jusqu'à 20 caractères (validUser) : le texte avec un pseudo long peut
-     dépasser les lignes qui tiennent dans le panneau peint — line-clamp coupe proprement avec des
-     points de suspension plutôt que de laisser overflow:hidden (sur le panneau parent) faire
-     disparaître le bas du texte sans aucun signe visible.
-     ⚠️ Audit V2 ciblé Pronos (2026-09-06) — le TITRE est désormais conditionnel lui aussi ("À {a} de
-     jouer !"), pas seulement le texte : mesuré en direct, avec un nom qui pousse le titre sur 2
-     lignes, il ne reste que ~25px pour le texte (panneau étroit, 27% de large seulement, contrainte
-     par l'image) — juste assez pour 2 lignes, pas 3. `flex-shrink:0` sur l'eyebrow et le titre les
-     fige à leur hauteur déjà bornée par leur propre line-clamp, pour que tout le manque d'espace
-     retombe de façon prévisible sur le texte plutôt que de se répartir on ne sait comment. */
+  /* ⚠️ Repasse V2 (2026-09-06) — demande explicite : un pseudo long (jusqu'à 20 caractères,
+     validUser) ne doit tronquer QUE lui-même (ellipsis sur le nom), jamais le reste du message.
+     `.a2-name-clip` isole le nom dans son propre bloc borné : il se comporte comme un mot normal
+     dans le texte qui l'entoure (peut passer à la ligne EN ENTIER si besoin), mais ne peut jamais
+     déborder au milieu — seul un pseudo qui dépasse encore À LUI SEUL cette largeur montre "…",
+     et "À "/" de jouer !" restent alors intacts. Les deux textes du panneau ("Tout est prêt." /
+     "En attente de ses pronos.") ne portent plus aucun nom : plus aucun risque de perdre la
+     personnalisation par troncature de ce côté-là. Le `-webkit-line-clamp` du titre/texte ci-dessus
+     reste un garde-fou de dernier recours, pas le mécanisme principal. */
+  .a2-name-clip{display:inline-block;max-width:64px;overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;vertical-align:bottom}
   /* ⚠️ Audit V2 ciblé Pronos (2026-09-06) — les 3 AUTRES héros Maestro de Pronos (pronos-attente-
      choix.html/pronos-choix-matchs.html/pronos-miser.html) avaient été omis du portage tout comme
      celui de pronos-valides.html (déjà réintégré) : famille de classes PARTAGÉE, même principe déjà
@@ -1375,6 +1376,163 @@
   .a2-maestro-pronos-text{font-size:9.5px;line-height:1.2;color:var(--a2-ink,#f4ecd8);opacity:.92;
     text-shadow:0 1px 4px rgba(0,0,0,.7);
     display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
+  /* ================= Bloc Résultats V2 (2026-09-06) — port de resultats.html consolidé =================
+     Reprend le langage visuel de la maquette (Maestro à 6 états, résumé compact, 5 matchs en
+     mbe-score/mbe-cols, carte points, bannière bonus, autres duels) — AUCUN calcul recréé ici :
+     chaque nombre vient d'une variable déjà calculée par recapBody() (netMap/dpts/forgot/starId/
+     capInfo/line()/explain()/euroSigned…), jamais reconstruit. Couleurs sur les variables --a2-*
+     déjà établies (Pronos) plutôt que les noms de la maquette (--brass/--ready/--urgent…), qui
+     n'existent pas dans ce fichier. */
+  .a2-res-maestro{position:relative;overflow:hidden;border-radius:16px 16px 0 0;margin-bottom:2px}
+  .a2-res-maestro-img{display:block;width:100%}
+  .a2-res-maestro::after{content:"";position:absolute;left:0;right:0;bottom:0;height:52%;pointer-events:none;
+    background:linear-gradient(to bottom, rgba(18,21,31,0) 0%, rgba(18,21,31,.55) 45%, var(--panel) 88%)}
+  .a2-res-maestro.st-suspense::after{background:linear-gradient(to bottom, rgba(36,26,58,0) 0%, rgba(36,26,58,.38) 45%, rgba(27,17,49,.78) 82%, var(--panel) 100%)}
+  .a2-res-suspense-ring{position:absolute;left:5%;top:6%;width:34%;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;text-align:center;color:var(--a2-ink,#f4ecd8)}
+  .a2-res-suspense-ring .lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;line-height:1.3;margin-bottom:8px;
+    text-shadow:0 1px 6px rgba(0,0,0,.9)}
+  .a2-res-suspense-ring .circ{width:56px;height:56px;border-radius:50%;border:3px solid var(--a2-purple,#9c7fe0);display:flex;align-items:center;
+    justify-content:center;background:rgba(15,8,28,.82);box-shadow:0 0 16px rgba(156,127,224,.6)}
+  .a2-res-suspense-ring .num{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:22px;color:var(--a2-purple-light,#c9b6f5)}
+  .a2-res-box{position:absolute;display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden;padding:4px 10px}
+  .a2-res-eyebrow{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+  .a2-res-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:16px;line-height:1.18;color:var(--a2-ink,#f4ecd8);
+    text-shadow:0 1px 4px rgba(0,0,0,.6)}
+  .a2-res-text{font-size:11.5px;color:var(--a2-ink,#f4ecd8);line-height:1.3;opacity:.92;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+
+  .a2-res-duelbig{background:rgba(18,21,31,.55);border:1px solid var(--border2);border-radius:0 0 16px 16px;padding:14px;margin-bottom:12px}
+  .a2-res-duelbig-head{text-align:center;font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+  .a2-res-faces{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:14px}
+  .a2-res-face{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .a2-res-face .nm{font-size:12.5px;font-weight:700}
+  .a2-res-vs{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--border2);display:flex;align-items:center;
+    justify-content:center;font-size:10px;font-weight:800;color:var(--muted);flex:0 0 auto}
+  .a2-res-nets{display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:10px}
+  .a2-res-net{flex:1;text-align:center}
+  .a2-res-net .lbl{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-bottom:3px}
+  .a2-res-net .val{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:26px;font-variant-numeric:tabular-nums}
+  .a2-res-arrows{color:var(--a2-purple-light,#c9b6f5);font-size:16px;flex:0 0 auto;opacity:.7}
+  @keyframes a2ResSuspensePulse{0%,100%{opacity:1}50%{opacity:.5}}
+  .a2-res-nets.suspense-hold .a2-res-net .val{animation:a2ResSuspensePulse .5s ease-in-out infinite}
+  @media (prefers-reduced-motion: reduce){ .a2-res-nets.suspense-hold .a2-res-net .val{animation:none} }
+  .a2-res-caption{text-align:center;font-size:11.5px;color:var(--muted)}
+
+  .a2-res-summary{border-radius:14px;padding:10px 12px;margin-bottom:8px;border:1.5px solid var(--border2);
+    display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .a2-res-summary.win{border-color:var(--green);background:rgba(37,192,125,.12)}
+  .a2-res-summary.lose{border-color:var(--red);background:rgba(239,106,95,.12)}
+  .a2-res-summary.tie{border-color:var(--gold);background:rgba(231,184,75,.12)}
+  .a2-res-summary .side{display:flex;align-items:center;gap:7px;flex:1;min-width:0}
+  .a2-res-summary .side.right{flex-direction:row-reverse;text-align:right}
+  .a2-res-summary .nm{font-size:11.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .a2-res-summary .amt{font-size:13px;font-weight:800;white-space:nowrap}
+  .a2-res-summary .amt.pos{color:var(--green)}
+  .a2-res-summary .amt.neg{color:var(--red)}
+  .a2-res-summary .vsmini{flex:0 0 auto;font-size:9px;font-weight:800;color:var(--muted)}
+
+  .a2-res-details-toggle{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;padding:8px;
+    font-size:11px;font-weight:700;color:var(--muted);margin-bottom:12px}
+  .a2-res-details-toggle svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2.4;transition:transform .2s}
+  .a2-res-details-toggle.open svg{transform:rotate(180deg)}
+  .a2-res-details-panel{background:rgba(31,38,53,.5);border:1px solid var(--border2);border-radius:14px;padding:2px 12px;margin:-6px 0 12px}
+  .a2-res-match{border-bottom:1px solid var(--border2)}
+  .a2-res-match:last-child{border-bottom:0}
+  .a2-res-match-head{width:100%;display:flex;align-items:center;gap:8px;padding:11px 0;text-align:left}
+  .a2-res-match-head .nm{flex:1;min-width:0;font-size:12px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .a2-res-match-head .net{font-size:12.5px;font-weight:800;flex:0 0 auto}
+  .a2-res-match-head .net.pos{color:var(--green)}
+  .a2-res-match-head .net.neg{color:var(--red)}
+  .a2-res-match-head svg{width:13px;height:13px;stroke:var(--faint);fill:none;stroke-width:2.4;transition:transform .2s;flex:0 0 auto}
+  .a2-res-match.open .a2-res-match-head svg{transform:rotate(180deg)}
+  .a2-res-match-body{padding:0 0 12px}
+  .a2-res-mbe-score{text-align:center;padding:10px 8px;margin-bottom:10px;background:rgba(231,184,75,.1);
+    border:1px solid rgba(231,184,75,.35);border-radius:10px}
+  .a2-res-mbe-score .teams{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:14px;color:var(--ink)}
+  .a2-res-mbe-score .teams b{color:var(--gold);font-size:19px;margin:0 7px;font-variant-numeric:tabular-nums}
+  .a2-res-mbe-score .tag{display:block;font-size:8.5px;color:var(--gold);text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-top:3px}
+  .a2-res-mbe-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .a2-res-mbe-side{background:rgba(18,21,31,.35);border:1px solid var(--border2);border-radius:10px;padding:9px 8px;text-align:center;min-width:0}
+  .a2-res-mbe-side.has-favori{border-color:var(--gold)}
+  .a2-res-mbe-side.has-bonus{border-color:var(--a2-purple,#9c7fe0)}
+  .a2-res-mbe-side .who{display:flex;align-items:center;justify-content:center;gap:4px;font-size:9.5px;font-weight:800;
+    text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin-bottom:5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .a2-res-mbe-side .pick{font-size:12.5px;font-weight:700;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .a2-res-mbe-side .stake-odds{font-size:9.5px;color:var(--muted);margin-bottom:6px}
+  .a2-res-mbe-side .net{font-size:14px;font-weight:800}
+  .a2-res-mbe-side .net.pos{color:var(--green)}
+  .a2-res-mbe-side .net.neg{color:var(--red)}
+  .a2-res-mbe-badges{display:flex;flex-direction:column;align-items:center;gap:3px;margin-top:6px}
+  .a2-res-mbe-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;padding:2.5px 7px;border-radius:999px}
+  .a2-res-mbe-badge.favori{background:rgba(231,184,75,.16);color:var(--gold)}
+  .a2-res-mbe-badge.bonus{background:rgba(156,127,224,.16);color:var(--a2-purple-light,#c9b6f5)}
+  .a2-res-mbe-badge.bonus img{width:12px;height:12px;object-fit:contain}
+  .a2-res-mbe-effect{font-size:9px;color:var(--muted);margin-top:4px;line-height:1.3}
+
+  .a2-res-points{border-radius:16px;padding:14px;margin-bottom:10px;border:1.5px solid var(--a2-purple,#9c7fe0);background:rgba(31,38,53,.5)}
+  .a2-res-points.win{border-color:var(--green)}
+  .a2-res-points.lose{border-color:var(--red)}
+  .a2-res-points.tie{border-color:var(--gold)}
+  .a2-res-points.forfeit{border-color:var(--red)}
+  .a2-res-points-head{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--a2-purple-light,#c9b6f5);margin-bottom:10px}
+  .a2-res-points-body{display:flex;align-items:stretch;gap:10px}
+  .a2-res-points-rows{flex:1;display:flex;flex-direction:column;gap:9px;min-width:0}
+  .a2-res-prow{display:flex;align-items:center;gap:9px}
+  .a2-res-prow .ic{font-size:15px;flex:0 0 auto;width:20px;text-align:center}
+  .a2-res-prow .pt{font-weight:800;font-size:13px;flex:0 0 auto;min-width:34px}
+  .a2-res-prow .pt.zero{color:var(--faint)}
+  .a2-res-prow .lbl{font-size:11.5px;color:var(--ink)}
+  .a2-res-points-total{flex:0 0 auto;width:76px;border-radius:12px;background:rgba(18,21,31,.4);border:1px solid var(--border2);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px}
+  .a2-res-points-total .lbl{font-size:8px;color:var(--muted);font-weight:700;letter-spacing:.03em}
+  .a2-res-points-total .val{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:22px;color:var(--green)}
+  .a2-res-points-total .val.zero{color:var(--muted)}
+  .a2-res-points-total .val.neg{color:var(--red)}
+  .a2-res-points-oubli{display:flex;align-items:flex-start;gap:9px}
+  .a2-res-points-oubli .ic{font-size:16px;flex:0 0 auto;width:20px;text-align:center}
+  .a2-res-points-oubli .txt{font-size:11.5px;color:var(--ink)}
+  .a2-res-points-oubli .txt b{color:var(--red)}
+  .a2-res-points-oubli .mini{display:block;font-size:9.5px;color:var(--muted);margin-top:3px;font-weight:400}
+
+  .a2-res-bonus-banner{display:flex;align-items:center;gap:10px;background:rgba(231,184,75,.14);border:1.5px solid var(--gold);
+    border-radius:14px;padding:11px 12px;margin-bottom:12px}
+  .a2-res-bonus-banner .ic{font-size:20px;flex:0 0 auto}
+  .a2-res-bonus-banner .t{font-size:11.5px;font-weight:800;color:var(--gold);letter-spacing:.01em}
+  .a2-res-bonus-banner .s{font-size:10.5px;color:var(--muted);margin-top:1px}
+
+  .a2-res-other-head{margin-bottom:4px;font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:10.5px;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--faint)}
+  .a2-res-oduel-row{display:flex;align-items:center;gap:6px;padding:8px 4px;border-bottom:1px solid var(--border2);font-size:10.5px;cursor:pointer;border-radius:8px}
+  .a2-res-oduel-row:last-child{border-bottom:0}
+  .a2-res-oduel-row:active{background:rgba(255,255,255,.04)}
+  .a2-res-oduel-row .side{flex:1;display:flex;align-items:center;gap:4px;min-width:0}
+  .a2-res-oduel-row .side.lose{opacity:.6}
+  .a2-res-oduel-row .side.b{justify-content:flex-end;text-align:right}
+  .a2-res-oduel-row .side.b .nm{order:1}
+  .a2-res-oduel-row .side.b .crown{order:2}
+  .a2-res-oduel-row .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .a2-res-oduel-row .side.win .nm{font-weight:800;color:var(--ink)}
+  .a2-res-oduel-row .amt{font-weight:800;flex:0 0 auto}
+  .a2-res-oduel-row .amt.pos{color:var(--green)}
+  .a2-res-oduel-row .amt.neg{color:var(--red)}
+  .a2-res-oduel-row .crown{font-size:9px;flex:0 0 auto;line-height:1}
+  .a2-res-oduel-row .mid{flex:0 0 auto;font-size:9px;color:var(--faint);font-weight:700;padding:0 3px}
+  .a2-res-oduel-row .mid.tie{color:var(--gold)}
+  .a2-res-oduel-row .chev{width:11px;height:11px;stroke:var(--faint);fill:none;stroke-width:2.4;flex:0 0 auto;margin-left:2px}
+
+  .a2-res-oduel-modal{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center}
+  .a2-res-oduel-modal-bd{position:absolute;inset:0;background:rgba(0,0,0,.62)}
+  .a2-res-oduel-sheet{position:relative;width:100%;max-width:460px;background:var(--panel);border-radius:18px 18px 0 0;
+    max-height:82vh;display:flex;flex-direction:column;box-shadow:0 -10px 30px rgba(0,0,0,.45);animation:a2ResSheetUp .22s ease-out}
+  @keyframes a2ResSheetUp{from{transform:translateY(28px);opacity:.5}to{transform:translateY(0);opacity:1}}
+  .a2-res-oduel-grip{width:36px;height:4px;border-radius:2px;background:var(--border2);margin:8px auto 0}
+  .a2-res-oduel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px 12px;border-bottom:1px solid var(--border2)}
+  .a2-res-oduel-title{font-family:'Playfair Display',Georgia,serif;font-weight:700;font-size:15.5px}
+  .a2-res-oduel-title .mini{display:block;font-weight:600;font-size:9.5px;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;margin-top:1px;font-family:-apple-system,sans-serif}
+  .a2-res-oduel-close{width:28px;height:28px;border-radius:50%;background:var(--panel2);border:1px solid var(--border2);
+    color:var(--ink);font-size:13px;line-height:1;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
+  .a2-res-oduel-body{overflow-y:auto;padding:6px 14px 18px;-webkit-overflow-scrolling:touch}
   /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — `margin-top:56px` réservait de la place pour laisser
      le Maestro DÉBORDER au-dessus de la carte (effet repris de la maquette) : sur Lobby/Prépa, la
      barre du haut restant visible (contrairement à Auth/Profil), ce débord tombait dans le vide
@@ -1479,7 +1637,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.360";
+const APP_VERSION = "v8.361";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -3272,7 +3430,7 @@ const EN={
   "Cet emoji est déjà utilisé dans le jeu (bonus, 👑 match favori…) — choisis-en un autre.":"This emoji is already used in the game (bonuses, 👑 favourite match…) — pick another one.",
   "Bonus encore en main de {a} (pas forcément joués aujourd'hui) :":"Bonuses still in {a}'s hand (not necessarily played today):",
   "Ça s'est retourné contre toi":"It backfired",
-  "au lieu de le plomber, ton bonus a <b>rapporté {a}€</b> à ton adversaire. Aïe. 🙈":"instead of sinking them, your bonus <b>earned {a}€</b> for your opponent. Ouch. 🙈",
+  "au lieu de le plomber, ton bonus a <b>rapporté {a}</b> à ton adversaire. Aïe. 🙈":"instead of sinking them, your bonus <b>earned {a}</b> for your opponent. Ouch. 🙈",
   "🏠 Retour à l'accueil":"🏠 Back to home",
   "Cette ligue est <b>terminée</b> — tu la retrouveras dans le dossier <b>« Ligues terminées »</b> de l'accueil.":"This league is <b>finished</b> — you'll find it in the <b>“Finished leagues”</b> folder on the home screen.",
   "🎓 Première fois ? Découvrir le jeu":"🎓 First time? Discover the game",
@@ -3703,7 +3861,7 @@ const EN={
   "✅ Pronos clôturés — on attend la fin des matchs.":"✅ Picks closed — waiting for the matches to finish.",
   "⏰ pronos non faits":"⏰ picks not submitted", "caché (IA)":"hidden (AI)", "ton duel":"your duel",
   "Aucune journée terminée pour l'instant — les résultats arriveront après la clôture.":"No matchday finished yet — results will come after the close.",
-  "Perte de capital ce jour-là : <b>{a}€</b>.":"Balance lost that day: <b>{a}€</b>.",
+  "Perte de capital ce jour-là : <b>{a}</b>.":"Balance lost that day: <b>{a}</b>.",
   "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
   "Résultat à découvrir":"Result ready to discover",
   "Tout le monde a validé — la journée est résolue.":"Everyone has confirmed — the matchday is resolved.",
@@ -3824,8 +3982,8 @@ const EN={
   "Voir la description du bonus":"See the bonus description",
   "Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours.":"Couldn't find a free code for your league. Tap the button again: a fresh draw almost always works.",
   // — v7.62 : faits marquants d'un bonus dont tout l'effet est chez l'adversaire, et liens des stats —
-  "a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}€</b> à {c}.":"played {a} — it backfired: the bonus earned <b class=\"green\">€{b}</b> for {c}.",
-  "a réussi {a} : <b class=\"red\">{b}€</b> pour {c}.":"pulled off {a}: <b class=\"red\">€{b}</b> for {c}.",
+  "a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}</b> à {c}.":"played {a} — it backfired: the bonus earned <b class=\"green\">{b}</b> for {c}.",
+  "a réussi {a} : <b class=\"red\">{b}</b> pour {c}.":"pulled off {a}: <b class=\"red\">{b}</b> for {c}.",
   "Ouvrir cette journée":"Open this matchday",
   // — v7.60 : la fenêtre « détail des points », journée par journée —
   "Détail des points":"Points breakdown", "Jour":"Day", "J{a}":"D{a}", "Pén.":"Pen.", "Cumul":"Total",
@@ -4585,15 +4743,14 @@ const EN={
   "Pronostics envoyés":"Picks sent", "Place au match !":"Game time!",
   // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — wording de pronos-valides dépendant de l'état réel de
   // l'adversaire (oppBet) ; "Bonne chance face à {a} !" (fixe, prématuré) retiré, plus aucun appel.
+  // ⚠️ Repasse V2 (2026-09-06, 2e mesure) — même sur ce panneau étroit (27% de large), les DEUX
+  // phrases longues d'origine ("Tes choix sont faits…"/"{a} et toi êtes prêts !") débordaient
+  // encore une fois combinées à un titre qui peut, lui, faire 2 lignes. Textes raccourcis au strict
+  // nécessaire (demande explicite d'Hervé) : le texte ne porte plus JAMAIS le nom (déplacé/gardé
+  // seulement dans le titre), qui lui-même a son propre garde-fou nom-tronqué-par-ellipsis ci-dessous.
   "À {a} de jouer !":"{a}'s turn now!",
-  "Tes choix sont faits. Il ne reste plus qu'à attendre ses pronostics.":"Your picks are locked in. Now it's just a matter of waiting for theirs.",
-  // ⚠️ Mesuré en direct sur ce panneau précis (27% de large, calibré par le maquettiste sur "Bonne
-  // chance face à Nico !" = 27 caractères pile, sans marge) : "Tout est prêt pour ton duel face à
-  // {a}." (44 caractères) dépasse largement ce budget, ET place le nom tout à la fin — exactement
-  // là où un `-webkit-line-clamp` coupe en premier. Nom D'ABORD : si un pseudo long (jusqu'à 20
-  // caractères, validUser) force quand même une coupe, elle ne peut plus jamais mordre sur le nom,
-  // seulement sur la formule de politesse qui suit.
-  "{a} et toi êtes prêts !":"{a} and you are ready!",
+  "En attente de ses pronos.":"Waiting for their picks.",
+  "Tout est prêt.":"All set.",
   // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — heros Maestro attente/choix/miser, réintégrés.
   "En attente":"Waiting", "{a} prépare la journée":"{a} is getting ready",
   "{a} doit sélectionner les 5 matchs.":"{a} needs to pick the 5 matches.",
@@ -4661,18 +4818,18 @@ const EN={
   "commencé, mais pas encore validé (le joueur doit revenir valider).":"started, but not confirmed yet (the player must come back to confirm).",
   "le joueur n'a encore rien saisi.":"the player hasn't entered anything yet.",
   "⚡ Temps forts":"⚡ Highlights",
-  "Meilleur résultat du jour : {a} (<b class=\"green\">{b}€</b>).":"Best result of the day: {a} (<b class=\"green\">{b}€</b>).",
-  "Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).":"Biggest hit: {a} on {b} (<b class=\"green\">{c}€</b>).",
+  "Meilleur résultat du jour : {a} (<b class=\"green\">{b}</b>).":"Best result of the day: {a} (<b class=\"green\">{b}</b>).",
+  "Plus gros coup : {a} sur {b} (<b class=\"green\">{c}</b>).":"Biggest hit: {a} on {b} (<b class=\"green\">{c}</b>).",
   // Faits marquants — bonus retournés (v7.15). L'ancienne clé « … <b class="green">{b}€</b> pour
   // {c} » est supprimée : elle ne disait que le gain de l'adversaire, jamais ce que ça avait
   // coûté au joueur, et ne se déclenchait que sur les bonus visant l'adversaire.
-  "a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.":"played {a} — it backfired: <b class=\"red\">{b}€</b> for {d}, and <b class=\"green\">{b2}€</b> for {c}.",
-  "a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.":"played {a} — it backfired on {d}: <b class=\"red\">{b}€</b>.",
-  "Plus grosse mise : {a} — {b} € sur {c} ({d}).":"Biggest stake: {a} — €{b} on {c} ({d}).",
+  "a joué {a} — ça s'est retourné : <b class=\"red\">{b}</b> pour {d}, et <b class=\"green\">{b2}</b> pour {c}.":"played {a} — it backfired: <b class=\"red\">{b}</b> for {d}, and <b class=\"green\">{b2}</b> for {c}.",
+  "a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}</b>.":"played {a} — it backfired on {d}: <b class=\"red\">{b}</b>.",
+  "Plus grosse mise : {a} — {b} sur {c} ({d}).":"Biggest stake: {a} — {b} on {c} ({d}).",
   "gagné":"won", "perdu":"lost",
   "Journée faste : <b>tout le monde</b> finit dans le vert.":"A good day: <b>everyone</b> finishes in the green.",
   "Journée noire : <b>personne</b> ne s'en sort — tout le monde est dans le rouge.":"A dark day: <b>nobody</b> made it — everyone is in the red.",
-  "a réussi {a} : <b class=\"green\">{b}€</b>.":"nailed {a}: <b class=\"green\">{b}€</b>.",
+  "a réussi {a} : <b class=\"green\">{b}</b>.":"nailed {a}: <b class=\"green\">{b}</b>.",
   "a volé le bonus de {c}.":"stole {c}'s bonus.",
   // Bonus « Demi-portion » (v6.39)
   "Demi-portion":"Half Rations",
@@ -5224,7 +5381,30 @@ const EN={
   "Rendement à mise fixe":"Flat-stake yield",
   "Si tu avais misé <b>1 € sur chacun</b> de tes pronos (cotes comprises) : ce que tu aurais gagné ou perdu <b>en moyenne par pari</b>. <b class=\"green\">Positif</b> = tu bats les cotes ; <b class=\"red\">négatif</b> = tu as souvent raison mais sur des favoris qui rapportent trop peu pour couvrir les erreurs.":"If you had staked <b>€1 on each</b> of your predictions (odds included): what you'd have won or lost <b>on average per bet</b>. <b class=\"green\">Positive</b> = you beat the odds; <b class=\"red\">negative</b> = you're often right but on favourites that pay too little to cover the misses.",
   "Ta position, sur {a} pronostiqueurs classés":"Your position, out of {a} ranked forecasters",
-  "🏆 Autres records (en €)":"🏆 Other records (in €)", "Les plus grosses perfs par journée, parmi les joueurs avec qui tu as déjà partagé une ligue.":"The biggest single-day performances, among players you've already shared a league with."
+  "🏆 Autres records (en €)":"🏆 Other records (in €)", "Les plus grosses perfs par journée, parmi les joueurs avec qui tu as déjà partagé une ligue.":"The biggest single-day performances, among players you've already shared a league with.",
+  // ⚠️ Port V2 Résultats (2026-09-06) — copie des 6 états du Maestro (suspense + 5 issues), du
+  // résumé/carte points/bannière/autres duels, reprise telle quelle de resultats.html.
+  "Victoire !":"Victory!", "Belle journée !":"Great day!",
+  "Tu prends les points et ta cagnotte progresse.":"You take the points and your pot grows.",
+  "Les points sont là.":"The points are there.",
+  "La cagnotte recule, mais tu remportes le duel.":"Your pot shrinks, but you win the duel.",
+  "Défaite…":"Defeat…", "Tout n'est pas perdu.":"Not all is lost.",
+  "Tu perds le duel, mais ta cagnotte progresse.":"You lose the duel, but your pot grows.",
+  "Journée compliquée.":"A tough day.",
+  "Le duel et la cagnotte t'échappent aujourd'hui.":"Both the duel and your pot slip away today.",
+  "Égalité parfaite.":"A perfect tie.", "Personne ne prend l'avantage.":"Neither of you gets the edge.",
+  "Résultats dévoilés dans":"Results revealed in", "Net":"Net",
+  "Calcul des résultats… Patience Maestro !":"Crunching the results… Patience, Maestro!",
+  "Pari non validé":"Picks not submitted", "journée non jouée":"matchday not played",
+  "Conséquence : duel perdu d'office pour ton adversaire, quel que soit son gain":"Consequence: your opponent wins the duel by forfeit, whatever their own gain",
+  "de capital":"of capital", "Aucun point gagné aujourd'hui":"No points earned today",
+  "Victoire":"Win", "Net positif":"Positive net", "Tes points de la journée":"Your points today",
+  "points":"points",
+  "Meilleur pronostiqueur de la journée !":"Top forecaster of the day!",
+  "Bravo Maestro, personne n'a fait mieux que toi.":"Well played, Maestro — nobody did better than you.",
+  "Les autres duels de la journée":"The other duels of the day", "🤝 nul":"🤝 tie",
+  "Favori":"Favourite", "Score final":"Final score", "Détail des 5 matchs":"Detail of the 5 matches",
+  "Voir détails des matchs":"See match details"
 };
 function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); }
   // Espace INSÉCABLE entre un nombre et son unité : « 10 € » ne doit jamais se retrouver coupé en
@@ -5338,9 +5518,9 @@ function infoModal(emoji,title,bodyHTML,sansOk){ closeCardInfo();
 function showBonusJoue(id, cloned, qui, adv, cible, self, opp){
   const c=CARDS[id]; if(!c) return;
   const ecart=(+self||0)-(+opp||0);
-  /* `fmt()` : le formateur SIGNÉ déjà utilisé partout pour les gains. Refaire le signe à la
-     main aurait donné un « +0.00 » là où le reste de l'app écrit « 0.00 ». */
-  const mnt=v=>`<b class="${v>0?'green':(v<0?'red':'muted')}">${fmt(v)} €</b>`;
+  // ⚠️ Formatage monétaire (2026-09-06) — `euroSigned()` (formatter centralisé) remplace
+  // `fmt(v)+" €"` : virgule FR, jamais de centimes réels supprimés, équivalent EN.
+  const mnt=v=>`<b class="${v>0?'green':(v<0?'red':'muted')}">${euroSigned(v)}</b>`;
   const ligne=(lab,val)=>`<div class="row" style="margin:3px 0"><span class="mini">${lab}</span>${mnt(val)}</div>`;
   // v8.317 : titre clone-aware, même principe que `cardEmoji`/`cardName` — un 🧬 Clone qui a copié
   // ce bonus se présente comme tel, la règle affichée plus bas reste celle qui a produit les chiffres.
@@ -6125,7 +6305,7 @@ function showDuelPtsInfo(pid,star){
     const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2()); const iAmHome=d.home_id===pid; const mult=lastDayMult(_day); const pts=(iAmHome?r.h:r.a)*mult; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
     const issue = fg(iAmHome?hb:ab) ? t("déclaré forfait (pronos non faits)") : (r.win==null?t("fait match nul") : (((r.win==='h')===iAmHome)?t("gagné son duel"):t("perdu son duel")));
     const x2 = mult===2 ? ' <b class="gold">'+t("(dernière journée → ×2)")+'</b>' : '';
-    ctx=`<div class="mini" style="text-align:left">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:avaName(p),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+fmt(netMe)+'€</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}${x2}</div>`;
+    ctx=`<div class="mini" style="text-align:left">${t("<b>Ici :</b> {a} a <b>{b}</b> avec un net {c} ({d}) → <b>{e}</b>.",{a:avaName(p),b:issue,c:'<b class="'+(pos?'green':'red')+'">'+euroSigned(netMe)+'</b>',d:pos?t("positif"):t("négatif ou nul"),e:pts+' pt'+(pts>1?'s':'')})}${x2}</div>`;
     /* ⚠️ v8.221 — CETTE FENÊTRE DOIT RENDRE LE NOMBRE SUR LEQUEL ON VIENT DE CLIQUER. La ligne des
        résultats affiche le TOTAL du jour ; s'arrêter aux points de duel ferait dire à l'explication
        le contraire du chiffre qu'elle explique. Les deux écarts possibles sont ajoutés ici — le +1
@@ -6172,8 +6352,8 @@ function showBonusImpact(pid,day){
   else if(c.id==="clone") mot=t("🧬 Rien à copier : ton adversaire n'a joué aucun bonus clonable ce jour-là.");
   if(c.stolenBy) mot=t("🥷 Ce bonus t'a été <b>pris</b> par {a} : il ne s'est pas appliqué.",{a:nomJ(c.stolenBy)});
   if(mot) body+=`<div class="mini" style="text-align:left;margin-top:8px">${mot}</div>`;
-  if(hasSelf){ const wo=r2(net-im.self); body+=`<div class="mini" style="text-align:left;margin-top:7px">🧑 <b>${t("Sur son gain du jour :")}</b><br>${t("• avec le bonus :")} <b>${fmt(net)}€</b><br>${t("• sans le bonus :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b></div>`; }
-  if(hasOpp){ const wo=r2(oppNet-im.opp); body+=`<div class="mini" style="text-align:left;margin-top:7px">🥊 <b>${t("Sur le gain de l'adversaire :")}</b><br>${t("• avec le bonus :")} <b>${fmt(oppNet)}€</b><br>${t("• sans le bonus :")} <b>${fmt(wo)}€</b><br>${t("• effet :")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b></div>`; }
+  if(hasSelf){ const wo=r2(net-im.self); body+=`<div class="mini" style="text-align:left;margin-top:7px">🧑 <b>${t("Sur son gain du jour :")}</b><br>${t("• avec le bonus :")} <b>${euroSigned(net)}</b><br>${t("• sans le bonus :")} <b>${euroSigned(wo)}</b><br>${t("• effet :")} <b class="${im.self>=0?'green':'red'}">${euroSigned(im.self)}</b></div>`; }
+  if(hasOpp){ const wo=r2(oppNet-im.opp); body+=`<div class="mini" style="text-align:left;margin-top:7px">🥊 <b>${t("Sur le gain de l'adversaire :")}</b><br>${t("• avec le bonus :")} <b>${euroSigned(oppNet)}</b><br>${t("• sans le bonus :")} <b>${euroSigned(wo)}</b><br>${t("• effet :")} <b class="${im.opp>=0?'green':'red'}">${euroSigned(im.opp)}</b></div>`; }
   if(!hasSelf&&!hasOpp) body+=`<div class="mini muted" style="text-align:left;margin-top:8px">${t("Aucun effet chiffré ce jour-là.")}</div>`;
   infoModal(cardEmoji(c), esc(cardName(c))+" — "+t("l'effet"), body);
 }
@@ -8836,6 +9016,32 @@ function viewGame(){
     if(S.ptab==="encheres") return viewEncheresA2();
     return viewPrepHub();
   }
+  // ⚠️ Correctif séquencement Résultats → Trêve/journée suivante/fin de saison (2026-09-06,
+  // demandé par Hervé — bug réel constaté : l'écran Trêve était déjà visible DERRIÈRE la modale
+  // "Résultat à découvrir", avant même que le joueur ait vu le résultat de la journée qui la
+  // déclenche). La seule protection qui existait (`refresh()`, variable locale `jourNonVu`) est
+  // une redirection PONCTUELLE — une seule fenêtre de rafraîchissement, jamais rejouée ensuite —
+  // et `goGame()` (l'onglet Pronos) rend directement `viewGame()` sans jamais passer par elle : un
+  // joueur qui n'était pas sur cet onglet au moment précis de la transition atterrissait donc
+  // directement sur la Trêve/journée suivante, résultat jamais montré. On la rend donc
+  // STRUCTURELLE : ce contrôle vit ici, dans le routeur lui-même, réévalué à CHAQUE rendu tant que
+  // la journée n'a pas été vue — plus robuste qu'une fenêtre à sens unique.
+  // `getSeen()`/`setSeen()` (déjà la source de vérité utilisée par `openResults()`) ne sont PAS
+  // réinventés ici : `viewRecap(D)` ci-dessous appelle `ackRecap()` sur "Continuer →", qui appelle
+  // déjà `setSeen()` — une fois la journée acquittée, ce garde-fou s'efface tout seul au rendu
+  // suivant et laisse la Trêve/journée suivante/fin de saison s'afficher normalement.
+  const _resolues = (L.status==="done") ? (L.num_days||0) : (L.current_day||0);
+  const _unseenDay = (_resolues>=1 && getSeen()<_resolues) ? _resolues-1 : null;
+  if(_unseenDay!=null && !awaitingReveal && !awaitingTreveReveal){
+    // Même garde que viewResults() (v8.282) : recapBody() sait relire chartBets/standDuels (rejeu
+    // déjà chargé en tâche de fond par refresh(), indépendamment de l'onglet actif) pour une
+    // journée différente de loadedDay — mais si ce rejeu n'est vraiment pas encore prêt, on
+    // préfère un « chargement… » franc à un résultat faux plutôt que de risquer d'afficher les
+    // données de la MAUVAISE journée (celle actuellement en mémoire).
+    if(loadedDay!==_unseenDay && !(Array.isArray(chartBets) && Array.isArray(standDuels)))
+      return `<div class="box" style="text-align:center"><div style="font-size:24px">⏳</div><div class="mini muted" style="margin-top:6px">${t("Chargement de la journée…")}</div></div>`;
+    return viewRecap(_unseenDay);
+  }
   if(L.status==="truce") return viewTreve();
   // v8.319 : le dernier à avoir enchéri attend son propre clic sur `revealGate` (cf. saveTreve) —
   // même contenu que l'attente de "starting" juste en dessous, pour ne rien laisser deviner.
@@ -10273,8 +10479,16 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
        On lit donc le mode dans `st`, la source déjà parsée juste au-dessus. */
     const modeLot = ((st&&st.mode)==='simple') ? 'simple' : 'complet';
     const capLot = Math.max(1, Math.min(hasTreve(fresh) ? Math.floor((fresh.num_days|0)/2) : (fresh.num_days|0), modeCards(modeLot).length));
-    for(const cardId in CARDS){ const cand=ps.map(p=>({pid:p.id,amt:(bids[p.id]&&+bids[p.id][cardId])||0,ts:(bidTs[p.id]!=null?bidTs[p.id]:Infinity)})).filter(c=>c.amt>0);
-      if(!cand.length) continue; cand.sort((a,b)=> (b.amt-a.amt) || (a.ts-b.ts)); const wpid=cand[0].pid;
+    // ⚠️ Correctif enchères Solo/IA (2026-09-06, demandé par Hervé) — l'IA enregistre TOUJOURS sa
+    // mise en tout premier (dès l'ouverture de l'enchère, cf. aiPrep()/`bidTs[p.id]=Date.now()`
+    // posé de façon synchrone au lancement de la ligue), avant même que l'humain ne voie l'écran de
+    // mise : à montant égal, la règle « premier arrivé » lui donnait donc TOUJOURS l'avantage,
+    // un avantage impossible à reproduire pour un joueur humain. Entre humains la règle du jeu ne
+    // change pas (`a.ts-b.ts`, premier à avoir misé). `(a.isAi-b.isAi)` ne s'active QUE si l'un des
+    // deux camps est l'IA : humain (0) passe alors devant IA (1) à montant égal ; entre deux
+    // humains (0-0) ou si aucune IA n'est en lice, ce terme vaut 0 et ne change rien.
+    for(const cardId in CARDS){ const cand=ps.map(p=>({pid:p.id,amt:(bids[p.id]&&+bids[p.id][cardId])||0,ts:(bidTs[p.id]!=null?bidTs[p.id]:Infinity),isAi:!!p.is_ai})).filter(c=>c.amt>0);
+      if(!cand.length) continue; cand.sort((a,b)=> (b.amt-a.amt) || ((a.isAi?1:0)-(b.isAi?1:0)) || (a.ts-b.ts)); const wpid=cand[0].pid;
       if(won[wpid].length>=capLot) continue;                 // plafond : le bonus n'est attribué à personne
       won[wpid].push(cardId); paid[wpid]+=cand[0].amt;
       auction.push({card:cardId, winner:wpid, amount:cand[0].amt, bids:cand.map(c=>({pid:c.pid,amt:c.amt}))}); }
@@ -11044,12 +11258,16 @@ function viewWait(dayLbl){
   // `editable` devient faux et l'écran bascule entièrement sur `headClose` (son propre en-tête,
   // sans ce Maestro) — aucun message obsolète ne peut donc rester affiché après la clôture.
   const oppReady = !!oppBet;
+  // ⚠️ Repasse V2 (2026-09-06) — le nom ne peut plus se contenter d'un line-clamp sur toute la
+  // phrase : demandé explicitement — un pseudo trop long doit tronquer LUI SEUL (ellipsis sur le
+  // nom), jamais le reste du message. `.a2-name-clip` isole le nom dans son propre bloc
+  // overflow:hidden/nowrap/text-overflow:ellipsis, qui se comporte comme un mot normal dans le flux
+  // (peut passer à la ligne en entier) mais ne peut jamais lui-même déborder au milieu.
+  const oppNameClip = '<span class="a2-name-clip">'+esc(opp.name||'?')+'</span>';
   const maestroValide = md ? `<div class="a2-maestro-valide"><img class="a2-maestro-valide-img" src="img/qg-tactizo-carte-valides-v2.png" alt="${t("Le Maestro")}">
      <div class="a2-maestro-valide-box"><div class="a2-maestro-valide-eyebrow">${t("Pronostics envoyés")}</div>
-     <div class="a2-maestro-valide-title">${oppReady ? t("Place au match !") : t("À {a} de jouer !",{a:esc(opp.name||'?')})}</div>
-     <div class="a2-maestro-valide-text">${oppReady
-       ? t("{a} et toi êtes prêts !",{a:'<b>'+esc(opp.name||'?')+'</b>'})
-       : t("Tes choix sont faits. Il ne reste plus qu'à attendre ses pronostics.")}</div></div></div>` : '';
+     <div class="a2-maestro-valide-title">${oppReady ? t("Place au match !") : t("À {a} de jouer !",{a:oppNameClip})}</div>
+     <div class="a2-maestro-valide-text">${oppReady ? t("Tout est prêt.") : t("En attente de ses pronos.")}</div></div></div>` : '';
   const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}<div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
 
   // ── ÉTAT « VALIDÉS » (avant clôture) : la liste des 5 pronos + bouton Modifier (cf. maquette écran ⑥)
@@ -11389,9 +11607,12 @@ async function resolveTreve(){ if(resolvingTreve||resolving) return; resolvingTr
     const plafond=Math.max(1, Math.min(reste, modeCards(mode).length));
     const won={},paid={},auction=[]; ps.forEach(p=>{won[p.id]=[];paid[p.id]=0;});
     for(const cardId of modeCards(mode)){
-      const cand=ps.map(p=>({pid:p.id, amt:((st.bids||{})[p.id]&&+st.bids[p.id][cardId])||0, ts:(st.bidTs&&st.bidTs[p.id]!=null)?st.bidTs[p.id]:Infinity})).filter(c=>c.amt>0);
+      // ⚠️ Correctif enchères Solo/IA (2026-09-06) — même règle qu'en préparation initiale
+      // (`resolvePrep`, cf. son commentaire) : à montant égal, l'humain passe devant l'IA
+      // (`isAi`), la règle « premier arrivé » (`ts`) restant inchangée entre deux humains.
+      const cand=ps.map(p=>({pid:p.id, amt:((st.bids||{})[p.id]&&+st.bids[p.id][cardId])||0, ts:(st.bidTs&&st.bidTs[p.id]!=null)?st.bidTs[p.id]:Infinity, isAi:!!p.is_ai})).filter(c=>c.amt>0);
       if(!cand.length) continue;
-      cand.sort((a,b)=> (b.amt-a.amt) || (a.ts-b.ts));
+      cand.sort((a,b)=> (b.amt-a.amt) || ((a.isAi?1:0)-(b.isAi?1:0)) || (a.ts-b.ts));
       const w=cand[0]; if(won[w.pid].length>=plafond) continue;   // plafond appliqué côté serveur
       won[w.pid].push(cardId); paid[w.pid]+=w.amt;
       auction.push({card:cardId, winner:w.pid, amount:w.amt, bids:cand.map(c=>({pid:c.pid,amt:c.amt}))});
@@ -11761,7 +11982,12 @@ function recapBody(D){
     if(c&&c.target===i){ if(c.id==="double"&&win)g*=2; if(c.id==="tout")g*=(win?3:2); if(c.id==="assurance"&&!win)g*=(1-ASSURANCE_REMB); if(c.id==="joker")g*=2; }
     let faceCut=false; if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; faceCut=true; }
     const selTxt = isDC ? `<b>${esc(labelSel(f,b.sel))}</b>/<b>${esc(labelSel(f,c.sel2))}</b>` : (b.orig!=null ? `<s class="red">${esc(labelSel(f,b.orig))}</s> → <b>${esc(labelSel(f,b.sel))}</b> <span class="bem clik" onclick="event.stopPropagation();showCardInfo('cadeau')">🎁</span>` : esc(labelSel(f,b.sel)));
-    return `${selTxt} · ${b.stake}€ @${cote(odd)}${i===bt.captain?' <span class="bem clik" onclick="event.stopPropagation();showCaptainInfo()">👑</span>':''}${cardOnMatch(c,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.cloned?'clone':c.id}')">${cardEmoji(c)}</span>`:''}${faceCut?` <span class="mini red" title="${t("Gain réduit de moitié par « Dans ta face » adverse")}">↓½ 🤛</span>`:''} → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}`; };
+    // ⚠️ Formatage monétaire (2026-09-06) — le NET final (`fmt(g)}€`) passe par `euroSigned()`
+    // (formatter centralisé). La mise (`b.stake`) reste en concaténation brute : elle est
+    // TOUJOURS un entier par convention de saisie (jamais de centimes en jeu côté mise), et son
+    // "€" est ici baigné dans plusieurs phrases traduites d'`explain()` juste en dessous — un
+    // changement plus large, à faire dans une passe dédiée plutôt qu'au fil de ce portage UI.
+    return `${selTxt} · ${b.stake}€ @${cote(odd)}${i===bt.captain?' <span class="bem clik" onclick="event.stopPropagation();showCaptainInfo()">👑</span>':''}${cardOnMatch(c,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${c.cloned?'clone':c.id}')">${cardEmoji(c)}</span>`:''}${faceCut?` <span class="mini red" title="${t("Gain réduit de moitié par « Dans ta face » adverse")}">↓½ 🤛</span>`:''} → <b class="${g>=0?'green':'red'}">${euroSigned(g)}</b> ${win?'✓':'✗'}`; };
   const explain=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return t("pari non enregistré pour ce match.");
     const b=bt.picks[i]; const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;  // bonus volé → neutralisée (cf. line())
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
@@ -11819,10 +12045,10 @@ function recapBody(D){
       }
     }
     // 😅 RETOUR DE BÂTON : un bonus censé PÉNALISER l'adversaire (oppT) lui a en fait RAPPORTÉ de l'argent.
-    if(C.oppT && (im.opp||0) >= 1){ detail += ` <span class="red">😅 <b>${t("Ça s'est retourné contre toi")}</b> — ${t("au lieu de le plomber, ton bonus a <b>rapporté {a}€</b> à ton adversaire. Aïe. 🙈",{a:fmt(im.opp)})}</span>`; }
+    if(C.oppT && (im.opp||0) >= 1){ detail += ` <span class="red">😅 <b>${t("Ça s'est retourné contre toi")}</b> — ${t("au lieu de le plomber, ton bonus a <b>rapporté {a}</b> à ton adversaire. Aïe. 🙈",{a:euroSigned(im.opp)})}</span>`; }
     const bits=[];
-    if(im.self!=null&&Math.abs(im.self)>=1) bits.push(`gain de ${esc(who)} : <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`);
-    if(im.opp!=null&&Math.abs(im.opp)>=1) bits.push(`gain adverse : <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
+    if(im.self!=null&&Math.abs(im.self)>=1) bits.push(`gain de ${esc(who)} : <b class="${im.self>=0?'green':'red'}">${euroSigned(im.self)}</b>`);
+    if(im.opp!=null&&Math.abs(im.opp)>=1) bits.push(`gain adverse : <b class="${im.opp>=0?'green':'red'}">${euroSigned(im.opp)}</b>`);
     return `<div class="box" style="border-left:3px solid var(--blue)"><div class="mini"><b>🃏 ${esc(who)} a joué ${cardEmoji(c)} ${esc(cardName(c))}</b></div>
       <div class="mini muted" style="margin-top:3px">${esc(C.d)}</div>${detail?`<div class="mini" style="margin-top:4px">${detail}</div>`:''}
       ${bits.length?`<div class="mini" style="margin-top:4px"><span class="muted">Effet du bonus (vs sans le bonus)</span> — ${bits.join(' · ')}</div>`:''}</div>`; };
@@ -11832,76 +12058,67 @@ function recapBody(D){
     const hP=pById(homeId)||{}, aP=pById(awayId)||{};
     const hB=bets.find(b=>b.player_id===homeId), aB=bets.find(b=>b.player_id===awayId);
     const hNet=netMap[homeId]||0, aNet=netMap[awayId]||0;
-    /* ⚠️ v8.241 (bug vécu par Hervé, capture à l'appui : duel Polo/Aurel, TOUS DEUX « n'a pas
-       parié », et pourtant Polo affichait 2 pts (duel) contre 0 pour Aurel — comme s'il avait
-       gagné) — CE `rr` APPELAIT `duelPts()`, LA VERSION QUI IGNORE LES OUBLIS. Elle compare les
-       deux nets normalement : entre deux pénalités d'oubli, celle qui rogne le MOINS le capital
-       "gagne" le duel par comparaison de net — alors que la règle du jeu dit noir sur blanc
-       qu'un double oubli ne doit donner AUCUN point de duel à personne (`duelPtsF`, juste
-       au-dessus dans ce fichier : `if(hForgot&&aForgot) return {h:0,a:0,win:null};`). Le total du
-       classement, plus haut sur cet écran, utilise déjà `duelPtsF` et affichait donc le bon
-       0-0 — seul CE récapitulatif de duel, calculé à part avec la mauvaise fonction, se
-       contredisait avec le total juste au-dessus de lui. */
-    const rr=duelPtsF(Object.assign({net:hNet},gainMise(hB&&hB.picks,myD.fixtures)), Object.assign({net:aNet},gainMise(aB&&aB.picks,myD.fixtures)), forgot(homeId), forgot(awayId), isScoring2());
+    // ⚠️ Port V2 Résultats (2026-09-06) — `rr` (duelPtsF recalculé pour l'ancien pied « Gain net du
+    // duel ») est retiré avec ce pied, devenu redondant avec le nouveau résumé compact. Le
+    // correctif double-oubli qu'il documentait (v8.241) reste appliqué : `dpts`, calculé plus haut
+    // dans cette fonction pour TOUT le classement du jour, utilise déjà `duelPtsF` correctement.
+    // ⚠️ Formatage monétaire (2026-09-06) — `fmt(x)+"€"` remplacé par `euroSigned(x)` (formatter
+    // centralisé : espace insécable, virgule FR, jamais de centimes réels supprimés).
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,im=c.impact||{};
-      const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${fmt(im.self)}€</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${fmt(im.opp)}€</b>`);
+      const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${euroSigned(im.self)}</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${euroSigned(im.opp)}</b>`);
       return `<div class="duel-bonus-line clik" onclick="showBonusImpact('${bt.player_id}',${D})" title="${t("Toucher pour le détail : gain avec le bonus vs sans le bonus")}"><span class="duel-bonus-ic">${cardEmoji(c)}</span><span class="duel-bonus-txt"><b>🃏 ${esc(cardName(c))}</b>${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</span></div>`; };
-    // 🏠/✈️ (qui a choisi les 5 matchs) porté par chaque .pick plutôt que par un bandeau séparé —
-    // la maquette n'a pas de bandeau domicile/extérieur (elle n'affiche qu'un seul duel à la fois,
-    // pas de bascule de focus), donc pas d'équivalent direct à reprendre pour cette info réelle.
+    // ⚠️ Port V2 Résultats (2026-09-06) — le duel « en détail » reprend le gabarit mbe-score/
+    // mbe-cols de resultats.html (score réel en évidence, colonnes Toi/Adversaire), MAIS
+    // `line()`/`explain()` (calcul + texte, juste au-dessus dans ce fichier) restent APPELÉS TELS
+    // QUELS : ils gèrent déjà Double Chance/capitaine/tous les bonus/effet Dans-ta-face — les
+    // reconstruire pour les faire tenir dans des cases séparées (pick/mise-cote/net) risquerait de
+    // dupliquer ce calcul et de diverger d'un cas limite. Seul l'EMBALLAGE change ici.
+    // 🏠/✈️ (qui a choisi les 5 matchs) porté par le nom de chaque colonne, comme avant.
     const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
       const impB=(bt)=> !!(bt&&bt.picks&&bt.picks[i]&&bt.picks[i].orig!=null) || cardOnMatch(bt.card,i); const imp=impB(hB)||impB(aB);
-      const whoTag=(p,ic)=>p.id===S.myId?`<span class="me">${t("Toi")}</span> ${ic}`:`${esc(p.name||'?')} ${ic}`;
-      return `<div class="match${open?' open':''}"${imp?' style="border-color:var(--gold)"':''}>
-        <div class="match-head" onclick="toggleRecapMatch(${i})">
-          <span class="sport-ic">${f.sport}</span>
-          <div class="match-teams"><div class="tt">${esc(f.home)} – ${esc(f.away)}</div><div class="sub">${(f.hs!=null&&f.as!=null)?f.hs+'–'+f.as:'–'}</div></div>
-          <span class="score">→ ${esc(labelSel(f,f.res))}</span>
-          <span class="chev">▾</span>
-        </div>
-        <div class="match-picks">
-          <div class="pick"><div class="who">${whoTag(hP,'🏠')}</div><div class="sel">${line(hB,f,i,aB&&aB.card)}</div></div>
-          <div class="pick"><div class="who">${whoTag(aP,'✈️')}</div><div class="sel">${line(aB,f,i,hB&&hB.card)}</div></div>
-        </div>
-        ${open?`<div class="match-detail-in">
-          <div>${t("Cotes")} : ${esc(f.home)} ${cote(f.oh)}${f.draw?` · ${t("Nul")} ${cote(f.od)}`:''} · ${esc(f.away)} ${cote(f.oa)}</div>
-          <div style="margin-top:5px"><b>${avaName(hP)}</b> ${explain(hB,f,i,aB&&aB.card)}</div>
-          <div style="margin-top:3px"><b>${avaName(aP)}</b> ${explain(aB,f,i,hB&&hB.card)}</div></div>`:''}
+      const sideName=(p,ic)=>p.id===S.myId?`${ic} ${t("Toi")}`:`${ic} ${esc(p.name||'?')}`;
+      const badgesFor=(bt)=>{ const bs=[]; if(bt&&i===bt.captain) bs.push(`<div class="a2-res-mbe-badge favori">👑 ${t("Favori")}</div>`);
+        if(cardOnMatch(bt&&bt.card,i)) bs.push(`<div class="a2-res-mbe-badge bonus">${cardEmoji(bt.card)} ${esc(cardName(bt.card))}</div>`);
+        return bs.join(''); };
+      return `<div class="a2-res-match${open?' open':''}"${imp?' style="border-color:var(--gold)"':''}>
+        <button class="a2-res-match-head" onclick="toggleRecapMatch(${i})" type="button">
+          <span class="nm">${esc(f.home)} – ${esc(f.away)}</span>
+          <span class="mini muted" style="flex:0 0 auto">→ ${esc(labelSel(f,f.res))}</span>
+          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        ${open?`<div class="a2-res-match-body">
+          <div class="a2-res-mbe-score"><span class="teams">${esc(f.home)} <b>${(f.hs!=null&&f.as!=null)?f.hs+' – '+f.as:'–'}</b> ${esc(f.away)}</span><span class="tag">${t("Score final")}</span></div>
+          <div class="a2-res-mbe-cols">
+            <div class="a2-res-mbe-side${(hB&&i===hB.captain)?' has-favori':''}${cardOnMatch(hB&&hB.card,i)?' has-bonus':''}">
+              <div class="who">${sideName(hP,'🏠')}</div>
+              <div class="mini" style="margin:2px 0 4px">${line(hB,f,i,aB&&aB.card)}</div>
+              ${badgesFor(hB)?`<div class="a2-res-mbe-badges">${badgesFor(hB)}</div>`:''}
+            </div>
+            <div class="a2-res-mbe-side${(aB&&i===aB.captain)?' has-favori':''}${cardOnMatch(aB&&aB.card,i)?' has-bonus':''}">
+              <div class="who">${sideName(aP,'✈️')}</div>
+              <div class="mini" style="margin:2px 0 4px">${line(aB,f,i,hB&&hB.card)}</div>
+              ${badgesFor(aB)?`<div class="a2-res-mbe-badges">${badgesFor(aB)}</div>`:''}
+            </div>
+          </div>
+          <div style="margin-top:8px">
+            <div class="mini muted">${t("Cotes")} : ${esc(f.home)} ${cote(f.oh)}${f.draw?` · ${t("Nul")} ${cote(f.od)}`:''} · ${esc(f.away)} ${cote(f.oa)}</div>
+            <div class="mini" style="margin-top:5px"><b>${avaName(hP)}</b> ${explain(hB,f,i,aB&&aB.card)}</div>
+            <div class="mini" style="margin-top:3px"><b>${avaName(aP)}</b> ${explain(aB,f,i,hB&&hB.card)}</div>
+          </div>
+        </div>`:''}
       </div>`; }).join("");
-    // Jauge : simple repère visuel du sens du duel (qui est devant), pas une statistique du jeu —
-    // centrée à 50 %, penchée vers l'écart réel des deux gains nets, plafonnée pour ne jamais vider
-    // une des deux barres (comme dans la maquette, où aucune des deux n'est jamais à 0 %).
-    const spread=Math.max(1,Math.abs(hNet)+Math.abs(aNet));
-    const shareH=Math.max(10,Math.min(90, 50+Math.round(((hNet-aNet)/spread)*40)));
+    // ⚠️ Port V2 Résultats (2026-09-06) — la jauge + le pied « Gain net du duel » (2ᵉ affichage des
+    // mêmes nets) et la ligne « Meilleur gain net du duel/de la ligue » sont retirés : redevenus
+    // redondants avec le nouveau résumé compact (`.a2-res-summary`, juste au-dessus dans le
+    // template, montre déjà les deux nets côte à côte) et la nouvelle bannière ⭐ (ci-dessous,
+    // reprend exactement la même condition `starId===fp` que l'ancienne ligne "de la ligue").
+    // `bonusMini` EST CONSERVÉ tel quel : plusieurs bonus (Miroir, Sangsue, Moitié, Parachute)
+    // n'ont PAS de match ciblé (`c.target` absent) et n'apparaîtront donc JAMAIS dans un badge
+    // mbe-cols par match — c'est la SEULE vue qui les rend visibles sur cet écran.
     detail=`<div class="mini muted" style="margin:0 2px 8px">${t("👉 Touche un match pour le calcul détaillé.")}</div>
       ${(forgot(homeId)!==forgot(awayId))?`<div class="office-box"><b>🏆 ${t("Duel gagné d'office")}</b> — ${t("{a} n'a pas validé ses pronos : il perd le duel <b>quel que soit le gain en €</b>.",{a:esc((forgot(homeId)?hP:aP).name||'?')})}</div>`:''}
       ${rows}
-      <div class="duel-foot">
-        <div class="gauge-row"><span>${t("Gain net du duel")}</span><span>🏠 ${esc(hP.name||'?')} ${t("vs")} ✈️ ${esc(aP.name||'?')}</span></div>
-        <div class="gauge"><i class="h" style="width:${shareH}%"></i><i class="a" style="width:${100-shareH}%"></i></div>
-        <div class="duel-nets">
-          <div><div class="side lbl">${avaName(hP)}${hP.id===S.myId?' '+t("(toi)"):''}</div><div class="side clik" style="color:var(--${hNet>=0?'green':'red'})" onclick="showGainDetail('${homeId}')" title="${t("Comment ce montant est calculé")}">${fmt(hNet)}€</div>
-            <div style="margin-top:3px"><span class="ptpill ${rr.h>0?'':'zero'}">${rr.h*lastMult} pt${rr.h*lastMult>1?'s':''} ${t("(duel)")}</span></div></div>
-          <div style="text-align:right"><div class="side lbl">${avaName(aP)}${aP.id===S.myId?' '+t("(toi)"):''}</div><div class="side clik" style="color:var(--${aNet>=0?'green':'red'})" onclick="showGainDetail('${awayId}')" title="${t("Comment ce montant est calculé")}">${fmt(aNet)}€</div>
-            <div style="margin-top:3px"><span class="ptpill ${rr.a>0?'':'zero'}">${rr.a*lastMult} pt${rr.a*lastMult>1?'s':''} ${t("(duel)")}</span></div></div>
-        </div>
-      </div>
-      ${bonusMini(hB)}${bonusMini(aB)}
-      ${(()=>{
-        /* ⚠️ v8.248 (demandé par Hervé) — PAS DE « MEILLEUR GAIN » QUAND PERSONNE N'A PARIÉ.
-           Si les deux joueurs du duel ont oublié, `hNet`/`aNet` ne sont que deux pénalités
-           d'oubli — `Math.max` désignait quand même l'un des deux comme « meilleur gain du
-           duel », ce qui n'a pas de sens (personne n'a rien gagné). Même logique que le
-           correctif v8.241 sur `rr`/`duelPtsF` juste au-dessus, mais pour cette ligne
-           informative séparée, restée intacte à l'époque. La ligue (⭐, `starId`) N'EST PAS
-           concernée : elle porte sur TOUS les joueurs de la ligue, pas seulement ce duel — un
-           double oubli ici n'empêche pas un autre joueur d'avoir un vrai gain ce jour-là. */
-        const bothForgot=forgot(homeId)&&forgot(awayId);
-        const dbN=Math.max(hNet,aNet), dbP=(hNet>=aNet?hP:aP); const sP=starId?(pById(starId)||{}):{}; const sN=starId?(netMap[starId]||0):0;
-        const duelLine=bothForgot?'':`🏅 <b>${t("Meilleur gain net du duel :")}</b> <b class="clik ${dbN>=0?'green':'red'}" onclick="showGainDetail('${dbP.id}')" title="${t("Comment ce montant est calculé")}">${fmt(dbN)}€</b> — ${avaName(dbP)}`;
-        const starLine=starId?`<span class="clik" onclick="showStarInfo()">⭐</span> <b>${t("Meilleur gain net de la ligue :")}</b> <b class="clik ${sN>=0?'green':'red'}" onclick="showGainDetail('${starId}')" title="${t("Comment ce montant est calculé")}">${fmt(sN)}€</b> — ${avaName(sP)} <span class="muted">${t("→ +1 pt bonus")}</span>`:'';
-        if(!duelLine && !starLine) return '';
-        return `<div class="mini" style="margin:2px 2px 0;line-height:1.85">${duelLine}${(duelLine&&starLine)?'<br>':''}${starLine}</div>`; })()}`;
+      ${bonusMini(hB)}${bonusMini(aB)}`;
   }
   // ✨ Faits marquants de la journée (dont bonus qui se sont retournés contre leur joueur) — demandé par Hervé.
   /* ORDRE DE PRIORITÉ FIXÉ PAR HERVÉ (v7.15) — trois groupes, dans cet ordre :
@@ -11955,13 +12172,13 @@ function recapBody(D){
     const effet=self-opp;
     if(effet<=-FAIT_MIN){
       // Trois formulations selon OÙ l'effet s'est produit : sur lui, sur l'adversaire, ou les deux.
-      if(self<=-FAIT_MIN && opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}€</b> pour {d}, et <b class=\"green\">{b2}€</b> pour {c}.",{a:lbl,b:fmt(self),b2:fmt(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
-      else if(self<=-FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}€</b>.",{a:lbl,b:fmt(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
-      else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}€</b> à {c}.",{a:lbl,b:fmt(opp),c:oppNm})}`);
+      if(self<=-FAIT_MIN && opp>=FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : <b class=\"red\">{b}</b> pour {d}, et <b class=\"green\">{b2}</b> pour {c}.",{a:lbl,b:euroSigned(self),b2:euroSigned(opp),c:oppNm,d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+      else if(self<=-FAIT_MIN) retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné contre {d} : <b class=\"red\">{b}</b>.",{a:lbl,b:euroSigned(self),d:(b.player_id===S.myId?t("toi"):esc(wp.name||'?'))})}`);
+      else retournes.push(`😅 <b>${whoNm}</b> ${t("a joué {a} — ça s'est retourné : le bonus a rapporté <b class=\"green\">{b}</b> à {c}.",{a:lbl,b:euroSigned(opp),c:oppNm})}`);
     }
     else if(effet>=FAIT_MIN){
-      if(self>=FAIT_MIN) reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}€</b>.",{a:lbl,b:fmt(self)})}`);
-      else reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"red\">{b}€</b> pour {c}.",{a:lbl,b:fmt(opp),c:oppNm})}`);
+      if(self>=FAIT_MIN) reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"green\">{b}</b>.",{a:lbl,b:euroSigned(self)})}`);
+      else reussis.push(`🎯 <b>${whoNm}</b> ${t("a réussi {a} : <b class=\"red\">{b}</b> pour {c}.",{a:lbl,b:euroSigned(opp),c:oppNm})}`);
     }
     else if(c.stole) reussis.push(`🥷 <b>${whoNm}</b> ${t("a volé le bonus de {c}.",{c:oppNm})}`);
   });
@@ -11981,16 +12198,16 @@ function recapBody(D){
     divers.unshift(`💸 ${t("{a} — passé sous {b} € : capital remonté à {c} €, <b class=\"red\">−1 point</b>.",{a:nm2(p.id),b:RECAP_THRESHOLD,c:RECAP_TARGET})}`); });
   const inDay=players.filter(p=>duels.some(d=>d.home_id===p.id||d.away_id===p.id));
   if(inDay.length){ const best=inDay.slice().sort((a,b)=>(netMap[b.id]||0)-(netMap[a.id]||0))[0];
-    if(best && (netMap[best.id]||0)>0) divers.push(`🏅 ${t("Meilleur résultat du jour : {a} (<b class=\"green\">{b}€</b>).",{a:nm2(best.id),b:fmt(netMap[best.id]||0)})}`); }
+    if(best && (netMap[best.id]||0)>0) divers.push(`🏅 ${t("Meilleur résultat du jour : {a} (<b class=\"green\">{b}</b>).",{a:nm2(best.id),b:euroSigned(netMap[best.id]||0)})}`); }
   let bc=null; bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[]; if(!Array.isArray(b.picks)) return;
     b.picks.forEach((pk,i)=>{ const f=fx[i]; if(!f||f.canceled||f.res!==pk.sel) return; const g=Math.round((+pk.stake||0)*(oddOf(f,pk.sel)-1)*100)/100; if(g>0 && (!bc||g>bc.g)) bc={g,pid:b.player_id,f,sel:pk.sel}; }); });
-  if(bc) divers.push(`💥 ${t("Plus gros coup : {a} sur {b} (<b class=\"green\">{c}€</b>).",{a:nm2(bc.pid),b:esc(bc.f.home+' – '+bc.f.away),c:fmt(bc.g)})}`);
+  if(bc) divers.push(`💥 ${t("Plus gros coup : {a} sur {b} (<b class=\"green\">{c}</b>).",{a:nm2(bc.pid),b:esc(bc.f.home+' – '+bc.f.away),c:euroSigned(bc.g)})}`);
   // Plus grosse MISE de la journée — demandée par Hervé, distincte du plus gros gain : elle dit
   // qui a osé, gagnant ou perdant.
   let bm=null; bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[]; if(!Array.isArray(b.picks)) return;
     b.picks.forEach((pk,i)=>{ const f=fx[i]; const st=+pk.stake||0; if(!f||f.canceled||st<=0) return;
       if(!bm||st>bm.st) bm={st,pid:b.player_id,f,gagne:(f.res===pk.sel)}; }); });
-  if(bm) divers.push(`💰 ${t("Plus grosse mise : {a} — {b} € sur {c} ({d}).",{a:nm2(bm.pid),b:fmt(bm.st).replace('+',''),c:esc(bm.f.home+' – '+bm.f.away),d:bm.gagne?t("gagné"):t("perdu")})}`);
+  if(bm) divers.push(`💰 ${t("Plus grosse mise : {a} — {b} sur {c} ({d}).",{a:nm2(bm.pid),b:euro(bm.st),c:esc(bm.f.home+' – '+bm.f.away),d:bm.gagne?t("gagné"):t("perdu")})}`);
   /* SANS-FAUTE et ZÉRO POINTÉ (v7.64, demandé par Hervé : « dire si un joueur a tous ses paris
      faux ou tous bons »). C'est le fait le plus parlant d'une journée et il n'était nulle part :
      le classement montre un net, jamais la régularité qui l'a produit.
@@ -12076,128 +12293,203 @@ function recapBody(D){
   // du sondage en cours de route affiche donc directement le bon instantané — ni retour en arrière
   // (v8.157), ni saut en avant (ce bug-ci) — et la boucle déjà lancée continue sur les nouveaux
   // éléments (mêmes id) sans effet visible, puisqu'ils sont déjà à l'état qu'elle va y écrire.
-  const heroOutcomeClass=oppId!=null?(won?'win':(tie?'':'loss')):'';
-  const meSideClass=oppId!=null?(won?'win-side':(tie?'':'lose-side')):'';
-  const oppSideClass=won?'lose-side':(tie?'':'win-side');
-  const oppPtsTarget=oppId!=null?((dpts[oppId]||0)-(oppId===starId?1:0)):0;
-  const wonTxt=t("Gagné"), tieTxt=t("Match nul"), lostTxt=t("Perdu"), calcTxt=t("Calcul du duel");
+  const wonTxt=t("Gagné"), tieTxt=t("Match nul"), lostTxt=t("Perdu");
   const resultTxt=won?wonTxt:(tie?tieTxt:lostTxt);
-  // Minutage : 900 (LES DEUX gains nets défilent ENSEMBLE) + 400 (les deux chiffres côte à côte,
-  // figés : le temps de lire soi-même qui devance l'autre) puis le verdict d'un coup
-  // (fond/avatars/texte) avec les points de duel qui défilent sur 450 ms, + 500 (infos annexes)
-  // + 200 (flou levé) = 2000 ms pile.
-  // ⚠️ v8.220 (Hervé) — LES DEUX NETS PARTAGENT UNE SEULE COURBE `e` : même instant de départ,
-  // même durée, même arrivée. Avant, le mien défilait seul de 0 à 900 ms et celui de l'adversaire
-  // ne partait qu'à 1300 — c'est-à-dire À L'INSTANT MÊME où le verdict tombait : son chiffre
-  // n'était plus qu'une formalité, la réponse était déjà donnée. Le suspense est dans la COURSE
-  // entre les deux nombres, pas dans leur succession. Le tutoriel a toujours fait ainsi
-  // (`ttAnime(a,…,950)` et `ttAnime(b,…,950)` lancés ensemble) : c'est la prod qui divergeait.
-  // Si un jour on redonne des durées distinctes aux deux, il faut le vouloir : tools/test-recap-suspense.ps1 échoue.
+  // ⚠️ Port V2 Résultats (2026-09-06, demandé par Hervé) — REMPLACE le minutage/l'emballage v8.153
+  // ci-dessus par le suspense VALIDÉ dans resultats.html : comptage non-linéaire sur 2500 ms
+  // (`suspenseFrac`, copiée telle quelle de la maquette) + 500 ms de suspension figée = 3000 ms,
+  // avec l'anneau de compte à rebours 3-2-1. Chaque calcul (`won`/`tie`/`myNet`/`oppNet`/`fpDuelPts`/
+  // `dpts`/`starId`…) reste EXACTEMENT celui déjà produit plus haut dans cette fonction — seuls le
+  // rythme et l'habillage visuels changent.
+  function suspenseFrac(p){ if(p<0.40) return 0.58*(p/0.40); if(p<0.75) return 0.58+0.30*((p-0.40)/0.35);
+    const q=(p-0.75)/0.25; return 0.88+0.12*(1-Math.pow(1-q,3)); }
+  const COUNT_MS=2500, HOLD_MS=500, TOTAL_MS=COUNT_MS+HOLD_MS;
   const heroSettled=!heroFresh||oppId==null;   // déjà vu avant, ou rien à suspendre (pas d'adversaire)
   if(heroFresh && oppId!=null && heroStartTimes[heroKey]==null) heroStartTimes[heroKey]=performance.now();
   const heroElapsed=heroSettled?Infinity:(performance.now()-heroStartTimes[heroKey]);
-  const easeOut=p=>1-Math.pow(1-p,3);
   function heroState(el){
-    if(el>=2000) return {amt:myNet,pts:fpDuelPts,oppAmt:oppNet,oppPts:oppPtsTarget,resultText:resultTxt,revealed:true,extra:true,veil:true};
-    if(el>=1300){ const e=easeOut(Math.min(1,(el-1300)/450));
-      return {amt:myNet,pts:fpDuelPts*e,oppAmt:oppNet,oppPts:oppPtsTarget*e,resultText:resultTxt,revealed:true,extra:(el>=1800),veil:false}; }
-    if(el>=900) return {amt:myNet,pts:0,oppAmt:oppNet,oppPts:0,resultText:null,revealed:false,extra:false,veil:false};
-    const e=easeOut(Math.max(0,el)/900);   // UNE seule courbe pour les deux nets (cf. ⚠️ ci-dessus)
-    return {amt:myNet*e,pts:0,oppAmt:oppNet*e,oppPts:0,resultText:null,revealed:false,extra:false,veil:false};
+    if(el>=TOTAL_MS) return {phase:'revealed', secondsLeft:0};
+    if(el>=COUNT_MS) return {phase:'hold', amt:Math.round(Math.abs(myNet)), oppAmt:Math.round(Math.abs(oppNet)), secondsLeft:0};
+    const frac=suspenseFrac(Math.max(0,el)/COUNT_MS);
+    return {phase:'counting', amt:Math.round(Math.abs(myNet)*frac), oppAmt:Math.round(Math.abs(oppNet)*frac),
+      secondsLeft:Math.max(1,3-Math.floor(Math.max(0,el)/1000))};
   }
   const st0=heroState(heroElapsed);
-  const fmtOppPts=v=>{const n=Math.round(v); return n+' pt'+(Math.abs(n)>1?'s':'');};
-  // La boucle d'animation elle-même : programmée PENDANT l'exécution de recapBody(), donc APRÈS que
-  // render() ait posé ce HTML dans le DOM (l'appelant fait innerHTML=... juste après ce `return`)
-  // mais avant la prochaine image affichée. Ne se lance qu'UNE SEULE FOIS par clé (`heroRevealing`) ;
-  // les rendus suivants pour la même clé se contentent de lire `heroState()` dans le template.
+  // Boucle d'animation : ne tourne QUE pendant le comptage/la suspension (mise à jour directe de 3
+  // nœuds texte, pas de re-rendu complet — évite de perturber le reste de la page 60×/s). À l'instant
+  // de la révélation, un SEUL `render()` prend le relais : `heroState()` renverra alors 'revealed'
+  // pour cette clé à chaque rendu suivant (fonction pure du temps écoulé, cf. v8.162 plus haut dans
+  // l'historique), et le template ci-dessous affiche directement le Maestro/résumé/points définitifs
+  // — pas de manipulation manuelle du DOM pour faire apparaître ces blocs, juste le rendu normal.
   if(heroFresh && oppId!=null && !heroRevealing.has(heroKey)){
     heroRevealing.add(heroKey);
     const start=heroStartTimes[heroKey];
-    let wasRevealed=false, wasExtra=false, wasVeil=false;
     const frame=(now)=>{
-      if(!document.getElementById('recapHero')) return;   // vue quittée
       const st=heroState(now-start);
-      const amtEl=document.getElementById('recapAmtVal'); if(amtEl) amtEl.textContent=fmt(st.amt);
-      const ptsEl=document.getElementById('recapPtsVal'); if(ptsEl) ptsEl.textContent=Math.round(st.pts);
-      const oppAmtEl=document.getElementById('recapOppAmt'); if(oppAmtEl) oppAmtEl.textContent=fmt(st.oppAmt)+'€';
-      const oppPtsEl=document.getElementById('recapOppPts'); if(oppPtsEl) oppPtsEl.textContent=fmtOppPts(st.oppPts);
-      if(st.revealed && !wasRevealed){
-        wasRevealed=true;
-        const hEl=document.getElementById('recapHero'); if(hEl) hEl.classList.add(heroOutcomeClass);
-        const meD=document.getElementById('recapDuelistMe'); if(meD) meD.classList.add(meSideClass);
-        const oppD=document.getElementById('recapDuelistOpp'); if(oppD) oppD.classList.add(oppSideClass);
-        const resEl=document.getElementById('recapResult'); if(resEl) resEl.textContent=resultTxt;
-      }
-      if(st.extra && !wasExtra){ wasExtra=true; const extraEl=document.getElementById('recapExtra'); if(extraEl) extraEl.classList.add('show'); }
-      if(st.veil && !wasVeil){ wasVeil=true; const veilEl=document.getElementById('recapVeil'); if(veilEl) veilEl.classList.add('revealed'); }
-      if(now-start<2000) requestAnimationFrame(frame);
+      if(st.phase==='revealed'){ render(); return; }
+      const yEl=document.getElementById('recapNetYou'), oEl=document.getElementById('recapNetOpp'),
+        cEl=document.getElementById('recapCountdown'), netsEl=document.getElementById('recapDuelNets');
+      if(!yEl && !oEl) return;   // vue quittée
+      if(yEl) yEl.textContent=st.amt+' €'; if(oEl) oEl.textContent=st.oppAmt+' €';
+      if(cEl) cEl.textContent=st.secondsLeft;
+      if(netsEl) netsEl.classList.toggle('suspense-hold', st.phase==='hold');
+      requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
   }
-  /* ⚠️ v8.269 (demandé par Hervé) — LE DOMICILE EST À GAUCHE, COMME PARTOUT AILLEURS SUR L'ÉCRAN.
-     Le joueur suivi occupait toujours la case de gauche. Quand il jouait à l'EXTÉRIEUR, l'entête
-     le montrait donc à gauche pendant que « ⚔️ Le duel en détail » juste en dessous — les deux
-     lignes de pronos (🏠 puis ✈️), la jauge de gain net et les deux nets du pied — le donnaient
-     à droite. Deux lectures opposées du même duel sur un même écran : on suit un avatar des yeux
-     et il change de côté en cours de page.
-     On range donc les deux blocs par CÔTÉ DE TERRAIN, jamais par identité.
-     ⚠️ LES ID NE BOUGENT PAS (`recapDuelistMe` / `recapDuelistOpp`) : la boucle de révélation les
-     retrouve par `getElementById` pour poser `win-side` / `lose-side`. Seul l'ORDRE change — et
-     `.faceoff` étant un flex centré, aucun style ne suppose un côté. */
-  const fpIsHome = !myD || myD.home_id===fp;   // pas de duel ce jour-là → on garde la gauche
-  /* ⚠️ v8.270 (demandé par Hervé) — LE CÔTÉ S'ÉCRIT, il n'est plus seulement déduit de la place.
-     La position seule oblige à se souvenir de la convention pour la lire ; l'icône la donne. Ce
-     sont les MÊMES que « ⚔️ Le duel en détail » juste en dessous (`whoTag`), et l'infobulle
-     reprend les libellés déjà traduits « 🏠 Domicile » / « ✈️ Extérieur » — ne pas en inventer
-     de nouveaux, ils existent depuis l'écran de composition.
-     Rien à afficher sans adversaire : « à domicile » n'a de sens que face à quelqu'un. */
-  const nomCote=(txt,estDom)=>`<span class="who"><span class="nm">${txt}</span>${(oppId!=null&&myD)?`<span class="side-ic" title="${estDom?t("🏠 Domicile"):t("✈️ Extérieur")}">${estDom?'🏠':'✈️'}</span>`:''}</span>`;
-  const blocMoi = `<div class="duelist${st0.revealed?' '+meSideClass:''}" id="recapDuelistMe"><span class="ava">${avatarHTML(fpP.emoji,96)}</span>${nomCote(isMe?t("Toi"):esc(fpName),fpIsHome)}</div>`;
-  const blocAdv = oppId!=null?`<div class="duelist${st0.revealed?' '+oppSideClass:''}" id="recapDuelistOpp"><span class="ava">${avatarHTML(pById(oppId).emoji,96)}</span>${nomCote(esc(oppName),!fpIsHome)}
-        <span class="opp-stat" id="recapOppStat"><span class="opp-amount" id="recapOppAmt">${fmt(st0.oppAmt)}€</span><span class="opp-pts" id="recapOppPts">${fmtOppPts(st0.oppPts)}</span></span></div>`:'';
-  return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}<div class="hero ${st0.revealed?heroOutcomeClass:''}${heroFresh?' rise':''}" id="recapHero">
-    ${!isMe?`<button class="hero-back" onclick="setRecapFocus('')">${t("← Revenir à mes résultats")}</button>`:''}
-    <div class="faceoff">
-      ${oppId==null?blocMoi
-        :(fpIsHome?blocMoi:blocAdv)+`<span class="vsx">${t("vs")}</span>`+(fpIsHome?blocAdv:blocMoi)}
+  // ⚠️ Port V2 Résultats (2026-09-06) — REMPLACE le face-off v8.269/v8.270 ci-dessus (deux avatars
+  // génériques + montant/points superposés) par le Maestro à 6 états + résumé compact de
+  // resultats.html. `won`/`tie`/`myNet`/`oppNet`/`fpDuelPts`/`dpts`/`starId`/`forgot`/`isScoring2`
+  // restent les SEULES sources de vérité — rien n'est recalculé, uniquement réorganisé à l'affichage.
+  const netPositive = myNet>0;   // même seuil strict que le moteur (bonus +1 pt, `R(x)>0`)
+  const RES_ASSETS = {
+    'victoire-pos':{img:'qg-tactizo-resultats-victoire-pos-v2.png',ar:'1369/1149',box:'left:54%;top:28%;right:2.5%;bottom:30.5%',color:'var(--green)',
+      eyebrow:"Victoire !",title:"Belle journée !",text:"Tu prends les points et ta cagnotte progresse."},
+    'victoire-neg':{img:'qg-tactizo-resultats-victoire-neg-v2.png',ar:'1446/1087',box:'left:52.5%;top:27.5%;right:2%;bottom:31%',color:'var(--green)',
+      eyebrow:"Victoire !",title:"Les points sont là.",text:"La cagnotte recule, mais tu remportes le duel."},
+    'defaite-pos':{img:'qg-tactizo-resultats-defaite-pos-v2.png',ar:'1464/1074',box:'left:49%;top:24.5%;right:6.5%;bottom:32%',color:'var(--red)',
+      eyebrow:"Défaite…",title:"Tout n'est pas perdu.",text:"Tu perds le duel, mais ta cagnotte progresse."},
+    'defaite-neg':{img:'qg-tactizo-resultats-defaite-neg-v2.png',ar:'1498/1050',box:'left:53%;top:25%;right:4%;bottom:34.5%',color:'var(--red)',
+      eyebrow:"Défaite…",title:"Journée compliquée.",text:"Le duel et la cagnotte t'échappent aujourd'hui."},
+    'nul':{img:'qg-tactizo-resultats-nul-v2.png',ar:'1597/985',box:'left:58.5%;top:24.5%;right:5%;bottom:29%',color:'var(--a2-purple-light,#c9b6f5)',
+      eyebrow:"Match nul",title:"Égalité parfaite.",text:"Personne ne prend l'avantage."}
+  };
+  const resKey = oppId==null?null:(won?(netPositive?'victoire-pos':'victoire-neg'):(tie?'nul':(netPositive?'defaite-pos':'defaite-neg')));
+  const revealed = oppId==null || st0.phase==='revealed';   // pas d'adversaire → rien à suspendre
+  // N'invente AUCUN Maestro pour un jour sans duel (repos) : la maquette n'en prévoit pas.
+  const maestroHTML = oppId==null ? '' : (revealed ? (()=>{ const rs=RES_ASSETS[resKey];
+      return `<div class="a2-res-maestro st-${resKey}"><img class="a2-res-maestro-img" src="img/${rs.img}" alt="${t("Le Maestro")}" style="aspect-ratio:${rs.ar}">
+        <div class="a2-res-box" style="${rs.box}"><div class="a2-res-eyebrow" style="color:${rs.color}">${t(rs.eyebrow)}</div>
+        <div class="a2-res-title">${t(rs.title)}</div><div class="a2-res-text">${t(rs.text)}</div></div></div>`; })()
+    : `<div class="a2-res-maestro st-suspense"><img class="a2-res-maestro-img" src="img/qg-tactizo-resultats-suspense.png" alt="${t("Le Maestro")}" style="aspect-ratio:1536/1024">
+        <div class="a2-res-suspense-ring"><div class="lbl">${t("Résultats dévoilés dans")}</div><div class="circ"><span class="num" id="recapCountdown">${st0.secondsLeft}</span></div></div>
+      </div>`);
+  const duelBodyHTML = oppId==null ? '' : (!revealed
+    ? `<div class="a2-res-duelbig">
+        <div class="a2-res-duelbig-head">${t("Ton duel")}</div>
+        <div class="a2-res-faces">
+          <div class="a2-res-face">${avatarHTML(fpP.emoji,44)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span></div>
+          <div class="a2-res-vs">${t("vs")}</div>
+          <div class="a2-res-face">${avatarHTML(pById(oppId).emoji,44)}<span class="nm">${esc(oppName)}</span></div>
+        </div>
+        <div class="a2-res-nets" id="recapDuelNets">
+          <div class="a2-res-net"><div class="lbl">${t("Net")}</div><div class="val" id="recapNetYou">${st0.amt} €</div></div>
+          <div class="a2-res-arrows">»»»</div>
+          <div class="a2-res-net"><div class="lbl">${t("Net")}</div><div class="val" id="recapNetOpp">${st0.oppAmt} €</div></div>
+        </div>
+        <div class="a2-res-caption">${t("Calcul des résultats… Patience Maestro !")}</div>
+      </div>`
+    : `<div class="a2-res-summary ${won?'win':(tie?'tie':'lose')}">
+        <div class="side clik" onclick="showGainDetail('${fp}')">${avatarHTML(fpP.emoji,28)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span><span class="amt ${myNet>=0?'pos':'neg'}">${euroSigned(myNet)}</span></div>
+        <div class="vsmini">${t("vs")}</div>
+        <div class="side right clik" onclick="showGainDetail('${oppId}')">${avatarHTML(pById(oppId).emoji,28)}<span class="nm">${esc(oppName)}</span><span class="amt ${oppNet>=0?'pos':'neg'}">${euroSigned(oppNet)}</span></div>
+      </div>`);
+  // Carte "Tes points de la journée" : décompose `fpDuelPts` en ses composantes RÉELLES (résultat +
+  // net positif, `duelPtsF`/`duelPts` ci-dessus dans ce fichier : "V=2, N=1, D=0, +1 si net>0",
+  // additif en v2 — y compris pour un duel gagné d'office, cf. `gagne()`) UNIQUEMENT pour l'AFFICHAGE
+  // ligne par ligne ; le TOTAL montré reste `dpts[fp]`, déjà calculé plus haut et JAMAIS recalculé
+  // ici — en cas d'écart la carte reste fausse au pire dans son détail, jamais dans son total.
+  const forgotFp = forgot(fp);
+  let pointsRowsHTML;
+  if(forgotFp){
+    pointsRowsHTML = `<div class="a2-res-points-oubli"><span class="ic">⚠️</span><span class="txt"><b>${t("Pari non validé")}</b> — ${t("journée non jouée")}
+      <span class="mini">${t("Conséquence : duel perdu d'office pour ton adversaire, quel que soit son gain")} · −${Math.round(forgotPenOf()*100)}% ${t("de capital")}</span></span></div>`;
+  } else if(!myD){
+    pointsRowsHTML = `<div class="a2-res-prow"><span class="ic">➖</span><span class="pt zero">0 pt</span><span class="lbl" style="color:var(--faint)">${t("Aucun point gagné aujourd'hui")}</span></div>`;
+  } else {
+    const rowsArr=[];
+    if(isScoring2()){
+      const outcomeBase = won?2:(tie?1:0);
+      if(outcomeBase>0) rowsArr.push(`<div class="a2-res-prow"><span class="ic">${won?"🏆":"🤝"}</span><span class="pt">+${outcomeBase*lastMult} pt${outcomeBase*lastMult>1?'s':''}</span><span class="lbl">${won?t("Victoire"):t("Match nul")}</span></div>`);
+      if(netPositive) rowsArr.push(`<div class="a2-res-prow"><span class="ic">📈</span><span class="pt">+${lastMult} pt${lastMult>1?'s':''}</span><span class="lbl">${t("Net positif")}</span></div>`);
+    } else if(fpDuelPts>0){
+      // Ancien barème (ligues antérieures à SCORING2) : non additif (nul = 1 pt fixe, quel que
+      // soit le net) — un seul total, pas de décomposition inventée.
+      rowsArr.push(`<div class="a2-res-prow"><span class="ic">${won?"🏆":(tie?"🤝":"")}</span><span class="pt">+${fpDuelPts} pt${fpDuelPts>1?'s':''}</span><span class="lbl">${won?t("Victoire"):(tie?t("Match nul"):t("Duel"))}</span></div>`);
+    }
+    if(starId===fp) rowsArr.push(`<div class="a2-res-prow"><span class="ic">⭐</span><span class="pt">+1 pt</span><span class="lbl">${t("Meilleur pronostiqueur")}</span></div>`);
+    pointsRowsHTML = rowsArr.length ? rowsArr.join('') : `<div class="a2-res-prow"><span class="ic">➖</span><span class="pt zero">0 pt</span><span class="lbl" style="color:var(--faint)">${t("Aucun point gagné aujourd'hui")}</span></div>`;
+  }
+  const pointsTotal = dpts[fp]||0;
+  const pointsMood = forgotFp?'lose':(!myD?'':(won?'win':(tie?'tie':'lose')));
+  const pointsCardHTML = `<div class="a2-res-points ${pointsMood}${forgotFp?' forfeit':''}">
+    <div class="a2-res-points-head">${t("Tes points de la journée")}</div>
+    <div class="a2-res-points-body">
+      <div class="a2-res-points-rows">${pointsRowsHTML}</div>
+      <div class="a2-res-points-total"><div class="lbl">${t("Total")}</div><div class="val${pointsTotal===0?' zero':(pointsTotal<0?' neg':'')}">${(pointsTotal>0?'+':'')+pointsTotal}</div><div class="lbl">${t("points")}</div></div>
     </div>
-    ${oppId!=null?`<div class="hero-result clik${fpIsHome?'':' away'}" id="recapResult" onclick="showDuelPtsInfo('${fp}')" title="${t("Comment ces points sont attribués")}">${st0.revealed?st0.resultText:`${calcTxt}<span class="dots"><i></i><i></i><i></i></span>`}</div>`:''}
-    <div class="hero-amount clik${fpIsHome?'':' away'}" onclick="showGainDetail('${fp}')" title="${t("Comment ce montant est calculé")}"><span id="recapAmtVal">${fmt(st0.amt)}</span><span class="cur">€</span><span class="lbl">${t("gain net")}</span></div>
-    ${oppId!=null?`<div class="hero-points${fpIsHome?'':' away'}"><span class="num" id="recapPtsVal">${Math.round(st0.pts)}</span><span class="lbl">${t("Points de duel")}</span></div>`:''}
-    <div class="hero-reveal${st0.extra?' show':''}" id="recapExtra">
-    <div class="hero-meta">
-      ${capInfo?`<span class="m">${t("capital")} <b>${euro(capInfo.cap)}</b></span>`:''}
-      ${(!forgot(fp)&&pronosTotal>0)?`<span class="m">${t("{a} pronos justes sur {b}",{a:pronosCount,b:pronosTotal})}</span>`:''}
-    </div>
-    ${(capInfo&&capInfo.renfloue)?`<div class="mini" style="margin-top:6px;opacity:.9">💸 ${t("renfloué à {a} € · −1 pt",{a:RECAP_TARGET})}</div>`:''}
-    ${(starId!=null&&starId===fp)?`<div class="hero-mvp clik" onclick="showStarInfo()">⭐ ${t("Meilleur gain net de la ligue aujourd'hui")} <b>${t("→ +1 pt bonus")}</b></div>`:''}
-    ${forgot(fp)?`<div class="hero-forgot"><b>${t("⏰ Pari non validé à temps")}</b><div class="mini" style="margin-top:4px;opacity:.9">${t("Aucun pari pris en compte ce jour-là → <b>{a} pt{s}</b> au classement et <b>−{b} %</b> {c}capital.",{a:forgotPtsOf(),s:Math.abs(forgotPtsOf())>1?'s':'',b:Math.round(forgotPenOf()*100),c:isMe?t("de ton "):t("du ")})}</div></div>`:''}
-    </div>
-    </div>
+  </div>`;
+  // Bannière ⭐ : MÊME condition que l'ancien hero-mvp (`starId===fp`) — reprise fidèle en
+  // bandeau façon maquette, pas une nouvelle règle. Le classement (plus bas) porte déjà le ⭐ pour
+  // qui n'est PAS le lauréat mais veut savoir qui l'est.
+  const bonusBannerHTML = (starId!=null && starId===fp) ? `<div class="a2-res-bonus-banner"><div class="ic">🌟</div><div><div class="t">${t("Meilleur pronostiqueur de la journée !")}</div><div class="s">${t("Bravo Maestro, personne n'a fait mieux que toi.")}</div></div></div>` : '';
+  // « Autres duels de la journée » — liste compacte + panneau détail (pas une navigation de page
+  // entière) : reprend `line()`/`explain()` pour CE duel-là exactement comme pour le sien, jamais
+  // un second calcul (cf. `oduelDetail`/`openOduelDetail` ci-dessus dans ce fichier).
+  const otherDuelsHTML = (()=>{
+    const others = duels.filter(d=>d.fixtures && d!==myD);
+    if(!others.length) return '';
+    const rowHTML=(d)=>{
+      const hP2=pById(d.home_id)||{}, aP2=pById(d.away_id)||{};
+      const hN=netMap[d.home_id]||0, aN=netMap[d.away_id]||0;
+      const win2 = hN===aN?null:(hN>aN?'h':'a');
+      const side=(p,net,key)=>`<div class="side${key==='a'?' b':''}${win2===key?' win':''}${(win2!==null&&win2!==key)?' lose':''}">`
+        +`<span class="nm">${esc(p.name||'?')}</span>${win2===key?'<span class="crown">🏆</span>':''}<span class="amt ${net>=0?'pos':'neg'}">${euroSigned(net)}</span></div>`;
+      const mid = win2===null ? `<span class="mid tie">${t("🤝 nul")}</span>` : `<span class="mid">${t("vs")}</span>`;
+      return `<div class="a2-res-oduel-row" onclick="openOduelDetail('${d.home_id}','${d.away_id}')">${side(hP2,hN,'h')}${mid}${side(aP2,aN,'a')}<svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`;
+    };
+    return `<div class="a2-res-other-head">${t("Les autres duels de la journée")}</div>${others.map(rowHTML).join('')}`;
+  })();
+  const oduelModalHTML = (()=>{
+    if(!oduelDetail) return '';
+    const od = duels.find(d=>d.home_id===oduelDetail.homeId && d.away_id===oduelDetail.awayId && d.fixtures);
+    if(!od) return '';
+    const ohP=pById(od.home_id)||{}, oaP=pById(od.away_id)||{};
+    const ohB=bets.find(b=>b.player_id===od.home_id), oaB=bets.find(b=>b.player_id===od.away_id);
+    const badgesFor2=(bt,i)=>{ const bs=[]; if(bt&&i===bt.captain) bs.push(`<div class="a2-res-mbe-badge favori">👑 ${t("Favori")}</div>`);
+      if(cardOnMatch(bt&&bt.card,i)) bs.push(`<div class="a2-res-mbe-badge bonus">${cardEmoji(bt.card)} ${esc(cardName(bt.card))}</div>`);
+      return bs.join(''); };
+    const rows2 = od.fixtures.map((f,i)=>{ const open=oduelMatchOpen===i;
+      return `<div class="a2-res-match${open?' open':''}">
+        <button class="a2-res-match-head" onclick="toggleOduelMatch(${i})" type="button">
+          <span class="nm">${esc(f.home)} – ${esc(f.away)}</span>
+          <span class="mini muted" style="flex:0 0 auto">→ ${esc(labelSel(f,f.res))}</span>
+          <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        ${open?`<div class="a2-res-match-body">
+          <div class="a2-res-mbe-score"><span class="teams">${esc(f.home)} <b>${(f.hs!=null&&f.as!=null)?f.hs+' – '+f.as:'–'}</b> ${esc(f.away)}</span><span class="tag">${t("Score final")}</span></div>
+          <div class="a2-res-mbe-cols">
+            <div class="a2-res-mbe-side${(ohB&&i===ohB.captain)?' has-favori':''}${cardOnMatch(ohB&&ohB.card,i)?' has-bonus':''}">
+              <div class="who">🏠 ${esc(ohP.name||'?')}</div>
+              <div class="mini" style="margin:2px 0 4px">${line(ohB,f,i,oaB&&oaB.card)}</div>
+              ${badgesFor2(ohB,i)?`<div class="a2-res-mbe-badges">${badgesFor2(ohB,i)}</div>`:''}
+            </div>
+            <div class="a2-res-mbe-side${(oaB&&i===oaB.captain)?' has-favori':''}${cardOnMatch(oaB&&oaB.card,i)?' has-bonus':''}">
+              <div class="who">✈️ ${esc(oaP.name||'?')}</div>
+              <div class="mini" style="margin:2px 0 4px">${line(oaB,f,i,ohB&&ohB.card)}</div>
+              ${badgesFor2(oaB,i)?`<div class="a2-res-mbe-badges">${badgesFor2(oaB,i)}</div>`:''}
+            </div>
+          </div>
+        </div>`:''}
+      </div>`; }).join('');
+    return `<div class="a2-res-oduel-modal"><div class="a2-res-oduel-modal-bd" onclick="closeOduelDetail()"></div>
+      <div class="a2-res-oduel-sheet"><div class="a2-res-oduel-grip"></div>
+        <div class="a2-res-oduel-head"><div class="a2-res-oduel-title">${esc(ohP.name||'?')} ${t("vs")} ${esc(oaP.name||'?')}<span class="mini">${t("Détail des 5 matchs")}</span></div>
+          <button class="a2-res-oduel-close" onclick="closeOduelDetail()" type="button">✕</button></div>
+        <div class="a2-res-oduel-body">${rows2}</div>
+      </div></div>`;
+  })();
+  return `${quickBar('results')}${recapNav(D)}${lastDayBanner(D)}
+    ${maestroHTML}${duelBodyHTML}
     ${(L.recap_note && L.recap_note.day===D)?`<div class="box" style="border-color:#8a6d3b;background:rgba(250,204,21,.10)"><b class="gold">${t("💸 Recapitalisation solidaire")}</b><div class="mini" style="margin-top:4px">${recapNoteText(L.recap_note)}</div></div>`:''}
-    ${/* Ordre aligné sur la maquette : Temps forts puis Le duel en détail sont dans le même
-         "suspense-veil" (flou qui se lève au même moment que l'avatar/fond ci-dessus) ;
-         le classement du jour, lui, n'est JAMAIS flouté — c'est un tableau qu'on veut pouvoir
-         consulter tout de suite, pas un moment de suspense. */''}
-    <div class="suspense-veil${st0.veil?' revealed':''}" id="recapVeil">
-    ${flagsBox}
-    ${detail?`<div class="listsec">${t("⚔️ Le duel en détail")}</div>${detail}`:''}
-    </div>
+    ${oppId==null?`<div class="box" style="text-align:center"><div class="mini muted">${t("Aucun duel (repos).")}</div>${capInfo?`<div class="mini" style="margin-top:6px">${t("capital")} <b>${euro(capInfo.cap)}</b></div>`:''}</div>`:''}
+    ${revealed ? `${pointsCardHTML}${bonusBannerHTML}
+      ${(flagsBox||detail) ? `<button class="a2-res-details-toggle${recapDetailsOpen?' open':''}" onclick="toggleRecapDetails()" type="button">${t("Voir détails des matchs")} <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      ${recapDetailsOpen?`<div class="a2-res-details-panel">${flagsBox}${detail?`<div class="listsec">${t("⚔️ Le duel en détail")}</div>${detail}`:''}</div>`:''}` : ''}` : ''}
+    ${otherDuelsHTML}
     <div class="listsec">${t("Résultats de la journée")}</div>
-    ${/* Même raison qu'au classement (v7.81) : cette phrase citait le joueur et le gain, mais pas
-         le bonus joué, ni le ⏰ de l'oubli, ni le 💸 du renflouement — tous devenus cliquables
-         depuis. On énonce le principe plutôt que d'entretenir un inventaire. */''}
     <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un nom ou un chiffre pour savoir d'où il vient.")}</div>
     <div class="lb">
-      ${/* ⚠️ v8.221 (Hervé, capture à l'appui : « ⭐ 3 pts » ici, « ⭐×1 · 4 Pts » au classement pour
-             le MÊME joueur, le même jour). Ce nombre affichait `dp − 1` pour l'étoile : les points de
-             duel SEULS, le +1 du ⭐ retranché. Or la ligne est ORDONNÉE par `dpts`, total compris —
-             l'étoile pouvait donc se retrouver au-dessus d'un joueur affichant PLUS de points qu'elle
-             (duel perdu + ⭐ = 1, placé devant un match nul à 1, départagé au net). On affiche
-             désormais le TOTAL DU JOUR, exactement le nombre du classement et celui qui trie la
-             liste ; le ⭐ porte le « +1 » pour que l'addition reste lisible, comme ⏰ et 💸 le font
-             déjà à côté d'un nombre qui les contient. */''}
       ${ord.map((p,i)=>{ const dp=dpts[p.id]||0; const isStar=p.id===starId; const net=netMap[p.id]||0;
         const tags=[]; if(p.id===S.myId) tags.push(`<span class="tagchip me">${t("(toi)")}</span>`);
         if(p.is_ai) tags.push(`<span class="tagchip ia">${t("IA")}</span>`);
@@ -12211,10 +12503,11 @@ function recapBody(D){
             ${isStar?`<span class="lb-star clik" onclick="event.stopPropagation();showStarInfo()">⭐ <b class="gold">+1</b></span>`:''}
             <span class="lb-pts clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}',${isStar?1:0})" title="${t("Détail des points")}">${dp} pt${Math.abs(dp)>1?'s':''}</span>
             <span class="lb-bonus ${cardMap[p.id]&&cardMap[p.id].id?'clik':'none'}"${cardMap[p.id]&&cardMap[p.id].id?` onclick="event.stopPropagation();showBonusImpact('${p.id}',${D})"`:''}>${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</span>
-            <span class="lb-gain ${net>=0?'win':'lose'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${fmt(net)}€</span>
+            <span class="lb-gain ${net>=0?'win':'lose'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${euroSigned(net)}</span>
           </div>
         </div>`; }).join("")}
-    </div>`;
+    </div>
+    ${oduelModalHTML}`;
   } finally { if(_restore){ bets=_sb; duels=_sd; } }
 }
 // Fenêtre « détail du calcul » du gain net d'un joueur pour la journée affichée
@@ -12228,19 +12521,19 @@ function showGainDetail(pid){
   const net=(bt&&bt.net)||0;
   let rows='', sumG=0;
   const isForgot = bt && Array.isArray(bt.picks) && bt.picks.length===0;
-  if(isForgot){ rows=`<div class="mini">${t("⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>{b} pt</b> au classement et <b>−{a} %</b> du capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div>${net<0?`<div class="mini" style="margin-top:6px">${t("Perte de capital ce jour-là : <b>{a}€</b>.",{a:fmt(net)})}</div>`:''}`; }
+  if(isForgot){ rows=`<div class="mini">${t("⏰ <b>Pari non validé à temps.</b> Aucun pari pris en compte → <b>{b} pt</b> au classement et <b>−{a} %</b> du capital.",{b:forgotPtsShown(),a:pct(forgotPenShown())})}</div>${net<0?`<div class="mini" style="margin-top:6px">${t("Perte de capital ce jour-là : <b>{a}</b>.",{a:euroSigned(net)})}</div>`:''}`; }
   else if(bt&&bt.picks&&d&&d.fixtures){
     const c=bt.card; const oppId=d.home_id===pid?d.away_id:d.home_id; const oppB=bets.find(b=>b.player_id===oppId); const oppCard=oppB&&oppB.card;
     rows=d.fixtures.map((f,i)=>{ const b=bt.picks[i]; if(!b) return '';
       const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
       const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res);
       const odd=isDC?dcWinOdd(f,b.sel,c.sel2):oddOf(f,b.sel);
-      let g=win?(+b.stake)*(odd-1):-(+b.stake); const parts=[`${b.stake}€ @${cote(odd)}`];
+      let g=win?(+b.stake)*(odd-1):-(+b.stake); const parts=[`${euro(b.stake)} @${cote(odd)}`];
       if(i===bt.captain){ g*=2; parts.push('👑 ×2'); }
       if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;parts.push('🐗 ×2');} else if(c.id==="tout"){g*=(win?3:2);parts.push('🔥 '+(win?'×3':'×2'));} else if(c.id==="joker"){g*=2;parts.push('🃏 ×2');} else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);parts.push('🛡 '+t("moitié remboursée"));} }
       if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; parts.push('🤛 ÷2'); }
       sumG+=g; const selD=isDC?`${labelSel(f,b.sel)}/${labelSel(f,c.sel2)}`:labelSel(f,b.sel);
-      return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b>${scoreHTML(f)} <span class="muted">(${esc(labelSel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${fmt(g)}€</b> ${win?'✓':'✗'}</div>`;
+      return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b>${scoreHTML(f)} <span class="muted">(${esc(labelSel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${euroSigned(g)}</b> ${win?'✓':'✗'}</div>`;
     }).join('');
     /* ⚠️ v8.217 — CETTE NOTE DISAIT LE CONTRAIRE PENDANT CINQ MOIS, ET C'ÉTAIT FAUX.
        Elle concluait de Tranmere 2-2 Rochdale (DRDJ3, 01/08, Coupe de la Ligue) que « l'API
@@ -12282,7 +12575,7 @@ function showGainDetail(pid){
        ciel. Avec les trois lignes — somme, ajustement, total — le joueur peut vérifier lui-même,
        ce qui est tout l'objet de cette fenêtre. */
     const adj=net-sumG;
-    rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("Somme des paris :")} <b>${fmt(sumG)} €</b></div>`;
+    rows+=`<div class="mini muted" style="margin-top:6px;border-top:1px dashed var(--border);padding-top:6px">${t("Somme des paris :")} <b>${euroSigned(sumG)}</b></div>`;
     /* ⚠️ v8.321 (bug vécu par Hervé, ligue LYQ22 J1) — LA LIGNE D'AJUSTEMENT NOMMAIT TOUJOURS MA
        PROPRE carte (`c`), même quand l'écart vient du bonus de l'ADVERSAIRE (🩸 Sangsue, ✂️ Demi-
        portion : ils touchent MON total à MOI en jouant sur SA carte à LUI, pas sur la mienne).
@@ -12299,13 +12592,13 @@ function showGainDetail(pid){
       const sources=[];
       if(c&&CARDS[c.id]&&Math.abs(imSelf)>=0.005) sources.push(cardEmoji(c)+' '+esc(cardName(c)));
       if(oppCard&&CARDS[oppCard.id]&&Math.abs(imOpp)>=0.005) sources.push(cardEmoji(oppCard)+' '+esc(cardName(oppCard)));
-      rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${sources.length?' ('+sources.join(' + ')+')':''} : <b class="${adj>=0?'green':'red'}">${fmt(adj)}€</b></div>`;
+      rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${sources.length?' ('+sources.join(' + ')+')':''} : <b class="${adj>=0?'green':'red'}">${euroSigned(adj)}</b></div>`;
     }
   } else rows=`<div class="mini muted">${t("Pas de détail disponible pour ce joueur.")}</div>`;
-  infoModal("🧮", t("Détail — {a}",{a:(p.name||'?')}), `<div style="text-align:left">${rows}<div class="mini" style="margin-top:8px;border-top:2px solid var(--border);padding-top:6px"><b>${t("Total net :")} <span class="${net>=0?'green':'red'}">${fmt(net)}€</span></b></div></div>`);
+  infoModal("🧮", t("Détail — {a}",{a:(p.name||'?')}), `<div style="text-align:left">${rows}<div class="mini" style="margin-top:8px;border-top:2px solid var(--border);padding-top:6px"><b>${t("Total net :")} <span class="${net>=0?'green':'red'}">${euroSigned(net)}</span></b></div></div>`);
   } finally { if(_r){ bets=_sb; duels=_sd; } }
 }
-function setRecapFocus(pid){ recapFocus=pid||null; recapOpen=-1; render(); }
+function setRecapFocus(pid){ recapFocus=pid||null; recapOpen=-1; recapDetailsOpen=false; oduelDetail=null; oduelMatchOpen=-1; render(); }
 /* ⚠️ v7.64 — LA DERNIÈRE JOURNÉE CONSULTABLE N'EST PAS TOUJOURS LA DERNIÈRE RÉSOLUE.
    Quand les paris de la journée en cours sont clôturés, l'onglet Résultats affiche déjà cette
    journée-là (les affiches, en attendant les scores) : elle fait donc partie de la navigation.
@@ -12352,7 +12645,7 @@ function recapNav(D){ const last=resultsMaxDay();
     <b class="mini" style="text-align:center;flex:1">${t("Journée {a} / {b}",{a:D+1,b:L.num_days})}</b>
     <button class="btn ghost sm ${off2?'off':''}" ${off2?'aria-disabled="true"':''} onclick="navDay(${D+1})">${t("Suiv. ▶")}</button></div>`; }
 function navDay(d){ const last=resultsMaxDay(); if(d<0||d>last) return; openResults(d); }
-async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recapFocus=null;
+async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recapFocus=null; recapDetailsOpen=false; oduelDetail=null; oduelMatchOpen=-1;
   /* ⚠️ v8.282 — rendu immédiat AVANT la requête réseau : la page Résultats (avec son état
      « chargement » posé par le garde-fou de `viewResults()`) apparaît dès le clic, au lieu de
      laisser l'ancien écran (ou l'ancienne journée) affiché pendant 1-2 s comme avant. */
@@ -12583,7 +12876,7 @@ function waitingResultsBody(d){
       if(!b || (Array.isArray(b.picks) && b.picks.length===0)) return `<span class="mini red"><b>🚫 ${t("n'a pas parié")}</b></span>`;
       if(!Array.isArray(b.picks)||!b.picks[i]) return '<span class="mini muted">—</span>';
       const p=b.picks[i]; const o=oddOf(f,p.sel);
-      return `<span class="mini">${esc(labelSel(f,p.sel))} · ${p.stake}€${o?' @'+cote(o):''}${capIdx===i?' 👑':''}</span>`; };
+      return `<span class="mini">${esc(labelSel(f,p.sel))} · ${euro(p.stake)}${o?' @'+cote(o):''}${capIdx===i?' 👑':''}</span>`; };
     /* ⚠️ v8.07 (demandé par Hervé) — MES MARQUEURS 👑 / 🃏 SUR L'ÉCRAN D'ATTENTE. La liste des
        affiches ne disait pas où j'avais posé mon Capitaine ni mon bonus : entre la validation et
        les résultats il peut s'écouler 24 à 72 h, et c'est précisément là qu'on rouvre l'app pour
@@ -12735,6 +13028,21 @@ function waitingResultsBody(d){
 }
 let recapOpen=-1, recapFocus=null;
 function toggleRecapMatch(i){ recapOpen=recapOpen===i?-1:i; render(); }
+// ⚠️ Port V2 Résultats (2026-09-06) — accordéon à 2 niveaux de resultats.html : un bouton "Voir
+// détails des matchs" replie/déplie tout le panneau des 5 matchs (`recapDetailsOpen`), et CHAQUE
+// match reste individuellement dépliable à l'intérieur (`recapOpen`, déjà existant, inchangé).
+let recapDetailsOpen=false;
+function toggleRecapDetails(){ recapDetailsOpen=!recapDetailsOpen; render(); }
+// « Autres duels de la journée » (resultats.html) : un duel de la ligue autre que le sien,
+// consulté via un panneau (pas une navigation de page entière — reprend le composant
+// `.match`/`.mbe-*` déjà utilisé pour SON PROPRE duel, avec 2 noms de colonnes à la place de
+// Toi/Adversaire). `oduelDetail` retient {homeId,awayId} du duel ouvert ; recapBody() calcule son
+// détail À LA DEMANDE avec les MÊMES `line()`/`explain()` que pour le duel du joueur — jamais un
+// second calcul.
+let oduelDetail=null, oduelMatchOpen=-1;
+function openOduelDetail(homeId,awayId){ oduelDetail={homeId,awayId}; oduelMatchOpen=-1; render(); }
+function closeOduelDetail(){ oduelDetail=null; render(); }
+function toggleOduelMatch(i){ oduelMatchOpen=oduelMatchOpen===i?-1:i; render(); }
 // ⚠️ Sur une ligue TERMINÉE, le bouton de ce récap promet « 🏆 Voir le classement final → ». Depuis
 // v7.23 l'onglet Pronos n'affiche plus le bilan mais un message de fin de saison : sans ce renvoi,
 // le bouton tiendrait à moitié sa promesse. On l'envoie donc explicitement sur 📊 Classt.
