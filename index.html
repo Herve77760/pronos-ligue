@@ -1339,16 +1339,42 @@
   .a2-maestro-valide-box{position:absolute;left:67%;top:26.5%;right:6%;bottom:27%;
     display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;padding:2px 6px}
   .a2-maestro-valide-eyebrow{font-size:8.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;
-    color:var(--a2-ready,#3fca85);text-shadow:0 1px 4px rgba(0,0,0,.7)}
+    color:var(--a2-ready,#3fca85);text-shadow:0 1px 4px rgba(0,0,0,.7);flex-shrink:0}
   .a2-maestro-valide-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:12.5px;
-    line-height:1.1;color:var(--a2-ink,#f4ecd8);text-shadow:0 1px 4px rgba(0,0,0,.7)}
+    line-height:1.1;color:var(--a2-ink,#f4ecd8);text-shadow:0 1px 4px rgba(0,0,0,.7);flex-shrink:0;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
   .a2-maestro-valide-text{font-size:9.5px;line-height:1.18;color:var(--a2-ink,#f4ecd8);opacity:.92;
     text-shadow:0 1px 4px rgba(0,0,0,.7);
     display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-  /* ⚠️ Un pseudo réel va jusqu'à 20 caractères (validUser) : "Bonne chance face à {pseudo} !" peut
-     dépasser les 2 lignes qui tiennent dans le panneau peint avec un pseudo long — line-clamp coupe
-     proprement avec des points de suspension plutôt que de laisser overflow:hidden (sur le panneau
-     parent) faire disparaître le bas du texte sans aucun signe visible. */
+  /* ⚠️ Un pseudo réel va jusqu'à 20 caractères (validUser) : le texte avec un pseudo long peut
+     dépasser les lignes qui tiennent dans le panneau peint — line-clamp coupe proprement avec des
+     points de suspension plutôt que de laisser overflow:hidden (sur le panneau parent) faire
+     disparaître le bas du texte sans aucun signe visible.
+     ⚠️ Audit V2 ciblé Pronos (2026-09-06) — le TITRE est désormais conditionnel lui aussi ("À {a} de
+     jouer !"), pas seulement le texte : mesuré en direct, avec un nom qui pousse le titre sur 2
+     lignes, il ne reste que ~25px pour le texte (panneau étroit, 27% de large seulement, contrainte
+     par l'image) — juste assez pour 2 lignes, pas 3. `flex-shrink:0` sur l'eyebrow et le titre les
+     fige à leur hauteur déjà bornée par leur propre line-clamp, pour que tout le manque d'espace
+     retombe de façon prévisible sur le texte plutôt que de se répartir on ne sait comment. */
+  /* ⚠️ Audit V2 ciblé Pronos (2026-09-06) — les 3 AUTRES héros Maestro de Pronos (pronos-attente-
+     choix.html/pronos-choix-matchs.html/pronos-miser.html) avaient été omis du portage tout comme
+     celui de pronos-valides.html (déjà réintégré) : famille de classes PARTAGÉE, même principe déjà
+     validé (aspect-ratio natif de chaque asset = aucun recadrage, texte incrusté dans le panneau
+     déjà peint) — seules la position du panneau (mesurée par asset, posée en style inline par appel)
+     et la couleur d'eyebrow (bleu "calm" en attente, violet "ton tour" sinon) diffèrent, comme dans
+     les 3 maquettes sources. */
+  .a2-maestro-pronos{position:relative;overflow:hidden;border-radius:16px;margin-bottom:16px}
+  .a2-maestro-pronos-img{display:block;width:100%}
+  .a2-maestro-pronos-box{position:absolute;display:flex;flex-direction:column;justify-content:center;
+    gap:2px;overflow:hidden;padding:3px 7px}
+  .a2-maestro-pronos-eyebrow{font-size:8.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;
+    text-shadow:0 1px 4px rgba(0,0,0,.7);flex-shrink:0}
+  .a2-maestro-pronos-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:13px;
+    line-height:1.15;color:var(--a2-ink,#f4ecd8);text-shadow:0 1px 4px rgba(0,0,0,.7);flex-shrink:0;
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  .a2-maestro-pronos-text{font-size:9.5px;line-height:1.2;color:var(--a2-ink,#f4ecd8);opacity:.92;
+    text-shadow:0 1px 4px rgba(0,0,0,.7);
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
   /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — `margin-top:56px` réservait de la place pour laisser
      le Maestro DÉBORDER au-dessus de la carte (effet repris de la maquette) : sur Lobby/Prépa, la
      barre du haut restant visible (contrairement à Auth/Profil), ce débord tombait dans le vide
@@ -1453,7 +1479,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.359";
+const APP_VERSION = "v8.360";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4556,7 +4582,24 @@ const EN={
   // Écran Pronos refondu (v6.17)
   "Pronos enregistrés":"Picks saved", "✅ validés":"✅ confirmed", "Paris clôturés 🔒":"Betting closed 🔒", "En attente de tes pronos…":"Waiting for your picks…",
   // ⚠️ Audit V2 (2026-09-06) — hero Maestro de pronos-valides.html, réintégré (voir viewWait()).
-  "Pronostics envoyés":"Picks sent", "Place au match !":"Game time!", "Bonne chance face à {a} !":"Good luck against {a}!",
+  "Pronostics envoyés":"Picks sent", "Place au match !":"Game time!",
+  // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — wording de pronos-valides dépendant de l'état réel de
+  // l'adversaire (oppBet) ; "Bonne chance face à {a} !" (fixe, prématuré) retiré, plus aucun appel.
+  "À {a} de jouer !":"{a}'s turn now!",
+  "Tes choix sont faits. Il ne reste plus qu'à attendre ses pronostics.":"Your picks are locked in. Now it's just a matter of waiting for theirs.",
+  // ⚠️ Mesuré en direct sur ce panneau précis (27% de large, calibré par le maquettiste sur "Bonne
+  // chance face à Nico !" = 27 caractères pile, sans marge) : "Tout est prêt pour ton duel face à
+  // {a}." (44 caractères) dépasse largement ce budget, ET place le nom tout à la fin — exactement
+  // là où un `-webkit-line-clamp` coupe en premier. Nom D'ABORD : si un pseudo long (jusqu'à 20
+  // caractères, validUser) force quand même une coupe, elle ne peut plus jamais mordre sur le nom,
+  // seulement sur la formule de politesse qui suit.
+  "{a} et toi êtes prêts !":"{a} and you are ready!",
+  // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — heros Maestro attente/choix/miser, réintégrés.
+  "En attente":"Waiting", "{a} prépare la journée":"{a} is getting ready",
+  "{a} doit sélectionner les 5 matchs.":"{a} needs to pick the 5 matches.",
+  "Ton tour":"Your turn", "À toi de choisir les 5 matchs":"Time to pick the 5 matches",
+  "Toi et {a} devrez pronostiquer dessus.":"You and {a} will both bet on them.",
+  "Pronostique tes 5 matchs et tente de battre {a} !":"Pick your 5 matches and try to beat {a}!",
   "🃏 Bonus du jour :":"🃏 Bonus of the day:", "Prêts : {a}/{b}":"Ready: {a}/{b}", "clôture dans {a}":"closes in {a}",
   "✏️ Modifier (jusqu'à la clôture)":"✏️ Edit (until close)", "Ton duel":"Your duel",
   "Tu n'as pas validé tes pronos avant la clôture : <b>aucun pari</b> n'est pris en compte ce jour-là → <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital.":"You didn't confirm your picks before close: <b>no bet</b> counts that day → <b>{b} pt</b> in the standings and <b>−{a}%</b> of your capital.",
@@ -10274,7 +10317,17 @@ function viewDay(){
   if(!d) return `${quickBar('')}<div class="box">${dayLbl}<br><span class="muted mini">${t("Aucun duel (repos).")}</span></div>`;
   const iAmHome=d.home_id===S.myId; const opp=pById(iAmHome?d.away_id:d.home_id);
   if(!d.fixtures){ if(iAmHome) return viewSelect(d,dayLbl,opp);
-    return `${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("En attente que {a} (à domicile) choisisse les 5 matchs…",{a:'<b>'+esc(opp.name)+'</b>'})}</div>${selLineHTML()}
+    // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — hero Maestro de pronos-attente-choix.html, omis du
+    // portage (constaté par Hervé sur le compte de Giulian). Reprise fidèle : asset
+    // qg-tactizo-carte-attente-v2.png, eyebrow/titre/texte de la maquette tels quels, aucune
+    // variante inventée. Même gabarit .a2-maestro-pronos que les 2 autres états (aspect-ratio natif,
+    // aucun recadrage — voir le commentaire CSS pour le contexte de la régression déjà corrigée).
+    const maestroAttente = `<div class="a2-maestro-pronos"><img class="a2-maestro-pronos-img" src="img/qg-tactizo-carte-attente-v2.png" alt="${t("Le Maestro")}" style="aspect-ratio:1701/924">
+      <div class="a2-maestro-pronos-box" style="left:54%;top:25.5%;right:6%;bottom:26.5%">
+        <div class="a2-maestro-pronos-eyebrow" style="color:#5aa9dc">${t("En attente")}</div>
+        <div class="a2-maestro-pronos-title">${t("{a} prépare la journée",{a:esc(opp.name)})}</div>
+        <div class="a2-maestro-pronos-text">${t("{a} doit sélectionner les 5 matchs.",{a:'<b>'+esc(opp.name)+'</b>'})}</div></div></div>`;
+    return `${maestroAttente}${quickBar('')}<div class="box"><b>${dayLbl}</b><div class="mini muted" style="margin-top:6px">${t("En attente que {a} (à domicile) choisisse les 5 matchs…",{a:'<b>'+esc(opp.name)+'</b>'})}</div>${selLineHTML()}
       <div class="mini muted" style="margin-top:8px">${t("💡 Pas d'inquiétude : s'il ne choisit pas à temps, les matchs seront tirés automatiquement — et ta fenêtre de paris démarrera seulement à ce moment-là.")}</div>
       ${(me()&&me().is_organizer)?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button>`:''}</div>
       ${rosterDuelsHTML()}`; }
@@ -10409,11 +10462,20 @@ function viewSelect(d,dayLbl,opp){
      (`selPool=genPool(...)` s'exécutait dans la même frappe), donc `selPool` était déjà rempli à
      la ligne `selPool.map` plus bas : aucun garde n'y était nécessaire. Maintenant que les DEUX
      chemins chargent en tâche de fond, les DEUX doivent attendre avant de lire `selPool`. */
-  if(selLoading || !selPool) return `${quickBar('')}<div class="box">${t(real?"⏳ Chargement des vrais matchs à venir…":"⏳ Chargement des matchs…")}</div>`;
-  if(real && selPool.length<5) return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
+  // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — hero Maestro de pronos-choix-matchs.html, omis du
+  // portage. Reprise fidèle : asset qg-tactizo-carte-choix-v2.png, eyebrow/titre/texte tels quels.
+  // Posé sur les 3 issues de la fonction (chargement/pas assez de matchs/écran normal) : dans la
+  // maquette c'est un élément d'en-tête stable, pas un état conditionné aux données.
+  const maestroChoix = `<div class="a2-maestro-pronos"><img class="a2-maestro-pronos-img" src="img/qg-tactizo-carte-choix-v2.png" alt="${t("Le Maestro")}" style="aspect-ratio:1706/922">
+    <div class="a2-maestro-pronos-box" style="left:59%;top:23.5%;right:4%;bottom:22.5%">
+      <div class="a2-maestro-pronos-eyebrow" style="color:var(--a2-purple-light,#c9b6f5)">${t("Ton tour")}</div>
+      <div class="a2-maestro-pronos-title">${t("À toi de choisir les 5 matchs")}</div>
+      <div class="a2-maestro-pronos-text">${t("Toi et {a} devrez pronostiquer dessus.",{a:'<b>'+esc(opp.name)+'</b>'})}</div></div></div>`;
+  if(selLoading || !selPool) return `${maestroChoix}${quickBar('')}<div class="box">${t(real?"⏳ Chargement des vrais matchs à venir…":"⏳ Chargement des matchs…")}</div>`;
+  if(real && selPool.length<5) return `${maestroChoix}${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
      <div class="mini muted" style="margin-top:8px">${t("Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard, ou l'organisateur peut repasser la ligue en mode simulé.")}</div>
      <button class="btn ghost sm" style="margin-top:8px" onclick="selPool=null;render()">${t("🔄 Réessayer")}</button></div>`;
-  return `${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
+  return `${maestroChoix}${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
      <div class="flow-head" style="margin-top:10px"><h3>${t("Choisis 5 rencontres")}</h3></div>
      <div class="flow-sub">${t("<b>{a}</b>/5 sélectionnées — imposées à <b>{b}</b>.",{a:selChosen.length,b:esc(opp.name)})}</div>
      ${selLineHTML()}${cotesDatees()}</div>
@@ -10586,7 +10648,16 @@ function viewBet(d,dayLbl,opp,iAmHome){
   // Bonus encore en main de l'adversaire (info publique) — affiché EN BAS, en petit cadre « info ».
   const oppHandInfo=(()=>{ if(!opp) return ''; const oc=((opp.hand)||[]).filter(id=>CARDS[id]&&!CARDS[id].retired);
     return `<div class="box" style="background:rgba(90,166,224,.06);border-color:var(--blue);padding:8px 10px"><div class="mini muted"><b>${t("ℹ️ Pour info")}</b> — ${oc.length?t("bonus encore en main de {a} (pas forcément joués aujourd'hui) :",{a:'<b>'+esc(opp.name)+'</b>'}):t("{a} n'a plus aucun bonus en main.",{a:esc(opp.name)})}</div>${oc.length?`<div class="cards" style="margin-top:5px">${oc.map(id=>`<div class="cardchip clik sm" onclick="showCardInfo('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>`:''}</div>`; })();
-  return `${quickBar('')}${lastDayBanner(L.current_day)}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
+  // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — hero Maestro de pronos-miser.html, omis du portage.
+  // Reprise fidèle : asset qg-tactizo-carte-miser-v2.png, eyebrow/titre/texte tels quels. Le titre
+  // "À toi de jouer" réutilise la traduction déjà établie ailleurs dans l'app (bandeaux d'accueil),
+  // pas une nouvelle clé — même phrase, même sens, un seul texte anglais à maintenir pour elle.
+  const maestroMiser = `<div class="a2-maestro-pronos"><img class="a2-maestro-pronos-img" src="img/qg-tactizo-carte-miser-v2.png" alt="${t("Le Maestro")}" style="aspect-ratio:1691/930">
+    <div class="a2-maestro-pronos-box" style="left:55.5%;top:24.5%;right:5.5%;bottom:25.5%">
+      <div class="a2-maestro-pronos-eyebrow" style="color:var(--a2-purple-light,#c9b6f5)">${t("Ton tour")}</div>
+      <div class="a2-maestro-pronos-title">${t("À toi de jouer")}</div>
+      <div class="a2-maestro-pronos-text">${t("Pronostique tes 5 matchs et tente de battre {a} !",{a:'<b>'+esc(opp.name)+'</b>'})}</div></div></div>`;
+  return `${maestroMiser}${quickBar('')}${lastDayBanner(L.current_day)}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip ${iAmHome?'b':''}">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>
     <div class="row mini" style="margin-top:8px"><span class="muted">${t("Duel vs {a}",{a:'<b>'+esc(opp.name)+'</b>'})}</span><span class="muted">${t("Capital")} <b>${euro(cap)}</b></span></div>${betLineHTML()}
     <div class="row mini" style="margin-top:6px"><span class="muted clik" onclick="showStakeInfo()">${t("Misé")} <b id="tot" class="${over?'red':''}">${euro(tot)}</b> / ${euro(max)} ${t("max")}${derniereJournee()?' <span class="gold">(🏁 dernière journée)</span>':(invest?' <span class="blue">(📈 70%)</span>':'')} ⓘ</span><span class="muted clik" onclick="showCaptainInfo()">${t("👑 Match favori ×2")} ⓘ</span></div>
     <div class="gauge ${over?'over':''}" id="betGauge"><i style="width:${pct}%"></i></div>
@@ -10959,17 +11030,26 @@ function viewWait(dayLbl){
      ${betLineHTML()}${cotesDatees()}</div>`;
   // ⚠️ Audit V2 (2026-09-06) — Maestro manquant à ce stade : relu pronos-valides.html (maquette
   // consolidée), qui prévoit une scène dédiée ICI (pronostics envoyés, avant clôture), absente du
-  // portage réel. Reprise fidèle : même asset (qg-tactizo-carte-valides-v2.png), même eyebrow/titre/
-  // texte ("Pronostics envoyés" / "Place au match !" / "Bonne chance face à {adversaire} !"), aucune
-  // variante inventée. ⚠️ Correctif régression iPhone (2026-09-06) : rendue avec le gabarit dédié
-  // .a2-maestro-valide (texte incrusté DANS le panneau déjà peint dans l'image, comme la maquette),
-  // PAS .a2-hero-card (son object-position:100% coupait la tête du Maestro sur cet asset précis —
-  // voir le commentaire CSS de .a2-maestro-valide pour la mesure). N'apparaît que s'il y a un duel
-  // ce tour-ci (`md`) : la maquette ne prévoit pas de texte pour un tour sans adversaire (repos).
+  // portage réel. Reprise fidèle : même asset (qg-tactizo-carte-valides-v2.png). ⚠️ Correctif
+  // régression iPhone (2026-09-06) : rendue avec le gabarit dédié .a2-maestro-valide (texte incrusté
+  // DANS le panneau déjà peint dans l'image), PAS .a2-hero-card (son object-position:100% coupait la
+  // tête du Maestro sur cet asset précis). N'apparaît que s'il y a un duel ce tour-ci (`md`) : la
+  // maquette ne prévoit pas de texte pour un tour sans adversaire (repos).
+  // ⚠️ Audit V2 ciblé Pronos (2026-09-06) — le texte fixe "Place au match ! Bonne chance face à X"
+  // était FAUX tant que l'adversaire n'a pas lui-même validé (rien ne l'annonce encore, le duel n'a
+  // rien de joué) : deux textes réels, choisis sur `oppBet` (déjà calculé ci-dessus, même donnée que
+  // la ligne "Duel vs" et que la fiche pari-par-pari) — jamais de nouvelle donnée, jamais un état
+  // inventé. Rien à gérer ici pour la clôture automatique alors que l'adversaire n'a pas validé : ce
+  // Maestro ne vit que dans la branche `editable` (avant clôture) ; une fois la clôture passée,
+  // `editable` devient faux et l'écran bascule entièrement sur `headClose` (son propre en-tête,
+  // sans ce Maestro) — aucun message obsolète ne peut donc rester affiché après la clôture.
+  const oppReady = !!oppBet;
   const maestroValide = md ? `<div class="a2-maestro-valide"><img class="a2-maestro-valide-img" src="img/qg-tactizo-carte-valides-v2.png" alt="${t("Le Maestro")}">
      <div class="a2-maestro-valide-box"><div class="a2-maestro-valide-eyebrow">${t("Pronostics envoyés")}</div>
-     <div class="a2-maestro-valide-title">${t("Place au match !")}</div>
-     <div class="a2-maestro-valide-text">${t("Bonne chance face à {a} !",{a:'<b>'+esc(opp.name||'?')+'</b>'})}</div></div></div>` : '';
+     <div class="a2-maestro-valide-title">${oppReady ? t("Place au match !") : t("À {a} de jouer !",{a:esc(opp.name||'?')})}</div>
+     <div class="a2-maestro-valide-text">${oppReady
+       ? t("{a} et toi êtes prêts !",{a:'<b>'+esc(opp.name||'?')+'</b>'})
+       : t("Tes choix sont faits. Il ne reste plus qu'à attendre ses pronostics.")}</div></div></div>` : '';
   const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}<div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
 
   // ── ÉTAT « VALIDÉS » (avant clôture) : la liste des 5 pronos + bouton Modifier (cf. maquette écran ⑥)
