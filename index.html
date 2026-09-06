@@ -68,8 +68,17 @@
      (barre = 78 px) mais pas sur iPhone, où s'ajoute la hauteur de l'encoche : le contenu passait
      alors SOUS la barre (constaté dans le simulateur, 2026-08-10). Même chose en bas pour la barre
      d'accueil. Sur navigateur, env() vaut 0 → aucun changement. */
+  /* ⚠️ Correctif audit V2 (2026-09-06), remplace le système lp-mode/93px — LA HAUTEUR RÉELLE DE LA
+     BARRE DU HAUT N'EST PAS UNE FONCTION DU SEUL NOMBRE D'ICÔNES : mesuré en direct, un jeu de 5
+     icônes tient sur une seule ligne (~59px) à 375/390px mais REPASSE à deux lignes (~103px) à
+     320px (iPhone SE) — donc AUSSI vrai pour Lobby/Prépa (4 icônes) selon la largeur réelle de
+     l'écran, ce qu'un seuil fixe par écran/nombre d'icônes ne peut jamais couvrir correctement (et
+     ce que le réglage réglage d'accessibilité "Texte plus grand" d'iOS changerait aussi). PLUTÔT QUE
+     DEVINER, `render()` MESURE la hauteur réelle de #topBar après chaque rendu et la pose dans
+     --topbar-h ; .app lit cette variable. `93px` ne reste que comme repli AVANT la première mesure
+     (premier paint, un instant avant que le JS tourne) — plus une hypothèse qu'on applique partout. */
   .app{max-width:540px;margin:0 auto;
-    padding:calc(93px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));}
+    padding:calc(var(--topbar-h, 93px) + 12px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));}
   /* ⚠️ v8.344 (Tactizo V2) — écrans Auth/Profil : la barre fixe du haut et la nav du bas sont
      masquées (render() bascule cette classe), donc l'espace qu'elles réservaient normalement dans
      .app doit disparaître avec elles — sinon un grand vide reste en haut/bas. Remplace le bidouillage
@@ -77,12 +86,6 @@
      débordement horizontal constaté sur iPhone réel : .a2-wrap n'a plus besoin d'aucune marge
      négative, juste le padding sûr de .app + le sien, en largeur normale (100%). */
   .app.a2-mode{padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
-  /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — Lobby/Prépa : la barre du haut reste affichée (elle
-     n'est pas dans A2_VIEWS) mais tient sur une seule ligne (~59px mesurés) avec les seuls boutons
-     qui y restent visibles sur ces deux écrans, alors que le padding-top fixe de .app (93px) réserve
-     la place d'une barre à deux lignes. Un seul point commun (voir render()) réduit ce padding pour
-     ce cas précis — le 93px global n'est pas touché, ni le style de la barre elle-même. */
-  .app.lp-mode{padding-top:calc(66px + env(safe-area-inset-top))}
   h1{font-size:21px;margin:0;letter-spacing:-.4px;font-weight:800;}
   h2{font-size:15px;margin:22px 4px 10px;letter-spacing:.01em;}
   .sub{color:var(--muted);font-size:13.5px;}
@@ -1320,6 +1323,32 @@
   .a2-maestro-mood-chip.tier-4{background:var(--mm-tier-4-dim);color:var(--mm-tier-4-ink);border:1px solid rgba(199,217,74,.45)}
   .a2-maestro-mood-chip.tier-5{background:var(--mm-tier-5-dim);color:var(--mm-tier-5-ink);border:1px solid rgba(123,216,143,.45)}
   .a2-maestro-mood-chip.tier-6{background:var(--mm-tier-6-dim);color:var(--mm-tier-6-ink);border:1px solid rgba(63,202,133,.45)}
+  /* ⚠️ Correctif régression iPhone (2026-09-06) — hero "Pronos validés" (pronos-valides.html),
+     REFAIT : la première version réutilisait .a2-hero-card (aspect-ratio:5/4 + object-position:
+     100% = cadré sur le bord DROIT de l'image), pensé pour d'autres assets où le Maestro occupe le
+     bord droit. Sur qg-tactizo-carte-valides-v2.png (1702×924 réels) le Maestro est à GAUCHE : ce
+     cadrage coupait sa tête et n'affichait plus que son bras/pouce, avec le panneau peint à droite
+     resté vide au milieu. Ici : aspect-ratio NATIF (aucun recadrage possible, tout le Maestro est
+     TOUJOURS visible, même principe déjà validé sur le Maestro du QG), texte incrusté dans le
+     panneau déjà peint dans l'image — position mesurée par analyse de pixels (bord du panneau à
+     53,8%/95,5% en largeur, 25,2%/74,1% en hauteur ; le repère ✓ occupe 56-65% / 29-46%) puis
+     alignée sur les repères EXACTS de pronos-valides.html (left:67%/top:26.5%/right:6%/bottom:27%,
+     cohérents avec cette mesure — le texte démarre après le repère ✓, jamais dessus). */
+  .a2-maestro-valide{position:relative;overflow:hidden;border-radius:16px;margin-bottom:16px}
+  .a2-maestro-valide-img{display:block;width:100%;aspect-ratio:1702/924}
+  .a2-maestro-valide-box{position:absolute;left:67%;top:26.5%;right:6%;bottom:27%;
+    display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;padding:2px 6px}
+  .a2-maestro-valide-eyebrow{font-size:8.5px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;
+    color:var(--a2-ready,#3fca85);text-shadow:0 1px 4px rgba(0,0,0,.7)}
+  .a2-maestro-valide-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:12.5px;
+    line-height:1.1;color:var(--a2-ink,#f4ecd8);text-shadow:0 1px 4px rgba(0,0,0,.7)}
+  .a2-maestro-valide-text{font-size:9.5px;line-height:1.18;color:var(--a2-ink,#f4ecd8);opacity:.92;
+    text-shadow:0 1px 4px rgba(0,0,0,.7);
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  /* ⚠️ Un pseudo réel va jusqu'à 20 caractères (validUser) : "Bonne chance face à {pseudo} !" peut
+     dépasser les 2 lignes qui tiennent dans le panneau peint avec un pseudo long — line-clamp coupe
+     proprement avec des points de suspension plutôt que de laisser overflow:hidden (sur le panneau
+     parent) faire disparaître le bas du texte sans aucun signe visible. */
   /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — `margin-top:56px` réservait de la place pour laisser
      le Maestro DÉBORDER au-dessus de la carte (effet repris de la maquette) : sur Lobby/Prépa, la
      barre du haut restant visible (contrairement à Auth/Profil), ce débord tombait dans le vide
@@ -1424,7 +1453,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.358";
+const APP_VERSION = "v8.359";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -10932,15 +10961,15 @@ function viewWait(dayLbl){
   // consolidée), qui prévoit une scène dédiée ICI (pronostics envoyés, avant clôture), absente du
   // portage réel. Reprise fidèle : même asset (qg-tactizo-carte-valides-v2.png), même eyebrow/titre/
   // texte ("Pronostics envoyés" / "Place au match !" / "Bonne chance face à {adversaire} !"), aucune
-  // variante inventée. Rendue avec le gabarit .a2-hero-card déjà utilisé ailleurs (Coulisses/Stats/
-  // Palmarès) plutôt que la mise en page "texte incrusté sur l'image" propre à ce fichier maquette,
-  // pour rester cohérent avec le seul système de hero déjà en place côté production — pas de nouveau
-  // redesign. N'apparaît que s'il y a un duel ce tour-ci (`md`) : la maquette ne prévoit pas de texte
-  // pour un tour sans adversaire (repos), donc aucun texte n'est inventé pour ce cas.
-  const maestroValide = md ? `<div class="a2-hero-card"><div class="a2-hero-img-wrap"><img src="img/qg-tactizo-carte-valides-v2.png" alt="${t("Le Maestro")}"></div>
-     <div class="a2-hero-text"><div class="mini" style="text-transform:uppercase;letter-spacing:.04em;font-weight:800;color:var(--a2-ready,var(--green))">${t("Pronostics envoyés")}</div>
-     <h1 style="margin:2px 0 4px;font-size:18px">${t("Place au match !")}</h1>
-     <p class="mini muted" style="margin:0">${t("Bonne chance face à {a} !",{a:'<b>'+esc(opp.name||'?')+'</b>'})}</p></div></div>` : '';
+  // variante inventée. ⚠️ Correctif régression iPhone (2026-09-06) : rendue avec le gabarit dédié
+  // .a2-maestro-valide (texte incrusté DANS le panneau déjà peint dans l'image, comme la maquette),
+  // PAS .a2-hero-card (son object-position:100% coupait la tête du Maestro sur cet asset précis —
+  // voir le commentaire CSS de .a2-maestro-valide pour la mesure). N'apparaît que s'il y a un duel
+  // ce tour-ci (`md`) : la maquette ne prévoit pas de texte pour un tour sans adversaire (repos).
+  const maestroValide = md ? `<div class="a2-maestro-valide"><img class="a2-maestro-valide-img" src="img/qg-tactizo-carte-valides-v2.png" alt="${t("Le Maestro")}">
+     <div class="a2-maestro-valide-box"><div class="a2-maestro-valide-eyebrow">${t("Pronostics envoyés")}</div>
+     <div class="a2-maestro-valide-title">${t("Place au match !")}</div>
+     <div class="a2-maestro-valide-text">${t("Bonne chance face à {a} !",{a:'<b>'+esc(opp.name||'?')+'</b>'})}</div></div></div>` : '';
   const missingFx = (org && duels.some(d=>!d.fixtures)) ? `<div class="box mini muted" style="text-align:center">${t("⏳ Un duel n'a pas encore ses 5 matchs — la journée ne pourra pas se résoudre tant que le joueur à domicile n'a pas choisi (ou que l'échéance de sélection n'est pas passée).")}<div style="height:6px"></div><button class="btn ghost sm" onclick="forceSelectEnd()">${t("🎲 Tirer les matchs manquants maintenant (organisateur)")}</button></div>` : '';
 
   // ── ÉTAT « VALIDÉS » (avant clôture) : la liste des 5 pronos + bouton Modifier (cf. maquette écran ⑥)
@@ -15041,17 +15070,23 @@ function render(){
   const A2_VIEWS = ["auth","login","signup","checkEmail","resetPassword","newPassword","choosePseudo","profil","create","join"];
   $("topBar").classList.toggle("hide", A2_VIEWS.includes(S.view));
   $("appShell").classList.toggle("a2-mode", A2_VIEWS.includes(S.view));
-  // ⚠️ Bloc 3A (2026-09-05), généralisé lors de l'audit V2 (2026-09-06) — l'ancienne barre du haut
-  // reste visible sur tout écran de ligue (pas dans A2_VIEWS : 🏠/📖/🐛/👤(+🤝) — refonte reportée à
-  // la nav V2). Le NOMBRE d'icônes qu'elle affiche — donc sa hauteur réelle, une seule ligne (~59px)
-  // à 4 icônes contre deux (~89px, ce que le padding-top fixe de .app réserve) dès que 🤝 s'ajoute —
-  // dépend de `canTrade` (L.status==="running" &amp;&amp; pas en lecture seule), PAS de l'écran affiché.
-  // La condition précédente ne couvrait que S.view==="game" (Lobby/Prépa) : Coulisses/Résultats/
-  // Classement/Stats sont TOUS atteignables hors "running" (prep/truce/starting/resolving/done) avec
-  // la même topbar à 4 icônes — d'où le même grand vide constaté dessus, corrigé une seule fois ici
-  // plutôt que par écran. `canTrade` lui-même n'est calculé que plus bas : condition recopiée à
-  // l'identique pour ne pas dépendre de l'ordre des déclarations.
-  $("appShell").classList.toggle("lp-mode", !!S.leagueId && !(L && L.status==="running" && !LECTURE_SEULE));
+  // ⚠️ Correctif audit V2 (2026-09-06) — REMPLACE lp-mode (Bloc 3A, 2026-09-05, généralisé une
+  // première fois le même jour) : cette variante décidait encore d'une hauteur FIXE (66px) à partir
+  // du nombre d'icônes visibles, en supposant qu'une topbar à 4 icônes tient TOUJOURS sur une seule
+  // ligne. Faux : mesuré en direct, elle repasse à 2 lignes (~103px) à 320px (iPhone SE) avec ce
+  // MÊME jeu de 4 icônes qui tient sur ~59px à 375/390px — un réglage d'accessibilité "Texte plus
+  // grand" changerait aussi ce point de bascule. Aucun seuil fixe (par écran, par nombre d'icônes,
+  // par largeur) ne peut donc être juste partout : on MESURE la hauteur réellement rendue de la
+  // barre et on la pose dans --topbar-h, que .app lit (cf. sa définition). +12px = l'espacement
+  // normal du design system entre la barre et le contenu (même valeur que le bandeau "Mes ligues"
+  // utilise déjà par ailleurs) — pas une marge de sécurité supplémentaire.
+  {
+    const tb = $("topBar");
+    const h = (tb && !tb.classList.contains("hide")) ? Math.ceil(tb.getBoundingClientRect().height) : 0;
+    const cur = getComputedStyle(document.documentElement).getPropertyValue("--topbar-h").trim();
+    const next = h ? (h+"px") : "0px";
+    if(cur !== next) document.documentElement.style.setProperty("--topbar-h", next);
+  }
   const inLeague=!!S.leagueId;
   applyThemeBtn(); applyLangBtn();
   /* ⚠️ v8.193 — LES DEUX PAGES LÉGALES SONT ATTEIGNABLES DEPUIS L'APP.
