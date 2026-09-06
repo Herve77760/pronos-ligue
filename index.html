@@ -1691,7 +1691,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.364";
+const APP_VERSION = "v8.365";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5478,6 +5478,7 @@ const EN={
   "La saison est jouée.":"The season is over.", "La revanche s'organise sur Tactizo.":"Plan your revenge on Tactizo.",
   // ⚠️ Port V2 Notifications (2026-09-06) — messages de notification navigateur, jusqu'ici en dur.
   "Vote le gage et mise sur les bonus.":"Vote on the forfeit and bid on the bonuses.",
+  "👑 Match favori · Gain/perte ×2":"👑 Favourite match · Gain/loss ×2",
   "🏠 À toi de jouer !":"🏠 Your turn!", "Choisis les 5 matchs de la journée.":"Pick the day's 5 matches.",
   "⚽ Paris ouverts":"⚽ Bets are open", "À toi de faire tes pronostics !":"Time to make your picks!",
   "📊 Résultats dispo":"📊 Results are in", "Les résultats de la journée sont là.":"Today's results are in."
@@ -12154,11 +12155,19 @@ function recapBody(D){
     if(p.state==='noPick') return `<div class="${cls}">${who}<div class="muted" style="margin-top:4px">—</div></div>`;
     const badges=[]; if(p.isCaptain) badges.push(`<div class="a2-res-mbe-badge favori">👑 ${t("Favori")}</div>`);
     if(cardOnMatch(p.card,i)) badges.push(`<div class="a2-res-mbe-badge bonus">${cardEmoji(p.card)} ${esc(cardName(p.card))}</div>`);
+    // ⚠️ Port V2 Résultats (2026-09-06, écart constaté par l'audit) — resultats.html accompagne
+    // TOUJOURS le badge 👑 d'une ligne d'explication (`.mbe-effect`, "Match favori · Gain/perte ×2")
+    // sous les badges. Seul le favori est repris ici : le bonus a aussi son `.mbe-effect` dans la
+    // maquette, mais avec un texte d'effet COURT par bonus (`m.bonus.effect`, ex. données de démo)
+    // qu'aucune donnée de production n'expose aujourd'hui (seul `CARDS[id].d`, une description
+    // longue, existe) — nécessite d'écrire ces ~14 textes courts avant de le porter, hors périmètre
+    // de cette correction ciblée.
+    const effect = p.isCaptain ? `<div class="a2-res-mbe-effect">${t("👑 Match favori · Gain/perte ×2")}</div>` : '';
     return `<div class="${cls}">${who}
       <div class="pick">${p.selTxt}</div>
       <div class="stake-odds">${p.stake}€ @${cote(p.odd)}${p.faceCut?` · ↓½ 🤛`:''}</div>
       <div class="net ${p.net>=0?'pos':'neg'}">${euroSigned(p.net)} ${p.win?'✓':'✗'}</div>
-      ${badges.length?`<div class="a2-res-mbe-badges">${badges.join('')}</div>`:''}
+      ${badges.length?`<div class="a2-res-mbe-badges">${badges.join('')}</div>`:''}${effect}
     </div>`;
   };
   const fxRecap = (myD && myD.fixtures) || [];
