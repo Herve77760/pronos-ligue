@@ -1691,7 +1691,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.363";
+const APP_VERSION = "v8.364";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4602,16 +4602,16 @@ const EN={
   "Pas de détail disponible pour ce joueur.":"No details available for this player.",
   "Détail — {a}":"Details — {a}", "Total net :":"Net total:",
   "pari non enregistré pour ce match.":"no bet recorded for this match.",
-  "l'un est sorti : {a}×({b}−1)={c}€":"one came in: {a}×({b}−1)={c}€", "aucun des deux → −{a}€":"neither → −{a}€",
+  "l'un est sorti : {a}×({b}−1)={c}":"one came in: {a}×({b}−1)={c}", "aucun des deux → −{a}€":"neither → −{a}€",
   // ⚠️ v7.62 : plus de « cote combinée » ici — 🧈 paie à la cote PLEINE du résultat sorti.
   "🧈 <b>{n}</b> : couvre <b>{a}</b> ou <b>{b}</b> pour {c}€ (cote @{d}) → {e}":"🧈 <b>{n}</b>: covers <b>{a}</b> or <b>{b}</b> for {c}€ (odds @{d}) → {e}",
   "🎁 <b>Chérie c'est cadeau</b> : choix initial <s class=\"red\">{a}</s> inversé en <b>{b}</b>.":"🎁 <b>Sweetie It's a Gift</b>: original pick <s class=\"red\">{a}</s> flipped to <b>{b}</b>.",
-  "a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}€":"bet <b>{a}</b> ({b}€ @{c}) → won: {b}×({c}−1)={d}€",
+  "a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}":"bet <b>{a}</b> ({b}€ @{c}) → won: {b}×({c}−1)={d}",
   "a parié <b>{a}</b> ({b}€) → perdu : −{b}€":"bet <b>{a}</b> ({b}€) → lost: −{b}€",
-  "👑 Match favori ×2 → {a}€":"👑 Favourite match ×2 → {a}€", "{n} ×2 → {a}€":"{n} ×2 → {a}€",
-  "{n} {m} → {a}€":"{n} {m} → {a}€",
-  "{n} : moitié de la mise remboursée → {a}€":"{n}: half the stake refunded → €{a}",
-  "🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}€":"🤛 Opponent's In Your Face: gain <b>halved</b> → {a}€",
+  "👑 Match favori ×2 → {a}":"👑 Favourite match ×2 → {a}", "{n} ×2 → {a}":"{n} ×2 → {a}",
+  "{n} {m} → {a}":"{n} {m} → {a}",
+  "{n} : moitié de la mise remboursée → {a}":"{n}: half the stake refunded → {a}",
+  "🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}":"🤛 Opponent's In Your Face: gain <b>halved</b> → {a}",
   "Gain réduit de moitié par « Dans ta face » adverse":"Gain halved by the opponent's In Your Face",
   // — Phase 4c : noms & descriptions des bonus —
   "Assurance":"Insurance", "Assurance tous risques":"Better Safe Than Sorry", "Un pari choisi : s'il est perdu, la moitié de la mise est remboursée.":"A chosen bet: if it loses, half the stake is refunded.",
@@ -5475,7 +5475,12 @@ const EN={
   // ⚠️ Port V2 Carte de partage de saison (2026-09-06) — carte-partage-saison-v2.html, 5 variantes.
   "Podium":"Podium",
   "Capital final":"Final balance", "Pronos réussis":"Picks won",
-  "La saison est jouée.":"The season is over.", "La revanche s'organise sur Tactizo.":"Plan your revenge on Tactizo."
+  "La saison est jouée.":"The season is over.", "La revanche s'organise sur Tactizo.":"Plan your revenge on Tactizo.",
+  // ⚠️ Port V2 Notifications (2026-09-06) — messages de notification navigateur, jusqu'ici en dur.
+  "Vote le gage et mise sur les bonus.":"Vote on the forfeit and bid on the bonuses.",
+  "🏠 À toi de jouer !":"🏠 Your turn!", "Choisis les 5 matchs de la journée.":"Pick the day's 5 matches.",
+  "⚽ Paris ouverts":"⚽ Bets are open", "À toi de faire tes pronostics !":"Time to make your picks!",
+  "📊 Résultats dispo":"📊 Results are in", "Les résultats de la journée sont là.":"Today's results are in."
 };
 function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); }
   // Espace INSÉCABLE entre un nombre et son unité : « 10 € » ne doit jamais se retrouver coupé en
@@ -5511,17 +5516,15 @@ function applyLangBtn(){ const b=$("langBtn"); if(b) b.textContent = lang==="en"
 function toggleLang(){ lang=lang==="en"?"fr":"en"; try{ localStorage.setItem("pl_lang",lang); document.documentElement.lang=lang; }catch(e){} applyLangBtn(); render(); }
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const pick=a=>a[Math.floor(Math.random()*a.length)];
-const r2=n=>Math.round((+n||0)*100)/100;                       // arrondi à 2 décimales
-const fmt=n=>{ const r=r2(n); return (r>=0?"+":"")+r.toFixed(2); }; // gain signé, 2 décimales
-const eur=n=>r2(n).toFixed(2);                                 // montant non signé, 2 décimales
-// ⚠️ Correctif audit V2 (2026-09-06) — FORMAT MONÉTAIRE HARMONISÉ (demandé par Hervé) : `fmt`/`eur`
-// ci-dessus restent inchangées (trop de code hors du périmètre de cette passe en dépend, toujours
-// point-décimal + 2 décimales fixes + "€" ajouté séparément par l'appelant) — `euro()`/`euroSigned()`
-// sont NEUVES, à côté, et remplacent ces deux conventions uniquement sur les écrans audités
-// (capital, mises, enchères, risque/gain, résultats) : entier sans décimale ("25 €", jamais
-// "25,00 €"), virgule si de vrais centimes existent ("44,50 €"), point en anglais ("44.50 €"),
-// "€" et l'espace déjà inclus (l'appelant n'ajoute plus rien). Centimes calculés en entier (jamais
-// via .toFixed sur un flottant) pour ne jamais produire un artefact du type "12.339999999999998".
+const r2=n=>Math.round((+n||0)*100)/100;                       // arrondi à 2 décimales (calcul interne)
+// ⚠️ Migration monétaire terminée (2026-09-06, demandé par Hervé) — `fmt`/`eur` (point-décimal fixe
+// + "€" ajouté séparément par l'appelant) ont été entièrement remplacées par `euro()`/`euroSigned()`
+// ci-dessous, y compris dans `explain()`/`impactTxt()` (dernier bastion, migré en passe dédiée) : il
+// n'en reste plus un seul appel dans tout le fichier — supprimées plutôt que laissées mortes.
+// Entier sans décimale ("25 €", jamais "25,00 €"), virgule si de vrais centimes existent
+// ("44,50 €"), point en anglais ("44.50 €"), "€" et l'espace déjà inclus (l'appelant n'ajoute plus
+// rien). Centimes calculés en entier (jamais via .toFixed sur un flottant) pour ne jamais produire
+// un artefact du type "12.339999999999998".
 function euroAmt(n, signed){
   const v=+n||0; const totalCents=Math.round(Math.abs(v)*100); const neg=v<0;
   const whole=Math.floor(totalCents/100), cents=totalCents%100;
@@ -6594,11 +6597,14 @@ function myActionKey(){
   }
   return null;
 }
+// ⚠️ Correctif audit V2 (2026-09-06) — ces 4 messages (notification navigateur) étaient codés en
+// dur en français, jamais passés par t() : un joueur en anglais les recevait en français alors que
+// le reste de l'app (dont les notifications de rachat, notifyTrades()) est bien localisé.
 function notifMsg(key){
-  if(key.indexOf("prep:")===0) return ["🎬 Préparation","Vote le gage et mise sur les bonus."];
-  if(key.indexOf("sel:")===0)  return ["🏠 À toi de jouer !","Choisis les 5 matchs de la journée."];
-  if(key.indexOf("bet:")===0)  return ["⚽ Paris ouverts","À toi de faire tes pronostics !"];
-  if(key.indexOf("recap:")===0) return ["📊 Résultats dispo","Les résultats de la journée sont là."];
+  if(key.indexOf("prep:")===0) return [t("🎬 Préparation"),t("Vote le gage et mise sur les bonus.")];
+  if(key.indexOf("sel:")===0)  return [t("🏠 À toi de jouer !"),t("Choisis les 5 matchs de la journée.")];
+  if(key.indexOf("bet:")===0)  return [t("⚽ Paris ouverts"),t("À toi de faire tes pronostics !")];
+  if(key.indexOf("recap:")===0) return [t("📊 Résultats dispo"),t("Les résultats de la journée sont là.")];
   return null;
 }
 function maybeNotify(){ const key=myActionKey(); if(key && key!==notifKey){ const m=notifMsg(key); if(m) notify(m[0],(L&&L.name?L.name+" — ":"")+m[1]); } notifKey=key; }
@@ -7939,6 +7945,15 @@ function computeMaestroMood(act, plys, bts){
   const perLeague=act.map(m=>{
     const lg=m.lg;
     if(lg.status!=="running") return {score:75, N:0};   // pas encore lancée : rien à mesurer
+    // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — `lg.current_day` compte les journées
+    // RÉSOLUES côté serveur, pas celles que CE joueur a acquittées (`getSeen()`/`viewRecap`). Sans
+    // ce garde, l'humeur du Maestro (palier 1-6, 🔴→🟢) et son message pouvaient déjà refléter le
+    // résultat d'une journée que le joueur n'avait pas encore découverte (points/capital déjà à
+    // jour en base dès la résolution serveur) — un gain récent se voyait dans l'humeur du QG avant
+    // même le rituel de révélation. Tant qu'une journée résolue n'est pas acquittée, cette ligue
+    // retombe sur le palier neutre (comme une ligue sans historique), exactement comme le cas
+    // "pas encore lancée" juste au-dessus — aucune donnée liée à cette journée n'entre dans le score.
+    if(lg.current_day>getSeen(lg.id,m.pid)) return {score:75, N:0};
     const curDay=lg.current_day||0, wantN=Math.min(curDay,3);
     const myNets=(bts||[]).filter(b=>b.league_id===lg.id && b.player_id===m.pid && b.net!=null && b.day>=curDay-wantN && b.day<curDay);
     const N=myNets.length;
@@ -12096,28 +12111,33 @@ function recapBody(D){
     // "€" est ici baigné dans plusieurs phrases traduites d'`explain()` juste en dessous — un
     // changement plus large, à faire dans une passe dédiée plutôt qu'au fil de ce portage UI.
     return `${p.selTxt} · ${p.stake}€ @${cote(p.odd)}${p.isCaptain?' <span class="bem clik" onclick="event.stopPropagation();showCaptainInfo()">👑</span>':''}${cardOnMatch(p.card,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${p.card.cloned?'clone':p.card.id}')">${cardEmoji(p.card)}</span>`:''}${p.faceCut?` <span class="mini red" title="${t("Gain réduit de moitié par « Dans ta face » adverse")}">↓½ 🤛</span>`:''} → <b class="${p.net>=0?'green':'red'}">${euroSigned(p.net)}</b> ${p.win?'✓':'✗'}`; };
+  // ⚠️ Fin de migration monétaire (2026-09-06, passe dédiée demandée par Hervé) — les montants
+  // calculés (`fmt(x)+"€"`) passent tous par `euroSigned()` (virgule FR, point EN, jamais de
+  // centimes réels supprimés). La MISE (`b.stake`) reste en concaténation brute avec son propre
+  // "€" dans les phrases ci-dessous : c'est TOUJOURS un entier par convention de saisie (jamais de
+  // centimes en jeu côté mise), donc rien à migrer sur elle spécifiquement.
   const explain=(bt,f,i,oppCard)=>{ if(!bt||!bt.picks||!bt.picks[i]) return t("pari non enregistré pour ce match.");
     const b=bt.picks[i]; const c=(bt.card&&bt.card.stolenBy)?null:bt.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;  // bonus volé → neutralisée (cf. line())
     const win = isDC ? (f.res===b.sel||f.res===c.sel2) : (b.sel===f.res);
     const odd = isDC ? dcWinOdd(f,b.sel,c.sel2) : oddOf(f,b.sel);
     const base=win?(+b.stake)*(odd-1):-(+b.stake); let g=base; let txt;
-    if(isDC){ const out=win?t("l'un est sorti : {a}×({b}−1)={c}€",{a:b.stake,b:odd,c:fmt(base)}):t("aucun des deux → −{a}€",{a:b.stake});
+    if(isDC){ const out=win?t("l'un est sorti : {a}×({b}−1)={c}",{a:b.stake,b:odd,c:euroSigned(base)}):t("aucun des deux → −{a}€",{a:b.stake});
       /* ⚠️ PAS « cote combinée » (corrigé v7.62, signalé par Hervé sur HR98Z). C'était un reste de
          l'ANCIENNE règle du bonus, qui payait à une cote combinée pondérée. Depuis, 🧈 paie à la
          cote PLEINE du résultat qui sort (`dcWinOdd`) — c'est-à-dire la cote du match, rien de
          combiné. Le mot annonçait un calcul que le jeu ne fait plus. */
       txt=t("🧈 <b>{n}</b> : couvre <b>{a}</b> ou <b>{b}</b> pour {c}€ (cote @{d}) → {e}",{n:t(CARDS.chance.n),a:esc(labelSel(f,b.sel)),b:esc(labelSel(f,c.sel2)),c:b.stake,d:odd,e:out}); }
     else { const flip = b.orig!=null ? t("🎁 <b>Chérie c'est cadeau</b> : choix initial <s class=\"red\">{a}</s> inversé en <b>{b}</b>.",{a:esc(labelSel(f,b.orig)),b:esc(labelSel(f,b.sel))})+'<br>' : '';
-      txt= flip + (win?t("a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}€",{a:esc(labelSel(f,b.sel)),b:b.stake,c:odd,d:fmt(base)})
+      txt= flip + (win?t("a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}",{a:esc(labelSel(f,b.sel)),b:b.stake,c:odd,d:euroSigned(base)})
              :t("a parié <b>{a}</b> ({b}€) → perdu : −{b}€",{a:esc(labelSel(f,b.sel)),b:b.stake})); }
-    if(i===bt.captain){ g=base*2; txt+=' · '+t("👑 Match favori ×2 → {a}€",{a:fmt(g)}); }
+    if(i===bt.captain){ g=base*2; txt+=' · '+t("👑 Match favori ×2 → {a}",{a:euroSigned(g)}); }
     if(c&&c.target===i&&!isDC){ const ce=cardEmoji(c), cn=cardName(c);   // v8.317 : emoji/nom clone-aware, cf. leur définition
-      if(c.id==="double"&&win){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}€",{n:cn,a:fmt(g)});}
-      else if(c.id==="tout"){g*=(win?3:2);txt+=' · '+ce+' '+t("{n} {m} → {a}€",{n:cn,m:win?'×3':'×2',a:fmt(g)});}
-      else if(c.id==="joker"){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}€",{n:cn,a:fmt(g)});}
-      else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);txt+=' · '+ce+' '+t("{n} : moitié de la mise remboursée → {a}€",{n:cn,a:fmt(g)});} }
-    if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; txt+=' · '+t("🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}€",{a:fmt(g)}); }
-    txt+=` = <b class="${g>=0?'green':'red'}">${fmt(g)}€</b>`; return txt; };
+      if(c.id==="double"&&win){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}",{n:cn,a:euroSigned(g)});}
+      else if(c.id==="tout"){g*=(win?3:2);txt+=' · '+ce+' '+t("{n} {m} → {a}",{n:cn,m:win?'×3':'×2',a:euroSigned(g)});}
+      else if(c.id==="joker"){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}",{n:cn,a:euroSigned(g)});}
+      else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);txt+=' · '+ce+' '+t("{n} : moitié de la mise remboursée → {a}",{n:cn,a:euroSigned(g)});} }
+    if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; txt+=' · '+t("🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}",{a:euroSigned(g)}); }
+    txt+=` = <b class="${g>=0?'green':'red'}">${euroSigned(g)}</b>`; return txt; };
   const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Match favori : gain et perte doublés">👑 Match favori (${esc(who)})</span> `; if(cardOnMatch(bt.card,i)) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.cloned?'clone':bt.card.id}')">${cardEmoji(bt.card)} ${esc(cardName(bt.card))} (${esc(who)})</span> `; return s; };
   // ⚠️ Port V2 Résultats (2026-09-06, densité/hiérarchie demandée par Hervé après test réel iPhone)
   // — une colonne mbe-cols de resultats.html, construite depuis `pickCalc()` : pick GRAND et en
@@ -12156,7 +12176,7 @@ function recapBody(D){
       // ⚠️ v7.64 : « meilleur RÉSULTAT de pari », pas « meilleur pari gagnant » — l'échange a lieu
       // même quand l'un des deux a tout raté (cf. la phase 3 du moteur).
       detail=(Math.abs(sv)>=0.5)
-        ? t("❄️ Ton <b>meilleur résultat de pari</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.",{a:'<b class="'+(sv>=0?'green':'red')+'">'+fmt(sv)+'€</b>',b:'<b class="'+((im.opp||0)>=0?'green':'red')+'">'+fmt(im.opp||0)+'€</b>'})
+        ? t("❄️ Ton <b>meilleur résultat de pari</b> et celui de l'adversaire ont été <b>échangés</b> — {a} pour toi, {b} pour lui.",{a:'<b class="'+(sv>=0?'green':'red')+'">'+euroSigned(sv)+'</b>',b:'<b class="'+((im.opp||0)>=0?'green':'red')+'">'+euroSigned(im.opp||0)+'</b>'})
         : t("❄️ Échange <b>sans effet</b> : l'un des deux n'avait aucun pari, ou les deux meilleurs résultats étaient identiques.");
     } else if(c.id==="sangsue"){ detail=(Math.abs(im.opp||0)>=1)?`Tu as siphonné une part du bénéfice de l'adversaire.`:`L'adversaire n'était pas bénéficiaire → rien à siphonner.`;
     } else if(c.id==="moitie"){ detail=(Math.abs(im.opp||0)>=1)?t("Le résultat total de l'adversaire a été divisé par 2."):t("L'adversaire a fini quasiment à zéro — diviser par 2 n'a rien changé.");
@@ -12608,27 +12628,7 @@ function recapBody(D){
     ${revealed ? `${pointsCardHTML}${bonusBannerHTML}
       ${(flagsBox||detail) ? `<button class="a2-res-details-toggle${recapDetailsOpen?' open':''}" onclick="toggleRecapDetails()" type="button">${t("Voir détails des matchs")} <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
       ${recapDetailsOpen?`<div class="a2-res-details-panel">${flagsBox}${detail?`<div class="listsec">${t("⚔️ Le duel en détail")}</div>${detail}`:''}</div>`:''}` : ''}` : ''}
-    ${otherDuelsHTML}
-    <div class="listsec">${t("Résultats de la journée")}</div>
-    <div class="mini muted" style="margin:-4px 0 6px">${t("👉 Touche un nom ou un chiffre pour savoir d'où il vient.")}</div>
-    <div class="lb">
-      ${ord.map((p,i)=>{ const dp=dpts[p.id]||0; const isStar=p.id===starId; const net=netMap[p.id]||0;
-        const tags=[]; if(p.id===S.myId) tags.push(`<span class="tagchip me">${t("(toi)")}</span>`);
-        if(p.is_ai) tags.push(`<span class="tagchip ia">${t("IA")}</span>`);
-        if(forgot(p.id)) tags.push(`<span class="tagchip late clik" onclick="event.stopPropagation();showOubliInfo('${esc2(p.name)}')">⏰ ${forgotPtsShown()}</span>`);
-        if(infoCap(p.id)&&infoCap(p.id).renfloue) tags.push(`<span class="tagchip bail clik" onclick="event.stopPropagation();showRecapInfo('${esc2(p.name)}')">💸 −1</span>`);
-        return `<div class="lb-row ${p.id===fp?'me':''}" onclick="setRecapFocus('${p.id}')">
-          <span class="rank ${i===0?'gold':''}">${i===0?'🥇':(i+1)}</span>
-          <span class="lb-ava">${avatarHTML(p.emoji,40)}</span>
-          <div class="lb-name"><div class="n">${esc(p.name||'?')}${(p.id===fp&&!isMe)?' 👁️':''}</div>${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div>
-          <div class="lb-stats">
-            ${isStar?`<span class="lb-star clik" onclick="event.stopPropagation();showStarInfo()">⭐ <b class="gold">+1</b></span>`:''}
-            <span class="lb-pts clik" onclick="event.stopPropagation();showDuelPtsInfo('${p.id}',${isStar?1:0})" title="${t("Détail des points")}">${dp} pt${Math.abs(dp)>1?'s':''}</span>
-            <span class="lb-bonus ${cardMap[p.id]&&cardMap[p.id].id?'clik':'none'}"${cardMap[p.id]&&cardMap[p.id].id?` onclick="event.stopPropagation();showBonusImpact('${p.id}',${D})"`:''}>${cardMap[p.id]&&cardMap[p.id].id?CARDS[cardMap[p.id].id].e:'–'}</span>
-            <span class="lb-gain ${net>=0?'win':'lose'}" onclick="event.stopPropagation();showGainDetail('${p.id}')">${euroSigned(net)}</span>
-          </div>
-        </div>`; }).join("")}
-    </div>
+    ${revealed ? otherDuelsHTML : ''}
     ${oduelModalHTML}`;
   } finally { if(_restore){ bets=_sb; duels=_sd; } }
 }
@@ -13323,7 +13323,12 @@ function computeStandHist(){
 }
 // ✨ FICHE STATS PERSO (premium, offert en test) — calculée depuis chartBets + standDuels (données déjà chargées).
 function myStats(){
-  const my=(chartBets||[]).filter(b=>b.player_id===S.myId && Array.isArray(b.picks));
+  // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — `chartBets` contient TOUTES les journées
+  // résolues côté serveur, y compris celle que ce joueur n'a pas encore acquittée (`getSeen()`).
+  // Sans ce filtre, "meilleure/pire journée" citait déjà son numéro et son montant, et le net/ROI
+  // cumulés intégraient déjà son résultat — avant même le rituel de découverte (suspense 3-2-1).
+  const seen=getSeen();
+  const my=(chartBets||[]).filter(b=>b.player_id===S.myId && Array.isArray(b.picks) && b.day<seen);
   const duelOf=day=>(standDuels||[]).find(d=>d.day===day && (d.home_id===S.myId||d.away_id===S.myId));
   const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0);
   let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0;
@@ -13465,7 +13470,12 @@ async function loadMyStats(){
     ids.forEach(lid=>{ const mp=myPid[lid]; if(!mp) return; const lg=lgMap[lid]||{};
       if(!garde(lg)) return;   // onglet : ligue d'un autre type de données
       const compte=alleeAuTerme(lg);   // false = ligue abandonnée : visible dans la liste, hors totaux
-      const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp).sort((x,y)=>(x.day|0)-(y.day|0));
+      // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — même correctif que myStats() : sans ce
+      // filtre, une journée résolue côté serveur mais pas encore acquittée par CE joueur dans CETTE
+      // ligue pouvait déjà apparaître dans « Mes stats » (accueil, hors ligue ouverte), avec son
+      // numéro de journée et son montant exact — avant le rituel de découverte (suspense 3-2-1).
+      const seenLid=getSeen(lid,mp);
+      const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp && (b.day|0)<seenLid).sort((x,y)=>(x.day|0)-(y.day|0));
       let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
       run=0;   // une série de duels ne traverse pas deux championnats différents : elle repart à zéro
       myBets.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures; days++;
@@ -15040,10 +15050,18 @@ async function loadPalmares(){
   try{
     // `data_mode` (v7.26) : le palmarès se lit lui aussi par type de données — voir `calcule` plus bas.
     const lgs=await q(db.from("leagues").select("id,name,num_participants,status,data_mode"));
-    const pls=await q(db.from("players").select("id,name,emoji,league_id,is_ai,user_id"));
-    const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").not("net","is",null));
+    const pls=await q(db.from("players").select("id,name,emoji,league_id,is_ai,user_id,last_seen_day"));
+    const btsAll=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").not("net","is",null));
     const dls=await q(db.from("duels").select("id,fixtures"));
     const lgMap={},plMap={},dlMap={}; lgs.forEach(l=>lgMap[l.id]=l); pls.forEach(p=>plMap[p.id]=p); dls.forEach(d=>dlMap[d.id]=d);
+    // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — CROSS-JOUEURS : sans ce filtre, le résultat
+    // d'un tiers (nom, ligue, journée, montant exact) pouvait apparaître dans "Plus gros gain"/"Pire
+    // dégringolade"/etc. avant même que CE joueur (pas seulement toi) ait acquitté sa propre journée
+    // (`players.last_seen_day`, mis à jour par `setSeen()`/`ackRecap()`) — donc avant son propre
+    // rituel de découverte. `getSeen()` ne convient pas ici (elle ne lit que le joueur/la ligue
+    // OUVERTE côté client) : chaque pari est comparé au `last_seen_day` DE SON PROPRE joueur, déjà
+    // chargé ci-dessus pour tout le monde.
+    const bts=btsAll.filter(b=>{ const pl=plMap[b.player_id]; return pl && b.day<(pl.last_seen_day|0); });
     // Le palmarès ne classe que les gens avec qui TOI tu as déjà partagé une ligue — pas tout le
     // monde qui a jamais joué sur l'app (demandé par Hervé : classer des inconnus n'a pas de sens).
     const mesLigues=new Set(pls.filter(p=>p.user_id===(AUTH&&AUTH.id)).map(p=>p.league_id));
@@ -15137,11 +15155,15 @@ function palmTabsHTML(){
       :t("Les deux types de ligues réunis. Attention : en simulé les cotes sont tirées au sort, battre les cotes n'y a pas le même sens."))}</div>`;
 }
 function viewPalmares(){
-  // ⚠️ Bloc 3B (2026-09-05) — hero repris de la maquette palmares.html (vue "Moi"), affiché en tête
-  // de TOUTES les vues (Records inclus) : `back` est déjà préfixé sur chaque retour de la fonction
-  // (y compris les retours anticipés erreur/chargement), donc un seul point d'insertion suffit.
-  const back=`<div class="a2-hero-card"><div class="a2-hero-img-wrap"><img src="img/tactizo-palmares-hall-of-fame.png" alt=""></div>
-   <div class="a2-hero-text"><h1 style="margin:0 0 4px;font-size:20px">🥇 ${t("Palmarès")}</h1><p class="mini muted" style="margin:0">${t("Les records de tous les joueurs que tu as croisés.")}</p></div></div>`;  // navigation via la barre d'onglets du bas (v6.15)
+  // ⚠️ Correctif audit V2 (2026-09-06) — le hero "Salle des trophées" (Bloc 3B, 2026-09-05) était
+  // affiché en tête de CETTE vue, alors que la maquette palmares.html documente explicitement
+  // (commentaire d'en-tête) qu'il est réservé à la vue "Moi" et volontairement PAS répété sur
+  // Records/Mes groupes/fiche Groupe, "pour rester une identité d'entrée, pas un décor systématique".
+  // Le contenu actuellement porté ici (classements 🎯📈💎…) EST la vue Records de la maquette
+  // (`#view-records`, qui démarre directement sur le filtre Tout/Réelles/Simulées, sans hero ni
+  // titre) — pas la vue "Moi" (non portée, cf. rapport d'audit : verrouillée derrière l'option
+  // premium Stats). Retiré : à réintroduire uniquement si/quand la vue "Moi" existe réellement ici.
+  const back=``;  // navigation via la barre d'onglets du bas (v6.15)
   // ⚠️ L'erreur vit sur `palmares`, PAS sur le classement d'un onglet : elle est levée avant même
   // que les trois existent. La tester sur la vue la rendrait invisible (même piège qu'en v7.24).
   if(palmares&&palmares.error) return back+`<div class="err">${esc(palmares.error)}</div>`;
