@@ -1396,7 +1396,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.356";
+const APP_VERSION = "v8.357";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -8081,10 +8081,12 @@ function viewHome(){
   // assumé, cf. rapport de fin de bloc — l'ancien chemin via l'onglet Ligues reste intact).
   // ⚠️ Bloc 3C (2026-09-06) — le Maestro dynamique EST maintenant porté (cf. maestroHeroHTML() et
   // le commentaire détaillé de computeMaestroMood() ci-dessus) : les assets t1..t6 vivent désormais
-  // dans app/img/. Posé AVANT `salut` (comme dans la maquette, où le Maestro prime) — `salut` lui-
-  // même n'est pas modifié, seulement décalé d'un bloc.
+  // dans app/img/.
+  // ⚠️ Correctif test iPhone (2026-09-06) — LE BLOC « 👋 Bonjour {nom} » + AVATAR + SLOGAN A ÉTÉ
+  // RETIRÉ : le hero Maestro assure désormais seul la personnalisation/l'accroche du QG, qui doit
+  // rester compact et directement opérationnel (enchaîne sur `alerte`/`bloc`). `sloganHTML()` n'est
+  // PAS supprimée : elle reste utilisée ailleurs (entrée, partage, tuto) — seul cet appel disparaît.
   const maestro=maestroHeroHTML();
-  const salut=`<div class="a2-qg-greet">${avatarHTML(AUTH.avatar,52)}<h1>${t("👋 Bonjour {a}",{a:esc(AUTH.name)})}</h1></div>${sloganHTML("haut",true)}`;
   /* ⚠️ v8.46 (arbitré avec Hervé) — LE BLOC « 💡 Comment ça marche ? » A ÉTÉ RETIRÉ D'ICI.
      Il était devenu la TROISIÈME version du même contenu — après le tuto et la page 📖 Règles.
      L'accueil est « bonjour, puis où aller ». ⚠️ `howItWorksHTML()` reste dans le SALON D'ATTENTE,
@@ -8194,7 +8196,11 @@ function viewHome(){
   const tuto=dejaJoue
     ? `<div style="height:8px"></div><button class="btn ghost sm" style="width:100%" onclick="openTuto()">${t("🎓 Revoir le tuto")}</button>`
     : `<div style="height:8px"></div><button class="btn ghost" onclick="openTuto()" style="border-color:var(--green);color:var(--green)">${t("🎓 Première fois ? Découvrir le jeu")}</button>`;
-  return `<div class="a2-wrap" style="padding-top:6px">${maestro+salut+alerte+bloc+tuto}</div>`;
+  // ⚠️ Correctif test iPhone (2026-09-06) — `.a2-wrap-tight` (déjà utilisée par Lobby/Hub Prépa,
+  // même raison : la barre du haut RESTE visible sur "home", donc le padding-top de 20px habituel
+  // de `.a2-wrap` — pensé pour les écrans qui la masquent — n'ajoutait qu'une bande vide teintée
+  // (le dégradé de fond de `.a2-wrap`) entre le header et le hero Maestro.
+  return `<div class="a2-wrap a2-wrap-tight">${maestro+alerte+bloc+tuto}</div>`;
   // v7.04 (Hervé) : le bouton « 🛠 Admin » a été RETIRÉ de l'accueil. Il faisait doublon avec
   // « ⚙️ Espace admin » de l'écran Profil, seul point d'entrée conservé. Motif : l'accueil de
   // l'administrateur doit être EXACTEMENT celui de n'importe quel joueur — sans quoi on teste
