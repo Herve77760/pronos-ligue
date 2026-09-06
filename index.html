@@ -696,6 +696,18 @@
   .pick-row .sel-lbl .o{font-size:11px;color:var(--muted);margin-left:5px;font-variant-numeric:tabular-nums;}
   .pick-row .stk{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--muted);flex:none;}
   .picks-total{display:flex;justify-content:space-between;padding:11px 14px;background:var(--panel2);font-size:12.5px;font-weight:800;}
+  /* ---- Port V2 Pronos (2026-09-06, pronos-valides.html) : carte de match "pronos validés" ---- */
+  .match-card-c{background:var(--panel);border:1px solid var(--border);border-left:3px solid transparent;border-radius:10px;padding:10px 12px;margin-bottom:8px;}
+  .match-card-c.is-favori{border-left-color:var(--gold);}
+  .mc-top{display:flex;align-items:center;gap:7px;}
+  .mc-num{width:17px;height:17px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;background:var(--panel2);color:var(--muted);font-size:9.5px;font-weight:800;}
+  .mc-team{flex:1;min-width:0;font-weight:800;font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .mc-vs{font-size:9px;color:var(--faint);flex:0 0 auto;}
+  .mc-fav{flex:0 0 auto;font-size:12px;}
+  .mc-meta{display:block;font-size:10.5px;color:var(--muted);margin-top:4px;}
+  .mc-result{display:block;font-size:12px;color:var(--ink);margin-top:5px;}
+  .mc-result .pick-name{font-weight:800;}
+  .mc-bonus-c{font-size:11px;color:var(--muted);margin-top:5px;}
   .opp-status{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--border);border-radius:calc(var(--r) - 4px);padding:11px 13px;font-size:12.5px;color:var(--muted);}
   /* ⚠️ `.st` n'a plus AUCUN usage (vécu par Hervé : la pastille « pronos non validés »
      partait seule à droite alors que « ✓ pronos validés » et « attend ses matchs » sont
@@ -1129,6 +1141,8 @@
   .a2-status-ic svg{width:24px;height:24px;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round}
   .a2-status-ic.ok{background:rgba(63,202,133,.12);border:1px solid rgba(63,202,133,.4)}
   .a2-status-ic.ok svg{stroke:var(--a2-ready)}
+  .a2-status-ic.warn{background:rgba(205,164,58,.14);border:1px solid rgba(205,164,58,.4)}
+  .a2-status-ic.warn svg{stroke:var(--a2-brass-light)}
   .a2-status-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:17px;color:var(--a2-ink);margin:0 0 8px}
   .a2-status-text{font-size:13px;color:var(--a2-muted);line-height:1.5;margin:0 0 18px}
   /* ---- Profil : lignes de menu (icônes SVG sobres, pas d'emoji comme identité UI) ---- */
@@ -1287,6 +1301,14 @@
   .a2-wrap .match, .a2-theme .match{background:var(--a2-panel);border-color:var(--a2-border)}
   .a2-wrap .picks-card, .a2-theme .picks-card{background:var(--a2-panel);border-color:var(--a2-border)}
   .a2-wrap .picks-total, .a2-theme .picks-total{background:var(--a2-panel-2)}
+  .a2-wrap .match-card-c, .a2-theme .match-card-c{background:var(--a2-panel);border-color:var(--a2-border)}
+  .a2-wrap .match-card-c.is-favori, .a2-theme .match-card-c.is-favori{border-left-color:var(--a2-brass)}
+  .a2-wrap .mc-num, .a2-theme .mc-num{background:var(--a2-panel-2);color:var(--a2-muted)}
+  .a2-wrap .mc-team, .a2-theme .mc-team{color:var(--a2-ink)}
+  .a2-wrap .mc-vs, .a2-theme .mc-vs{color:var(--a2-faint)}
+  .a2-wrap .mc-meta, .a2-theme .mc-meta{color:var(--a2-muted)}
+  .a2-wrap .mc-result, .a2-theme .mc-result{color:var(--a2-ink)}
+  .a2-wrap .mc-bonus-c, .a2-theme .mc-bonus-c{color:var(--a2-muted)}
   /* ⚠️ Correctif audit V2 (2026-09-06) — passe typographique : ces classes portaient un texte
      RÉELLEMENT explicatif (règle d'enjeu, instruction obligatoire pour valider un prono) à une
      taille de micro-label (10.5-11.5px, en dessous même de .mini à 13px). Distinction conservée :
@@ -1670,10 +1692,15 @@
      deux sections distinctes. Records/Confrontations ajoutés EN PLUS, données réelles bornées à MA
      PROPRE `getSeen()` (jamais les champs serveur players.best_day/best_odd, qui avancent dès la
      résolution sans attendre que CE joueur ait acquitté la journée — même piège anti-spoiler déjà
-     corrigé ailleurs cette session). "Faits marquants" de la maquette n'est PAS porté : sa source
-     réelle (endStats/computeStandHist) n'est calculée qu'en fin de ligue (loadEndStats(), déclenché
-     seulement si L.status==="done") et mélangerait des journées non vues si rejouée mi-saison sans
-     un vrai travail de bornage — gap documenté plutôt qu'un algorithme neuf risqué. */
+     corrigé ailleurs cette session).
+     ⚠️ Correctif (2026-09-06, même session) — LA NOTE PRÉCÉDENTE ICI ÉTAIT FAUSSE. Elle affirmait
+     que `computeStandHist()` "n'est calculée qu'en fin de ligue" en la confondant avec
+     `loadEndStats()` (qui, elle, est bien réservée à L.status==="done", pour les graphiques du
+     Classement final) — deux fonctions différentes. `computeStandHist()` se rejoue à N'IMPORTE
+     QUEL moment de la saison (`N = L.status==="done" ? num_days : current_day`, voir sa propre
+     définition) : c'est exactement ce que `leagueRecordsHTML()` fait déjà, avec succès, mi-saison,
+     juste en dessous. "Faits marquants" (seasonHighlightsHTML(), plus bas) est donc PORTÉ pour son
+     sous-ensemble vérifié fiable — voir sa propre note pour le détail de ce qui est inclus/exclu. */
   .stats-section{margin-bottom:16px}
   .section-title{display:flex;align-items:center;justify-content:center;gap:7px;margin:0 0 10px;
     font-weight:700;font-size:13.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--a2-brass-light)}
@@ -1696,6 +1723,19 @@
   .confront-bar .seg-v{background:var(--a2-ready)}
   .confront-bar .seg-n{background:var(--a2-muted)}
   .confront-bar .seg-d{background:var(--a2-red)}
+  .highlight-card{display:flex;align-items:center;gap:12px;border-radius:14px;padding:12px;border:1.5px solid var(--a2-border);background:rgba(18,21,31,.45);margin-bottom:8px}
+  .highlight-card:last-child{margin-bottom:0}
+  .highlight-card.c-green{border-color:rgba(63,202,133,.55)}
+  .highlight-card.c-purple{border-color:rgba(156,127,224,.55)}
+  .highlight-av{position:relative;width:44px;height:44px;border-radius:50%;background:var(--a2-panel-2);border:1.5px solid var(--a2-border);flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--a2-ink)}
+  .highlight-av .badge{position:absolute;bottom:-3px;right:-3px;width:19px;height:19px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;border:2px solid var(--a2-navy-deep)}
+  .highlight-card.c-green .highlight-av .badge{background:var(--a2-ready)}
+  .highlight-card.c-purple .highlight-av .badge{background:var(--a2-purple)}
+  .highlight-body{flex:1;min-width:0}
+  .highlight-t{font-weight:800;font-size:12.5px;letter-spacing:.02em;text-transform:uppercase;margin-bottom:3px}
+  .highlight-card.c-green .highlight-t{color:var(--a2-ready)}
+  .highlight-card.c-purple .highlight-t{color:var(--a2-purple-light)}
+  .highlight-s{font-size:11.5px;color:var(--a2-ink);line-height:1.35;opacity:.92}
   /* ================= Bloc Résultats V2 (2026-09-06) — port de resultats.html consolidé =================
      Reprend le langage visuel de la maquette (Maestro à 6 états, résumé compact, 5 matchs en
      mbe-score/mbe-cols, carte points, bannière bonus, autres duels) — AUCUN calcul recréé ici :
@@ -2191,7 +2231,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.376";
+const APP_VERSION = "v8.384";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2487,6 +2527,13 @@ const MODES={
   complet:{n:"🎛️ Complet", d:"Tous les bonus et un large choix de gages — le jeu dans toute sa richesse."},
   simple: {n:"🎯 Simple",  d:"Moins de bonus et de gages — parfait pour débuter ou jouer vite."}
 };
+// ⚠️ Solo (2026-09-06) — MODES[k].d mentionne "gages", inexistants en Solo (aucun enjeu, cf.
+// isSolo()) : cette variante ne décrit que ce qui reste vrai en Solo (le nombre de bonus), pour
+// tous les endroits qui affichent la description du mode (création, Infos de ligue, Caractéristiques).
+function modeDesc(k, solo){
+  if(!solo) return t(MODES[k].d);
+  return k==='complet' ? t("Tous les bonus disponibles pour la partie — le jeu dans toute sa richesse.") : t("Moins de bonus — parfait pour débuter ou jouer vite.");
+}
 /* `dealHand` / `handSize` / `COMMON` / `RANDOM_POOL` SUPPRIMÉS en v7.89 (relevé par Hervé) :
    distribution ALÉATOIRE des bonus, d'avant les enchères. `dealHand` n'était plus appelée nulle
    part, et elle était la seule à utiliser les trois autres — quatre déclarations qui décrivaient
@@ -3912,11 +3959,6 @@ let awaitingReveal=false, awaitingTreveReveal=false;
 // résultats. Voir la note en tête de myBet().
 let myBetToday=false;
 let standHist=false;   // ligue terminée : afficher le classement journée par journée au lieu du bilan (v7.18)
-// Confrontations directes de la ligue COURANTE, alimentées par computeStandHist :
-// STAND_H2H["idA|idB"] = points de duel gagnés par A contre B sur toute la saison.
-// STAND_H2H_LG mémorise à quelle ligue elles appartiennent — sans ce garde-fou, l'écran
-// « mes stats » (qui parcourt plusieurs ligues) appliquerait le h2h d'une ligue à une autre.
-let STAND_H2H=null, STAND_H2H_LG=null;
 let palmares=null, adminData=null, palmOpen="", myStatsData=null, palmMoi=null, palmView="moi";
 let adminUsers=null, adminPwd="";
 let adminConnex=null;   // ⏳ mesure temporaire des connexions — supprimer avec son bloc
@@ -4000,6 +4042,7 @@ const EN={
   "Continuer":"Continue",
   "Pour confirmer, tape ton pseudo :":"To confirm, type your username:",
   "Suppression annulée — le pseudo ne correspond pas.":"Deletion cancelled — the username does not match.",
+  "Retape ton pseudo pour confirmer":"Retype your username to confirm", "Supprimer définitivement":"Delete permanently",
   "Ton compte a été supprimé. Merci d'avoir joué 👋":"Your account has been deleted. Thanks for playing 👋",
   "Le compte d'administration ne peut pas être supprimé.":"The administration account cannot be deleted.",
   "⏰ tu as une <b>heure limite</b> pour valider. Sans pronos validés, le duel est <b>perdu d'avance</b> — quel que soit le résultat d'en face — et tu prends <b>{b} pt</b> au classement et <b>−{a} %</b> de ton capital. Aïe 😬":"⏰ you have a <b>deadline</b> to confirm. With no picks confirmed, the duel is <b>lost before it starts</b> — whatever your opponent does — and you take <b>{b} pt</b> in the standings and <b>−{a}%</b> of your capital. Ouch 😬",
@@ -4156,6 +4199,7 @@ const EN={
   "Si un compte existe pour cette adresse, un lien de réinitialisation vient d'être envoyé.":"If an account exists for this address, a reset link has just been sent.",
   "On enverra un lien de réinitialisation à l'adresse e-mail associée à ce compte.":"We'll send a reset link to the email address linked to this account.",
   "Envoyer le lien":"Send the link", "Pseudo ou e-mail requis.":"Username or email required.",
+  "Ce lien n'est plus valide.":"This link is no longer valid.", "Recevoir un nouveau lien":"Get a new link",
   "Pseudo ou e-mail":"Username or email", "ex : herve ou herve@exemple.fr":"e.g. herve or herve@example.com",
   "Vérifie tes e-mails":"Check your email",
   "Si un compte correspond, un lien de réinitialisation vient d'être envoyé à l'adresse associée.":"If a matching account exists, a reset link was just sent to the associated address.",
@@ -4304,6 +4348,9 @@ const EN={
   "Créer une nouvelle ligue":"Create a new league",
   "Un code de ligue fait {a} caractères.":"A league code is {a} characters long.",
   "Code de ligue introuvable — vérifie le code saisi.":"League code not found — check the code you entered.",
+  "Cette ligue a déjà démarré, tu ne peux plus la rejoindre.":"This league has already started, you can no longer join it.",
+  "Tu fais déjà partie de cette ligue — retrouve-la directement.":"You're already part of this league — jump right back in.",
+  "Tu as rejoint {a} 🎉":"You joined {a} 🎉", "la ligue":"the league", "Impossible de rejoindre":"Couldn't join",
   "aujourd'hui":"today", "demain":"tomorrow",
   "▲ masquer":"▲ hide", "▼ afficher":"▼ show",
   "Salon":"Lobby", "Journée {a}/{b}":"Day {a}/{b}",
@@ -4345,8 +4392,10 @@ const EN={
   "Aux enchères, un bonus que <b>personne</b> n'achète reste <b>hors jeu toute la saison</b> : réfléchis à ce que tu laisses passer.":"At the auction, a bonus <b>nobody</b> buys stays <b>out of play for the whole season</b> — think about what you let go.",
   "🎭 Choisis ton avatar (visible dans toutes tes ligues)":"🎭 Choose your avatar (shown in all your leagues)", "Avatar mis à jour ✓":"Avatar updated ✓",
   "Pseudo affiché":"Display name", "Modifier":"Edit", "Pseudo mis à jour ✓":"Display name updated ✓",
+  "Présets illustrés ou photo perso":"Illustrated presets or your own photo",
   "✨ Ou colle ton propre emoji":"✨ Or paste your own emoji", "✨ Ou colle un emoji":"✨ Or paste an emoji", "Utiliser":"Use", "Colle un emoji d'abord.":"Paste an emoji first.",
   "📷 Ou charge ta propre image":"📷 Or upload your own picture", "Choisir une image":"Choose an image",
+  "Choisis un avatar illustré, ou charge ta propre photo.":"Choose an illustrated avatar, or upload your own photo.",
   "Choisis un fichier image.":"Pick an image file.", "Image trop lourde (8 Mo max).":"Image too large (8 MB max).",
   "Traitement…":"Processing…", "Envoi…":"Uploading…", "Échec de l'envoi":"Upload failed",
   "Stockage non configuré (bucket « avatars »).":"Storage not set up (\"avatars\" bucket).",
@@ -4585,7 +4634,7 @@ const EN={
   "⚠️ La carte est <b>consommée quand même</b> : un bonus mal placé est un bonus perdu.":"⚠️ The card is <b>used up all the same</b>: a badly placed bonus is a wasted bonus.",
   "⭐ Meilleur net de la ligue":"⭐ Best net in the league",
   "🃏 <b>{a} bonus</b> au lieu des trois de la démo, 🤝 le <b>rachat de bonus</b> entre joueurs, 🕵️ les <b>pronos de l'adversaire</b> après la clôture, ⏱️ les <b>résultats en direct</b>…":"🃏 <b>{a} bonuses</b> instead of the demo's three, 🤝 <b>buying bonuses</b> between players, 🕵️ your <b>opponent's picks</b> after the close, ⏱️ <b>live results</b>…",
-  "🎓 Découvrir le jeu en 2 min":"🎓 Discover the game in 2 min",
+  "Découvrir comment ça marche":"See how it works",
   "🎓 Jouer le tutoriel (2 min) →":"🎓 Play the tutorial (2 min) →",
   "🏆 <b>Un gage et une récompense</b> — le dernier paie son gage, le premier reçoit sa récompense. Choisis à la préparation, <b>avant</b> de savoir où tu finiras.":"🏆 <b>A forfeit and a reward</b> — the last pays their forfeit, the first receives their reward. Chosen at the preparation step, <b>before</b> you know where you'll finish.",
   "🏠 <b>Tu reçois à domicile</b> : c'est toi qui composes la journée, et ces {a} affiches <b>s'imposeront aussi à Léa</b>. La prochaine journée, tu joueras à l'extérieur : c'est toi qui <b>subiras les choix</b> de ton adversaire.":"🏠 <b>You're playing at home</b>: you compose the matchday, and these {a} matches <b>will be imposed on Léa too</b>. Next matchday you'll be away: you will <b>take on your opponent's choices</b>.",
@@ -4770,6 +4819,7 @@ const EN={
   "💡 La vitesse (classique / fast) est le <b>seul</b> réglage que l'organisateur pourra encore changer, en cours de partie.":"💡 The pace (classic / fast) is the <b>only</b> setting the organizer can still change, mid-game.",
   "Gage — au dernier":"Forfeit — for the last", "Récompense — au premier":"Reward — for the first", "Les deux — gage ET récompense":"Both — forfeit AND reward",
   "🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça.":"🎭 In solo there's <b>no forfeit or reward</b> — that needs at least two humans.",
+  "Partie en solo contre l'IA : pas de gage ni de récompense, il faut au moins deux humains pour ça.":"Solo game against the AI: no forfeit or reward, that needs at least two humans.",
   "Créer la ligue →":"Create the league →", "Créer et jouer en solo →":"Create and play solo →", "← Annuler":"← Cancel",
   "Une fois créée, ces réglages sont <b>figés</b> — les joueurs rejoignent avec le code.":"Once created, these settings are <b>locked</b> — players join with the code.",
   "Inscriptions ouvertes — partage le code, puis clôture depuis l'onglet 👥 Joueurs.":"Registration open — share the code, then close it from the 👥 Players tab.",
@@ -4889,7 +4939,7 @@ const EN={
   "Clôturer les pronos":"Close the picks", "Fermer la ligue":"Close the league",
   "Publier les résultats":"Publish the results", "Retirer un joueur":"Remove a player",
   "Se déconnecter":"Log out", "Souscrire":"Subscribe", "Tirer les matchs manquants":"Draw the missing matches",
-  "Lancer le championnat":"Start the championship",
+  "Lancer la préparation":"Start preparation", "Lancer avec l'IA":"Start with the AI", "Lancer en solo":"Start solo",
   "Fermer":"Close",
   // Fenêtres de confirmation à la charte du jeu (v7.53).
   "Attention à ton capital":"Careful with your balance", "Valider quand même":"Confirm anyway",
@@ -5436,7 +5486,6 @@ const EN={
   "Ton adversaire, lui, <b>gagne le duel</b> — mais uniquement <b>3 pts</b> si son net est positif, <b>2 pts</b> sinon. Il ne peut pas perdre d'argent à cause de ton absence.":"Your opponent <b>wins the duel</b> — but only <b>3 pts</b> if their net is positive, <b>2 pts</b> otherwise. They cannot lose money because of your absence.",
   "Tu prends <b>{b} pt</b> au classement et tu perds <b>{a} %</b> de ton capital.":"You take <b>{b} pt</b> in the standings and lose <b>{a} %</b> of your balance.",
   "Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.":"Each day, the player with the <b>best net result in the whole league</b> earns a <b>+1 bonus point</b> (on top of the duel points). Ties are broken by the biggest winnings.",
-  "<b>Départage au classement final</b> (à points égaux) : <b>capital</b>, puis le <b>résultat des confrontations directes</b> entre les joueurs concernés, puis plus gros gain, puis plus grosse cote.":"<b>Final standings tie-break</b> (equal points): <b>balance</b>, then the <b>head-to-head record</b> between the players involved, then biggest win, then biggest odds.",
   "La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend le bonus 🧈 {c} jouable — une journée sans football est donc une journée où ce bonus ne peut pas être joué.":"The list offers <b>{a} fixtures</b> from <b>football, basketball and tennis</b> — the only sports in the game —, of which about <b>{b} % football</b>. If there isn't enough football available, the remainder comes from basketball and tennis. Football ⚽ being the only sport with <b>3 outcomes</b> (win, draw, loss), it is what makes the 🧈 {c} bonus playable — so a matchday without football is a matchday where that bonus cannot be played.",
   // Fenêtre des matchs, propre à la formule (v7.29).
   "Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>48h</b> en ⚡ Fast, <b>96h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b> — on ne va jamais chercher des matchs plus lointains pour compléter.":"These fixtures kick off <b>shortly after betting closes</b>, never days later: at most <b>48h</b> in ⚡ Fast, <b>96h</b> in 🗓️ Classique — with a little slack on the final evening, until <b>{h}:00</b>, so European evening kick-offs aren't cut off. In a quiet period the matchday has <b>fewer than {a} fixtures</b> — we never reach for more distant matches to fill it up.",
@@ -5563,6 +5612,7 @@ const EN={
   "Mes stats":"My stats", "Ton parcours dans cette ligue.":"Your journey in this league.",
   "Pas encore de journée résolue — reviens après ta première journée.":"No resolved day yet — come back after your first day.",
   "Journées jouées":"Days played", "Pronos gagnés":"Winning picks", "Total misé":"Total staked",
+  "Mise":"Stake", "Cote":"Odds",
   "Résultat net cumulé":"Cumulative net result", "Rentabilité (ROI)":"Return (ROI)",
   "Meilleure journée":"Best day", "Pire journée":"Worst day",
   "Plus grosse cote gagnée":"Biggest odds won", "Bonus fétiche":"Favourite bonus", "Face-à-face":"Head-to-head",
@@ -5588,6 +5638,7 @@ const EN={
   "Image indisponible sur cet appareil — le texte ci-dessous reste partageable.":"Image unavailable on this device — the text below can still be shared.",
   "Version texte":"Text version", "Copier le texte":"Copy the text",
   "Enregistrer":"Save", "Image enregistrée 📥":"Image saved 📥",
+  "Modifier mon pseudo":"Edit my username",
   "Ma saison — {a}":"My season — {a}", "Classement : {a}ᵉ / {b}":"Rank: {a} / {b}",
   "Points : {a} · Capital : {b}":"Points: {a} · Balance: {b}",
   "Pronos gagnés : {a}/{b} ({c} %)":"Winning picks: {a}/{b} ({c}%)",
@@ -5669,6 +5720,8 @@ const EN={
   "Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard.":"Not enough upcoming real matches right now (off-season?). Try again later.",
   "Tous les bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus bonuses and a wide choice of forfeits — the full-featured game.",
   "Moins de bonus et de gages — parfait pour débuter ou jouer vite.":"Fewer bonus bonuses and forfeits — perfect to start or play fast.",
+  "Tous les bonus disponibles pour la partie — le jeu dans toute sa richesse.":"All bonuses available for the game — the full-featured game.",
+  "Moins de bonus — parfait pour débuter ou jouer vite.":"Fewer bonuses — perfect to start or play fast.",
   "🎯 Gage personnalisé (optionnel)":"🎯 Custom forfeit (optional)",
   "Ajoute ton propre gage — il sera proposé au vote. Ex. « tout le monde doit 5 € au vainqueur ». ⚠️ Réglé <b>entre vous</b> : l'application ne gère aucun argent.":"Add your own forfeit — it'll be offered in the vote. E.g. \"everyone owes 5 € to the winner\". ⚠️ Settled <b>between you</b>: the app handles no money.",
   "✏️ Modifier":"✏️ Edit", "➕ Ajouter un gage perso":"➕ Add a custom forfeit",
@@ -5690,6 +5743,7 @@ const EN={
   "🎬 C'est parti !":"🎬 Here we go!", "Voici le gage proposé et les enchères de bonus — jette un œil avant ton premier pari.":"Here's the proposed forfeit and the bonus auction — take a look before your first bet.",
   "C'est parti ! →":"Let's go! →", "Les Coulisses de l'ouverture":"Opening behind the scenes",
   "Comment tout a commencé : le choix du gage et la grande vente aux enchères des bonus.":"How it all began: the forfeit choice and the big bonus auction.",
+  "Comment tout a commencé : la grande vente aux enchères des bonus.":"How it all began: the big bonus auction.",
   "La ligue n'a pas encore démarré : le tirage arrive bientôt !":"The league hasn't started yet — the draw is coming soon!",
   "🎭 Gage retenu":"🎭 Chosen forfeit", "à faire par le dernier":"for the last-placed player",
   "😅 <b>Motivation express :</b> le bon dernier s'y colle pour de vrai — photo ou vidéo à l'appui 📸. Une excellente raison de soigner tes pronos et de ne <b>pas</b> finir lanterne rouge !":"😅 <b>Quick motivation:</b> the last-placed player really has to do it — photo or video as proof 📸. A great reason to polish your predictions and <b>not</b> finish dead last!",
@@ -5833,7 +5887,6 @@ const EN={
   "Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). À <b>net égal</b>, c'est un <b>match nul</b> — ni le gain ni la mise ne départagent.":"The <b>duel winner</b> is the one with the <b>best net result</b> (winnings − stakes). At <b>equal net</b>, it's a <b>draw</b> — neither gain nor stake breaks the tie.",
   "<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.":"<b>Winner</b>: <b>3 pts</b> if their net is positive, <b>1 pt</b> if negative. <b>Loser</b>: <b>1 pt</b> if their net is positive, <b>0 pt</b> if negative. <b>Draw</b>: <b>1 pt</b> each.",
   "<b>⭐ Meilleur pronostiqueur :</b> chaque journée, le joueur au plus gros net de <b>toute la ligue</b> gagne <b>+1 point</b> en plus.":"<b>⭐ Best forecaster:</b> each matchday, the player with the biggest net in the <b>whole league</b> gets <b>+1 point</b> on top.",
-  "<b>Départage au classement final</b> (à points égaux) : capital, puis victoires en duel, puis plus gros gain, puis plus grosse cote.":"<b>Final standings tie-break</b> (equal points): balance, then duel wins, then biggest gain, then biggest odds.",
   "<b>▲ = ▼ Le classement</b> montre, à côté de chaque joueur, s'il <b>monte</b> (▲ vert), <b>reste stable</b> (=) ou <b>descend</b> (▼ rouge) par rapport à la journée précédente — <b>purement indicatif</b>.":"<b>▲ = ▼ The standings</b> show, next to each player, whether they <b>climb</b> (green ▲), <b>hold</b> (=) or <b>drop</b> (red ▼) versus the previous matchday — <b>purely indicative</b>.",
   "Gagne {a} place(s) depuis la journée précédente":"Up {a} place(s) since the previous matchday",
   "Perd {a} place(s) depuis la journée précédente":"Down {a} place(s) since the previous matchday",
@@ -5889,6 +5942,10 @@ const EN={
   "Calcul du bilan de la ligue…":"Computing the league summary…",
   "🎢 <b>Du suspense :</b> la tête du classement a changé <b>{n}</b> fois{extra}.":"🎢 <b>Suspense:</b> the lead changed <b>{n}</b> times{extra}.",
   " — {name} l'a occupée le plus longtemps ({d} j)":" — {name} held it longest ({d} days)",
+  "Une tête qui change":"A changing lead", "La tête du classement a changé <b>{n}</b> fois{extra}.":"The lead has changed <b>{n}</b> times{extra}.",
+  "Cavalier seul":"Lone leader", "{name} a tenu la tête depuis le début.":"{name} has led from the start.",
+  "La remontée":"The comeback", "{name} est remonté de la <b>{worst}ᵉ</b> à la <b>{fin}ᵉ</b> place.":"{name} climbed from <b>{worst}th</b> to <b>{fin}th</b> place.",
+  "Les faits marquants de la saison":"The season's highlights",
   "🚂 <b>Cavalier seul :</b> {name} a tenu la tête de bout en bout.":"🚂 <b>Wire to wire:</b> {name} led from start to finish.",
   "🚀 <b>La remontée :</b> {name} est remonté de la <b>{worst}ᵉ</b> à la <b>{fin}ᵉ</b> place.":"🚀 <b>The comeback:</b> {name} climbed from <b>{worst}th</b> to <b>{fin}th</b> place.",
   "💥 <b>Le carton :</b> {name} — <b class=\"green\">{net}</b> en une seule journée (J{d}).":"💥 <b>The blowout:</b> {name} — <b class=\"green\">{net}</b> in a single day (D{d}).",
@@ -5968,6 +6025,7 @@ const EN={
   "Saison de rêve !":"Dream season!", "Personne ne t'a détrôné.":"Nobody dethroned you.",
   "Belle saison !":"Great season!", "La prochaine sera la bonne.":"Next one's the one.",
   "Saison rude.":"A rough season.", "Le gage t'attend…":"The dare awaits…",
+  "La revanche t'attend la saison prochaine.":"The rematch awaits next season.",
   "Solide, sans plus.":"Solid, nothing more.", "Pas mal, sans plus.":"Not bad, nothing more.",
   "Voici ce que les chiffres racontent sur votre saison.":"Here's what the numbers say about your season.",
   // ⚠️ Port V2 Classement (2026-09-06) — Maestro à 4 états, copie reprise de classement.html.
@@ -6020,6 +6078,7 @@ const EN={
   "Archive définitivement la ligue — action irréversible.":"Permanently archives the league — irreversible action.",
   "Rythme, mode, enjeu, données, enchères":"Rhythm, mode, stakes, data, auctions",
   "Les records de la ligue":"The league's records", "Plus grosse journée":"Biggest single day",
+  "Plus longue série de victoires en duel":"Longest run of duels won",
   "Meilleure cote gagnée":"Best winning odds", "Le plus précis":"The most accurate",
   "% de pronostics réussis":"% of correct picks", "Meilleur net cumulé":"Best cumulative net result",
   "Plus de bonus Meilleur pronostiqueur":"Most Best Predictor bonuses", "{a} fois":"{a} times",
@@ -6030,7 +6089,11 @@ const EN={
   "Voir le bilan":"See the recap", "🎯 <b>Le plus précis :</b> {name} — <b>{r} %</b> de pronostics réussis.":"🎯 <b>The most accurate:</b> {name} — <b>{r}%</b> of correct picks.",
   "Saisons":"Seasons", "Titres":"Titles", "Podiums":"Podiums", "Mes saisons":"My seasons",
   "Aucune saison terminée pour l'instant.":"No completed season yet.", "Ton premier trophée t'attend.":"Your first trophy awaits.",
-  "{a}ᵉ":"{a}th", "Moi":"Me", "Records":"Records",
+  "{a}ᵉ":"{a}th", "Moi":"Me", "Records":"Records", "Ex æquo avec {a} ({b}ᵉ)":"Tied with {a} ({b}th)",
+  "Classement par <b>nombre de points</b>, du plus élevé au plus faible.":"Ranked by <b>number of points</b>, highest first.",
+  "En cas d'égalité de points, <b>capital le plus élevé</b> départage.":"If points are tied, the <b>highest capital</b> breaks the tie.",
+  "Si points et capital sont identiques, les joueurs sont <b>ex æquo</b>.":"If points and capital are both identical, players are <b>tied</b>.",
+  "<b>Départage</b> (à points égaux) : <b>capital le plus élevé</b>. Si points ET capital sont identiques : <b>ex æquo</b> — aucun autre critère.":"<b>Tie-break</b> (equal points): <b>highest capital</b>. If points AND capital are both identical: <b>tied</b> — no other criterion.",
   "Budget d'enchères :":"Bidding budget:", "Répartis jusqu'à {a} entre les bonus que tu veux viser.":"Spread up to {a} across the bonuses you want.",
   "Seules tes enchères gagnantes seront réellement débitées de ton capital.":"Only your winning bids are actually taken from your capital.",
   "Bonus visés":"Targeted bonuses", "Définis d'abord l'enjeu de la ligue":"Set the league's stake first",
@@ -8073,10 +8136,17 @@ function sloganHTML(pos,big,noSep){
 }
 function viewAuth(){
   // ⚠️ v8.343 (Tactizo V2) — RE-SKIN UNIQUEMENT (maquette auth-entree.html consolidée) : la
-  // logique de v8.280 est conservée à l'identique (tuto mis en avant pour un nouveau venu, avant
+  // logique de v8.280 est conservée à l'identique (tuto accessible pour un nouveau venu, avant
   // toute demande de compte — décision produit explicite d'Hervé, cf. commentaires d'origine
   // archivés dans l'historique git) — seul l'habillage visuel change. `openTuto()`,
   // `S.view='signup'/'login'` inchangés.
+  // ⚠️ Correctif (2026-09-06, demandé par Hervé) — HIÉRARCHIE CORRIGÉE vs la maquette : "Créer un
+  // compte" / "Se connecter" sont les VRAIS premiers gestes attendus sur cet écran, le tuto n'est
+  // qu'une option pour qui hésite encore. Avant, le tuto arrivait EN PREMIER dans une carte mise en
+  // avant (fond dégradé), concurrençant visuellement les deux CTA réels. La maquette le place en
+  // DERNIER, en simple lien discret sous les deux boutons — repris ici à l'identique. "Se connecter"
+  // devient un second CTA plein (violet, comme la maquette), plus un bouton fantôme qui le faisait
+  // paraître secondaire alors que c'est un geste tout aussi principal que "Créer un compte".
   return `<div class="a2-wrap">
     <div class="a2-topbar"><span class="a2-title">TACTIZO</span>
       <div class="a2-lang"><button class="${lang==='fr'?'on':''}" onclick="setLang2('fr')">FR</button><button class="${lang==='en'?'on':''}" onclick="setLang2('en')">EN</button></div>
@@ -8085,13 +8155,10 @@ function viewAuth(){
       <img src="${HERO_LOGIN_B64}" alt="Tactizo" style="display:block;width:100%;height:200px;object-fit:cover;object-position:50% 70%">
     </div>
     ${sloganHTML("bas",false,true)}
-    <div class="a2-cta-ghost" style="margin-top:14px;background:linear-gradient(155deg,rgba(156,127,224,.16),var(--a2-panel-2));border-color:rgba(156,127,224,.35);cursor:pointer" onclick="openTuto()">
-      <div style="font-weight:800">${t("🎓 Découvrir le jeu en 2 min")}</div>
-      <div style="font-size:11.5px;color:var(--a2-muted);font-weight:400;margin-top:3px">${t("Comme si tu y étais, sans rien créer.")}</div>
-    </div>
-    <div class="a2-card" style="margin-top:16px">
+    <div style="margin-top:16px">
       <button class="a2-cta" onclick="showErr('');S.view='signup';render()">${t("Créer un compte")}</button>
-      <button class="a2-cta-ghost" style="margin-top:10px" onclick="showErr('');S.view='login';render()">${t("Se connecter")}</button>
+      <button class="a2-cta" style="margin-top:11px;background:var(--a2-purple);box-shadow:0 8px 22px rgba(156,127,224,.3)" onclick="showErr('');S.view='login';render()">${t("Se connecter")}</button>
+      <button class="a2-cta-ghost" style="margin-top:2px;background:none;border:0;color:var(--a2-muted);font-weight:600;font-size:12.5px;box-shadow:none;min-height:44px" onclick="openTuto()">${t("Découvrir comment ça marche")}</button>
     </div>
   </div>`;
 }
@@ -8119,6 +8186,7 @@ function viewLogin(){
       <div class="a2-field" id="aUserFld">
         <label>${t("Email")}</label>
         <input id="aUser" type="email" autocomplete="username" placeholder="toi@exemple.fr">
+        <div class="a2-field-err" id="aUserErr"></div>
       </div>
       <div class="a2-field" id="aPassFld">
         <label>${t("Mot de passe")}</label>
@@ -8130,11 +8198,11 @@ function viewLogin(){
           </button>
         </div>
       </div>
-      <button class="a2-link" style="font-size:12.5px;font-weight:700" onclick="showErr('');S.resetSent=false;S.view='resetPassword';render()">${t("Mot de passe oublié ?")}</button>
       <div class="a2-banner-err" id="aErrBanner"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span id="aErrText"></span></div>
       <button class="a2-cta" id="aLoginBtn" onclick="doLogin()">
         <span class="a2-spinner"></span><span class="a2-lbl-normal">${t("Se connecter")}</span><span class="a2-lbl-loading">${t("Connexion…")}</span>
       </button>
+      <button class="a2-link" style="font-size:12.5px;font-weight:700" onclick="showErr('');S.resetSent=false;S.view='resetPassword';render()">${t("Mot de passe oublié ?")}</button>
       <div class="a2-divider">${t("ou")}</div>
       <div class="a2-provider-stack">
         <button class="a2-cta-ghost" onclick="loginGoogle()">${t("Continuer avec Google")}</button>
@@ -8147,9 +8215,10 @@ function viewLogin(){
 function a2TogglePw(id,btn){ const inp=$(id); const shown=btn.classList.toggle("shown"); inp.type=shown?"text":"password"; }
 function a2SetErr(fieldId,bannerMsg){
   ["aUserFld","aPassFld"].forEach(id=>{ const el=$(id); if(el) el.classList.remove("err"); });
-  const b=$("aErrBanner"); if(b) b.classList.toggle("show", !!bannerMsg);
-  if(bannerMsg) $("aErrText").textContent=bannerMsg;
-  if(fieldId){ const el=$(fieldId); if(el) el.classList.add("err"); }
+  fieldErr("aUserErr","");   // ⚠️ 2026-09-06 — l'erreur générique (banner) et l'erreur de format
+  const b=$("aErrBanner"); if(b) b.classList.toggle("show", !!bannerMsg);   // (inline, cf. a2FErr ci-
+  if(bannerMsg) $("aErrText").textContent=bannerMsg;                       // -dessous) ne s'affichent
+  if(fieldId){ const el=$(fieldId); if(el) el.classList.add("err"); }      // jamais ensemble.
 }
 /* ⚠️ v8.278 — LE PSEUDO N'EST PLUS L'E-MAIL DU COMPTE (depuis la vraie adresse demandée à
    l'inscription). La résolution pseudo → e-mail se fait DÉSORMAIS côté serveur, jamais ici :
@@ -8161,6 +8230,13 @@ async function doLogin(){
   if(busy)return; const u=($("aUser").value||"").trim(), p=$("aPass").value||"";
   a2SetErr(null,"");
   if(!u||!p){ a2SetErr(!u?"aUserFld":"aPassFld", t("Email et mot de passe requis.")); return; }
+  // ⚠️ Port V2 (2026-09-06, maquette auth-connexion.html) — ERREUR DE FORMAT EN LIGNE, sous le
+  // champ (a2FErr, même mécanique que sEmailErr côté Inscription — voir doSignup()), PAS le
+  // bandeau générique : un email mal saisi est une faute de frappe repérable côté client, à
+  // distinguer du VRAI échec de connexion (identifiants incorrects) qui, lui, reste volontairement
+  // générique juste en dessous (anti-énumération : ne dit jamais si c'est l'email ou le mot de
+  // passe qui cloche — mécanique réelle inchangée).
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(u)){ a2FErr("aUserFld","aUserErr",t("Adresse e-mail invalide.")); return; }
   busy=true; const btn=$("aLoginBtn"); btn.classList.add("loading","off"); btn.setAttribute("aria-disabled","true");
   let session;
   try{
@@ -8332,6 +8408,34 @@ function viewResetPassword(){
       </button>
     </div>
   </div>`;
+}
+// ⚠️ Port V2 (2026-09-06, maquette auth-reset.html, « Lien expiré/invalide ») — écran cible d'un
+// vrai trou avant ce correctif : si le lien de réinitialisation est expiré/déjà utilisé, Supabase
+// ne déclenche JAMAIS l'évènement `PASSWORD_RECOVERY` (voir son écouteur plus bas) — l'utilisateur
+// retombait donc silencieusement sur l'écran de connexion standard, sans aucun message. Détecté au
+// démarrage (cf. `boot()`, parseAuthHashError()) via le hash d'erreur que Supabase pose dans l'URL
+// de retour. AUCUN bouton retour (même raison que #view-newpass de la maquette : on arrive ici
+// depuis un lien cliqué dans une messagerie externe, il n'existe aucun écran précédent dans l'app) —
+// seule l'action "Recevoir un nouveau lien" est proposée, qui RECOMMENCE la vraie demande
+// (viewResetPassword()/doRequestReset(), mécanique déjà réelle, inchangée).
+function viewResetLinkExpired(){
+  return `<div class="a2-wrap"><div class="a2-topbar"><span class="a2-title">${t("Mot de passe oublié")}</span></div>
+    <div class="a2-card a2-status-card">
+      <div class="a2-status-ic warn"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg></div>
+      <p class="a2-status-text">${t("Ce lien n'est plus valide.")}</p>
+      <button class="a2-cta" onclick="showErr('');S.resetSent=false;S.view='resetPassword';render()">${t("Recevoir un nouveau lien")}</button>
+    </div></div>`;
+}
+// Le hash que Supabase pose sur l'URL de retour quand l'échange du jeton échoue (lien expiré/déjà
+// utilisé/invalide) : `#error=...&error_code=otp_expired&error_description=...`. `otp_expired` est
+// vérifié explicitement (pas un `error=` générique) — le seul parcours de CE type (jeton dans un
+// lien e-mail) que l'app propose aujourd'hui est la réinitialisation de mot de passe ; élargir la
+// détection à toute erreur de hash risquerait de masquer une AUTRE erreur Auth (ex. OAuth) sous cet
+// état, ce qui est explicitement à éviter.
+function parseAuthHashError(){
+  const h=(window.location.hash||"").replace(/^#/,""); if(!h) return null;
+  const p=new URLSearchParams(h); const code=p.get("error_code");
+  return code ? {code, desc:p.get("error_description")||""} : null;
 }
 async function doRequestReset(){
   if(busy)return; const v=(($("rUser").value)||"").trim();
@@ -8992,6 +9096,16 @@ function howItWorksHTML(){
    ${t("• <b>Chaque journée</b> : tu paries sur <b>5 matchs</b> — total des mises ≤ <b>50 % de ton capital</b> — avec un 👑 <b>match favori</b> (gains/pertes ×2), et un 🃏 <b>bonus</b> si tu le souhaites (facultatif).")}<br>
    ${t("• Le <b>vainqueur du duel</b> du jour marque des points.")}<br>
    ${fin}</div></div>`; }
+// Bottom-sheet "Modifier mon avatar" (2026-09-06, port profil.html) — reprend TEL QUEL la grille de
+// présets + l'upload (mêmes onclick réels : choisirAvatar()/uploadAvatar()), simplement déplacés
+// depuis la carte "Mon profil" (où ils étaient affichés en permanence) vers une fiche ouverte à la
+// demande, cohérent avec le champ Pseudo juste au-dessus (bouton "Modifier").
+function avatarSheetBodyHTML(){
+  return `<div class="mini muted" style="text-align:left;margin:2px 0 12px">${t("Choisis un avatar illustré, ou charge ta propre photo.")}</div>
+    <div class="a2-avatar-grid">${Array.from({length:AVIMG_COUNT},(_,i)=>i).filter(i=>i!==AVATAR_IA_IDX).map(i=>{const v="avimg:"+i, on=AUTH.avatar===v; return `<button class="a2-av-tile${on?' on':''}" onclick="choisirAvatar('${v}')"><img src="${esc(avimgUrl(i))}" alt="">${on?'<span class="a2-av-chk">✓</span>':''}</button>`;}).join("")}</div>
+    <div class="a2-upload"><label>${t("Choisir une image")}<input type="file" accept="image/*" onchange="uploadAvatar(this)" style="display:none"></label><span id="avUpMsg" class="a2-menu-sub"></span></div>`;
+}
+function openAvatarSheet(){ infoModal("🖼️", t("Modifier mon avatar"), avatarSheetBodyHTML(), true); }
 // Changement d'avatar depuis la GRILLE d'illustrations — avec confirmation (v7.18, Hervé : « j'ai
 // cliqué par erreur sur un avatar et ça a enlevé mon image, j'ai dû la remettre »).
 // ⚠️ La confirmation est ICI et pas dans `setAvatar` : après un envoi de fichier, l'utilisateur
@@ -9048,18 +9162,27 @@ async function uploadAvatar(input){ const file=input&&input.files&&input.files[0
 // Changer son PSEUDO affiché (≠ identifiant de connexion, qui reste l'email dérivé du pseudo d'origine).
 // Met à jour la métadonnée du compte ET le nom recopié dans toutes ses ligues (players.name par user_id),
 // comme setAvatar le fait pour l'emoji. L'admin reste l'admin : le statut dépend de l'UID, pas du pseudo.
-async function changeMyUsername(){ if(!AUTH) return;
-  const nv=(prompt(t("Nouveau pseudo (2 caractères min.) — c'est le nom affiché partout :"), AUTH.name||"")||"").trim();
+// ⚠️ Bottom-sheet (2026-09-06, port profil.html) — LE prompt() NATIF EST RETIRÉ : changeMyUsername()
+// ouvre désormais la fiche (même infoModal() que le reste de l'app) au lieu de demander directement.
+// savePseudoSheet() ci-dessous reprend EXACTEMENT l'ancienne validation/écriture (validUser(),
+// db.auth.updateUser, cascade players.name) — seule la SOURCE du texte change (champ réel au lieu
+// d'un prompt()), même principe que scheduleEnjeuSave()/prepVoteCustom() pour l'Enjeu.
+function changeMyUsername(){ if(!AUTH) return;
+  infoModal("✏️", t("Modifier mon pseudo"),
+    `<div class="a2-field" style="text-align:left;margin-top:2px"><input type="text" id="pseudoSheetInput" maxlength="20" value="${esc(AUTH.name||'')}" style="width:100%" autofocus></div>
+     <div class="mini muted" style="text-align:left;margin-top:8px">${t("Identifiant : 2 à 20 caractères — lettres, chiffres, . _ - (sans espace).")}</div>
+     <button class="btn" style="margin-top:14px" onclick="savePseudoSheet()">${t("Enregistrer")}</button>
+     <button class="btn ghost sm" style="margin-top:8px;width:auto" onclick="closeCardInfo()">${t("Annuler")}</button>`, true);
+}
+async function savePseudoSheet(){ if(!AUTH) return;
+  const el=$("pseudoSheetInput"); const nv=(el&&el.value||"").trim();
   if(!nv) return;
-  // ⚠️ v8.343 (Tactizo V2) — utilise désormais validUser (Unicode), la même règle qu'à l'inscription
-  // et au choix du pseudo — avant, ce chemin ne vérifiait que la longueur (incohérence relevée à
-  // l'audit Profil du 2026-09-05).
   if(!validUser(nv)){ showErr(t("Identifiant : 2 à 20 caractères — lettres, chiffres, . _ - (sans espace).")); return; }
-  if(nv===AUTH.name){ return; }
+  if(nv===AUTH.name){ closeCardInfo(); return; }
   try{
     const r=await db.auth.updateUser({ data:{ username:nv } }); if(r&&r.error) throw r.error;   // fusionne les métadonnées (avatar/options conservés)
     try{ await q(db.from("players").update({name:nv}).eq("user_id",AUTH.id)); }catch(e){}        // cascade dans toutes ses ligues
-    AUTH.name=nv; toast(t("Pseudo mis à jour ✓"));
+    AUTH.name=nv; closeCardInfo(); toast(t("Pseudo mis à jour ✓"));
     if(S.leagueId){ await refresh(); } else { await loadMyLeagues(); }
     render();
   }catch(e){ showErr("Pseudo : "+e.message); }
@@ -9253,15 +9376,30 @@ function viewLeagues(){
 // requête. Un code à 4 signes n'est PAS une « ligue introuvable » : c'est un code pas fini. Dire
 // « introuvable » envoyait chercher une faute de saisie dans le code d'un ami — ou dans son
 // existence — alors qu'il manquait simplement une lettre.
+// ⚠️ Port V2 (2026-09-06, maquette rejoindre-ligue.html) — `joinSetErr()` route l'erreur SOUS le
+// champ (mêmes `.a2-field-err`/`.a2-banner-err` que Connexion/Inscription) quand l'écran dédié
+// `viewJoinLeague()` est affiché (présence de `joinCodeErr` dans le DOM), et retombe sur le
+// bandeau générique `showErr()` sinon — l'onglet Ligues garde son propre champ inline (même
+// `#joinCode`/`doJoin()`/`joinLeague()`, AUCUNE logique dupliquée), qui n'a pas ces éléments.
+function joinSetErr(msg, fieldOnly){
+  const fld=$("joinCodeFld"), errEl=$("joinCodeErr");
+  if(!fld||!errEl){ showErr(msg); return; }   // écran non affiché (onglet Ligues) : bandeau global inchangé
+  fld.classList.toggle("err", !!msg); errEl.textContent=msg||"";
+  const b=$("joinBannerErr"); if(b){ b.classList.toggle("show", !!msg && !fieldOnly); }
+  if(msg && !fieldOnly){ const t2=$("joinBannerErrText"); if(t2) t2.textContent=msg; }
+}
 function doJoin(){ const c=($("joinCode").value||"").toUpperCase().trim();
-  if(c.length!==CODE_LEN){ showErr(t("Un code de ligue fait {a} caractères.",{a:CODE_LEN})); return; }
+  joinSetErr("");
+  if(c.length!==CODE_LEN){ joinSetErr(t("Un code de ligue fait {a} caractères.",{a:CODE_LEN}), true); return; }
   joinLeague(c); }
 // ⚠️ Bloc 2 Tactizo V2 (2026-09-05, maquette rejoindre-ligue.html) — écran dédié, mais AUCUNE
-// nouvelle logique : même champ `#joinCode`, mêmes `doJoin()`/`joinLeague()` que l'onglet Ligues
-// (qui garde son propre champ inline, inchangé). Écart assumé vs la maquette : pas d'écran de
-// confirmation « succès » avant d'entrer dans la ligue — `joinLeague()` navigue déjà tout de suite
-// (`openLeague(...)`) sans étape intermédiaire ; en rajouter une aurait été une vraie nouvelle
-// mécanique, pas juste un habillage.
+// nouvelle logique métier : même champ `#joinCode`, mêmes `doJoin()`/`joinLeague()` que l'onglet
+// Ligues. Écart assumé vs la maquette (2026-09-06, confirmé par Hervé) — PAS d'écran de
+// confirmation « succès »/« déjà membre » avant d'entrer dans la ligue : `joinLeague()` navigue
+// déjà tout de suite (`openLeague(...)`) sans étape intermédiaire, et en ajouter une serait une
+// vraie nouvelle mécanique, pas un habillage. Les DEUX états sont toutefois rendus — un `toast()`
+// (déjà utilisé partout ailleurs dans l'app pour un retour bref et non bloquant) accompagne la
+// navigation au lieu de la précéder.
 function openJoin(){ if(!AUTH) return; navOpen("join"); }
 function viewJoinLeague(){
   return `<div class="a2-wrap">
@@ -9269,9 +9407,11 @@ function viewJoinLeague(){
       <span class="a2-title">${t("Rejoindre une ligue")}</span>
     </div>
     <div class="a2-card">
-      <div class="a2-field"><label>${t("Code de la ligue")}</label>
-        <input id="joinCode" maxlength="${CODE_LEN}" placeholder="${t("Ex : {a}",{a:codeExemple()})}" style="text-transform:uppercase;letter-spacing:.08em;font-weight:800" autocapitalize="characters"></div>
+      <div class="a2-field" id="joinCodeFld"><label>${t("Code de la ligue")}</label>
+        <input id="joinCode" maxlength="${CODE_LEN}" placeholder="${t("Ex : {a}",{a:codeExemple()})}" style="text-transform:uppercase;letter-spacing:.08em;font-weight:800" autocapitalize="characters">
+        <div class="a2-field-err" id="joinCodeErr"></div></div>
       <div style="font-size:11.5px;color:var(--a2-muted);line-height:1.4;margin:-6px 0 14px">${t("Demande le code à {a} caractères à l'organisateur de la ligue.",{a:CODE_LEN})}</div>
+      <div class="a2-banner-err" id="joinBannerErr"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span id="joinBannerErrText"></span></div>
       <button class="a2-cta" style="margin-top:0" onclick="doJoin()">🔑 ${t("Rejoindre →")}</button>
     </div>
   </div>`;
@@ -9664,21 +9804,27 @@ async function createLeague(){
   }catch(e){ showErr((e&&e.codesSatures)?t("Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours."):"Création : "+e.message); } busy=false;
 }
 async function joinLeague(code){
-  if(busy||!AUTH)return; busy=true; showErr("");
+  if(busy||!AUTH)return; busy=true; joinSetErr("");
   try{
     const found=await q(db.from("leagues").select("*").eq("code",code));
     const lg=Array.isArray(found)?found[0]:found;
-    if(!lg){ showErr(t("Code de ligue introuvable — vérifie le code saisi.")); busy=false; return; }
+    if(!lg){ joinSetErr(t("Code de ligue introuvable — vérifie le code saisi.")); busy=false; return; }
     const ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
     const mine=ps.find(p=>p.user_id===AUTH.id);
-    if(mine){ openLeague(lg.id, mine.id); busy=false; return; } // déjà membre → on rouvre (reconnexion)
-    if(lg.status!=="lobby"){ showErr("Cette ligue a déjà démarré, tu ne peux plus la rejoindre."); busy=false; return; }
+    // ⚠️ Port V2 (2026-09-06) — "déjà membre" reste une RÉOUVERTURE, pas un échec (aucune nouvelle
+    // règle : openLeague() direct, inchangé) — seul un toast() accompagne désormais la navigation,
+    // là où rien n'était dit avant (texte repris de rejoindre-ligue.html).
+    if(mine){ toast(t("Tu fais déjà partie de cette ligue — retrouve-la directement.")); openLeague(lg.id, mine.id); busy=false; return; }
+    // ⚠️ 2026-09-06 — chaîne enfin traduite (jamais passée par t(), donc jamais en anglais malgré
+    // le sélecteur FR/EN — relevé en construisant le portage de cet écran).
+    if(lg.status!=="lobby"){ joinSetErr(t("Cette ligue a déjà démarré, tu ne peux plus la rejoindre.")); busy=false; return; }
     const humans=ps.filter(p=>!p.is_ai);
-    if(humans.length>=lg.num_participants){ showErr(t("Nombre de joueurs maximum atteint ({a}) — les inscriptions sont closes.",{a:lg.num_participants})); busy=false; return; }
+    if(humans.length>=lg.num_participants){ joinSetErr(t("Nombre de joueurs maximum atteint ({a}) — les inscriptions sont closes.",{a:lg.num_participants})); busy=false; return; }
     const ord=humans.length;
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[ord]||"🎮",join_order:ord,user_id:AUTH.id}).select().single());
+    toast(t("Tu as rejoint {a} 🎉",{a:lg.name||t("la ligue")}));
     openLeague(lg.id, pl.id, true);
-  }catch(e){ showErr("Impossible de rejoindre : "+e.message); } busy=false;
+  }catch(e){ joinSetErr(t("Impossible de rejoindre")+" : "+e.message); } busy=false;
 }
 
 /* ============ GAME dispatch ============ */
@@ -10221,7 +10367,7 @@ function viewCoulisses(){
     const humans=players.filter(p=>!p.is_ai);
     let rankCell='';
     if(!solo && humans.length){ const std=classe(humans,L); const idx=std.findIndex(p=>p.id===S.myId);
-      if(idx>=0) rankCell=`<div class="a2-pronos-info-cell"><div class="lbl">${t("Classement")}</div><div class="val">${t("{a}ᵉ / {b}",{a:idx+1,b:std.length})}</div></div>`; }
+      if(idx>=0) rankCell=`<div class="a2-pronos-info-cell"><div class="lbl">${t("Classement")}</div><div class="val">${t("{a}ᵉ / {b}",{a:competitionRanks(std)[idx],b:std.length})}</div></div>`; }
     return `<div class="a2-pronos-info-strip"><div class="a2-pronos-info-cell"><div class="lbl">${t("Journée")}</div><div class="val">${Math.min((L.current_day||0)+1,L.num_days)} / ${L.num_days}</div></div>${rankCell}</div>`; })();
   /* CODE DE LA LIGUE (v7.59, demandé par Hervé : « il est parfois difficile de retrouver le code
      d'une ligue une fois créée, je dois ressortir sur la liste de toutes les ligues »). Le code
@@ -10237,9 +10383,11 @@ function viewCoulisses(){
   // Scène Maestro (dégradé + cutout qg-tactizo-maestro-tablette.png déjà existant, aucun nouvel
   // asset) — reprend le texte déjà validé de l'ancien `.a2-hero-card` plutôt que d'inventer une
   // nouvelle bulle : même message, nouvel habillage.
+  // ⚠️ Solo (2026-09-06) — AUCUN gage en Solo : la bulle ne doit pas prétendre qu'un « choix du
+  // gage » a eu lieu là où l'étape n'a jamais existé (cf. enjeuSection plus bas, déjà masquée).
   const hero = `<div class="a2-coul-hero"><div class="a2-coul-hero-img"><img src="img/qg-tactizo-maestro-tablette.png" alt=""></div>
     <div class="a2-coul-hero-body"><div class="a2-coul-hero-kicker">🎪 ${t("Les Coulisses de l'ouverture")}</div>
-    <div class="a2-coul-hero-bubble">${t("Comment tout a commencé : le choix du gage et la grande vente aux enchères des bonus.")}</div></div></div>`;
+    <div class="a2-coul-hero-bubble">${solo?t("Comment tout a commencé : la grande vente aux enchères des bonus."):t("Comment tout a commencé : le choix du gage et la grande vente aux enchères des bonus.")}</div></div></div>`;
   if(!s) return `${infoStrip}${hero}${codeBlock}<div class="box mini muted">${t("La ligue n'a pas encore démarré : le tirage arrive bientôt !")}</div>`;
 
   // ── 1. L'enjeu de la ligue ──────────────────────────────────────────────────────────────────
@@ -10597,11 +10745,23 @@ async function closeRegistration(){
     catch(e){ showErr(t("Enregistrement du format")+" : "+e.message); return; }
     await doCloseRegistration(); return;
   }
-  if(!await confirmTxt("🚀",t("Lancer le championnat"), soloNow
+  // ⚠️ Port V2 (2026-09-06, maquette lobby-inscriptions.html) — MÊME MÉCANIQUE (confirmModal(),
+  // Annuler/Lancer, résolution identique à l'ancien confirmTxt()) : seuls l'icône et les libellés
+  // changent. La maquette distingue visuellement son "Cas 2" (impair + IA) par une vraie icône IA
+  // au lieu d'un 🚀 générique — même principe que showPremiumInfo() plus haut (infoModal() accepte
+  // une image à la place de l'emoji, sans rien changer à son fonctionnement pour les 50+ autres
+  // appels) — et nomme le bouton selon ce qui se passe réellement ("avec l'IA" quand c'est le cas),
+  // au lieu du même "Confirmer" générique partout. Le titre devient "Lancer la préparation" (plus
+  // exact : c'est la PRÉPARATION qui démarre ici, pas le championnat lui-même).
+  const oddNonSolo = !soloNow && nH%2===1;
+  const icon = (soloNow||oddNonSolo) ? '<img src="img/icone-ia.png" alt="" style="width:40px;height:40px;object-fit:contain;margin:0 auto;display:block">' : "🚀";
+  const okLabel = soloNow ? t("Lancer en solo") : (oddNonSolo ? t("Lancer avec l'IA") : t("Lancer la préparation"));
+  if(!await confirmModal(icon, t("Lancer la préparation"), `<div class="mini" style="text-align:left;line-height:1.7">${(soloNow
     ? t("Lancer la partie en SOLO contre le 🤖 joueur IA ? Personne d'autre ne pourra rejoindre. Pas de gage ni de récompense, et {a} journées à jouer.",{a:getAR()*2})
-    : (nH%2===1
+    : (oddNonSolo
       ? t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.")
-      : t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (gage/récompense + enchères sur les bonus) commencera.")))) return;
+      : t("Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (gage/récompense + enchères sur les bonus) commencera.")))}</div>`,
+    okLabel)) return;
   await doCloseRegistration();
 }
 // Corps de la clôture (calendrier + prépa) SANS confirm — réutilisé par l'auto-démarrage à la ligue pleine.
@@ -10916,9 +11076,15 @@ function prepGagesTab(){
   // Vote du gage disponible dès le LOBBY (options tirées à la création). Secours pour d'anciennes ligues
   // sans options en base : on garde l'écran verrouillé jusqu'à la clôture.
   if(!hasOpts) return `<div class="box"><h2 style="margin-top:0">🎭 ${t("Gages & récompenses")}</h2><div class="mini" style="color:var(--accent)">🔒 ${t("Le choix s'ouvrira au démarrage (quand l'organisateur clôture les inscriptions).")}</div></div>`;
+  // ⚠️ Correctif (2026-09-06, demandé par Hervé) — LE CTA EST DÉSORMAIS DÉSACTIVÉ TANT QUE LE(S)
+  // CHAMP(S) REQUIS NE SONT PAS REMPLIS, sur le même garde-fou que le bouton final des enchères
+  // (`votesManquants()`, seule source de vérité — pas de second calcul). Avant, le bouton restait
+  // toujours cliquable ici et seul l'onglet Enchères bloquait (lockHTML) ; les deux gardes coexistent
+  // sans se contredire : celle-ci évite juste le clic inutile un cran plus tôt.
+  const missFoot=votesManquants(), noVoteFoot=missFoot.length>0;
   const foot = lobby
     ? `<div class="mini muted" style="text-align:center;margin-top:12px">💡 ${t("Ton choix est enregistré au fur et à mesure. Les enchères sur les bonus s'ouvriront à la clôture des inscriptions.")}</div>`
-    : `<div style="height:12px"></div><button class="btn" onclick="setPtab('encheres')">${t("Passer aux enchères 💰 →")}</button>
+    : `<div style="height:12px"></div><button class="btn" ${noVoteFoot?'disabled':''} onclick="setPtab('encheres')">${noVoteFoot?(missFoot[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):t("Passer aux enchères 💰 →")}</button>
        <div class="mini muted" style="text-align:center;margin-top:5px">${t("Ton choix est enregistré au fur et à mesure. La validation finale se fait sur l'onglet Enchères.")}</div>`;
   return voteSectionHTML(false) + (isBoth()?`<div style="height:10px"></div>`+voteSectionHTML(true):'') + foot; }
 // Deux jeux d'enchères identiques ? Sert à savoir si une prépa DÉJÀ validée a été modifiée (→ re-valider).
@@ -11049,7 +11215,7 @@ function paramInfo(kind){
   let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
   let emoji="ℹ️", title="", body="";
   if(kind==='formula'){ const f=leagueFormula(); emoji="⏱️"; title=t(f.n); body=t(f.d)+"<br><br>"+t("💡 La vitesse (classique / fast) est le <b>seul</b> réglage que l'organisateur pourra encore changer, en cours de partie."); }
-  else if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=t(m.d); }
+  else if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=modeDesc(getMode(),isSolo()); }
   else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."); }
   else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur.")); }
   else if(kind==='solo'){ emoji="🤖"; const one=(o.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
@@ -12331,88 +12497,36 @@ function viewWait(dayLbl){
 
   // ── ÉTAT « VALIDÉS » (avant clôture) : la liste des 5 pronos + bouton Modifier (cf. maquette écran ⑥)
   if(editable){
+    // ⚠️ Port V2 Pronos (2026-09-06, pronos-valides.html) — picksCard PORTÉE dans la structure
+    // .match-card-c de la maquette (une carte par match : rang, équipes, favori · méta ligue/heure ·
+    // pari+mise+cote · bonus), dernier bloc structurel V1 de cet écran. AUCUN calcul ni donnée
+    // recalculé : `dc`/`selD`/`oddD` (double chance, corrigés en v8.08), `info` (compétition+heure,
+    // v7.56), le favori (`i===mine.captain`) et le bonus sur ce match (`cardOnMatch`) sont EXACTEMENT
+    // les mêmes qu'avant — seule la mise en page qui les affiche change.
+    // ⚠️ Les 4 correctifs historiques v8.01/v8.07/v8.57/v8.59 (marqueurs orphelins, nom coupé au
+    // milieu d'un mot, pastille de double chance éjectant ses voisins) naissaient tous d'un même
+    // schéma : plusieurs informations de longueur variable forcées à cohabiter sur UNE ligne flex.
+    // La carte de la maquette les isole chacune sur SA PROPRE ligne (équipes+favori / méta / pari) :
+    // aucune ne peut plus en pousser une autre. Le nom d'équipe se tronque proprement en ellipsis
+    // (`.mc-team`) au lieu de casser un mot — la maquette assume ce compromis pour cet écran dense.
     const picks = (mine&&mine.picks&&md&&md.fixtures) ? md.fixtures.map((f,i)=>{ const b=mine.picks[i]; if(!b) return '';
       const dc=mine.card&&mine.card.id==="chance"&&mine.card.target===i&&mine.card.sel2;
       const selD=dc?`${esc(labelSel(f,b.sel))} / ${esc(labelSel(f,mine.card.sel2))}`:esc(labelSel(f,b.sel));
-      /* ⚠️ v8.08 (relevé par Hervé sur capture) — LA COTE S'AFFICHAIT « @0.00 » AVEC 🧈.
-         `oddD` assemblait les DEUX cotes en une CHAÎNE (« 2.00 / 3.40 »), puis l'affichage la
-         repassait dans `cote()`, qui fait `(+o||0).toFixed(2)` : `+"2.00 / 3.40"` vaut `NaN`,
-         `NaN||0` vaut `0`. La valeur n'était pas perdue, elle était DÉTRUITE au dernier moment.
-         ⚠️ On formate donc CHAQUE cote avant de les joindre, et `oddD` est désormais du texte
-         PRÊT À AFFICHER — d'où le `@${oddD}` sans `cote()` plus bas. Repasser un texte déjà
-         formaté dans un convertisseur numérique est exactement ce qui a produit le 0,00. */
+      // ⚠️ v8.08 (relevé par Hervé) — CHAQUE cote est formatée AVANT d'être jointe par "/" : `oddD`
+      // est du texte prêt à afficher, jamais repassé dans `cote()` (qui détruirait "2.00 / 3.40" en
+      // NaN→0). Voir l'historique complet de ce bug dans le git blame de cette ligne.
       const oddD=dc?(cote(oddOf(f,b.sel))+' / '+cote(oddOf(f,mine.card.sel2))):cote(oddOf(f,b.sel));
-      const mk=`${i===mine.captain?' <span class="chip gold clik" onclick="showCaptainInfo()">👑</span>':''}${cardOnMatch(mine.card,i)?` <span class="chip b clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e}</span>`:''}`;
-      /* ⚠️ v7.56 — L'HEURE DU MATCH MANQUAIT UNE FOIS LES PRONOS VALIDÉS (signalé par Hervé). Elle
-         est affichée pendant la saisie, puis disparaissait de la liste des pronos verrouillés —
-         alors que c'est justement là qu'on la cherche : pour savoir quand ça se joue, et jusqu'à
-         quand on peut encore modifier (la clôture = le premier coup d'envoi, depuis la v7.32). */
+      const favori=(i===mine.captain), onMatch=cardOnMatch(mine.card,i);
       const info=[compBadge(f), koLabel(f)].filter(Boolean).join(' · ');
-      /* ⚠️ v8.01 (relevé par Hervé, capture à l'appui) — LES MARQUEURS 👑 / 🃏 PASSENT DEVANT LE NOM.
-         Ils le SUIVAIENT : sur « Union Saint-Gilloise – Bodø/Glimt », le nom remplit la ligne et
-         le marqueur basculait SEUL sur la suivante, juste au-dessus du badge de compétition. On
-         lisait un 🔥 orphelin, entre deux informations qui n'avaient rien à voir avec lui.
-         ⚠️ HERVÉ PROPOSAIT DE LES METTRE À DROITE, avec le pari. Mesuré à 375 px sur ce nom-là :
-         cette disposition règle bien le problème, mais fait passer la boîte de 90 à 108 px — la
-         colonne de droite s'élargit, celle du nom rétrécit, et le nom s'enroule sur deux lignes.
-         Sur cinq matchs, c'est un demi-écran de plus. Placé DEVANT, le marqueur ne peut plus se
-         retrouver seul (il ouvre la ligne) et la hauteur reste à 90 px. On garde donc l'intention
-         — que le logo cesse d'être orphelin — avec la disposition qui ne coûte rien. */
-      /* ⚠️ v8.07 (2ᵉ correction, capture d'Hervé) — LES MARQUEURS DESCENDENT SUR LA LIGNE DE LA
-         COMPÉTITION. La v8.01 les avait mis DEVANT le nom pour qu'ils cessent d'être orphelins ;
-         ça résolvait le symptôme mais déséquilibrait la carte : la pastille pousse le nom, qui
-         s'enroule autour d'elle. La ligne du dessous — « 🏆 Qualif. C1 · 🕐 demain 20:00 » — est
-         courte et porte déjà les informations de contexte : les marqueurs y tiennent sans rien
-         déplacer, et le nom du match retrouve toute la largeur.
-         ⚠️ Même disposition que sur l'écran d'attente (v8.07) : deux écrans qui montrent la même
-         chose doivent la montrer pareil, sinon on relit deux fois pour comparer. */
-      /* ⚠️ v8.57 (capture d'Hervé) — LE NOM DU MATCH SE CASSAIT AU MILIEU D'UN MOT.
-         Vu sur « Wolverhampton Wanderers – Port Vale » : le nom s'affichait « Wolverha / mpton /
-         Wandere / rs ». Deux causes qui se combinent — la pastille de droite répète le nom de
-         l'équipe choisie (« Wolverhampton Wanderers @1.24 · 10€ »), et elle était en
-         `flex:0 0 auto` + `white-space:nowrap` : elle ne rétrécit JAMAIS et prend toute la place.
-         Le `overflow-wrap:break-word` du body (là pour qu'un pseudo sans espace n'élargisse pas la
-         page) fait alors céder le nom lettre par lettre au lieu de déborder.
-         LA CORRECTION : la ligne peut passer à la ligne (`flex-wrap`), le nom garde une base de
-         150 px, et la pastille peut rétrécir ET revenir à la ligne. Sur un nom court rien ne
-         change ; sur un nom long, la pastille descend sous le nom au lieu de l'écraser.
-         ⚠️ Ne pas remettre `flex:0 0 auto` sur la pastille « pour qu'elle reste sur une ligne » :
-         c'est exactement ce qui cassait le nom. */
-      /* ⚠️ v8.59 (capture d'Hervé) — UNE CARTE SUR CINQ NE SE LISAIT PAS COMME LES AUTRES.
-         Vu sur « Bristol City – Walsall » : nom, puis « Coupe de la Ligue · » seul sur une ligne,
-         « aujourd'hui 20:45 » sur la suivante, les logos 👑 🃏 sur une troisième — et la pastille
-         du prono flottant à droite, en face de rien. Les quatre autres cartes affichaient bien
-         nom / compétition·heure / prono.
-         LA CAUSE : la disposition était UN SEUL bloc flex à deux enfants (le texte à gauche, la
-         pastille à droite). Tant que la pastille redescend, on LIT trois lignes empilées — mais
-         c'est un hasard de largeur, pas une règle. Dès que le texte de gauche devient assez long
-         (compétition + heure + deux logos bonus), il se découpe tout seul et la pastille reste en
-         haut à droite : la même carte, disposée autrement, sans que rien ne l'ait décidé.
-         LA CORRECTION : on écrit explicitement les trois lignes que l'écran montrait déjà par
-         accident — nom, puis compétition · heure, puis la pastille du prono avec les logos bonus
-         juste à côté d'elle. La longueur du texte et le nombre de bonus ne peuvent plus changer
-         l'ordre de lecture : les cinq cartes sont bâties pareil, celle qui porte deux bonus comme
-         celle qui n'en porte aucun.
-         ⚠️ Les logos vont désormais AVEC LE PRONO (ils le qualifient : 👑 = capitaine sur ce
-         match, 🃏 = bonus joué dessus) et non plus avec la compétition, où ils ne parlaient de
-         rien. C'est ce qu'Hervé demandait dès la v8.01 ; ça ne coûtait plus de hauteur ici, la
-         ligne de la pastille existant de toute façon.
-         ⚠️ v8.59 (2ᵉ correction, capture d'Hervé) — LES LOGOS DÉCROCHAIENT SUR LE PLUS LONG PRONO.
-         Vu sur « Union Saint-Gilloise / Bodø/Glimt @2.00 / 3.40 · 10€ » — la pastille la plus
-         longue possible (double chance : deux équipes ET deux cotes) : elle remplissait la ligne,
-         et 👑 🔥 basculaient SEULS sur la ligne suivante. Le logo orphelin, revenu par la porte
-         de derrière : `flex-wrap` place les éléments d'après leur largeur NATURELLE avant de les
-         faire rétrécir — une pastille trop large éjecte donc ses voisins au lieu de leur céder
-         de la place.
-         LA CORRECTION : plus de retour à la ligne du tout sur cette ligne. C'est la PASTILLE qui
-         rétrécit (`flex:0 1 auto` + `min-width:0`, son texte passe sur deux lignes à l'intérieur)
-         et les logos sont bloqués à leur taille (`flex:0 0 auto`). Ils ne peuvent plus se
-         détacher du prono qu'ils qualifient, quelle que soit la longueur du nom des équipes.
-         ⚠️ Ne pas remettre `flex-wrap:wrap` ici : c'est ce qui décrochait les logos. */
-      return `<div class="pick-row"><div class="sel-lbl">${mk?`<span style="margin-right:4px">${mk}</span>`:''}<span class="s">${esc(f.home)} – ${esc(f.away)}</span>${info?`<br><span class="o" style="margin-left:0">${info}</span>`:''}<br><span class="o" style="margin-left:0">${selD} @${oddD}</span></div><div class="stk">${euro(b.stake)}</div></div>`;
+      return `<div class="match-card-c${favori?' is-favori':''}">
+        <div class="mc-top"><span class="mc-num">${i+1}</span><span class="mc-team">${esc(f.home)}</span><span class="mc-vs">${t("vs")}</span><span class="mc-team">${esc(f.away)}</span>${favori?`<span class="mc-fav clik" onclick="showCaptainInfo()">👑</span>`:''}</div>
+        ${info?`<span class="mc-meta">${info}</span>`:''}
+        <span class="mc-result"><b class="pick-name">${selD}</b> · ${t("Mise")} ${euro(b.stake)} · ${t("Cote")} ${oddD}</span>
+        ${onMatch?`<div class="mc-bonus-c clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</div>`:''}
+      </div>`;
     }).join("") : '';
     const picksTot = (mine&&mine.picks) ? mine.picks.reduce((s,b)=>s+(+b.stake||0),0) : 0;
-    const picksCard = picks ? `<div class="picks-card">${picks}</div><div class="picks-total"><span>${t("Total misé")}</span><span>${euro(picksTot)}</span></div>` : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
+    const picksCard = picks ? `<div>${picks}</div><div class="picks-total"><span>${t("Total misé")}</span><span>${euro(picksTot)}</span></div>` : `<div class="box mini muted">${t("En attente de tes pronos…")}</div>`;
     const bonusLine = (mine&&mine.card&&mine.card.id)?`<div class="mini muted" style="margin:4px 2px 2px">${t("🃏 Bonus du jour :")} ${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))} <span class="muted">${t("(visible par toi seul jusqu'aux résultats)")}</span></div>`:(mine?`<div class="mini muted" style="margin:4px 2px 2px">${t("Aucun bonus joué ce jour.")}</div>`:'');
     const humansN=players.filter(p=>!p.is_ai).length; const doneN=players.filter(p=>!p.is_ai && bets.find(b=>b.player_id===p.id)).length;
     // Statut des pronos de CHAQUE joueur (qui a validé, qui n'a pas encore) — demandé par Hervé.
@@ -14160,37 +14274,35 @@ function ackRecap(){ recapOpen=-1; recapFocus=null; setSeen(L.current_day);
   refresh(); }
 
 /* ============ STANDINGS ============ */
-// Comparateur du classement. v2 (demande d'Hervé) : points → cagnotte → [confrontations directes,
-// appliquées à part, voir classe()] → plus gros gain → plus grosse cote. Le total des victoires en
-// duel a été retiré du départage. Les ligues antérieures gardent leur ordre d'origine.
-function cmpV(v2){ return (a,b)=> b.points-a.points || b.capital-a.capital
-  || (v2?0:(b.duel_wins-a.duel_wins)) || b.best_day-a.best_day || b.best_odd-a.best_odd; }
-function cmp(a,b){ return cmpV(isScoring2())(a,b); }
-// Classement complet. Les confrontations directes ne sont VOLONTAIREMENT pas dans le comparateur :
-// elles ne sont pas transitives (A bat B, B bat C, C bat A) et Array.sort avec un comparateur
-// incohérent peut renvoyer un ordre arbitraire — y compris pour des joueurs qui n'étaient pas à
-// égalité. On trie donc avec un comparateur sûr, puis on réordonne CHAQUE groupe à égalité de
-// points ET de cagnotte par un mini-championnat entre ses membres (points marqués dans leurs
-// face-à-face). Un cycle A>B>C>A donne des scores égaux et retombe sur le plus gros gain.
-function classe(arr,lg){
-  const v2=isScoring2(lg);
-  const out=[...arr].sort(cmpV(v2));
-  const lid=lg?lg.id:(L?L.id:null);
-  const h=(v2 && STAND_H2H && STAND_H2H_LG && STAND_H2H_LG===lid) ? STAND_H2H : null;
-  if(!h) return out; // pas d'historique chargé → on s'en tient au tri sûr
-  const res=[];
-  for(let i=0;i<out.length;){
-    let j=i;
-    while(j+1<out.length && out[j+1].points===out[i].points && out[j+1].capital===out[i].capital) j++;
-    if(j>i){
-      const grp=out.slice(i,j+1); const sc={};
-      grp.forEach(p=>{ sc[p.id]=0; grp.forEach(q=>{ if(q.id!==p.id) sc[p.id]+=(h[p.id+'|'+q.id]||0); }); });
-      grp.sort((a,b)=> (sc[b.id]-sc[a.id]) || (b.best_day-a.best_day) || (b.best_odd-a.best_odd));
-      res.push(...grp);
-    } else res.push(out[i]);
-    i=j+1;
+// ⚠️ Règle de départage DÉFINITIVE (décidée par Hervé, 2026-09-06) — remplace l'ancienne chaîne à
+// 5 critères (confrontation directe → meilleure journée → meilleure cote → victoires en duel).
+// Classement = points DÉCROISSANTS, puis en cas d'égalité capital DÉCROISSANT (au centime près),
+// puis EX ÆQUO si points ET capital sont strictement identiques — aucun autre critère.
+// `best_day`/`best_odd`/`duel_wins` restent en base et servent ailleurs (Stats, Palmarès, bilan de
+// fin de saison) mais n'entrent plus dans le tri du classement — l'ancien mini-championnat par
+// confrontations directes (STAND_H2H/computeStandHist) est supprimé, plus seulement contourné.
+// ⚠️ `join_order` en tout dernier : PAS un critère de départage (les deux restent EX ÆQUO à
+// l'affichage, cf. competitionRanks() qui ne regarde que points+capital) — seulement un ordre
+// STABLE et déterministe entre deux joueurs strictement à égalité, pour tout code qui a besoin de
+// désigner "le" premier ou "le" dernier d'un groupe à égalité (ex. enjeuOutcome() : qui subit le
+// gage / reçoit la récompense). Sans lui, l'ordre entre égalités dépendrait de l'ordre d'entrée du
+// tableau — silencieux et arbitraire plutôt que déterministe et documenté.
+function cmpV(){ return (a,b)=> b.points-a.points || b.capital-a.capital || (a.join_order||0)-(b.join_order||0); }
+function cmp(a,b){ return cmpV()(a,b); }
+// Classement complet — simple tri sûr, aucun réordonnancement supplémentaire : deux joueurs à
+// égalité stricte de points ET de capital sont à l'affichage EX ÆQUO (même rang, via
+// competitionRanks() — jamais l'un devant l'autre), même si join_order les départage en interne.
+function classe(arr,lg){ return [...arr].sort(cmpV()); }
+// Rangs "compétition" (1-2-2-4, pas 1-2-2-3) à partir d'un tableau déjà trié par classe() : deux
+// joueurs à égalité stricte de points ET de capital partagent le même rang affiché, et le rang
+// suivant saute d'autant de places. Utiliser CECI pour tout rang montré à l'écran (médaille,
+// "2ᵉ", etc.) — l'index brut du tableau (i+1) ne suffit plus depuis que l'ex æquo existe.
+function competitionRanks(ord){
+  const ranks=[];
+  for(let i=0;i<ord.length;i++){
+    ranks.push(i>0 && ord[i].points===ord[i-1].points && ord[i].capital===ord[i-1].capital ? ranks[i-1] : i+1);
   }
-  return res;
+  return ranks;
 }
 // Reconstruit l'historique du classement (état cumulé APRÈS chaque journée résolue) en rejouant les résultats stockés.
 // ⚠️ Correctif audit QA (2026-09-05) — cette fonction rejoue tout l'historique de la ligue et était
@@ -14205,14 +14317,12 @@ function computeStandHist(){
   if(N<1) return [];
   const cacheKey = (L?L.id:null)+'|'+L.status+'|'+N+'|'+chartBets.length+'|'+standDuels.length+'|'+((standTrades||[]).length)+'|'+players.length;
   if(_standHistCache && _standHistCache.key===cacheKey && _standHistCache.chartBets===chartBets && _standHistCache.standDuels===standDuels && _standHistCache.players===players && _standHistCache.standTrades===standTrades){
-    STAND_H2H=_standHistCache.h2h; STAND_H2H_LG=L?L.id:null;
     return _standHistCache.result;
   }
   const sp = L.prep_summary||{};
   const st={}; players.forEach(p=>{ const psx=(sp.players||[]).find(x=>x.pid===p.id); st[p.id]={points:0, capital: psx?psx.capital:100, duel_wins:0, best_day:0, best_odd:0, streak_w:0, streak_l:0, star:0, penOubli:0, penRecap:0, penJours:[], recapJours:[]}; });
   const betAt={}; chartBets.forEach(b=>{ betAt[b.day+'|'+b.player_id]=b; });
   const duelByDay={}; standDuels.forEach(d=>{ (duelByDay[d.day]=duelByDay[d.day]||[]).push(d); });
-  const h2h={}; // confrontations directes, remplies au fil des duels ci-dessous
   // Rachats de bonus : le capital change de mains SANS être le gain de personne. Sans ce report,
   // la reconstruction diverge du capital réel. On range chaque transfert à la journée où il a été
   // accepté ; `day` absent (rachat antérieur à MIGRATION-trades-day.sql) → journée 0, ce qui garde
@@ -14253,9 +14363,6 @@ function computeStandHist(){
       const A=Object.assign({net:(ab&&ab.net)||0}, gainMise(ab&&ab.picks, du.fixtures));
       const r=duelPtsF(H,A,forgot.has(du.home_id),forgot.has(du.away_id),isScoring2());
       const rh=r.h*lastMult, ra=r.a*lastMult;
-      // confrontations directes : points marqués par chacun DANS CE FACE-À-FACE (déjà doublés le dernier jour)
-      h2h[du.home_id+'|'+du.away_id]=(h2h[du.home_id+'|'+du.away_id]||0)+rh;
-      h2h[du.away_id+'|'+du.home_id]=(h2h[du.away_id+'|'+du.home_id]||0)+ra;
       if(st[du.home_id]) st[du.home_id].points+=rh; if(st[du.away_id]) st[du.away_id].points+=ra;
       if(r.win==='h'){ if(st[du.home_id]){st[du.home_id].duel_wins++;st[du.home_id].streak_w++;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_l++;st[du.away_id].streak_w=0;} }
       else if(r.win==='a'){ if(st[du.away_id]){st[du.away_id].duel_wins++;st[du.away_id].streak_w++;st[du.away_id].streak_l=0;} if(st[du.home_id]){st[du.home_id].streak_l++;st[du.home_id].streak_w=0;} }
@@ -14304,8 +14411,7 @@ function computeStandHist(){
     snaps.push(players.map(p=>({ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
       points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star, penOubli:st[p.id].penOubli, penRecap:st[p.id].penRecap, penJours:st[p.id].penJours.slice(), recapJours:st[p.id].recapJours.slice() })));
   }
-  STAND_H2H=h2h; STAND_H2H_LG=L?L.id:null; // dispo pour le départage du classement
-  _standHistCache={key:cacheKey, chartBets, standDuels, players, standTrades, h2h, result:snaps};
+  _standHistCache={key:cacheKey, chartBets, standDuels, players, standTrades, result:snaps};
   return snaps;
 }
 // ✨ FICHE STATS PERSO (premium, offert en test) — calculée depuis chartBets + standDuels (données déjà chargées).
@@ -14349,9 +14455,15 @@ function openLeagueStats(){ navOpen("leaguestats"); }
 // l'étoile, cf. l'avertissement sur dayStar() : "doit être testé à l'identique partout où l'étoile
 // est attribuée, sinon les points recalculés divergent de ceux écrits en base") — pas une 4e
 // implémentation, seulement sa borne "vu" à la place de la longueur de saison.
-// ⚠️ "Plus longue série de victoires en duel" de la maquette N'EST PAS porté : la reconstituer
-// demanderait de faire confiance à streak_w rejoué jour par jour sur toute computeStandHist(), point
-// jamais vérifié isolément — gap documenté plutôt qu'un 6e record recalculé sans certitude.
+// ⚠️ "Plus longue série de victoires en duel" (2026-09-06, demandé par Hervé : « ne le porte que si
+// c'est fiable ») — VÉRIFIÉ, PORTÉ. `computeStandHist()` rejoue déjà `streak_w`/`streak_l` jour par
+// jour (même incrément +1 sur victoire, même remise à 0 sur défaite/nul) EXACTEMENT comme la vraie
+// résolution serveur (comparé ligne à ligne : les deux blocs `if(r.win==='h')/else if(r.win==='a')
+// /else` sont identiques, seule la syntaxe d'accès à l'objet diffère) — ce n'est donc pas une 6e
+// implémentation mais la MÊME lecture de computeStandHist() que le record ⭐ juste en dessous, sur un
+// autre champ. Le record retient le MAXIMUM de streak_w atteint À N'IMPORTE QUEL JOUR jusqu'à
+// `upTo` (pas seulement le streak en cours) : une série de victoires peut s'être achevée avant la
+// fin de ce qui est déjà vu.
 function leagueRecordsHTML(){
   const seen=getSeen(); const upTo=Math.min(seen, L.current_day||0);
   if(upTo<1) return '';
@@ -14371,6 +14483,8 @@ function leagueRecordsHTML(){
     if(!mostAccurate||rate>mostAccurate.rate) mostAccurate={pid,rate}; });
   let bestNet=null; Object.keys(acc).forEach(pid=>{ if(!bestNet||acc[pid].net>bestNet.net) bestNet={pid,net:acc[pid].net}; });
   const sc=starCumul(upTo); let starChamp=null; Object.keys(sc).forEach(pid=>{ if(sc[pid]>0 && (!starChamp||sc[pid]>starChamp.n)) starChamp={pid,n:sc[pid]}; });
+  let bestStreak=null; { const sn=computeStandHist();
+    for(let d=0; d<Math.min(upTo, sn.length); d++){ (sn[d]||[]).forEach(x=>{ if((x.streak_w||0)>(bestStreak?bestStreak.n:1)) bestStreak={pid:x.id, n:x.streak_w}; }); } }
   const rec=(ic,label,ctx,val,pos)=>`<div class="record-row"><span class="ic">${ic}</span><span class="lbl">${label}<span class="ctx">${ctx}</span></span><span class="val${pos?' pos':''}">${val}</span></div>`;
   const items=[];
   if(bestDay) items.push(rec('💰', t("Plus grosse journée"), t("{a} · J{b}",{a:nm(bestDay.pid),b:bestDay.day+1}), euroSigned(bestDay.net), bestDay.net>=0));
@@ -14378,6 +14492,7 @@ function leagueRecordsHTML(){
   if(mostAccurate) items.push(rec('🎯', t("Le plus précis"), nm(mostAccurate.pid)+' · '+t("% de pronostics réussis"), Math.round(mostAccurate.rate*100)+" %", false));
   if(bestNet) items.push(rec('💰', t("Meilleur net cumulé"), nm(bestNet.pid), euroSigned(bestNet.net), bestNet.net>=0));
   if(starChamp) items.push(rec('⭐', t("Plus de bonus Meilleur pronostiqueur"), nm(starChamp.pid), t("{a} fois",{a:starChamp.n}), false));
+  if(bestStreak) items.push(rec('🔥', t("Plus longue série de victoires en duel"), nm(bestStreak.pid), ''+bestStreak.n, true));
   if(!items.length) return '';
   return `<div class="stats-section"><div class="section-title">🏅 ${t("Les records de la ligue")}</div><div class="leaders-panel">${items.join('')}</div></div>`;
 }
@@ -14388,7 +14503,7 @@ function viewLeagueStats(){
   // de viewStats() (qui masque déjà ce nombre en Solo via `!l.solo`, cf. plus bas dans ce fichier) :
   // "1er / 1" serait toujours vrai pour l'unique humain d'une ligue Solo, quel que soit le résultat
   // réel contre l'IA — masqué de la même façon ci-dessous plutôt que d'afficher un nombre trompeur.
-  const ord=classe(players.filter(p=>!p.is_ai)); const rank=ord.findIndex(p=>p.id===S.myId)+1; const tot=ord.length; const solo=isSolo();
+  const ord=classe(players.filter(p=>!p.is_ai)); const rank=competitionRanks(ord)[ord.findIndex(p=>p.id===S.myId)]||0; const tot=ord.length; const solo=isSolo();
   // ⚠️ Port V2 Stats (2026-09-06, bug réel constaté par Hervé) — l'ancien `.a2-hero-card` recadre
   // cette image en 5:4 (`object-fit:cover`) alors que l'asset réel est en 1717×916 (≈1,87:1) : la
   // bulle dorée peinte dans l'image (mesurée par pixels sur CE fichier précis, PAS sur les % de
@@ -14432,8 +14547,59 @@ function viewLeagueStats(){
         <span class="rec">${t("{w} V · {n} N · {l} D",{w:r.w,n:r.d,l:r.l})}</span>
         <span class="confront-bar"><span class="seg-v" style="width:${pv}%"></span><span class="seg-n" style="width:${pn}%"></span><span class="seg-d" style="width:${pl}%"></span></span></div>`; });
     h+=`</div></div>`; }
+  h+=seasonHighlightsHTML();
   if(L&&L.status==="done") h+=`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button>`;   // partage : seulement une fois la ligue terminée
   return h; }
+// ⚠️ Port V2 Stats (2026-09-06, maquette stats.html, "✨ Les faits marquants de la saison") — SEUL
+// UN SOUS-ENSEMBLE de la maquette est porté, celui que la maquette elle-même documente comme
+// « fiable dès aujourd'hui en prod, sans doublon avec les Records » : les changements de leader et
+// la plus grosse remontée (en RANG, cf. competitionRanks() — Point 1). Les deux se lisent depuis
+// computeStandHist(), bornée à getSeen() comme leagueRecordsHTML() juste au-dessus — même source,
+// même garde anti-spoiler.
+// ⚠️ CE QUI N'EST PAS PORTÉ, ET POURQUOI (gap documenté plutôt qu'un doublon ou un calcul incertain) :
+// - « Le carton » (le prono gagné à la plus haute cote) redirait le même fait que le Record
+//   "Meilleure cote gagnée" déjà affiché juste au-dessus — la maquette interdit elle-même ce
+//   doublon ("le compteur ⭐ de Léa n'apparaît que dans les Records, pas répété dans les Faits
+//   marquants"), et sa propre note ⚠️ RÈGLE CIBLE signale un cas non vérifié (bonus "Coup Double",
+//   cote combinée de 2 picks) qui rendrait ce fait potentiellement FAUX pour "le pronostic gagné à
+//   la cote la plus haute" tel qu'énoncé.
+// - Une variante narrative de "plus grosse journée" existe dans la maquette mais duplique elle
+//   aussi le Record déjà affiché, et sa propre note documente un écart de filtre (paris au net
+//   encore nul) à corriger avant toute utilisation — non repris ici tant que ce n'est pas vérifié.
+// Prérequis technique pour aller plus loin un jour : un filtre `.not("net","is",null)` dans la
+// requête qui alimenterait cette variante, identique à celui déjà appliqué à `chartBets`.
+// ⚠️ MÊME ALGORITHME que loadEndStats() (leadChanges/topLeader/daysLed/comeback, ~:15820-15826) —
+// PAS UNE 2E IMPLÉMENTATION : `comeback` y compare le pire rang JAMAIS atteint au rang FINAL
+// (la ligue est alors terminée, un seul "point final" existe) ; ici, borné à `upTo`, "le rang
+// final" devient "le rang d'aujourd'hui" (dernier jour vu) — seule adaptation, mêmes formules.
+// Une histoire de remontée doit se raconter pareil qu'on la lise mi-saison ou dans le bilan final.
+function seasonHighlightsHTML(){
+  const seen=getSeen(); const upTo=Math.min(seen, L.current_day||0);
+  const sn=computeStandHist(); if(upTo<2 || sn.length<2) return '';   // il faut AU MOINS 2 journées vues pour parler de "changement" ou de "remontée"
+  const nm=pid=>{ const p=pById(pid); return p?esc(p.name||'?'):'?'; };
+  const rankHist={}; players.forEach(p=>rankHist[p.id]=[]); const leaderByDay=[];
+  for(let d=0; d<upTo; d++){
+    const s=sn[d]; if(!s||!s.length){ leaderByDay.push(null); continue; }
+    const ord=classe(s); const dayRanks=competitionRanks(ord);
+    ord.forEach((p,idx)=>{ if(rankHist[p.id]) rankHist[p.id][d]=dayRanks[idx]; });
+    leaderByDay.push(ord[0]?ord[0].id:null);
+  }
+  let leadChanges=0; const daysLed={};
+  leaderByDay.forEach((pid,i)=>{ if(pid) daysLed[pid]=(daysLed[pid]||0)+1; if(i>0&&pid&&pid!==leaderByDay[i-1]) leadChanges++; });
+  let topLeader=null; Object.keys(daysLed).forEach(pid=>{ if(topLeader===null||daysLed[pid]>daysLed[topLeader]) topLeader=pid; });
+  const curDay=sn[upTo-1]||[]; const curOrd=classe(curDay); const curRanks=competitionRanks(curOrd);
+  const curRank={}; curOrd.forEach((p,i)=>curRank[p.id]=curRanks[i]);
+  let comeback=null; players.forEach(p=>{ const rh=(rankHist[p.id]||[]).filter(x=>x!=null); if(rh.length<2||curRank[p.id]==null) return;
+    const worst=Math.max(...rh); const g=worst-curRank[p.id]; if(g>0&&(comeback===null||g>comeback.g)) comeback={pid:p.id,g,worst,fin:curRank[p.id]}; });
+  const card=(cls,av,badge,title,sub)=>`<div class="highlight-card c-${cls}"><div class="highlight-av">${av}<span class="badge">${badge}</span></div>
+    <div class="highlight-body"><div class="highlight-t">${title}</div><div class="highlight-s">${sub}</div></div></div>`;
+  const items=[];
+  if(leadChanges>0) items.push(card('purple','👑','🔄', t("Une tête qui change"), t("La tête du classement a changé <b>{n}</b> fois{extra}.",{n:leadChanges,extra:topLeader?t(" — {name} l'a occupée le plus longtemps ({d} j)",{name:nm(topLeader),d:daysLed[topLeader]}):''})));
+  else if(topLeader) items.push(card('purple','👑','🚂', t("Cavalier seul"), t("{name} a tenu la tête depuis le début.",{name:nm(topLeader)})));
+  if(comeback && comeback.g>=1) items.push(card('green', esc((pById(comeback.pid)||{}).name||'?').charAt(0).toUpperCase(), '📈', t("La remontée"), t("{name} est remonté de la <b>{worst}ᵉ</b> à la <b>{fin}ᵉ</b> place.",{name:nm(comeback.pid),worst:comeback.worst,fin:comeback.fin})));
+  if(!items.length) return '';
+  return `<div class="stats-section"><div class="section-title">✨ ${t("Les faits marquants de la saison")}</div>${items.join('')}</div>`;
+}
 // ✨ STATS PERSO CROSS-LIGUE — dossier complet sur TOUTES les ligues du joueur (chargé à l'ouverture).
 // ⚠️ Dossier VIDE à la forme des trois onglets (v7.24). Les sorties anticipées ci-dessous rendaient
 // l'ancienne forme plate `{leagues,agg,h2h}` : l'écran, qui lit maintenant `jeux[onglet]`, n'y aurait
@@ -14569,7 +14735,9 @@ async function loadMyStats(){
             h2h[key]=h2h[key]||{name:opp.name,emoji:opp.emoji,is_ai:!!opp.is_ai,w:0,l:0,d:0};
             if(r.win==='h') h2h[key].w++; else if(r.win==='a') h2h[key].l++; else h2h[key].d++; } } });
       const humans=classe((plsByLg[lid]||[]).filter(p=>!p.is_ai), lg);
-      const rank=humans.findIndex(p=>p.id===mp)+1, total=humans.length; const me=plMap[mp]||{};
+      // ⚠️ Ex æquo (2026-09-06) : rang "compétition", pas l'index brut — deux champions ex æquo
+      // comptent chacun leur titre, deux 2ᵉ/3ᵉ ex æquo comptent chacun leur podium.
+      const rank=(competitionRanks(humans)[humans.findIndex(p=>p.id===mp)])||0, total=humans.length; const me=plMap[mp]||{};
       // ⚠️ SOLO CONTRE L'IA : aucun titre, aucun podium (v7.02, Hervé). Finir 1er quand on est le
       // seul humain n'est pas un championnat gagné — sinon n'importe qui gonfle son palmarès en
       // enchaînant des parties solo. En revanche les PARIS de ces ligues comptent normalement
@@ -14879,9 +15047,13 @@ function cdImg(src,cross){ return new Promise(res=>{ if(!src) return res(null);
 // fini 1er sur 1 humain contre l'IA. Sinon, rang 100 % humain (IA exclue) : 1er→champion,
 // dernier→dernier, total>3 ET rang∈{2,3}→podium, sinon→milieu. Implémentation exacte de
 // `pickVariant()` telle que documentée et testée dans la maquette (13 cas couverts).
-function seasonPickVariant(rank,total){
+// ⚠️ `lastRank` (2026-09-06, ex æquo) — PAS `total` : avec le nouveau départage (points→capital→ex
+// æquo), un groupe à égalité en dernière position partage un rang INFÉRIEUR au nombre de joueurs
+// (ex. 5 joueurs, les 2 derniers ex æquo → rang 4, pas 5). Comparer à `total` aurait fait rater la
+// variante "dernier" pour ce cas précis. `lastRank` = le rang du dernier de competitionRanks().
+function seasonPickVariant(rank,total,lastRank){
   if(rank===1) return 'champion';
-  if(rank===total) return 'dernier';
+  if(rank===(lastRank!=null?lastRank:total)) return 'dernier';
   if(total>3 && (rank===2||rank===3)) return 'podium';
   return 'milieu';
 }
@@ -14897,9 +15069,10 @@ async function seasonCardData(){
   // contre l'IA. `seasonPickVariant()` + le court-circuit `isSolo()` ci-dessous corrigent
   // exactement ce trou, sans toucher au calcul du rang lui-même (déjà correct).
   const ord=classe(players.filter(p=>!p.is_ai));
-  const rank=ord.findIndex(p=>p.id===S.myId)+1, total=ord.length;
+  const ranksArr=competitionRanks(ord);
+  const rank=(ranksArr[ord.findIndex(p=>p.id===S.myId)])||0, total=ord.length;
   const solo=isSolo();
-  const variant = solo ? 'solo' : seasonPickVariant(rank,total);
+  const variant = solo ? 'solo' : seasonPickVariant(rank,total,ranksArr[ranksArr.length-1]);
   const d={ league:(L&&L.name)||"Tactizo", name:(meP&&meP.name)||"?",
             rank, total, solo, variant, points:(meP?meP.points:0), capital:euro(meP?meP.capital:0),
             hit:s.hit, roi:s.roi, days:s.days, duelWins:(meP&&meP.duel_wins)||0, bestOdd:s.bestOdd,
@@ -15086,7 +15259,7 @@ function seasonRecapText(){
   // humain (déjà la bonne règle), mais Solo n'affiche jamais "1er / 1" (toujours vrai contre
   // l'unique IA, quel que soit le résultat réel) : une mention neutre à la place.
   const s=myStats(); const meP=me(); const ord=classe(players.filter(p=>!p.is_ai));
-  const rank=ord.findIndex(p=>p.id===S.myId)+1; const tot=ord.length; const solo=isSolo(); const l=[];
+  const rank=(competitionRanks(ord)[ord.findIndex(p=>p.id===S.myId)])||0; const tot=ord.length; const solo=isSolo(); const l=[];
   l.push("🏆 "+t("Ma saison — {a}",{a:(L&&L.name)||"Tactizo"}));
   if(solo) l.push(t("Solo · Terminé"));
   else if(rank>0) l.push(t("Classement : {a}ᵉ / {b}",{a:rank,b:tot}));
@@ -15142,6 +15315,10 @@ async function copySeason(){ const txt=seasonRecapText();
   try{ await navigator.clipboard.writeText(txt); toast(t("Récap copié — colle-le où tu veux ! 📋")); }catch(e){ const el=document.getElementById("recapTxt"); if(el){ el.focus(); el.select(); } } }
 // Explication groupée des colonnes du classement + des flèches de mouvement (le tooltip `title` des
 // flèches ne marche pas au tactile → une mini-ligne + ⓘ le rend accessible sur mobile).
+// ⚠️ Règle de départage définitive (2026-09-06, décidée par Hervé) — reprise ici en toutes lettres,
+// même contenu que le rule-list de classement.html : points → capital → ex æquo, plus aucun autre
+// critère. C'est le seul endroit qui explique le départage — cmpV()/classe() portent la règle,
+// ce texte la DÉCRIT, jamais l'inverse.
 function showStandingsInfo(){
   infoModal("📊", t("Comprendre le classement"),
    `<div class="mini muted" style="text-align:left;line-height:1.7">
@@ -15151,7 +15328,12 @@ function showStandingsInfo(){
      <b>${t("Cap.")}</b> — ${t("ton capital en euros fictifs : l'argent avec lequel tu mises.")} ${t("<b>Touche-le</b> pour voir son évolution journée par journée.")}<br>
      <b class="gold">🔥 ${t("Dernière journée")}</b> — ${t("les points de <b>duel comptent double</b> ce jour-là. Un retard peut se combler d'un coup : <b>rien n'est jamais joué jusqu'au bout</b>.")} ${t("(le +1 du ⭐ meilleur pronostiqueur de la journée n'est pas doublé)")}<br>
      <b>▲ = ▼</b> — ${t("À côté de chaque joueur au classement, une flèche montre son <b>mouvement</b> depuis la journée précédente : <b>▲ vert</b> (gagne des places), <b>=</b> (stable), <b>▼ rouge</b> (en perd). C'est <b>purement indicatif</b> : aucun bonus ni malus n'y est associé.")}
-   </div>`);
+   </div>
+   <ol class="mini" style="text-align:left;line-height:1.6;margin:14px 0 0;padding-left:20px;border-top:1px solid var(--border);padding-top:12px">
+     <li>${t("Classement par <b>nombre de points</b>, du plus élevé au plus faible.")}</li>
+     <li>${t("En cas d'égalité de points, <b>capital le plus élevé</b> départage.")}</li>
+     <li>${t("Si points et capital sont identiques, les joueurs sont <b>ex æquo</b>.")}</li>
+   </ol>`);
 }
 // ⭐ CUMUL DU MEILLEUR PRONOSTIQUEUR sur les `nbJours` premières journées : meilleur net de la
 // ligue chaque jour, les oublis exclus (picks vide), départage par ordre d'arrivée.
@@ -15331,8 +15513,11 @@ function viewStandings(){
   // Mouvement au classement vs journée précédente (remplace l'ancienne série 🔥/❄️, qui faisait
   // doublon avec les logos de bonus 🔥 Ça passe ou ça casse / ❄️ Effet Kiss Cool). ▲ vert = grimpé,
   // = inchangé, ▼ rouge = reculé. Pas de flèche sur la 1re journée (rien à comparer).
-  let prevRank={}; if(shownIdx>=1 && snaps[shownIdx-1]){ classe(snaps[shownIdx-1]).forEach((p,idx)=>{ prevRank[p.id]=idx; }); }
-  const moveHTML=(pid,curIdx)=>{ if(shownIdx<1 || !(pid in prevRank)) return `<span class="lb-trend flat">—</span>`; const d=prevRank[pid]-curIdx;
+  // ⚠️ Ex æquo (2026-09-06) : comparé par RANG (competitionRanks()), pas par position brute dans le
+  // tableau — deux joueurs ex æquo un jour puis ex æquo le lendemain ne doivent montrer aucun
+  // mouvement, même si leur ordre interne (join_order) les a fait échanger de position.
+  let prevRank={}; if(shownIdx>=1 && snaps[shownIdx-1]){ const prevOrd=classe(snaps[shownIdx-1]); const prevRanks=competitionRanks(prevOrd); prevOrd.forEach((p,idx)=>{ prevRank[p.id]=prevRanks[idx]; }); }
+  const moveHTML=(pid,curRank)=>{ if(shownIdx<1 || !(pid in prevRank)) return `<span class="lb-trend flat">—</span>`; const d=prevRank[pid]-curRank;
     if(d>0) return `<span class="lb-trend up" title="${t("Gagne {a} place(s) depuis la journée précédente",{a:d})}">▲${d}</span>`;
     if(d<0) return `<span class="lb-trend down" title="${t("Perd {a} place(s) depuis la journée précédente",{a:-d})}">▼${-d}</span>`;
     return `<span class="lb-trend flat" title="${t("Position inchangée")}">▬</span>`; };
@@ -15356,33 +15541,43 @@ function viewStandings(){
   // Hero "ma position" (v8.164, façon maquette) — pure lecture de `ord`/`ptsAvecPen`, déjà calculés
   // ci-dessus pour le tableau : aucun nouveau calcul, juste une autre vue de la même donnée.
   const myIdx=ord.findIndex(p=>p.id===S.myId);
+  const stdRanks=competitionRanks(ord);
   const rankHero=(myIdx>=0)?(()=>{
     // ⚠️ `ptsAvecPen()` renvoie du HTML (un <b class="clik" onclick="...">) fait pour être affiché
     // dans une cellule de tableau, PAS un nombre — l'utiliser dans un calcul produirait NaN. Les
     // pénalités sont déjà comprises dans `.points` (c'est justement ce que `ptsAvecPen` se contente
     // d'afficher), donc on lit `.points` directement pour le nombre ET pour l'écart.
-    const meRow=ord[myIdx]; const myPts=meRow.points;
-    const medal=myIdx===0?'🥇':myIdx===1?'🥈':myIdx===2?'🥉':null;
-    /* ⚠️ v8.223 (demandé par Hervé) — « X pts derrière Y » ne regardait que le voisin direct
-       (`ord[myIdx-1]`), qui peut être à ÉGALITÉ DE POINTS : `classe()` les sépare alors par la
-       cagnotte (cf. `cmpV`), et le voisin affichait « 0 pts derrière ». Un écart de points nul
-       n'est pas un écart : on remonte désormais jusqu'à trouver le premier joueur RÉELLEMENT devant
-       (points stricts), en sautant les égalités ; s'il n'y en a aucun (à égalité avec tout le monde
-       jusqu'au 1er), on le dit et on affiche l'écart de cagnotte, le vrai départage. */
+    const meRow=ord[myIdx]; const myPts=meRow.points; const myRank=stdRanks[myIdx];
+    const medal=myRank===1?'🥇':myRank===2?'🥈':myRank===3?'🥉':null;
+    /* ⚠️ Règle de départage simplifiée (2026-09-06, décidée par Hervé) — points → capital → EX
+       ÆQUO, plus aucun autre critère. Un rang partagé (competitionRanks()) n'a PLUS de sens à
+       comparer à « X pts d'avance/de retard » : deux joueurs du même rang sont, par définition,
+       identiques en points ET en capital. Le message dédié à l'égalité remplace l'ancien texte
+       qui affichait encore un écart de cagnotte (departage disparu). Pour un rang non partagé, on
+       cherche le voisin de rang DIFFÉRENT le plus proche (jamais un pair ex æquo) et on compare
+       d'abord les points, puis — à points strictement égaux mais rangs différents, cas normal
+       maintenant que le capital seul peut départager — la cagnotte. */
+    const tiedWithMe=ord.filter((p,i)=>i!==myIdx && stdRanks[i]===myRank);
     const gapHTML=(()=>{
-      if(myIdx===0){ if(ord.length<2) return ''; const nx=ord[1]; const d=myPts-nx.points;
-        if(d>0) return `<div class="gap">🏆 ${t("{a} pts d'avance sur {b} ({c}ᵉ)",{a:d,b:esc(nx.name||'?'),c:2})}</div>`;
+      if(tiedWithMe.length){
+        const noms=tiedWithMe.map(p=>esc(p.name||'?'));
+        const list=noms.length===1?noms[0]:(noms.slice(0,-1).join(', ')+t(" et ")+noms[noms.length-1]);
+        return `<div class="gap">🏆 ${t("Ex æquo avec {a} ({b}ᵉ)",{a:list,b:myRank})}</div>`;
+      }
+      if(myIdx===0){ const nx=ord[1]; if(!nx) return ''; const d=myPts-nx.points;
+        if(d>0) return `<div class="gap">🏆 ${t("{a} pts d'avance sur {b} ({c}ᵉ)",{a:d,b:esc(nx.name||'?'),c:stdRanks[1]})}</div>`;
         const dc=(meRow.capital||0)-(nx.capital||0);
-        return `<div class="gap">🏆 ${t("À égalité de points avec {b}, {a} d'avance en cagnotte ({c}ᵉ)",{a:euro(dc),b:esc(nx.name||'?'),c:2})}</div>`; }
-      let refIdx=-1; for(let i=myIdx-1;i>=0;i--){ if(ord[i].points>myPts){ refIdx=i; break; } }
+        return `<div class="gap">🏆 ${t("À égalité de points avec {b}, {a} d'avance en cagnotte ({c}ᵉ)",{a:euro(dc),b:esc(nx.name||'?'),c:stdRanks[1]})}</div>`; }
+      let refIdx=-1; for(let i=myIdx-1;i>=0;i--){ if(stdRanks[i]!==myRank){ refIdx=i; break; } }
       if(refIdx>=0){ const ab=ord[refIdx]; const d=ab.points-myPts;
-        return `<div class="gap">🏆 ${t("{a} pts derrière {b} ({c}ᵉ)",{a:d,b:esc(ab.name||'?'),c:refIdx+1})}</div>`; }
-      const ab=ord[myIdx-1]; const dc=(ab.capital||0)-(meRow.capital||0);
-      return `<div class="gap">🏆 ${t("À égalité de points avec {b}, {a} de retard en cagnotte ({c}ᵉ)",{a:euro(dc),b:esc(ab.name||'?'),c:myIdx})}</div>`;
+        if(d>0) return `<div class="gap">🏆 ${t("{a} pts derrière {b} ({c}ᵉ)",{a:d,b:esc(ab.name||'?'),c:stdRanks[refIdx]})}</div>`;
+        const dc=(ab.capital||0)-(meRow.capital||0);
+        return `<div class="gap">🏆 ${t("À égalité de points avec {b}, {a} de retard en cagnotte ({c}ᵉ)",{a:euro(dc),b:esc(ab.name||'?'),c:stdRanks[refIdx]})}</div>`; }
+      return '';
     })();
     return `<div class="rankhero">
       <div class="eyebrow">${t("Ton classement")}</div>
-      <div class="rankrow">${medal?`<span class="medal">${medal}</span>`:''}<span class="ranknum">${myIdx+1}</span><span class="ranklbl">${t("{a}ᵉ sur {b}",{a:myIdx+1,b:ord.length})}</span></div>
+      <div class="rankrow">${medal?`<span class="medal">${medal}</span>`:''}<span class="ranknum">${myRank}</span><span class="ranklbl">${t("{a}ᵉ sur {b}",{a:myRank,b:ord.length})}</span></div>
       <div class="ptsrow"><span class="ptsnum">${myPts}</span><span class="ptslbl">${t("points de saison")}</span></div>
       ${gapHTML}
       <div class="hmeta">
@@ -15405,8 +15600,8 @@ function viewStandings(){
     milieu:{img:'qg-tactizo-classement-milieu.png', color:'var(--gold)', eyebrow:"Milieu", title:"Tout reste possible.", text:"Une bonne journée peut tout changer."},
     difficulte:{img:'qg-tactizo-classement-difficulte.png', color:'var(--red)', eyebrow:"En difficulté", title:"La saison est longue.", text:"Un bon résultat peut relancer ta course."}
   };
-  const standingsMaestroHTML = (myIdx>=0) ? (()=>{ const rk=myIdx+1, tot=ord.length;
-    const key = rk===tot ? 'difficulte' : (rk===1?'leader':(rk<=3?'chasseur':'milieu'));
+  const standingsMaestroHTML = (myIdx>=0) ? (()=>{ const rk=stdRanks[myIdx], lastRank=stdRanks[stdRanks.length-1];
+    const key = rk===lastRank ? 'difficulte' : (rk===1?'leader':(rk<=3?'chasseur':'milieu'));
     const cs=STANDINGS_ASSETS[key];
     return `<div class="a2-classement-maestro st-${key}"><img class="a2-classement-maestro-img" src="img/${cs.img}" alt="${t("Le Maestro")}" style="aspect-ratio:1/1">
       <div class="a2-classement-box"><div class="a2-classement-eyebrow" style="color:${cs.color}">${t(cs.eyebrow)}</div>
@@ -15426,12 +15621,12 @@ function viewStandings(){
       <div class="a2-rank-head"><div class="num">#</div><div>${t("Joueur")}</div><div class="pts">${t("Pts")}</div><div class="cap">${t("Capital")}</div></div>
       ${ord.map((p,i)=>{const bp=p.star||0;
         const tags=[]; if(p.id===S.myId) tags.push(`<span class="tagchip me">${t("(toi)")}</span>`);
-        if(p.is_ai) tags.push(`<span class="tagchip ia">${t(isReward()?"hors récompense":"hors gage")}</span>`);
+        if(p.is_ai && !isSolo()) tags.push(`<span class="tagchip ia">${t(isReward()?"hors récompense":"hors gage")}</span>`);
         if(starOn) tags.push(`<span class="tagchip clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})">⭐×${bp||0}</span>`);
-        const medalCls = i===0?' gold':i===1?' silver':i===2?' bronze':'';
+        const rk=stdRanks[i]; const medalCls = rk===1?' gold':rk===2?' silver':rk===3?' bronze':'';
         const nameHTML = p.id===S.myId ? `<b class="nmtxt">${esc(p.name||'?')}</b>` : `<span class="nmtxt">${esc(p.name||'?')}</span>`;
         return `<div class="a2-rank-row${p.id===S.myId?' me':''}" onclick="showPlayerCards('${p.id}',${shownIdx})">
-          <div class="a2-rank-num-cell"><span class="a2-rank-num${medalCls}">${i+1}</span>${moveHTML(p.id,i)}</div>
+          <div class="a2-rank-num-cell"><span class="a2-rank-num${medalCls}">${rk}</span>${moveHTML(p.id,rk)}</div>
           <div class="a2-rank-nm">${avatarHTML(p.emoji,24)}<div style="min-width:0">${nameHTML}${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div></div>
           <div class="a2-rank-pts clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen(p,shownIdx)}</div>
           <div class="a2-rank-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',${shownIdx})" title="${t("Détail du capital")}">${euro(p.capital)}</div>
@@ -15662,14 +15857,16 @@ async function loadEndStats(){
     const rankHist={}; players.forEach(p=>rankHist[p.id]=[]); const leaderByDay=[];
     for(let d=0;d<N;d++){
       const s=snapsH[d]; if(!s||!s.length){ leaderByDay.push(null); continue; }
-      const ord=classe(s);
-      ord.forEach((p,idx)=>{ if(rankHist[p.id]) rankHist[p.id][d]=idx+1; });
+      const ord=classe(s); const dayRanks=competitionRanks(ord);
+      ord.forEach((p,idx)=>{ if(rankHist[p.id]) rankHist[p.id][d]=dayRanks[idx]; });
       leaderByDay.push(ord[0]?ord[0].id:null);
     }
     let leadChanges=0; const daysLed={};
     leaderByDay.forEach((pid,i)=>{ if(pid) daysLed[pid]=(daysLed[pid]||0)+1; if(i>0&&pid&&pid!==leaderByDay[i-1]) leadChanges++; });
     let topLeader=null; Object.keys(daysLed).forEach(pid=>{ if(topLeader===null||daysLed[pid]>daysLed[topLeader]) topLeader=pid; });
-    const finalOrd=classe(players); const finalRank={}; finalOrd.forEach((p,i)=>finalRank[p.id]=i+1);
+    // ⚠️ Ex æquo (2026-09-06) : rang final "compétition", pas l'index brut — la remontée compare
+    // désormais des rangs cohérents avec ceux affichés partout ailleurs.
+    const finalOrd=classe(players); const finalOrdRanks=competitionRanks(finalOrd); const finalRank={}; finalOrd.forEach((p,i)=>finalRank[p.id]=finalOrdRanks[i]);
     let comeback=null; players.forEach(p=>{ const rh=rankHist[p.id].filter(x=>x); if(rh.length<2)return; const worst=Math.max(...rh); const g=worst-finalRank[p.id]; if(g>0&&(comeback===null||g>comeback.g)) comeback={pid:p.id,g,worst,fin:finalRank[p.id]}; });
     const bonusImp={}; players.forEach(p=>bonusImp[p.id]=0); let cardsPlayed=0, master=null;
     bz.forEach(b=>{ if(b.card&&b.card.id){ cardsPlayed++; const self=(b.card.impact&&b.card.impact.self)||0; if(bonusImp[b.player_id]!=null)bonusImp[b.player_id]+=self; if(self>0&&(master===null||self>master.self)) master={pid:b.player_id,day:b.day,self,id:b.card.id}; } });
@@ -15720,7 +15917,8 @@ function showBilanSaison(){
   infoModal('📜', t("Bilan de la saison"), `<div style="text-align:left">${items.map(tx=>`<div class="mini" style="padding:8px 0;border-bottom:1px solid var(--border)">${tx}</div>`).join('')}</div>`);
 }
 function viewEnd(){
-  const ord=classe(players); const champ=ord[0]; const humans=ord.filter(p=>!p.is_ai); const last=humans[humans.length-1];
+  const ord=classe(players); const finalRanksAll=competitionRanks(ord);
+  const champ=ord[0]; const humans=ord.filter(p=>!p.is_ai); const humanRanks0=competitionRanks(humans); const last=humans[humans.length-1];
   // Ligue fermée manuellement AVANT son terme : une ligue finie normalement a current_day === num_days
   // (cf. resolveDay). Sinon (fermeture anticipée depuis l'accueil, ou lobby/prep jamais terminés), c'est un
   // ABANDON → on n'affiche NI vainqueur NI perdant, et aucun gage/récompense (retour Hervé).
@@ -15728,8 +15926,16 @@ function viewEnd(){
   // Dernier mis en avant DÈS qu'un gage est en jeu (mode gage ou both). En mode récompense seule,
   // il n'y a pas de « perdant » puni → on ne l'affiche pas comme tel.
   const showLast = !abandoned && !isSolo() && !isReward() && last && (!champ || last.id!==champ.id);
-  // Message personnalisé selon MON classement final (demandé par Hervé).
-  const meP=me(); const isChamp=!abandoned && !!(meP&&champ&&meP.id===champ.id); const isLastMe=!abandoned && !!(meP&&last&&meP.id===last.id&&!isChamp);
+  // ⚠️ Ex æquo (2026-09-06) : comparé PAR RANG, pas par identité d'objet — `champ`/`last` ne
+  // désignent qu'UN représentant (le premier par join_order parmi les ex æquo, cf. cmpV()), mais
+  // TOUS les joueurs à égalité au rang 1 (ou au dernier rang humain) doivent se reconnaître dans
+  // "tu es Champion"/"tu finis dernier", pas seulement celui choisi comme représentant d'affichage.
+  const meP=me();
+  const myGlobalIdx=meP?ord.findIndex(p=>p.id===meP.id):-1;
+  const isChamp=!abandoned && myGlobalIdx>=0 && finalRanksAll[myGlobalIdx]===1;
+  const myHumanIdx=meP?humans.findIndex(p=>p.id===meP.id):-1;
+  const lastHumanRank=humanRanks0.length?humanRanks0[humanRanks0.length-1]:null;
+  const isLastMe=!abandoned && !isChamp && myHumanIdx>=0 && humanRanks0[myHumanIdx]===lastHumanRank;
   const myMsg = (!abandoned && meP&&!meP.is_ai&&!isSolo()) ? (
       isChamp ? `<div class="box" style="border:2px solid var(--green);background:rgba(37,192,125,.10);text-align:center"><b class="gold" style="font-size:16px">🎉 ${t("Félicitations, tu es Champion !")}</b></div>`
     : (isLastMe && !isReward()) ? `<div class="box" style="border:2px solid var(--red);background:rgba(229,105,95,.10);text-align:center"><b class="red" style="font-size:15px">😅 ${t("Tu finis dernier… à toi le gage !")}</b></div>`
@@ -15751,10 +15957,13 @@ function viewEnd(){
   const CLASSEMENT_ASSETS = {
     champion:{img:'qg-tactizo-classement-champion.png', color:'var(--green)', eyebrow:"Champion", title:"Saison de rêve !", text:"Personne ne t'a détrôné."},
     podium:{img:'qg-tactizo-classement-podium.png', color:'var(--blue)', eyebrow:"Sur le podium", title:"Belle saison !", text:"La prochaine sera la bonne."},
-    dernier:{img:'qg-tactizo-classement-dernier.png', color:'var(--red)', eyebrow:"Dernier", title:"Saison rude.", text:"Le gage t'attend…"},
+    // ⚠️ Solo (2026-09-06) — AUCUN gage en Solo (retour Hervé) : ce Maestro se lit sur "ai-je battu
+    // l'IA ou non" (cf. note ci-dessus), pas sur l'enjeu entre humains — le texte ne doit donc
+    // jamais mentionner "le gage", qui n'existe pas dans ce contexte.
+    dernier:{img:'qg-tactizo-classement-dernier.png', color:'var(--red)', eyebrow:"Dernier", title:"Saison rude.", text: isSolo() ? "La revanche t'attend la saison prochaine." : "Le gage t'attend…"},
     horspodium:{img:'qg-tactizo-classement-horspodium.png', color:'var(--gold)', eyebrow:"Hors podium", title:"Solide, sans plus.", text:"Pas mal, sans plus."}
   };
-  const myRankFinal = (!abandoned && meP) ? ord.findIndex(p=>p.id===meP.id)+1 : 0;
+  const myRankFinal = myGlobalIdx>=0 ? finalRanksAll[myGlobalIdx] : 0;
   // ⚠️ Ordre de priorité CORRIGÉ vs la maquette (2026-09-06) — classement-final.html teste "podium"
   // (rang≤3) avant "dernier" (rang===dernier rang) ; avec ≤3 joueurs au total (dont le Solo, 2
   // joueurs : toi + l'IA), le dernier rang est TOUJOURS ≤3, donc "podium" gagnait systématiquement
@@ -15764,8 +15973,11 @@ function viewEnd(){
   // à un seul joueur (n'arrive pas en pratique) ; en dehors de ce cas, tester "dernier" avant
   // "podium" ne change AUCUN des 4 états eux-mêmes, seulement lequel gagne quand les deux
   // s'appliqueraient à la fois.
+  // ⚠️ Ex æquo (2026-09-06) : "dernier" compare au RANG du dernier (finalRanksAll[.length-1]), pas
+  // au nombre de joueurs — deux derniers ex æquo partagent un rang inférieur à `ord.length`.
+  const lastRankFinal = finalRanksAll[finalRanksAll.length-1];
   const classementStateKey = (!abandoned && myRankFinal>0)
-    ? (myRankFinal===1?'champion':myRankFinal===ord.length?'dernier':myRankFinal<=3?'podium':'horspodium')
+    ? (myRankFinal===1?'champion':myRankFinal===lastRankFinal?'dernier':myRankFinal<=3?'podium':'horspodium')
     : null;
   const classementMaestroHTML = classementStateKey ? (()=>{ const cs=CLASSEMENT_ASSETS[classementStateKey];
     return `<div class="a2-classement-maestro st-${classementStateKey}"><img class="a2-classement-maestro-img" src="img/${cs.img}" alt="${t("Le Maestro")}" style="aspect-ratio:1/1">
@@ -15800,6 +16012,7 @@ function viewEnd(){
         On récupère donc le DERNIER instantané, celui qui cumule toute la saison. */
      const finF=(()=>{ const sn=computeStandHist(); return sn.length?sn[sn.length-1]:[]; })();
      const penF={}; finF.forEach(x=>{ penF[x.id]=x; });
+     const finalRanks=competitionRanks(ord);
        // ⚠️ Port V2 Classement final (2026-09-06) — .a2-rank-table de classement-final.html au lieu
        // de l'ancien .lb : MÊMES données (ord/scF/penF/ptsAvecPen/euro, inchangés). Pas de colonne
        // évolution ici (la maquette finale n'en a pas — c'est un état final, pas un suivi journée
@@ -15811,12 +16024,12 @@ function viewEnd(){
      <div class="a2-rank-head"><div class="num">#</div><div>${t("Joueur")}</div><div class="pts">${t("Pts")}</div><div class="cap">${t("Capital")}</div></div>
      ${ord.map((p,i)=>{ const bp=scF[p.id]||0;
        const tags=[]; if(p.id===S.myId) tags.push(`<span class="tagchip me">${t("(toi)")}</span>`);
-       if(p.is_ai) tags.push(`<span class="tagchip ia">${t(isReward()?"hors récompense":"hors gage")}</span>`);
+       if(p.is_ai && !isSolo()) tags.push(`<span class="tagchip ia">${t(isReward()?"hors récompense":"hors gage")}</span>`);
        if(starOnF) tags.push(`<span class="tagchip clik" onclick="event.stopPropagation();showPenInfo('${p.id}',-1,${+p.points||0})">⭐×${bp||0}</span>`);
-       const medalCls = i===0?' gold':i===1?' silver':i===2?' bronze':'';
+       const rk=finalRanks[i]; const medalCls = rk===1?' gold':rk===2?' silver':rk===3?' bronze':'';
        const nameHTML = p.id===S.myId ? `<b class="nmtxt">${esc(p.name||'?')}</b>` : `<span class="nmtxt">${esc(p.name||'?')}</span>`;
        return `<div class="a2-rank-row${p.id===S.myId?' me':''}" onclick="showPlayerCards('${p.id}')">
-         <div class="a2-rank-num-cell"><span class="a2-rank-num${medalCls}">${i+1}</span></div>
+         <div class="a2-rank-num-cell"><span class="a2-rank-num${medalCls}">${rk}</span></div>
          <div class="a2-rank-nm">${avatarHTML(p.emoji,24)}<div style="min-width:0">${nameHTML}${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div></div>
          <div class="a2-rank-pts clik" onclick="event.stopPropagation();showPenInfo('${p.id}',-1,${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)}</div>
          <div class="a2-rank-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',-1)" title="${t("Détail du capital")}">${euro(p.capital)}</div>
@@ -15852,8 +16065,14 @@ function showLeagueInfo(lid){
         quatre : chercher le quatrième aurait demandé de lister les usages, pas de se fier
         à ceux que j'avais sous les yeux. */
   const f=leagueFormula(lg);
-  let mode="complet", enjeu="gage"; try{ const o=JSON.parse(lg.gage); if(o){ if(o.mode)mode=o.mode; if(o.enjeu)enjeu=o.enjeu; } }catch(e){}
+  let mode="complet", enjeu="gage", soloAR=null; try{ const o=JSON.parse(lg.gage); if(o){ if(o.mode)mode=o.mode; if(o.enjeu)enjeu=o.enjeu; if(o.soloAR!=null) soloAR=o.soloAR; } }catch(e){}
   if(lg.prep_summary&&lg.prep_summary.enjeu) enjeu=lg.prep_summary.enjeu; const rew=(enjeu==="reward"); const both=(enjeu==="both");
+  // ⚠️ Solo (2026-09-06, demandé par Hervé : « aucun gage/récompense en Solo ») — MÊME détection
+  // que prepParamsHTML() (gage.soloAR présent = ligue créée en Solo, jamais un enjeu voté) : ce
+  // panneau lisait `enjeu` sans jamais tester ce cas et affichait "🎭 Enjeu : Gage (au dernier)"
+  // même pour une ligue Solo, où ce champ n'est qu'un repli technique de getEnjeu() sans aucune
+  // réalité de jeu. On bascule sur la même ligne "🤖 Format" que prepParamsHTML().
+  const solo=(soloAR!=null);
   const real=(lg.data_mode==="real");
   /* v8.144 (demandé par Hervé sur capture) — CHAQUE LIGNE PEUT SE DÉPLIER, PAS SEULEMENT « Format ».
      `desc` masquée par défaut (.hide), révélée au clic sur la ligne — même geste que les bulles ⓘ
@@ -15863,13 +16082,15 @@ function showLeagueInfo(lid){
   const row=(lab,val,desc)=>`<div class="info-row clik" onclick="this.nextElementSibling.classList.toggle('hide')"><b>${lab}</b><span class="val">${val} ℹ️</span></div><div class="mini muted hide" style="margin:-2px 2px 10px">${desc}</div>`;
   let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
     ${row(t("⏱️ Rythme"), t(f.n), t(f.d))}
-    ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"), t(MODES[mode].d))}
+    ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"), modeDesc(mode,solo))}
     ${/* ⚠️ Bloc 3A, correctif (2026-09-05, signalé par Hervé) — LE CAS "both" (Gage + Récompense)
          N'ÉTAIT JAMAIS TESTÉ : le ternaire `rew?...:...` ne distinguait que reward vs pas-reward,
          donc une ligue "both" retombait silencieusement sur le libellé "Gage (au dernier)" — bug
          d'affichage pré-existant (pas introduit ici), jamais remarqué avant que ce panneau devienne
          un point de passage régulier. Pas de donnée touchée : `enjeu` reste lu tel quel. */''}
-    ${row(t("🎭 Enjeu"), both?t("Gage + récompense"):(rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)")),
+    ${solo
+      ? row(t("🤖 Format"), soloAR===1?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"), t("Partie en solo contre l'IA : pas de gage ni de récompense, il faut au moins deux humains pour ça."))
+      : row(t("🎭 Enjeu"), both?t("Gage + récompense"):(rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)")),
       both?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(rew?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur.")))}
     ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"), real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."))}
     ${/* ⚠️ v8.85 (demandé par Hervé) — LES ENCHÈRES FIGURENT DANS LES CARACTÉRISTIQUES. C'est un
@@ -15913,7 +16134,8 @@ async function loadPalmaresMoi(){
     let titles=0, podiums=0; const seasons=[];
     mine.forEach(m=>{ const lg=m.lg; if(lg.status!=="done") return; const compte=alleeAuTerme(lg);
       const humans=classe((plsByLg[lg.id]||[]).filter(p=>!p.is_ai), lg);
-      const rank=humans.findIndex(p=>p.id===m.pid)+1, total=humans.length, solo=(humans.length<=1);
+      // Ex æquo (2026-09-06) : rang "compétition" — deux champions ex æquo comptent chacun leur titre.
+      const rank=(competitionRanks(humans)[humans.findIndex(p=>p.id===m.pid)])||0, total=humans.length, solo=(humans.length<=1);
       if(compte && !solo && rank>=1){ if(rank===1) titles++; if(rank<=3) podiums++; }
       seasons.push({id:lg.id, name:lg.name||'?', rank, total, solo, compte, when:lg.finished_at||lg.created_at}); });
     seasons.sort((a,b)=> (a.when<b.when?1:-1));
@@ -16830,7 +17052,7 @@ function render(){
   // uniquement ici, ré-affichée sur tout autre écran (le classList.toggle couvre les deux sens à
   // chaque appel). `a2-mode` sur .app fait disparaître avec elle l'espace que .app réservait pour
   // cette barre fixe (et pour la nav du bas) — sans ça un grand vide restait en haut/bas de l'écran.
-  const A2_VIEWS = ["auth","login","signup","checkEmail","resetPassword","newPassword","choosePseudo","profil","create","join"];
+  const A2_VIEWS = ["auth","login","signup","checkEmail","resetPassword","newPassword","resetLinkExpired","choosePseudo","profil","create","join"];
   $("topBar").classList.toggle("hide", A2_VIEWS.includes(S.view));
   $("appShell").classList.toggle("a2-mode", A2_VIEWS.includes(S.view));
   // ⚠️ Correctif audit V2 (2026-09-06) — REMPLACE lp-mode (Bloc 3A, 2026-09-05, généralisé une
@@ -16876,7 +17098,7 @@ function render(){
      inatteignables sans compte. C'est un choix de PRODUIT, pas un oubli : à quelqu'un qui
      hésite encore, on montre le jeu, on ne lui tend pas un règlement. Les règles complètes
      l'attendent une fois entré. Ne pas « rétablir » ce 📖 en croyant réparer un manque. */
-  $("rulesBtn").classList.toggle("hide", S.view==="auth"||S.view==="login"||S.view==="signup"||S.view==="checkEmail"||S.view==="resetPassword"||S.view==="newPassword"||S.view==="choosePseudo");
+  $("rulesBtn").classList.toggle("hide", S.view==="auth"||S.view==="login"||S.view==="signup"||S.view==="checkEmail"||S.view==="resetPassword"||S.view==="newPassword"||S.view==="resetLinkExpired"||S.view==="choosePseudo");
   // 🛒 et 🐛 : conditionnés à la SESSION, pas à l'écran affiché. Tester `S.view==="auth"` ne
   // suffisait pas — un visiteur non connecté ouvrant les 📖 règles depuis l'écran de connexion
   // quittait la vue "auth" et voyait donc réapparaître la boutique (signalé par Hervé).
@@ -16906,6 +17128,7 @@ function render(){
   else if(S.view==="checkEmail") html=viewCheckEmail(S.checkEmailAddr);   // v8.278 : confirmation d'adresse en attente
   else if(S.view==="resetPassword") html=viewResetPassword();   // v8.278 : « mot de passe oublié »
   else if(S.view==="newPassword") html=viewNewPassword();   // v8.278 : lien de réinitialisation cliqué
+  else if(S.view==="resetLinkExpired") html=viewResetLinkExpired();   // 2026-09-06 : lien de réinitialisation expiré/invalide
   else if(S.view==="choosePseudo") html=viewChoosePseudo();   // v8.224 : 1ère connexion Google, pas encore de pseudo
   else if(S.view==="home") html=viewHome();
   else if(S.view==="leagues") html=viewLeagues();
@@ -17111,20 +17334,32 @@ function prepTabs(){ const solo=isSolo();
    Retire : currentSwipeTabs / swipeNav / swipeBlocked / initSwipeNav, et son appel au demarrage.
    ⚠️ HOME_VIEWS et LEAGUE_TABVIEWS sont CONSERVES : ils servent aussi a la barre d'onglets. */
 /* Suppression de compte — anonymisation (cf. MIGRATION-suppression-compte.sql).
-   ⚠️ DEUX CONFIRMATIONS, volontairement. La première explique ce qui disparaît et ce qui reste ; la
-   seconde demande de taper son pseudo. C'est une action qu'on ne peut pas annuler et qui, déclenchée
-   par erreur, fait perdre à quelqu'un ses ligues en cours.
+   ⚠️ Bottom-sheet (2026-09-06, port profil.html) — LES DEUX ÉTAPES (confirmTxt() PUIS prompt())
+   FUSIONNENT EN UNE SEULE fiche : l'explication (ce qui disparaît / ce qui reste) et le champ de
+   confirmation du pseudo vivent désormais sur le même infoModal(), comme dans la maquette. La
+   protection reste la MÊME (voire plus stricte) : le bouton "Supprimer définitivement" est désactivé
+   tant que le texte tapé ne correspond pas exactement au pseudo (updateDeleteSheetBtn()) — retaper
+   son pseudo pour confirmer est déjà, en soi, le geste qu'on ne fait pas par erreur.
    ⚠️ On déconnecte APRÈS l'appel : le compte n'existe plus, la session ne vaut plus rien. */
-async function deleteMyAccount(){
-  if(!await confirmTxt("🗑️", t("Supprimer mon compte"),
-      t("Cette action est définitive.\n\nCe qui disparaît : ton compte, ton mot de passe, ton pseudo, ton avatar et tes options.\n\nCe qui reste : tes résultats dans les ligues où tu as joué, rattachés à « Joueur supprimé » — pour ne pas casser l'historique de tes adversaires.\n\nTu ne pourras plus te reconnecter."),
-      t("Continuer"))) return;
-  const saisi=prompt(t("Pour confirmer, tape ton pseudo :"));
-  if(!saisi || saisi.trim().toLowerCase()!==String((AUTH&&AUTH.name)||"").trim().toLowerCase()){
-    infoWin(t("Suppression annulée — le pseudo ne correspond pas."),"✋"); return; }
+function deleteMyAccount(){ if(!AUTH) return;
+  infoModal("🗑️", t("Supprimer mon compte"),
+    `<div class="mini" style="text-align:left;line-height:1.7">${t("Cette action est définitive.\n\nCe qui disparaît : ton compte, ton mot de passe, ton pseudo, ton avatar et tes options.\n\nCe qui reste : tes résultats dans les ligues où tu as joué, rattachés à « Joueur supprimé » — pour ne pas casser l'historique de tes adversaires.\n\nTu ne pourras plus te reconnecter.").replace(/\n/g,"<br>")}</div>
+     <div class="a2-field" style="text-align:left;margin-top:12px"><input type="text" id="deleteSheetInput" placeholder="${esc(t("Retape ton pseudo pour confirmer"))}" style="width:100%" oninput="updateDeleteSheetBtn()"></div>
+     <button class="btn danger" id="deleteSheetBtn" disabled style="margin-top:14px" onclick="confirmDeleteSheet()">${t("Supprimer définitivement")}</button>
+     <button class="btn ghost sm" style="margin-top:8px;width:auto" onclick="closeCardInfo()">${t("Annuler")}</button>`, true);
+}
+function updateDeleteSheetBtn(){
+  const el=$("deleteSheetInput"), btn=$("deleteSheetBtn"); if(!el||!btn) return;
+  const v=el.value.trim();
+  btn.disabled = !(v && v.toLowerCase()===String((AUTH&&AUTH.name)||"").trim().toLowerCase());
+}
+async function confirmDeleteSheet(){
+  const el=$("deleteSheetInput"); const saisi=(el&&el.value||"").trim();
+  if(!saisi || saisi.toLowerCase()!==String((AUTH&&AUTH.name)||"").trim().toLowerCase()) return; // garde-fou (bouton déjà désactivé sinon)
   try{
     await q(db.rpc("delete_my_account"));
     try{ await db.auth.signOut(); }catch(e){}
+    closeCardInfo();
     AUTH=null; myOpts=null;
     infoWin(t("Ton compte a été supprimé. Merci d'avoir joué 👋"),"👋");
     setTimeout(()=>location.reload(), 1500);
@@ -17136,12 +17371,17 @@ async function deleteMyAccount(){
 function viewProfil(){
   // ⚠️ v8.343 (Tactizo V2) — RE-SKIN (maquette profil.html consolidée) : toutes les actions restent
   // les VRAIES fonctions existantes (changeMyUsername/choisirAvatar/uploadAvatar/toggleLang/
-  // toggleTheme/changeMyPassword/logout/deleteMyAccount/openAdmin/openRulesFull), seule la mise en
-  // page change. Ajouts strictement additifs, aucune logique retirée : (1) l'e-mail du compte
-  // (AUTH.email, déjà capturé à la connexion/inscription, jamais affiché nulle part avant) ; (2)
-  // un bloc Premium compact (myOpts, déjà chargé par loadOpts(), jusqu'ici visible uniquement dans
-  // Boutique) avec un lien vers openShop(). Juridique : le pied de page global (render(), CGU +
-  // Confidentialité) reste affiché sous cet écran comme sous tous les autres — pas de doublon ici.
+  // changeMyPassword/logout/deleteMyAccount/openAdmin/openRulesFull), seule la mise en page change.
+  // Ajouts strictement additifs, aucune logique retirée : (1) l'e-mail du compte (AUTH.email, déjà
+  // capturé à la connexion/inscription, jamais affiché nulle part avant) ; (2) un bloc Premium
+  // compact (myOpts, déjà chargé par loadOpts(), jusqu'ici visible uniquement dans Boutique) avec un
+  // lien vers openShop(). Juridique : le pied de page global (render(), CGU + Confidentialité)
+  // reste affiché sous cet écran comme sous tous les autres — pas de doublon ici.
+  // ⚠️ Portage V2 (2026-09-06, demandé par Hervé) — FINALISATION : avatar/pseudo/suppression du
+  // compte vivent désormais dans des bottom-sheets dédiées (openAvatarSheet/changeMyUsername/
+  // deleteMyAccount, tous via infoModal()), plus de prompt() natif ni de grille inline sur cet
+  // écran. Pas de ligne "🌗 Apparence" ici : le thème clair est désactivé (toggleTheme() dormante,
+  // cf. sa propre note) — rien à exposer, ce n'est plus un réglage réel.
   const admin = AUTH && AUTH.id===ADMIN_ID;
   const nOpts = Array.isArray(myOpts) ? myOpts.length : 0;
   return `<div class="a2-wrap">
@@ -17155,14 +17395,16 @@ function viewProfil(){
       <div class="a2-id-head">${avatarHTML(AUTH.avatar,64)}
         <div><div class="a2-id-name">${esc(AUTH.name)}</div><div class="a2-id-email">${esc(AUTH.email||"")}</div></div>
       </div>
-      <div class="a2-menu-row" style="cursor:pointer" onclick="changeMyUsername()">
+      <div class="a2-menu-row">
+        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></span>
+        <span class="a2-menu-text"><span class="a2-menu-label">${t("Avatar")}</span><span class="a2-menu-sub">${t("Présets illustrés ou photo perso")}</span></span>
+        <button type="button" class="ghost-btn-sm" onclick="openAvatarSheet()">${t("Modifier")}</button>
+      </div>
+      <div class="a2-menu-row">
         <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span>
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Pseudo")}</span><span class="a2-menu-sub">${t("C'est le nom vu dans toutes tes ligues.")}</span></span>
-        <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+        <button type="button" class="ghost-btn-sm" onclick="changeMyUsername()">${t("Modifier")}</button>
       </div>
-      <div class="a2-sec-title" style="margin:16px 0 10px;font-size:12px">${t("Avatar")}</div>
-      <div class="a2-avatar-grid">${Array.from({length:AVIMG_COUNT},(_,i)=>i).filter(i=>i!==AVATAR_IA_IDX).map(i=>{const v="avimg:"+i, on=AUTH.avatar===v; return `<button class="a2-av-tile${on?' on':''}" onclick="choisirAvatar('${v}')"><img src="${esc(avimgUrl(i))}" alt="">${on?'<span class="a2-av-chk">✓</span>':''}</button>`;}).join("")}</div>
-      <div class="a2-upload"><label>${t("Choisir une image")}<input type="file" accept="image/*" onchange="uploadAvatar(this)" style="display:none"></label><span id="avUpMsg" class="a2-menu-sub"></span></div>
     </div>
 
     <div class="a2-sec-title">${t("Mes préférences")}</div>
@@ -18545,9 +18787,7 @@ function viewRulesFull(){
        : t("<b>Vainqueur</b> : <b>3 pts</b> si son net est positif, <b>1 pt</b> s'il est négatif. <b>Perdant</b> : <b>1 pt</b> si son net est positif, <b>0 pt</b> s'il est négatif. <b>Match nul</b> : <b>1 pt</b> chacun.")}<br>
      ${t("<b>⭐ Meilleur pronostiqueur :</b> chaque journée, le joueur au plus gros net de <b>toute la ligue</b> gagne <b>+1 point</b> en plus.")}<br>
      <b class="gold">🔥 ${t("Dernière journée : les points de <b>duel comptent double</b> — un retard peut se combler sur le fil, rien n'est jamais joué jusqu'au bout.")}</b> <span class="mini muted">${t("(le +1 du ⭐ meilleur pronostiqueur de la journée n'est pas doublé)")}</span><br>
-     ${scoringShown()
-       ? t("<b>Départage au classement final</b> (à points égaux) : <b>capital</b>, puis le <b>résultat des confrontations directes</b> entre les joueurs concernés, puis plus gros gain, puis plus grosse cote.")
-       : t("<b>Départage au classement final</b> (à points égaux) : capital, puis victoires en duel, puis plus gros gain, puis plus grosse cote.")}<br>
+     ${t("<b>Départage</b> (à points égaux) : <b>capital le plus élevé</b>. Si points ET capital sont identiques : <b>ex æquo</b> — aucun autre critère.")}<br>
      ${t("<b>▲ = ▼ Le classement</b> montre, à côté de chaque joueur, s'il <b>monte</b> (▲ vert), <b>reste stable</b> (=) ou <b>descend</b> (▼ rouge) par rapport à la journée précédente — <b>purement indicatif</b>.")}`)}
 
    ${sec(t("😴 Le pari non validé à temps"), `${t("Si tu ne valides pas avant la clôture : <b>aucun pari</b> n'est pris en compte.")}<br>
@@ -18722,6 +18962,14 @@ db.auth.onAuthStateChange((event,session)=>{
     await loadOpts();                       // v8.191 : droits premium lus sur le serveur
   }catch(e){}
   if(modeRecuperation) return;   // le listener ci-dessus a déjà posé l'écran — ne pas l'écraser
+  // ⚠️ 2026-09-06 (demandé par Hervé) — lien de réinitialisation expiré/invalide : voir la note de
+  // viewResetLinkExpired(). Vérifié APRÈS `modeRecuperation` (un lien valide a déjà son écran) et
+  // AVANT le repli sur "auth" (sinon cet état se perdrait silencieusement, exactement le bug signalé).
+  const hashErr=parseAuthHashError();
+  if(hashErr && hashErr.code==="otp_expired"){
+    try{ history.replaceState(null,"",window.location.pathname+window.location.search); }catch(e){}
+    S.view="resetLinkExpired"; render(); return;
+  }
   if(!AUTH){ S.view="auth"; render(); return; }
   // ⚠️ v8.224 — 1ère connexion Google : la session existe mais `username` n'a jamais été posé
   // (Google ne fournit qu'un nom civil). Sans ce test, l'app ouvrirait l'accueil avec un pseudo
