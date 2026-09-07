@@ -1113,8 +1113,19 @@
      de 12px) fait déjà cette respiration : le padding de 20px s'ajoutait par-dessus, laissant une
      bande de fond sombre vide avant le hero. Un seul point commun (cette classe, posée par les deux
      écrans) ramène ce padding-top à 0 sans toucher au reste de `.a2-wrap` (padding bas, fond, largeur)
-     ni à l'image/au cadrage du hero. */
-  .a2-wrap.a2-wrap-tight{padding-top:0}
+     ni à l'image/au cadrage du hero — voir aussi `min-height` juste en dessous (2026-09-07). */
+  /* ⚠️ QA (2026-09-07, demandé par Hervé, vidéo réelle — QG à vide) — `min-height:0` AJOUTÉ ICI,
+     même famille de bug que le "GRAND FOND VIDE" plus bas (qui a donné naissance à `.a2-theme`),
+     côté BAS cette fois : `.a2-wrap` porte `min-height:calc(100vh - 40px)`, pensé pour un écran qui
+     REMPLACE tout l'affichage (Auth…) et doit donc couvrir la hauteur réelle de l'écran. Sur le QG
+     (toujours `.a2-wrap-tight`, header+nav du bas déjà visibles en PERMANENCE autour de lui), ce
+     calcul est FAUX dans les deux sens (ni le header ni la nav ne valent 40px) — et surtout inutile :
+     le contenu s'étire déjà naturellement entre les deux barres fixes. Sur un état compact (ex.
+     « Toutes tes ligues sont terminées », sans liste de ligues), l'écart entre le contenu réel et ce
+     minimum forcé restait un grand rectangle de dégradé vide, sans aucun contenu, juste au-dessus de
+     la nav du bas — lu comme un panneau supplémentaire par-dessus le vide. `min-height:0` laisse
+     `.a2-wrap` s'arrêter avec son contenu ; le dégradé reste identique pour tout ce qui est affiché. */
+  .a2-wrap.a2-wrap-tight{padding-top:0;min-height:0}
   /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — GRAND FOND VIDE DERRIÈRE « ‹ Enchères de bonus »
      (constaté en réel sur Enchères, mais valable pour tout futur sous-écran du même genre — Enjeu
      dès maintenant, puis Pronos/Résultats/Classement/Coulisses). Cause : `viewEnjeuA2()`/
@@ -2174,7 +2185,15 @@
   .a2-classement-maestro{position:relative;overflow:hidden;border-radius:16px;margin-bottom:2px}
   .a2-classement-maestro-img{display:block;width:100%}
   .a2-classement-box{position:absolute;left:44.8%;top:4.9%;right:2.3%;bottom:25.3%;
-    display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden;padding:4px 10px}
+    display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden;padding:7px 15px}
+  /* ⚠️ QA (2026-09-07, demandé par Hervé, vidéo réelle — "Dernier" collé à son bord gauche) — les 8
+     rectangles ci-dessous (mesurés le 09-06) collent EXACTEMENT au bord réel du panneau peint sur
+     les 8 assets, marge 0 dans les 4 directions (revérifié aux pixels près, gauche/haut/droite/bas
+     identiques sur les 8) : toute la respiration reposait donc UNIQUEMENT sur ce `padding`, qui ne
+     suffisait pas pour un texte lisible à côté d'un coin arrondi. Pas la peine de retoucher les 8
+     rectangles un par un (ils sont déjà au bord réel, jamais en dehors) : augmenter UNIQUEMENT ce
+     padding (4px 10px → 7px 15px) donne la même respiration aux 8 panneaux d'un coup, sans risque de
+     ressortir sur l'illustration puisque le rectangle qui le contient, lui, ne bouge pas. */
   .a2-classement-eyebrow{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.7)}
   .a2-classement-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:16px;line-height:1.2;color:var(--a2-ink,#f4ecd8);
     text-shadow:0 1px 4px rgba(0,0,0,.7)}
@@ -2304,7 +2323,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.386";
+const APP_VERSION = "v8.387";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4035,15 +4054,19 @@ let suppressResolveToast=false;
 // et un chevauchement improbable (une trêve qui se déclenche pile pendant l'attente des pronos)
 // ne doit jamais faire dire « trêve » à l'écran des pronos, ou l'inverse.
 let awaitingReveal=false, awaitingTreveReveal=false;
-// ⚠️ QA (2026-09-06, demandé par Hervé) — DISTINCT d'`awaitingReveal` ci-dessus, qui protège contre
-// une DOUBLE navigation (deux sondages qui se marcheraient dessus) mais reste vrai aussi dans le cas
-// "c'est MON action qui résout" (où la modale est justement supprimée, cf. submitBet()). Ce
-// drapeau-ci dit précisément "une modale Résultat à découvrir est ouverte, pas encore actionnée" —
-// posé UNIQUEMENT par le renvoi automatique de refresh() (bloc `jourNonVu`, quelqu'un D'AUTRE a
-// déclenché la résolution). `unseenDayGate()` s'appuie dessus pour ne JAMAIS rendre le vrai récap
-// (donc son suspense) tant que ce drapeau est vrai — corriger la LOGIQUE DE RENDU, pas seulement
-// poser une modale par-dessus un fond déjà révélateur.
-let revealGateOpen=false;
+// ⚠️ QA (2026-09-07, demandé par Hervé, échec réel constaté du correctif du 09-06) — un drapeau
+// `revealGateOpen`, posé UNIQUEMENT par le renvoi automatique de refresh() (cas B), vivait ici :
+// `unseenDayGate()` ne neutralisait le fond que si CE drapeau précis était vrai. Ça laissait un
+// trou : en cas A (mon PROPRE envoi déclenche la résolution), la fenêtre à risque n'est pas
+// couverte par un renvoi de refresh() mais par l'attente interne de `submitBet()` (`awaitingReveal`,
+// posé pendant qu'on attend que `resolveDay()` termine) — et surtout, `resolveDay()` appelle
+// lui-même `refresh()` en sortie, qui peut rendre `viewGame()` AVANT que `submitBet()` n'ait eu la
+// main pour appeler `openResults()`. Ce rendu-là voyait `revealGateOpen` toujours à `false` (jamais
+// posé en cas A) et retombait donc sur le vrai récap — démarrant son chronomètre de suspense
+// (`heroStartTimes`) prématurément, en coulisse, avant que le joueur n'ait rien vu : d'où
+// l'animation "déjà terminée" constatée dès l'ouverture réelle. Voir `unseenDayGate()` : le
+// correctif retenu neutralise DÉSORMAIS ce garde SANS CONDITION tant qu'un jour résolu n'a pas été
+// acquitté, quel que soit l'état d'un quelconque drapeau — ce drapeau-ci n'a donc plus lieu d'être.
 // ⚠️ v8.15 — « ai-je validé mes pronos de la JOURNÉE EN COURS ? ». Figé par refresh(), jamais
 // dérivé de `bets` au moment de l'affichage : `bets` change de journée quand on consulte les
 // résultats. Voir la note en tête de myBet().
@@ -8031,20 +8054,21 @@ async function refresh(){
        ⚠️ ON NE PERD RIEN : la trêve acquittée (`ackTreveResult`), `jourNonVu` reste posé et le
        prochain passage ici (tour de sondage suivant, ou reclic depuis l'accueil) déclenchera le
        renvoi normalement. */
-    // ⚠️ QA (2026-09-06, demandé par Hervé, points 1 et 2) — CAS "quelqu'un D'AUTRE a déclenché la
-    // résolution" (je reviens dans la ligue, ou je regarde un autre onglet pendant qu'un autre joueur
-    // valide en dernier) : ICI, contrairement à submitBet(), la modale "Résultat à découvrir" reste
-    // légitime — je n'ai encore rien vu. `revealGateOpen` (posé AVANT le premier `render()`, donc
-    // avant qu'aucun rendu ne puisse fuiter le vrai récap) fait que `unseenDayGate()` affiche l'état
-    // neutre pendant toute l'attente : le fond n'est plus révélateur, seule la modale l'est.
+    // ⚠️ QA (2026-09-06/07, demandé par Hervé, points 1 et 2) — CAS "quelqu'un D'AUTRE a déclenché
+    // la résolution" (je reviens dans la ligue, ou je regarde un autre onglet pendant qu'un autre
+    // joueur valide en dernier) : ICI, contrairement à submitBet(), la modale "Résultat à découvrir"
+    // reste légitime — je n'ai encore rien vu. Le fond, lui, n'a plus besoin d'un drapeau dédié pour
+    // rester neutre pendant l'attente : `unseenDayGate()` neutralise désormais SANS CONDITION tant
+    // que le jour n'est pas acquitté (cf. sa note — l'ancien `revealGateOpen` ne couvrait pas le cas
+    // A, où `resolveDay()` peut rendre `viewGame()` avant même que ce bloc-ci ne s'exécute).
     else if(jourNonVu!=null && S.view==="game" && treveResultSeen() && !awaitingReveal){
       const _jnv=jourNonVu;
-      awaitingReveal=true; revealGateOpen=true; render();
+      awaitingReveal=true; render();
       try{
         await revealGate("🔔", t("Résultat à découvrir"),
           `<div class="mini" style="text-align:center">${t("La journée est résolue.")}</div>`,
           "👀 "+t("Découvrir les résultats"));
-      } finally { awaitingReveal=false; revealGateOpen=false; }
+      } finally { awaitingReveal=false; }
       if(!stale()) openResults(_jnv);
     }
     /* ⚠️ v8.281 (bug vécu par Hervé, vidéo WhatsApp) — `maybeRecapModal` DOIT s'exécuter APRÈS
@@ -10012,27 +10036,25 @@ function rosterDuelsHTML(){
 // dès que `L.status==="done"` — pour une journée dont CE joueur n'avait pourtant pas encore vu le
 // résultat. Partagée par viewGame() ET viewStandings() (seul point d'entrée vers viewEnd()), donc
 // les deux onglets qui peuvent exposer la Trêve/la journée suivante/le classement final restent
-// bloqués sur le même récap tant que `setSeen()` (déclenché par "Continuer →" dans viewRecap) n'a
-// pas acquitté cette journée — quel que soit l'onglet par lequel le joueur arrive.
+// bloqués tant que `setSeen()` (déclenché par `openResults()`, cf. v8.319) n'a pas acquitté cette
+// journée — quel que soit l'onglet par lequel le joueur arrive.
+// ⚠️ QA (2026-09-07, demandé par Hervé — le correctif du 09-06, conditionné à un drapeau
+// `revealGateOpen` posé uniquement par le renvoi automatique de refresh(), échouait en vrai : ce
+// drapeau ne couvrait QUE l'attente de la modale (cas B, quelqu'un D'AUTRE résout). En cas A (MA
+// PROPRE validation résout), `resolveDay()` appelle lui-même `refresh()` en sortie — qui peut
+// rendre `viewGame()` AVANT que `submitBet()` n'ait la main pour appeler `openResults()`, avec
+// AUCUN des deux drapeaux (`awaitingReveal`/`revealGateOpen`) alignés au bon moment selon le tick
+// exact. Ce rendu retombait alors sur `viewRecap(day)`, dont `recapBody()` démarre IMMÉDIATEMENT
+// le chronomètre du suspense (`heroStartTimes`, jamais réinitialisé) — en coulisse, avant que le
+// joueur n'ait rien vu : d'où l'absence d'animation constatée à l'ouverture réelle, quel que soit
+// le chemin (modale ou direct). Ce garde-fou NE REND PLUS JAMAIS `viewRecap()`, SANS CONDITION,
+// tant qu'un jour résolu n'a pas été acquitté — le VRAI premier appel à `recapBody()` doit
+// TOUJOURS venir de `viewResults()`, après `openResults()`, jamais d'ici, peu importe le drapeau.
 function unseenDayGate(){
   const resolues = (L.status==="done") ? (L.num_days||0) : (L.current_day||0);
   const day = (resolues>=1 && getSeen()<resolues) ? resolues-1 : null;
   if(day==null) return null;
-  // Même garde que viewResults() (v8.282) : recapBody() sait relire chartBets/standDuels (rejeu
-  // déjà chargé en tâche de fond par refresh(), indépendamment de l'onglet actif) pour une journée
-  // différente de loadedDay — mais si ce rejeu n'est vraiment pas encore prêt, on préfère un
-  // « chargement… » franc à un résultat faux plutôt que de risquer d'afficher les données de la
-  // MAUVAISE journée (celle actuellement en mémoire).
-  if(loadedDay!==day && !(Array.isArray(chartBets) && Array.isArray(standDuels)))
-    return `<div class="box" style="text-align:center"><div style="font-size:24px">⏳</div><div class="mini muted" style="margin-top:6px">${t("Chargement de la journée…")}</div></div>`;
-  // ⚠️ QA (2026-09-06, demandé par Hervé, point 2) — TANT QUE LA MODALE "Résultat à découvrir" EST
-  // OUVERTE (`revealGateOpen`, posé par refresh()/bloc `jourNonVu`), ON NE REND JAMAIS `viewRecap()`
-  // ICI : c'est la fuite exacte qu'il a repérée sur vidéo (duel/joueurs/NET du vrai écran de
-  // résolution visibles derrière la modale). Cet état neutre ne nomme ni joueur ni chiffre ni
-  // résultat — juste "quelque chose t'attend" — et cède la place au vrai récap (avec son suspense)
-  // dès que la modale est actionnée et que `openResults()` prend le relais.
-  if(revealGateOpen) return `<div class="box" style="text-align:center"><div style="font-size:24px">🔔</div><div class="mini muted" style="margin-top:6px">${t("Résultat disponible — découverte en attente…")}</div></div>`;
-  return viewRecap(day);
+  return `<div class="box" style="text-align:center"><div style="font-size:24px">🔔</div><div class="mini muted" style="margin-top:6px">${t("Résultat disponible — découverte en attente…")}</div></div>`;
 }
 function viewGame(){
   if(!L) return `<div class="box">Chargement…</div>`;
@@ -10056,15 +10078,14 @@ function viewGame(){
   // réinventés ici : `viewRecap(D)` ci-dessous appelle `ackRecap()` sur "Continuer →", qui appelle
   // déjà `setSeen()` — une fois la journée acquittée, ce garde-fou s'efface tout seul au rendu
   // suivant et laisse la Trêve/journée suivante/fin de saison s'afficher normalement.
-  // ⚠️ CORRECTIF (2026-09-06, bug confirmé par Hervé après test réel — le garde-fou ci-dessus ne
-  // suffisait PAS) — `&& !awaitingReveal && !awaitingTreveReveal` désactivait CE GARDE-FOU pile
-  // pendant la fenêtre où la modale "Résultat à découvrir" est ouverte (le seul moment où
-  // `awaitingReveal` est vrai) : l'exécution retombait alors sur `if(L.status==="truce")` juste
-  // en dessous, qui affichait la Trêve/fin de saison DERRIÈRE la modale. Intention d'origine (ne
-  // pas doubler l'expérience du joueur qui vient de déclencher la résolution) correcte, mais
-  // implémentation inversée : la bonne réponse n'est pas de désactiver ce garde pendant la
-  // révélation, c'est de continuer à montrer LE RÉCAP (jamais la Trêve) derrière la modale —
-  // exactement ce qui s'affichera de toute façon une fois la modale fermée (`openResults()`).
+  // ⚠️ CORRECTIF (2026-09-06/07, bug confirmé par Hervé après test réel — le garde-fou ci-dessus ne
+  // suffisait PAS) — un ancien `&& !awaitingReveal && !awaitingTreveReveal` désactivait CE
+  // GARDE-FOU pile pendant la fenêtre où la modale "Résultat à découvrir" est ouverte : l'exécution
+  // retombait alors sur `if(L.status==="truce")` juste en dessous, qui affichait la Trêve/fin de
+  // saison DERRIÈRE la modale. Ce garde-fou reste désormais actif pendant TOUTE l'attente, quel que
+  // soit `awaitingReveal` — `unseenDayGate()` affiche un état neutre (ni récap ni Trêve, cf. sa
+  // note du 09-07) derrière la modale, jamais rien de spoilant, jusqu'à ce que `openResults()`
+  // prenne le relais et affiche le vrai contenu sur l'écran Résultats.
   const _unseenGate = unseenDayGate();
   if(_unseenGate!=null) return _unseenGate;
   if(L.status==="truce") return viewTreve();
@@ -14026,6 +14047,9 @@ async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recap
     if(d>=0 && d<resolues && (d+1)>getSeen()) setSeen(d+1);
     render(); }
   catch(e){ showErr("Résultats : "+e.message); } }
+// ⚠️ QA (2026-09-07) — plus aucun appelant depuis que `unseenDayGate()` ne retombe plus jamais
+// dessus (cf. sa note) : le seul chemin de découverte est désormais `openResults()`→`viewResults()`.
+// Reste définie, même statut que viewLobby()/openRules() — `ackRecap()` (son seul bouton) itou.
 function viewRecap(D){ const fin=(L&&L.status==="done"); return `${recapBody(D)}
     <button class="btn" onclick="ackRecap()">${fin?t("🏆 Voir le classement final →"):t("Continuer →")}</button>
     ${fin?'':`<button class="btn ghost" style="margin-top:8px" onclick="goStandings()">${t("Voir le classement général")}</button>`}`; }
