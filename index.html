@@ -1249,6 +1249,12 @@
   .a2-id-name{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:17px;color:var(--a2-ink)}
   .a2-id-email{font-size:12px;color:var(--a2-muted);margin-top:3px;word-break:break-all}
   .a2-sec-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:14.5px;color:var(--a2-ink);margin:22px 0 10px}
+  /* ⚠️ QA (2026-09-07, point 1, demandé par Hervé) — ⓘ discret sur les catégories de l'assistant de
+     création qui changent réellement une mécanique (Matchs/Bonus/Rythme/Enchères/Format du solo),
+     PAS sur toutes ("Type de partie"/"Enjeu" restent auto-explicites par leur propre description
+     déjà affichée). Tap zone 44×44 invisible (même technique que le reste de l'app), glyphe minuscule. */
+  .a2-sec-info{position:relative;display:inline-block;margin-left:6px;font-size:12px;font-weight:400;color:var(--a2-muted);cursor:pointer;vertical-align:1px}
+  .a2-sec-info::before{content:'';position:absolute;top:50%;left:50%;width:44px;height:44px;transform:translate(-50%,-50%)}
   .a2-sec-title:first-of-type{margin-top:0}
   .a2-avatar-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:10px}
   .a2-av-tile{aspect-ratio:1;border-radius:50%;position:relative;padding:0;line-height:0;background:var(--a2-panel-2);
@@ -1870,6 +1876,23 @@
   .a2-res-nets.suspense-hold .a2-res-net .val{animation:a2ResSuspensePulse .5s ease-in-out infinite}
   @media (prefers-reduced-motion: reduce){ .a2-res-nets.suspense-hold .a2-res-net .val{animation:none} }
   .a2-res-caption{text-align:center;font-size:11.5px;color:var(--muted)}
+  /* ⚠️ QA (2026-09-07, point 9, demandé par Hervé, vidéo réelle) — layout COMPACT du suspense
+     uniquement (`.compact`, posé UNIQUEMENT sur le bloc suspense, jamais sur `.a2-res-summary` de
+     l'état révélé, cf. la note JS) : sur la dernière journée (et déjà sur des téléphones plus
+     petits en journée normale), hero (233px) + bloc duel (~195px) dépassaient la hauteur utile
+     entre header et nav du bas — les NET évolutifs sortaient du viewport pendant le compte à
+     rebours. Crop de l'image raccourci (`object-fit:cover` + `object-position:top`, le visage/les
+     mains du Maestro restent en haut, seule la table lumineuse en bas est rognée) + espaces/tailles
+     resserrés → environ 300px au lieu de 428px, sans jamais toucher `.a2-res-summary`/l'écran
+     Résultats normal une fois révélé. */
+  .a2-res-maestro.compact .a2-res-maestro-img{object-fit:cover;object-position:top}
+  .a2-res-duelbig.compact{padding:10px 14px;margin-bottom:8px}
+  .a2-res-duelbig.compact .a2-res-duelbig-head{margin-bottom:6px}
+  .a2-res-duelbig.compact .a2-res-faces{gap:10px;margin-bottom:8px}
+  .a2-res-duelbig.compact .a2-res-vs{width:24px;height:24px;font-size:9px}
+  .a2-res-duelbig.compact .a2-res-nets{margin-bottom:6px;gap:12px}
+  .a2-res-duelbig.compact .a2-res-net .val{font-size:21px}
+  .a2-res-duelbig.compact .a2-res-caption{font-size:10px}
 
   .a2-res-summary{border-radius:14px;padding:10px 12px;margin-bottom:8px;border:1.5px solid var(--border2);
     display:flex;align-items:center;justify-content:space-between;gap:8px}
@@ -1899,6 +1922,15 @@
   .a2-res-details-panel{background:rgba(31,38,53,.5);border:1px solid var(--border2);border-radius:14px;padding:2px 12px;margin:-6px 0 12px}
   .a2-res-match{border-bottom:1px solid var(--border2)}
   .a2-res-match:last-child{border-bottom:0}
+  /* ⚠️ QA (2026-09-07, point 7, demandé par Hervé) — réussi/perdu/neutre, TRAITEMENT DISCRET de la
+     carte entière (fond très léger + liseré via `box-shadow` inset — ne déplace rien, contrairement
+     à un `border-left` qui aurait décalé le contenu de sa largeur). "Neutre" (pas de pari sur ce
+     match, ou ce match précis sans pronostic) reste sans classe : style normal, intentionnellement. */
+  .a2-res-match.won{background:rgba(63,202,133,.05);box-shadow:inset 3px 0 0 0 var(--green)}
+  .a2-res-match.lost{background:rgba(255,106,106,.05);box-shadow:inset 3px 0 0 0 var(--red)}
+  .a2-res-outcome-ic{font-weight:800}
+  .a2-res-outcome-ic.won{color:var(--green)}
+  .a2-res-outcome-ic.lost{color:var(--red)}
   .a2-res-match-head{width:100%;display:flex;align-items:center;gap:8px;padding:11px 0;text-align:left;
     background:transparent;border:none;font-family:inherit;color:inherit}
   .a2-res-match-head .nm{flex:1;min-width:0;font-size:13.5px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2119,7 +2151,14 @@
   .a2-enc-ic{width:42px;height:42px;flex:0 0 auto;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--a2-panel-2);cursor:pointer}
   .a2-enc-ic img{width:34px;height:34px;object-fit:contain}
   .a2-enc-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;cursor:pointer}
-  .a2-enc-name{font-weight:700;font-size:13px;color:var(--a2-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .a2-enc-name{display:flex;align-items:center;gap:5px;font-weight:700;font-size:13px;color:var(--a2-ink)}
+  .a2-enc-name-txt{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* ⚠️ QA (2026-09-07, demandé par Hervé, point 3) — la carte entière ouvrait déjà la fiche du
+     bonus (icône/nom au clic), mais RIEN ne le signalait visuellement : un ⓘ discret, TAP ZONE
+     44×44 invisible via ::before (même technique que les icônes du header) sans agrandir le
+     glyphe affiché ni pousser le nom vers l'ellipsis (flex:0 0 auto, hors du conteneur nowrap). */
+  .a2-enc-info{position:relative;flex:0 0 auto;font-size:11px;color:var(--a2-muted);cursor:pointer}
+  .a2-enc-info::before{content:'';position:absolute;top:50%;left:50%;width:44px;height:44px;transform:translate(-50%,-50%)}
   .a2-enc-tags{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
   .a2-enc-force{font-size:10px;font-weight:700;color:var(--a2-brass-light);background:rgba(236,211,130,.14);border:1px solid rgba(236,211,130,.35);border-radius:999px;padding:1.5px 7px;white-space:nowrap}
   .a2-enc-risk{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:var(--a2-muted);white-space:nowrap}
@@ -2185,7 +2224,7 @@
   .a2-classement-maestro{position:relative;overflow:hidden;border-radius:16px;margin-bottom:2px}
   .a2-classement-maestro-img{display:block;width:100%}
   .a2-classement-box{position:absolute;left:44.8%;top:4.9%;right:2.3%;bottom:25.3%;
-    display:flex;flex-direction:column;justify-content:center;gap:4px;overflow:hidden;padding:7px 15px}
+    display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;padding:5px 11px}
   /* ⚠️ QA (2026-09-07, demandé par Hervé, vidéo réelle — "Dernier" collé à son bord gauche) — les 8
      rectangles ci-dessous (mesurés le 09-06) collent EXACTEMENT au bord réel du panneau peint sur
      les 8 assets, marge 0 dans les 4 directions (revérifié aux pixels près, gauche/haut/droite/bas
@@ -2194,10 +2233,10 @@
      rectangles un par un (ils sont déjà au bord réel, jamais en dehors) : augmenter UNIQUEMENT ce
      padding (4px 10px → 7px 15px) donne la même respiration aux 8 panneaux d'un coup, sans risque de
      ressortir sur l'illustration puisque le rectangle qui le contient, lui, ne bouge pas. */
-  .a2-classement-eyebrow{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.7)}
-  .a2-classement-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:16px;line-height:1.2;color:var(--a2-ink,#f4ecd8);
+  .a2-classement-eyebrow{font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.7);line-height:1.1}
+  .a2-classement-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:16px;line-height:1.1;color:var(--a2-ink,#f4ecd8);
     text-shadow:0 1px 4px rgba(0,0,0,.7)}
-  .a2-classement-text{font-size:11.5px;color:var(--a2-ink,#f4ecd8);line-height:1.35;opacity:.92;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+  .a2-classement-text{font-size:11.5px;color:var(--a2-ink,#f4ecd8);line-height:1.22;opacity:.92;text-shadow:0 1px 4px rgba(0,0,0,.7)}
   /* ⚠️ QA (2026-09-06, demandé par Hervé après échec réel de leader/champion sur iPhone malgré un
      correctif précédent sur les 4 autres états) — REMESURÉ PIXEL PAR PIXEL, LES 8 ASSETS, PAS
      SEULEMENT LEADER/CHAMPION : la correction précédente (ci-dessous en historique) partait de
@@ -2295,7 +2334,7 @@
     <div class="barTop">
     <div class="barId"><h1 style="min-width:0;overflow:hidden"><span style="color:var(--brand-gold)">Tactizo</span></h1><span id="headerPseudo" class="header-pseudo hide"></span></div>
     <div class="topbtns">
-      <button class="btn ghost sm hide" id="homeBtn" onclick="goHome()" title="Accueil"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v9a1 1 0 001 1h10a1 1 0 001-1v-9"/><path d="M10 20v-5h4v5"/></svg></button>
+      <button class="btn ghost sm hide" id="homeBtn" onclick="goHome()" title="QG"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7"/><path d="M6 10v9a1 1 0 001 1h10a1 1 0 001-1v-9"/><path d="M10 20v-5h4v5"/></svg></button>
       <button class="btn ghost sm hide" id="tradeBtn" onclick="openTrade()" title="Racheter un bonus"><svg viewBox="0 0 24 24"><path d="M4 8h13"/><path d="M14 4l4 4-4 4"/><path d="M20 16H7"/><path d="M10 12l-4 4 4 4"/></svg><span class="tradebadge hide" id="tradeBadge"></span></button>
       <button class="btn ghost sm hide" id="notifBtn" onclick="openNotifCenter()" title="Notifications"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0112 0c0 6 2 8 2 8H4s2-2 2-8"/><path d="M10 20a2 2 0 004 0"/></svg></button>
       <button class="btn ghost sm hide" id="profilBtn" onclick="openProfil()" title="Profil"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0116 0"/></svg></button>
@@ -2323,7 +2362,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.387";
+const APP_VERSION = "v8.388";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4387,7 +4426,9 @@ const EN={
   "Mes étapes":"My steps",
   "Enjeu de la ligue":"League stakes",
   "À faire":"To do",
-  "Enchères de bonus":"Bonus auction",
+  "Enchères de bonus":"Bonus auction", "Enchères de début de saison":"Start-of-season auction",
+  "Enchères de mi-saison":"Mid-season auction", "Enchères de trêve :":"Truce auction:",
+  "Ces {a} € ne sortent pas de ta cagnotte : ce que tu ne dépenses pas est perdu.":"This €{a} doesn't come out of your winnings pot: whatever you don't spend is lost.",
   "Préparation des joueurs":"Players' preparation",
   // ⚠️ Bloc 3A, correctifs UX test iPhone (2026-09-05)
   "Commencer":"Start",
@@ -4906,7 +4947,7 @@ const EN={
   "🔒 Les choix des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).":"🔒 Other players' choices stay hidden until everyone has confirmed (results in the backstage).",
   "✓ ton choix":"✓ your choice", "Voter":"Vote", "🃏 Enchères bonus":"🃏 Bonus auction",
   "Mise en aveugle : chaque bonus revient au <b>plus offrant</b> (égalité → premier à avoir misé). Les non-gagnants sont <b>remboursés</b>. Total ≤ <b>{a} €</b>, jusqu'à <b>{b}</b> bonus. Ce que tu paies (mises gagnantes) est retiré de ton capital de départ. <b>💪 x/5</b> indique la <b>force</b> (indicative) de chaque bonus — certains valent plus que d'autres.":"Blind bidding: each bonus goes to the <b>highest bidder</b> (tie → whoever bid first). Non-winners are <b>refunded</b>. Total ≤ <b>€{a}</b>, up to <b>{b}</b> bonuses. What you pay (winning bids) is deducted from your starting balance. <b>💪 x/5</b> shows each bonus's <b>strength</b> (indicative) — some are worth more than others.",
-  "bonus":"bonuses", "Dépasse {a} €":"Over €{a}", "Trop de bonus (max {a})":"Too many bonuses (max {a})", "Valider ma préparation →":"Confirm my preparation →",
+  "bonus":"bonuses", "Dépasse {a} €":"Over €{a}", "Choisis au maximum {a} bonus.":"Choose at most {a} bonuses.", "Valider ma préparation →":"Confirm my preparation →",
   // Préparation en onglets (v6 — Lot A2)
   "Infos":"Info", "Joueurs":"Players", "Gages":"Forfeits", "Récomp.":"Reward", "Rythme":"Pace", "Mode":"Mode", "Données":"Data", "Enjeu":"Stakes",
   "Infos de la ligue":"League info", "Démarrage auto dans {a}":"Auto-start in {a}", "Format":"Format",
@@ -4953,7 +4994,7 @@ const EN={
   "Ligue créée !":"League created!",
   "🎓 Première fois ? Apprendre en 2 min":"🎓 First time? Learn in 2 min",
   "Bienvenue dans Tactizo !":"Welcome to Tactizo!", "C'est parti →":"Let's go →", "On te montre tout en 2 minutes — en jouant.":"We'll show you everything in 2 minutes — by playing.",
-  "Accueil":"Home", "Après 2 journées":"After 2 matchdays", "Une vraie saison continue…":"A real season goes on…", "Voir le classement final 🏆 →":"See final standings 🏆 →",
+  "QG":"HQ", "Après 2 journées":"After 2 matchdays", "Une vraie saison continue…":"A real season goes on…", "Voir le classement final 🏆 →":"See final standings 🏆 →",
   "Bien plus qu'un jeu de pronos : un <b>championnat entre amis</b> où la <b>stratégie</b> fait la différence. Tu gères un <b>capital</b>, tu remportes des <b>bonus</b> aux enchères (doubler une mise, siphonner l'adversaire, lui <b>voler</b> un bonus…), et un seul coup peut provoquer un <b>retournement</b>. Et à la fin, le <b>dernier fait un gage</b>, le <b>champion</b> soulève la coupe. 🎉":"Far more than a prediction game: a <b>championship among friends</b> where <b>strategy</b> makes the difference. You manage a <b>balance</b>, win <b>bonuses</b> at auction (double a stake, siphon your opponent, <b>steal</b> their bonus…), and a single move can trigger a <b>turnaround</b>. And at the end, the <b>last-placed player does a forfeit</b>, the <b>champion</b> lifts the cup. 🎉",
   "⚠️ Ce que tu remportes est <b>retiré de tes 100 €</b> — donc moins de capital pour <b>parier</b> ensuite. Mise ce qui te semble juste (total ≤ 40 €).":"⚠️ What you win is <b>deducted from your €100</b> — so less balance to <b>bet</b> afterwards. Bid what feels right (total ≤ €40).",
   "Chaque bonus revient au plus offrant (à égalité, le plus rapide). Touche un bonus pour sa fiche.":"Each bonus goes to the highest bidder (on a tie, the fastest). Tap a bonus for its details.",
@@ -5106,7 +5147,6 @@ const EN={
   "Reprise dans {a} au plus tard — ou dès que tout le monde a validé.":"Play resumes in {a} at the latest — or as soon as everyone has confirmed.",
   "prêts":"ready", "bonus":"bonuses",
   "Dépasse {a} € — réduis tes mises":"Over €{a} — lower your bids",
-  "Trop de bonus — {a} maximum":"Too many bonuses — {a} maximum",
   "Modifier mes enchères ✓":"Edit my bids ✓", "Valider mes enchères →":"Confirm my bids →",
   "✅ Validé — tu peux encore modifier tant que la trêve dure.":"✅ Confirmed — you can still change things while the truce lasts.",
   "Enchères enregistrées ✓":"Bids saved ✓", "Trêve terminée — la saison reprend ✓":"Truce over — the season resumes ✓",
@@ -5373,6 +5413,7 @@ const EN={
   "{a} a accepté : {c} vendue (+{b} €).":"{a} accepted: {c} sold (+€{b}).",
   // --- Premium (badge + fiche stats + récap) ---
   "✨ Premium":"✨ Premium", "🔒 Premium":"🔒 Premium", "Fonction premium":"Premium feature",
+  "Fonction Premium — voir le détail":"Premium feature — see details", "En savoir plus":"Learn more",
   "Ligues":"Leagues", "Profil":"Profile", "Pronos":"Picks", "Langue":"Language", "Thème":"Theme", "Stats":"Stats",
   "Clair / sombre":"Light / dark", "Espace admin":"Admin area", "🔑 Changer mon mot de passe":"🔑 Change my password",
   "Palmarès":"Hall of fame",
@@ -5736,7 +5777,7 @@ const EN={
   // Bonus de saison partageable (v6.83). Les libellés en capitales du bonus restent courts :
   // ils sont dessinés dans des cases à largeur fixe (police réduite automatiquement si besoin).
   // Niveau de risque des bonus (v6.84) — ton volontairement valorisant côté « double tranchant ».
-  "Sans risque":"No downside", "Double tranchant":"Double-edged",
+  "Sans risque":"No downside", "Double tranchant":"Double-edged", "Détail du bonus":"Bonus detail",
   "Au pire elle ne sert à rien : elle ne peut pas se retourner contre toi.":"At worst it does nothing — it can never backfire on you.",
   "au pire elle ne sert à rien. Elle ne peut jamais se retourner contre toi.":"at worst it does nothing. It can never backfire on you.",
   "Elle peut rapporter gros comme se retourner contre toi.":"It can pay off big — or backfire on you.",
@@ -6138,17 +6179,17 @@ const EN={
   // ⚠️ Port V2 Classement final (2026-09-06) — Maestro à 4 états, copie reprise de classement-final.html.
   "Champion":"Champion", "Sur le podium":"On the podium", "Dernier":"Last", "Hors podium":"Off the podium",
   "Saison de rêve !":"Dream season!", "Personne ne t'a détrôné.":"Nobody dethroned you.",
-  "Belle saison !":"Great season!", "La prochaine sera la bonne.":"Next one's the one.",
+  "Belle saison !":"Great season!", "Bientôt la bonne !":"The big one's coming!",
   "Saison rude.":"A rough season.", "Le gage t'attend…":"The dare awaits…",
-  "La revanche t'attend la saison prochaine.":"The rematch awaits next season.",
-  "Solide, sans plus.":"Solid, nothing more.", "Pas mal, sans plus.":"Not bad, nothing more.",
+  "Ta revanche t'attend.":"Your rematch awaits.",
+  "Solide.":"Solid.", "Pas mal, sans plus.":"Not bad, nothing more.",
   "Voici ce que les chiffres racontent sur votre saison.":"Here's what the numbers say about your season.",
   // ⚠️ Port V2 Classement (2026-09-06) — Maestro à 4 états, copie reprise de classement.html.
   // "Sur le podium"/"En difficulté" réutilisent des clés déjà établies (Classement final/QG).
   "1er — Leader":"1st — Leader", "Tu domines !":"You're dominating!", "Garde ce rythme jusqu'au bout.":"Keep this pace until the end.",
-  "Tu es dans le coup !":"You're in the hunt!", "Encore un effort pour la 1ère place.":"One more push for 1st place.",
+  "Tu es dans le coup !":"You're in the hunt!", "Un dernier effort !":"One last push!",
   "Milieu":"Mid-table", "Tout reste possible.":"Anything's still possible.", "Une bonne journée peut tout changer.":"One good day can change everything.",
-  "La saison est longue.":"The season is long.", "Un bon résultat peut relancer ta course.":"A good result can relaunch your run.",
+  "La saison traîne.":"The season is dragging.", "Ça peut vite tourner.":"It can turn around fast.",
   // ⚠️ Port V2 Carte de partage de saison (2026-09-06) — carte-partage-saison-v2.html, 5 variantes.
   "Podium":"Podium",
   "Capital final":"Final balance", "Pronos réussis":"Picks won",
@@ -9777,7 +9818,7 @@ function viewCreate(){
       <span class="a2-opt-chk">✓</span></button>`;
   const pair=(active,onclick,title,desc,chip)=>`<button type="button" class="a2-pair${active?' on':''}" onclick="${onclick}">
       <div class="a2-pair-title">${title}</div><div class="a2-pair-desc">${desc}</div>${chip?`<div style="margin-top:6px">${chip}</div>`:''}${active?'<span class="a2-pair-chk">✓</span>':''}</button>`;
-
+  const secInfo=kind=>`<span class="a2-sec-info" onclick="createOptInfo('${kind}')" aria-label="${esc(t("En savoir plus"))}">ⓘ</span>`;
   let eyebrow="",title="",sub="",body="";
   if(createStep===1){
     eyebrow=t("Étape 1 sur 3"); title=t("Ta ligue"); sub=t("Le nom qui claque, et qui tu affrontes.");
@@ -9789,17 +9830,17 @@ function viewCreate(){
   } else if(createStep===2){
     eyebrow=t("Étape 2 sur 3"); title=t("Ton expérience"); sub=t("Trois réglages indépendants, à ton goût.");
     const secIc=src=>`<img src="img/${src}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-right:7px">`;
-    body=`<div class="a2-sec-title">${secIc('icone-donnees.png')}${t("Matchs")}</div>
+    body=`<div class="a2-sec-title">${secIc('icone-donnees.png')}${t("Matchs")}${secInfo('data')}</div>
       <div class="a2-pair-row">
         ${pair(g.data==='sim',"setNew('data','sim')",t("🎮 Simulé"),t("Résultats immédiats, sans vrais matchs."))}
         ${pair(g.data==='real',"setNew('data','real')",t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes."),premBadge('direct'))}
       </div>
-      <div class="a2-sec-title">${secIc('icone-mode.png')}${t("Bonus")}</div>
+      <div class="a2-sec-title">${secIc('icone-mode.png')}${t("Bonus")}${secInfo('mode')}</div>
       <div class="a2-pair-row">
         ${pair(g.mode==='simple',"setNew('mode','simple')",t(MODES.simple.n),t("6 bonus essentiels."))}
         ${pair(g.mode==='complet',"setNew('mode','complet')",t(MODES.complet.n),t("14 bonus, plus de stratégie."),premBadge('bonuscomplets'))}
       </div>
-      <div class="a2-sec-title">${secIc('icone-rythme.png')}${t("Rythme")}</div>
+      <div class="a2-sec-title">${secIc('icone-rythme.png')}${t("Rythme")}${secInfo('formula')}</div>
       <div class="a2-pair-row">
         ${pair(g.formula==='classique',"setNew('formula','classique')",t(FORMULAS.classique.n),t("24h par étape."))}
         ${pair(g.formula==='fast',"setNew('formula','fast')",t(FORMULAS.fast.n),t("12h par étape."))}
@@ -9814,11 +9855,11 @@ function viewCreate(){
         ${opt(g.enjeu==='reward',false,"setNew('enjeu','reward')",'<img src="img/enjeu-recompense.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Récompense"),t("Le champion reçoit une récompense votée par le dernier (aucun gage)."))}
         ${opt(g.enjeu==='both',false,"setNew('enjeu','both')",'⚔️',t("Gage + Récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."))}`
       : `<div class="a2-note"><span>${t("🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça.")}</span></div>`;
-    body+=`<div class="a2-sec-title">${t("🃏 Enchères de bonus")}</div>
+    body+=`<div class="a2-sec-title">${t("🃏 Enchères de bonus")}${secInfo('treve')}</div>
       ${opt(!g.treve,false,"setNew('treve',false)",'🎯',t("Au départ seulement"),t("Une seule vente, avant la première journée."))}
       ${opt(!!g.treve,false,"setNew('treve',true)",'🔄',t("Au départ et à mi-parcours"),t("Une seconde vente à la mi-saison ; les bonus non utilisés sont perdus."),premBadge('treve'))}`;
     if(solo){
-      body+=`<div class="a2-sec-title">${t("🤖 Format du solo")}</div>
+      body+=`<div class="a2-sec-title">${t("🤖 Format du solo")}${secInfo('solo')}</div>
         ${g.treve
           ? `<div class="a2-opt locked" style="cursor:default"><div class="a2-opt-ic">🥅</div><div class="a2-opt-main"><div class="a2-opt-title">${t("1 aller-retour — 2 journées")}</div><div class="a2-opt-desc" style="color:var(--a2-red)">🔒 ${t("Incompatible avec la trêve de mi-saison")}</div></div></div>`
           : opt(g.soloAR===1,false,"setNew('soloAR',1)",'🥅',t("1 aller-retour — 2 journées"),t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."))}
@@ -11151,7 +11192,7 @@ function viewPrep(){
      <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px">${bonusIconHTML(id)}<div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
-   <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>
+   <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):t("Valider ma préparation →")))}</button>
    <div style="height:6px"></div>${prec}
    <h2>${t("👥 Joueurs de la ligue · {a}",{a:players.filter(p=>!p.is_ai).length})}</h2>
    ${players.map(p=>`<div class="box row"><div class="row" style="gap:9px">${avatarHTML(p.emoji)}<b>${esc(p.name)}</b>${p.is_organizer?' <span class="tag">'+t("organisateur")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${p.id===S.myId?' <span class="chip b">'+t("toi")+'</span>':''}</div><span class="chip ${p.shop_done?'g':''}">${p.shop_done?t("✓ prêt"):t("en cours")}</span></div>`).join("")}`;
@@ -11267,20 +11308,31 @@ function viewTreve(){
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   const humans=players.filter(p=>!p.is_ai); const prets=humans.filter(p=>(st.done||{})[p.id]).length;
-  return `<div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)">
-      <h2 style="margin-top:0">🔄 ${t("Trêve de mi-saison")}</h2>
+  // ⚠️ QA (2026-09-07, demandé par Hervé, point 4) — LISTE ET BLOC BUDGET désormais MUTUALISÉS avec
+  // l'écran de début de saison (`encRowHTML`/`encBudgetHTML`/`encSummaryTxt`, cf. leurs notes) au
+  // lieu de l'ancienne liste `.box row` avec description complète pour chaque bonus (page inutilement
+  // longue, signalée par Hervé) : icône/nom/force/risque/mise/ⓘ, tap carte ou ⓘ → même fiche
+  // détaillée (showCardInfo), jamais de description dupliquée dans la liste. `.a2-theme` NÉCESSAIRE
+  // ICI (absent avant) : ces classes lisent leurs couleurs dans les variables `--a2-*`, qui n'existent
+  // que sous `.a2-wrap`/`.a2-theme` — sans lui le texte aurait hérité d'aucune couleur définie. Le
+  // reste (règles de la trêve, perdus, prêts/délai) est un contenu métier propre à cette période,
+  // volontairement conservé tel quel : seule la présentation de la liste/budget change de contexte.
+  return `<div class="a2-theme">
+    <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)">
+      <h2 style="margin-top:0">🔄 ${t("Enchères de mi-saison")}</h2>
       <div class="mini" style="line-height:1.6">${t("La saison s'arrête le temps d'un transfert. <b>Tous les bonus non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> pour racheter parmi <b>tous</b> les bonus.",{a:SHOP_CAP})}</div>
       <div class="mini muted" style="margin-top:6px;line-height:1.6">${t("Ces {a} € ne sortent pas de ta cagnotte, et <b>ce que tu ne dépenses pas est perdu</b>. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.",{a:SHOP_CAP,b:maxCards})}</div>
       ${perdus.length?`<div class="mini" style="margin-top:8px;color:var(--red)">${t("Perdus à la trêve :")} ${perdus.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(' · ')}</div>`:''}
-      <div class="mini muted" style="margin-top:8px">⏳ ${t("Reprise dans {a} au plus tard — ou dès que tout le monde a validé.",{a:fmtLeft(st.deadline)})} · <span class="clik" onclick="showTrevePretsInfo()"><b>${prets}/${humans.length}</b> ${t("prêts")} <span style="opacity:.6">ⓘ</span></span></div></div>
-    <div class="box"><div class="row mini"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${euro(tot)}</b> / ${euro(SHOP_CAP)}</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b> / ${maxCards} ${t("bonus")}</span></div>
-      <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
-   ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px"><span class="sport clik" onclick="showCardInfo('${id}')">${CARDS[id].e}</span>
-      <div style="min-width:0"><b class="mini clik" onclick="showCardInfo('${id}')">${esc(t(CARDS[id].n))}</b><div class="mini muted">${esc(t(CARDS[id].d))}</div></div></div>
-      <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
-   <button class="btn" id="essaibidbtn" ${(over||tooMany)?'disabled':''} onclick="saveTreve()">${over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Trop de bonus — {a} maximum",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →")))}</button>
-   ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`:''}
-   ${meP.is_organizer?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceTreveEnd()">${t("🔒 Clôturer la trêve maintenant (organisateur)")}</button>`:''}`;
+      <div class="mini muted" style="margin-top:8px">⏳ ${t("Reprise dans {a} au plus tard — ou dès que tout le monde a validé.",{a:fmtLeft(st.deadline)})} · <span class="clik" onclick="showTrevePretsInfo()"><b>${prets}/${humans.length}</b> ${t("prêts")} <span style="opacity:.6">ⓘ</span></span></div>
+    </div>
+    ${encBudgetHTML(tot,over,cnt,tooMany,maxCards, t("Enchères de trêve :"), `
+      <div class="a2-enc-budget-note">${t("Ces {a} € ne sortent pas de ta cagnotte : ce que tu ne dépenses pas est perdu.",{a:SHOP_CAP})}</div>`)}
+    <div class="a2-enc-list">${ids.map(id=>encRowHTML(id,bidL[id])).join('')}</div>
+    <div class="a2-enc-summary" id="encSummary">${encSummaryTxt(cnt,tot)}</div>
+    <button class="btn" id="essaibidbtn" ${(over||tooMany)?'disabled':''} onclick="saveTreve()">${over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →")))}</button>
+    ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`:''}
+    ${meP.is_organizer?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceTreveEnd()">${t("🔒 Clôturer la trêve maintenant (organisateur)")}</button>`:''}
+  </div>`;
 }
 async function saveTreve(){ if(busy)return;
   // ⚠️ Correctif audit V2 (2026-09-06) — sécurité, en plus du bouton désactivé (même principe que
@@ -11341,7 +11393,7 @@ function prepEncheresTab(){
       <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
    ${(meP.shop_done && bidsSame(bidL, prepState().bids[S.myId]||{}))
      ? `<button class="btn ghost" id="prepValidate" disabled>${t("✅ Préparation validée")}</button><div class="mini muted" style="text-align:center;margin-top:5px">${t("Modifie une enchère (ou ton choix) pour la re-valider.")}</div>`
-     : `<button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>`}`; }
+     : `<button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):t("Valider ma préparation →")))}</button>`}`; }
 // Les réglages FIGÉS de la ligue (une seule ligne par réglage : le choix retenu, pas les alternatives).
 // L'enjeu (amis) ou le format (solo) est déterminé par le TYPE choisi à la création — via gage.soloAR
 // présent (solo) ou gage.enjeu (amis) — et non par le nombre de joueurs déjà inscrits.
@@ -11360,6 +11412,31 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
    + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"), 'data')
    + kv("🃏 "+t("Enchères"), hasTreve()?t("Départ + trêve"):t("Au départ"), 'treve')
    + extra; }
+// ⚠️ QA (2026-09-07, point 1, demandé par Hervé) — MÊME CONTENU que `paramInfo()` juste en dessous
+// (mêmes textes déjà validés, affichés en lecture seule sur l'onglet Infos d'une ligue réelle),
+// mais lu depuis le BROUILLON `newLg` de l'assistant de création plutôt que depuis `L` : à ce stade
+// aucune ligue n'existe encore, `L` est soit `null` soit une AUTRE ligue déjà ouverte — `paramInfo()`
+// afficherait un contenu faux ou périmé si on l'appelait ici. Aucune règle inventée : copie exacte
+// des mêmes phrases, seule la source (brouillon vs ligue créée) change.
+function createOptInfo(kind){
+  const g=newLg||{}; let emoji="ℹ️", title="", body="", premKey=null;
+  if(kind==='data'){ const real=(g.data==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); if(real) premKey='direct';
+    body=real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."); }
+  else if(kind==='mode'){ const mk=(g.mode==='simple')?'simple':'complet'; const m=MODES[mk]; emoji="🎛️"; title=t(m.n); body=modeDesc(mk,g.type==='solo'); if(mk==='complet') premKey='bonuscomplets'; }
+  else if(kind==='formula'){ const fk=(g.formula==='fast')?'fast':'classique'; const f=FORMULAS[fk]; emoji="⏱️"; title=t(f.n); body=t(f.d)+"<br><br>"+t("💡 La vitesse (classique / fast) est le <b>seul</b> réglage que l'organisateur pourra encore changer, en cours de partie."); }
+  else if(kind==='treve'){ emoji="🃏";
+    title = g.treve?t("Enchères au départ et à la trêve"):t("Enchères au départ seulement"); if(g.treve) premKey='treve';
+    body = g.treve
+      ? t("À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Ce que tu ne dépenses pas est perdu.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés.")
+      : t("Une seule vente aux enchères, avant la première journée. Les bonus que tu remportes te suivent toute la saison, et tu les joues quand tu veux — au maximum un par journée."); }
+  else if(kind==='solo'){ emoji="🤖"; const one=(g.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
+  // ⚠️ QA (2026-09-07, point 1) — "mention Premium lorsque nécessaire" : le badge ✨/🔒 est déjà
+  // visible sur la carte elle-même (pair()/premBadge()), mais le lire UNE SEULE FOIS sur la carte
+  // n'est pas la même chose que le lire ICI, dans l'explication — `showPremiumInfo(premKey)` est le
+  // détail réel déjà existant (prix, échéance, statut Premium propre au compte), pas un texte inventé.
+  const premLine = premKey ? `<div class="mini" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><span class="clik" style="color:var(--gold)" onclick="showPremiumInfo('${premKey}')">✨ ${t("Fonction Premium — voir le détail")}</span></div>` : '';
+  infoModal(emoji, title, `<div class="mini muted" style="text-align:left;line-height:1.55">${body}</div>${premLine}`);
+}
 // Explication d'un réglage figé (clic sur une ligne de la page Infos).
 function paramInfo(kind){
   let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
@@ -11567,12 +11644,33 @@ function viewEnjeuA2(){
 // - Garde "champs désactivés tant que l'Enjeu n'est pas fait" NON reprise (la maquette la
 //   documente elle-même comme "écart volontaire, à trancher au portage") — comportement réel
 //   actuel conservé : champs saisissables, seul le bouton se bloque (votesManquants()).
+// ⚠️ QA (2026-09-07, demandé par Hervé, point 2) — sortie en fonction pour être appelée à
+// l'identique par le rendu complet ET par setBid() (mise à jour en direct, cf. #encSummary
+// ci-dessous) : avant, cette ligne de synthèse était écrite en dur dans viewEncheresA2(), jamais
+// retouchée par setBid() — elle ne se rafraîchissait donc qu'au prochain rendu complet de l'écran
+// (validation, sondage ambiant…), pas à chaque frappe, contrairement à #bt/#bc/#bidGauge/bouton,
+// déjà mis à jour en direct depuis le début. C'est CETTE ligne, seule à rester figée pendant la
+// saisie, qui donnait l'impression que "la synthèse ne se met à jour qu'après validation".
+function encSummaryTxt(cnt,tot){ return t("{a} bonus visé{s} · {b} d'enchères",{a:cnt,s:cnt>1?'s':'',b:euro(tot)}); }
+// ⚠️ QA (2026-09-07, demandé par Hervé, points 4 et 5) — bloc budget MUTUALISÉ entre les enchères
+// de début de saison (viewEncheresA2()) et de mi-saison (viewTreve()), qui avaient jusqu'ici DEUX
+// mises en page différentes (la trêve gardait l'ancien `.box`/`.gauge`) : mêmes #bt/#bc/#bidGauge
+// (déjà partagés par setBid(), donc déjà mis à jour en direct pour les deux), seuls le libellé et
+// les notes contextuelles (`labelHTML`/`notesHTML`) changent d'un écran à l'autre.
+function encBudgetHTML(tot,over,cnt,tooMany,maxCards,labelHTML,notesHTML){
+  return `<div class="a2-enc-budget">
+    <div class="a2-enc-budget-value">${labelHTML} <b id="bt" class="${over?'red':''}">${euro(tot)}</b> / ${euro(SHOP_CAP)}</div>
+    ${notesHTML||''}
+    <div class="a2-enc-budget-bar${over?' over':''}" id="bidGauge"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div>
+    <div class="a2-enc-budget-stats"><span>${t("Bonus visés")} <b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards}</span></div>
+  </div>`;
+}
 function encRowHTML(id, bidVal){
   const c=CARDS[id]; const risky=!!c.risk;
   return `<div class="a2-enc-row${(+bidVal>0)?' targeted':''}">
     <div class="a2-enc-ic" onclick="showCardInfo('${id}')">${bonusIconHTML(id)}</div>
     <div class="a2-enc-main" onclick="showCardInfo('${id}')">
-      <div class="a2-enc-name">${esc(t(c.n))}</div>
+      <div class="a2-enc-name"><span class="a2-enc-name-txt">${esc(t(c.n))}</span><span class="a2-enc-info" onclick="event.stopPropagation();showCardInfo('${id}')" aria-label="${esc(t('Détail du bonus'))}">ⓘ</span></div>
       <div class="a2-enc-tags"><span class="a2-enc-force">💪 ${c.f||3}/5</span>
         <span class="a2-enc-risk ${risky?'risky':'safe'}"><span class="dot"></span>${risky?t("Double tranchant"):t("Sans risque")}</span></div>
     </div>
@@ -11584,7 +11682,7 @@ function viewEncheresA2(){
   const ids=modeCards(getMode()).slice().sort((a,b)=>t(CARDS[a].n).localeCompare(t(CARDS[b].n),undefined,{sensitivity:"base"}));
   const shell=(body)=>`<div class="a2-theme">
     <div class="a2-topbar"><button class="a2-back" onclick="setPtab('infos')"><svg viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg></button>
-      <span class="a2-title">${t("Enchères de bonus")}</span>
+      <span class="a2-title">${t("Enchères de début de saison")}</span>
     </div>${body}</div>`;
   if(L.status==="lobby") return shell(`<div class="mini muted" style="margin:0 0 14px">🔒 ${t("Les enchères s'ouvriront à la clôture des inscriptions. Les bonus proposés (et leur force) sont listés ci-dessous.")}</div>
     <div class="a2-enc-list">${ids.map(id=>encRowHTML(id,0)).join('')}</div>`);
@@ -11597,20 +11695,16 @@ function viewEncheresA2(){
   const modeInfo=MODES[getMode()];
   const btn = (meP.shop_done && bidsSame(bidL, prepState().bids[S.myId]||{}))
     ? `<button class="btn ghost" id="prepValidate" disabled>${t("✅ Préparation validée")}</button><div class="mini muted" style="text-align:center;margin-top:5px">${t("Modifie une enchère (ou ton choix) pour la re-valider.")}</div>`
-    : `<button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →")))}</button>`;
+    : `<button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):t("Valider ma préparation →")))}</button>`;
   return shell(`
     ${lockHTML}
-    <div class="a2-enc-budget">
-      <div class="a2-enc-budget-value">${t("Budget d'enchères :")} <b id="bt" class="${over?'red':''}">${euro(tot)}</b> / ${euro(SHOP_CAP)}</div>
+    ${encBudgetHTML(tot,over,cnt,tooMany,maxCards, t("Budget d'enchères :"), `
       <div class="a2-enc-budget-note">${t("Répartis jusqu'à {a} entre les bonus que tu veux viser.",{a:euro(SHOP_CAP)})}</div>
-      <div class="a2-enc-budget-note strong">${t("Seules tes enchères gagnantes seront réellement débitées de ton capital.")}</div>
-      <div class="a2-enc-budget-bar${over?' over':''}" id="bidGauge"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div>
-      <div class="a2-enc-budget-stats"><span>${t("Bonus visés")} <b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards}</span></div>
-    </div>
+      <div class="a2-enc-budget-note strong">${t("Seules tes enchères gagnantes seront réellement débitées de ton capital.")}</div>`)}
     <div class="a2-enc-mode-title">${esc(t(modeInfo.n))}</div>
     <div class="a2-enc-mode-note">${esc(t(modeInfo.d))}</div>
     <div class="a2-enc-list">${ids.map(id=>encRowHTML(id,bidL[id])).join('')}</div>
-    <div class="a2-enc-summary">${t("{a} bonus visé{s} · {b} d'enchères",{a:cnt,s:cnt>1?'s':'',b:euro(tot)})}</div>
+    <div class="a2-enc-summary" id="encSummary">${encSummaryTxt(cnt,tot)}</div>
     ${btn}
   `);
 }
@@ -11652,18 +11746,27 @@ function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else d
   // d'étapes : la jauge d'argent ne bougeait jamais quand on saisissait une enchère (signalé par
   // Hervé), et la barre d'étapes sautait à sa place.
   const g=document.getElementById("bidGauge"); if(g){g.querySelector("i").style.width=Math.min(100,tot/SHOP_CAP*100)+"%"; g.classList.toggle("over",over);}
+  // ⚠️ QA (2026-09-07, demandé par Hervé, points 2 et 5) — cette ligne de synthèse ("X bonus visés
+  // · Y € d'enchères") restait figée pendant la saisie, contrairement à #bt/#bc/#bidGauge/bouton
+  // déjà mis à jour ici : c'est elle qui donnait l'impression que "rien ne se met à jour avant
+  // validation". Partagée par les deux écrans (même id sur les deux, cf. leur unification).
+  const es=$("encSummary"); if(es) es.textContent=encSummaryTxt(cnt,tot);
   if(inTreve){
-    // Le texte du bouton dépend aussi de `dejaFait` (déjà validé au moins une fois), pas recalculé
-    // ici : seul l'état actif/désactivé est corrigé en direct, le libellé se remet à jour au
-    // prochain rendu complet (déjà déclenché ailleurs par le poll) — un bouton "Valider…" désactivé
-    // reste un garde-fou correct, même si son texte n'a pas encore basculé sur "Dépasse…".
-    const btn2=$("essaibidbtn"); if(btn2) btn2.disabled=over||tooMany;
+    // ⚠️ QA (2026-09-07, demandé par Hervé, point 5) — AVANT, seul l'état actif/désactivé du bouton
+    // se corrigeait ici ; son LIBELLÉ ("Dépasse…"/"Trop de bonus…") restait celui du dernier rendu
+    // complet pendant toute la saisie — même défaut que la ligne de synthèse ci-dessus, pour la
+    // même raison (jamais retouché en dehors d'un rendu complet). `dejaFait` recalculé ici via
+    // `treveState()` (lecture pure de `L.prep_summary`, pas de requête) pour reproduire EXACTEMENT
+    // le même texte que le rendu complet de viewTreve().
+    const stT=treveState()||{}; const dejaFait=!!(stT.done||{})[S.myId];
+    const btn2=$("essaibidbtn"); if(btn2){ btn2.disabled=over||tooMany;
+      btn2.textContent=over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →"))); }
     return;
   }
   const miss=votesManquants(); const noVote=miss.length>0; // vote(s) obligatoire(s) — 2 en mode "both"
   // Une modif d'enchère « ré-active » le bouton vert (même si la prépa était déjà validée en gris).
   const btn=$("prepValidate"); if(btn){ btn.className="btn"; btn.onclick=savePrep; btn.disabled=over||tooMany||noVote;
-    btn.textContent=noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Trop de bonus (max {a})",{a:maxCards}):t("Valider ma préparation →"))); } }
+    btn.textContent=noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):t("Valider ma préparation →"))); } }
 // `r` = true → on vote la RÉCOMPENSE (bloc R, mode "both" uniquement) ; false/absent → bloc principal.
 async function prepVote(i, r){ if(busy)return; busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
@@ -13380,15 +13483,22 @@ function recapBody(D){
   // pousser `line()` (une seule ligne dense, ~11px) dans un conteneur générique. Partagée par le
   // duel du joueur ET par le panneau "autres duels" (même composant, deux appelants) pour ne pas
   // dupliquer cette mise en forme deux fois.
+  // ⚠️ QA (2026-09-07, point 8, demandé par Hervé, vidéo réelle — Atlético-OM, deux bonus affichés
+  // sans savoir lequel appartenait à qui) — le regroupement par COLONNE (who en haut, badges en bas)
+  // suffisait en théorie mais se perdait à la lecture rapide sur iPhone, surtout avec 2 badges
+  // empilés. Chaque badge porte désormais son propre nom ("Hervé · 🐗 Double ration Obélix"),
+  // autonome même sorti de son contexte de colonne — et l'icône générique 🏠/✈️ (qui garde son sens
+  // : qui recevait, cf. commentaire plus haut) est complétée par le VRAI avatar du joueur.
   const mbeSideHTML=(bt,f,i,oppCard,player,icon)=>{
     const p=pickCalc(bt,f,i,oppCard);
-    const isMe2=player&&player.id===S.myId;
-    const who=`<div class="who">${icon} ${isMe2?t("Toi"):esc(player&&player.name||'?')}</div>`;
+    const isMe2=player&&player.id===fp;
+    const whoName=isMe2?t("Toi"):esc(player&&player.name||'?');
+    const who=`<div class="who">${icon} ${avatarHTML(player&&player.emoji,16)} ${whoName}</div>`;
     const cls='a2-res-mbe-side'+((bt&&i===bt.captain)?' has-favori':'')+(cardOnMatch(bt&&bt.card,i)?' has-bonus':'');
     if(p.state==='noBet') return `<div class="${cls}">${who}<div class="mini red" style="margin-top:4px"><b>🚫 ${t("n'a pas parié")}</b></div></div>`;
     if(p.state==='noPick') return `<div class="${cls}">${who}<div class="muted" style="margin-top:4px">—</div></div>`;
-    const badges=[]; if(p.isCaptain) badges.push(`<div class="a2-res-mbe-badge favori">👑 ${t("Favori")}</div>`);
-    if(cardOnMatch(p.card,i)) badges.push(`<div class="a2-res-mbe-badge bonus">${cardEmoji(p.card)} ${esc(cardName(p.card))}</div>`);
+    const badges=[]; if(p.isCaptain) badges.push(`<div class="a2-res-mbe-badge favori">${whoName} · 👑 ${t("Favori")}</div>`);
+    if(cardOnMatch(p.card,i)) badges.push(`<div class="a2-res-mbe-badge bonus">${whoName} · ${cardEmoji(p.card)} ${esc(cardName(p.card))}</div>`);
     // ⚠️ Port V2 Résultats (2026-09-06, écart constaté par l'audit) — resultats.html accompagne
     // TOUJOURS le badge 👑 d'une ligne d'explication (`.mbe-effect`, "Match favori · Gain/perte ×2")
     // sous les badges. Seul le favori est repris ici : le bonus a aussi son `.mbe-effect` dans la
@@ -13467,12 +13577,24 @@ function recapBody(D){
     // reconstruire pour les faire tenir dans des cases séparées (pick/mise-cote/net) risquerait de
     // dupliquer ce calcul et de diverger d'un cas limite. Seul l'EMBALLAGE change ici.
     // 🏠/✈️ (qui a choisi les 5 matchs) porté par le nom de chaque colonne, comme avant.
+    // ⚠️ QA (2026-09-07, point 7, demandé par Hervé, vidéo réelle — "lignes jaunes ambiguës") —
+    // AVANT : une bordure dorée isolée (via `imp`) marquait "pari corrigé (🎁) ou bonus joué SUR CE
+    // MATCH, par n'importe lequel des deux joueurs", un signal sans rapport avec réussite/échec du
+    // pari — d'où l'impression de défaut d'affichage sur iPhone (ligne colorée sans explication au
+    // premier coup d'œil). Cette information n'est pas perdue : les badges 👑/🃏 de `mbeSideHTML()`
+    // ci-dessus l'affichent déjà, PAR JOUEUR, une fois la ligne dépliée — la bordure dorée globale
+    // n'ajoutait rien qu'on ne voie pas déjà en l'ouvrant. Remplacée par ce que Hervé demande
+    // réellement : l'état réussi/perdu du pari, du point de vue du joueur dont on regarde le récap
+    // (`fp`, pas forcément `S.myId` — cf. sa note plus haut, un admin peut consulter un autre
+    // joueur). `pickCalc()` (déjà la source de vérité du détail dépliée) est réutilisé tel quel.
+    const focusIsHome = hP.id===fp;
+    const focusBt = focusIsHome?hB:aB, focusOppCard = focusIsHome?(aB&&aB.card):(hB&&hB.card);
     const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
-      const impB=(bt)=> !!(bt&&bt.picks&&bt.picks[i]&&bt.picks[i].orig!=null) || cardOnMatch(bt.card,i); const imp=impB(hB)||impB(aB);
-      return `<div class="a2-res-match${open?' open':''}"${imp?' style="border-color:var(--gold)"':''}>
+      const fp2=pickCalc(focusBt,f,i,focusOppCard); const outcomeCls=fp2.state==='ok'?(fp2.win?' won':' lost'):'';
+      return `<div class="a2-res-match${open?' open':''}${outcomeCls}">
         <button class="a2-res-match-head" onclick="toggleRecapMatch(${i})" type="button">
           <span class="nm">${esc(f.home)} – ${esc(f.away)}</span>
-          <span class="mini muted" style="flex:0 0 auto">→ ${esc(labelSel(f,f.res))}</span>
+          <span class="mini muted" style="flex:0 0 auto">→ ${esc(labelSel(f,f.res))}${fp2.state==='ok'?(fp2.win?` <span class="a2-res-outcome-ic won">✓</span>`:` <span class="a2-res-outcome-ic lost">✕</span>`):''}</span>
           <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         ${open?`<div class="a2-res-match-body">
@@ -13757,16 +13879,22 @@ function recapBody(D){
       return `<div class="a2-res-maestro st-${resKey}"><img class="a2-res-maestro-img" src="img/${rs.img}" alt="${t("Le Maestro")}" style="aspect-ratio:${rs.ar}">
         <div class="a2-res-box" style="${rs.box}"><div class="a2-res-eyebrow" style="color:${rs.color}">${t(rs.eyebrow)}</div>
         <div class="a2-res-title">${t(rs.title)}</div><div class="a2-res-text">${t(rs.text)}</div></div></div>`; })()
-    : `<div class="a2-res-maestro st-suspense"><img class="a2-res-maestro-img" src="img/qg-tactizo-resultats-suspense.png" alt="${t("Le Maestro")}" style="aspect-ratio:1536/1024">
+    : `<div class="a2-res-maestro st-suspense compact"><img class="a2-res-maestro-img" src="img/qg-tactizo-resultats-suspense.png" alt="${t("Le Maestro")}" style="aspect-ratio:1536/650">
         <div class="a2-res-suspense-ring"><div class="lbl">${t("Résultats dévoilés dans")}</div><div class="circ"><span class="num pop" id="recapCountdown">${st0.secondsLeft}</span></div></div>
       </div>`);
+  // ⚠️ QA (2026-09-07, point 9, demandé par Hervé, vidéo réelle — dernière journée, NET plus visible
+  // en même temps que le suspense) — `.compact` sur CE bloc et sur `.a2-res-maestro.st-suspense`
+  // ci-dessus, JAMAIS sur `.a2-res-summary` (l'état révélé, quelques lignes plus bas) : seul l'écran
+  // de suspense doit tenir sans scroll (crop de l'image raccourci 1536/1024→1536/650, avatars et
+  // espaces resserrés) — l'écran Résultats normal, une fois révélé, retrouve sa mise en page
+  // habituelle inchangée. Vérifié à 320/375/390px, journée normale ET dernière journée.
   const duelBodyHTML = oppId==null ? '' : (!revealed
-    ? `<div class="a2-res-duelbig">
+    ? `<div class="a2-res-duelbig compact">
         <div class="a2-res-duelbig-head">${t("Ton duel")}</div>
         <div class="a2-res-faces">
-          <div class="a2-res-face">${avatarHTML(fpP.emoji,44)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span></div>
+          <div class="a2-res-face">${avatarHTML(fpP.emoji,34)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span></div>
           <div class="a2-res-vs">${t("vs")}</div>
-          <div class="a2-res-face">${avatarHTML(pById(oppId).emoji,44)}<span class="nm">${esc(oppName)}</span></div>
+          <div class="a2-res-face">${avatarHTML(pById(oppId).emoji,34)}<span class="nm">${esc(oppName)}</span></div>
         </div>
         <div class="a2-res-nets" id="recapDuelNets">
           <div class="a2-res-net"><div class="lbl">${t("Net")}</div><div class="val" id="recapNetYou">${st0.amt} €</div></div>
@@ -15761,9 +15889,9 @@ function viewStandings(){
   // contre l'IA. "Difficulté" (dernier rang) est donc testé EN PREMIER ici, comme pour Classement final.
   const STANDINGS_ASSETS = {
     leader:{img:'qg-tactizo-classement-1er.png', color:'var(--green)', eyebrow:"1er — Leader", title:"Tu domines !", text:"Garde ce rythme jusqu'au bout."},
-    chasseur:{img:'qg-tactizo-classement-chasseur.png', color:'var(--blue)', eyebrow:"Sur le podium", title:"Tu es dans le coup !", text:"Encore un effort pour la 1ère place."},
+    chasseur:{img:'qg-tactizo-classement-chasseur.png', color:'var(--blue)', eyebrow:"Sur le podium", title:"Tu es dans le coup !", text:"Un dernier effort !"},
     milieu:{img:'qg-tactizo-classement-milieu.png', color:'var(--gold)', eyebrow:"Milieu", title:"Tout reste possible.", text:"Une bonne journée peut tout changer."},
-    difficulte:{img:'qg-tactizo-classement-difficulte.png', color:'var(--red)', eyebrow:"En difficulté", title:"La saison est longue.", text:"Un bon résultat peut relancer ta course."}
+    difficulte:{img:'qg-tactizo-classement-difficulte.png', color:'var(--red)', eyebrow:"En difficulté", title:"La saison traîne.", text:"Ça peut vite tourner."}
   };
   const standingsMaestroHTML = (myIdx>=0) ? (()=>{ const rk=stdRanks[myIdx], lastRank=stdRanks[stdRanks.length-1];
     const key = rk===lastRank ? 'difficulte' : (rk===1?'leader':(rk<=3?'chasseur':'milieu'));
@@ -16121,12 +16249,12 @@ function viewEnd(){
   // maquette (qui ne correspondent pas à ce carré 1:1).
   const CLASSEMENT_ASSETS = {
     champion:{img:'qg-tactizo-classement-champion.png', color:'var(--green)', eyebrow:"Champion", title:"Saison de rêve !", text:"Personne ne t'a détrôné."},
-    podium:{img:'qg-tactizo-classement-podium.png', color:'var(--blue)', eyebrow:"Sur le podium", title:"Belle saison !", text:"La prochaine sera la bonne."},
+    podium:{img:'qg-tactizo-classement-podium.png', color:'var(--blue)', eyebrow:"Sur le podium", title:"Belle saison !", text:"Bientôt la bonne !"},
     // ⚠️ Solo (2026-09-06) — AUCUN gage en Solo (retour Hervé) : ce Maestro se lit sur "ai-je battu
     // l'IA ou non" (cf. note ci-dessus), pas sur l'enjeu entre humains — le texte ne doit donc
     // jamais mentionner "le gage", qui n'existe pas dans ce contexte.
-    dernier:{img:'qg-tactizo-classement-dernier.png', color:'var(--red)', eyebrow:"Dernier", title:"Saison rude.", text: isSolo() ? "La revanche t'attend la saison prochaine." : "Le gage t'attend…"},
-    horspodium:{img:'qg-tactizo-classement-horspodium.png', color:'var(--gold)', eyebrow:"Hors podium", title:"Solide, sans plus.", text:"Pas mal, sans plus."}
+    dernier:{img:'qg-tactizo-classement-dernier.png', color:'var(--red)', eyebrow:"Dernier", title:"Saison rude.", text: isSolo() ? "Ta revanche t'attend." : "Le gage t'attend…"},
+    horspodium:{img:'qg-tactizo-classement-horspodium.png', color:'var(--gold)', eyebrow:"Hors podium", title:"Solide.", text:"Pas mal, sans plus."}
   };
   const myRankFinal = myGlobalIdx>=0 ? finalRanksAll[myGlobalIdx] : 0;
   // ⚠️ Ordre de priorité CORRIGÉ vs la maquette (2026-09-06) — classement-final.html teste "podium"
@@ -17470,7 +17598,7 @@ const NAV_ICONS={
   podium:'<svg viewBox="0 0 24 24"><path d="M4 20v-6h4v6"/><path d="M10 20V9h4v11"/><path d="M16 20v-4h4v4"/></svg>',
 };
 function homeTabs(){ return `<div class="inner">`   // 5 onglets (Profil est passé en bouton haut-droite) → tous affichés, l'actif surligné
-  + navTab("home",NAV_ICONS.home,t("Accueil"),"goAccueil()")
+  + navTab("home",NAV_ICONS.home,t("QG"),"goAccueil()")
   + navTab("leagues",NAV_ICONS.trophy,t("Ligues"),"backToLeagues()")
   + navTab("stats",NAV_ICONS.bars,t("Stats"),"openStats()")
   + navTab("palmares",NAV_ICONS.medal,t("Palmarès"),"openPalmares()")
