@@ -1216,6 +1216,13 @@
   .a2-lbl-loading{display:none}
   .a2-cta.loading .a2-lbl-loading{display:inline}
   @keyframes a2spin{to{transform:rotate(360deg)}}
+  /* ⚠️ QA (2026-09-08, point 3, demandé par Hervé, test réel Entre amis) — l'écran d'attente
+     "Résolution de la trêve…" (emoji 🔄 statique + texte, jamais animé) lisait comme un écran figé
+     sur iPhone. Réutilise le `@keyframes a2spin` déjà existant (bouton "chargement" des CTA) plutôt
+     que d'en inventer un second : mêmes rouages, juste une taille/couleur adaptées à un fond `.box`
+     autonome (les tokens `--a2-*` du bouton n'existent pas ici, cet écran n'est pas dans `.a2-wrap`/
+     `.a2-theme`) — pas de nouveau hero, juste un signe de vie pendant l'attente réelle du serveur. */
+  .tr-spinner{width:34px;height:34px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--gold);animation:a2spin .8s linear infinite;margin:0 auto 10px}
   .a2-divider{display:flex;align-items:center;gap:10px;margin:18px 0;color:var(--a2-faint);font-size:11px;font-weight:700;
     text-transform:uppercase;letter-spacing:.05em}
   .a2-divider::before,.a2-divider::after{content:'';flex:1;height:1px;background:var(--a2-border)}
@@ -2362,7 +2369,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.388";
+const APP_VERSION = "v8.389";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -2690,8 +2697,8 @@ const FORMULAS={
      v7.33 : ils s'affichaient tels quels, en clair, au milieu de la phrase (signalé par Hervé).
      Si une mise en gras devient nécessaire ici, c'est l'échappement qu'il faut revoir aux trois
      endroits — pas ajouter une balise en espérant que ça passe. */
-  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 24h et 48h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."},
-  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 48h et 72h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."}
+  fast:      {n:"⚡ Fast",      sel:12, bet:12, d:"Préparation : 24h pour choisir ton enjeu et tes bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 24h et 48h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."},
+  classique: {n:"🗓️ Classique", sel:24, bet:24, d:"Préparation : 24h pour choisir ton enjeu et tes bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 48h et 72h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes."}
 };
 // Format EFFECTIF de la journée courante. `L.formula` = format initial (colonne). L'organisateur peut
 // le changer EN COURS, effectif à la journée suivante : chaque changement est empilé dans le JSON `gage`
@@ -4157,7 +4164,7 @@ const EN={
   "❄️ Échange <b>sans effet</b> : l'un des deux n'avait aucun pari gagnant (ou les meilleurs gains étaient égaux).":"❄️ Swap <b>had no effect</b>: one of the two had no winning bet (or the best gains were equal).",
   "Le rachat/vente n'est possible qu'entre <b>joueurs réels</b> — pas avec le 🤖 joueur IA.":"Buying/selling is only possible between <b>real players</b> — not with the 🤖 AI player.",
   // === Tuto démo (v5.x) + enjeu « aucun vote » + nom de ligue ===
-  "Vote pour le gage que tu aimerais voir. À la fin, le <b>dernier</b> du classement effectue le gage voté par le <b>vainqueur</b> 🏆.":"Vote for the forfeit you'd like to see. At the end, the <b>last-placed</b> player does the forfeit voted by the <b>winner</b> 🏆.",
+  "Vote pour le gage que tu aimerais voir. À la fin, le <b>dernier</b> du classement effectue le gage choisi par le <b>vainqueur</b> 🏆.":"Vote for the forfeit you'd like to see. At the end, the <b>last-placed</b> player does the forfeit chosen by the <b>winner</b> 🏆.",
   "chaque joueur propose SON gage (celui du vainqueur s'applique au dernier). Tu peux aussi voter une <b>récompense pour le champion</b> — gage seul, récompense seule, ou les deux — et même <b>créer ton propre gage/récompense sur mesure</b>. Ici, on garde juste le gage pour aller vite.":"each player proposes THEIR forfeit (the winner's applies to the last-placed player). You can also vote a <b>reward for the champion</b> — forfeit only, reward only, or both — and even <b>create your own custom forfeit/reward</b>. Here, we keep just the forfeit to go fast.",
   "Duel du jour contre 🦊 <b>Léa</b>.":"Today's duel against 🦊 <b>Léa</b>.",
   "gain doublé":"gain doubled",
@@ -4173,7 +4180,7 @@ const EN={
   "Pas besoin d'être {b} : tu peux lancer dès qu'il y a assez de joueurs (même à 2).":"No need to be {b}: you can start as soon as there are enough players (even just 2).",
   "Ton adversaire <b>si tu clôtures maintenant</b>, à toi seul":"Your opponent <b>if you close now</b>, on your own",
   "🤖 Format du solo (si tu restes seul à jouer)":"🤖 Solo format (if you stay the only player)",
-  "• À la fin : le <b>dernier</b> du classement fait le <b>gage</b> voté par le <b>vainqueur</b> 😅. <span class=\"muted\">(Une <b>récompense</b> pour le champion est aussi possible selon les ligues 🏆.)</span>":"• At the end: the <b>last-placed</b> player does the <b>forfeit</b> voted by the <b>winner</b> 😅. <span class=\"muted\">(A <b>reward</b> for the champion is also possible depending on the league 🏆.)</span>",
+  "• À la fin : le <b>dernier</b> du classement fait le <b>gage</b> choisi par le <b>vainqueur</b> 😅. <span class=\"muted\">(Une <b>récompense</b> pour le champion est aussi possible selon les ligues 🏆.)</span>":"• At the end: the <b>last-placed</b> player does the <b>forfeit</b> chosen by the <b>winner</b> 😅. <span class=\"muted\">(A <b>reward</b> for the champion is also possible depending on the league 🏆.)</span>",
   "• À la fin : le <b>vainqueur</b> remporte une <b>récompense</b> 🏆. <span class=\"muted\">(Selon les ligues, le <b>dernier</b> peut aussi devoir un <b>gage</b> 😅.)</span>":"• At the end: the <b>winner</b> earns a <b>reward</b> 🏆. <span class=\"muted\">(Depending on the league, the <b>last-placed</b> player may also owe a <b>forfeit</b> 😅.)</span>",
   "Cet emoji est déjà utilisé dans le jeu (bonus, 👑 match favori…) — choisis-en un autre.":"This emoji is already used in the game (bonuses, 👑 favourite match…) — pick another one.",
   "Bonus encore en main de {a} (pas forcément joués aujourd'hui) :":"Bonuses still in {a}'s hand (not necessarily played today):",
@@ -4252,7 +4259,7 @@ const EN={
   "<b>Tactizo</b>, c'est un <b>championnat de pronostics sportifs entre amis</b> — 100 % <b>argent virtuel</b>. Chacun démarre avec <b>100 €</b> fictifs.":"<b>Tactizo</b> is a <b>sports-prediction championship among friends</b> — 100% <b>virtual money</b>. Everyone starts with <b>100 €</b> of play money.",
   "À chaque <b>journée</b>, tu affrontes <b>un adversaire</b> en <b>duel</b> : vous pariez, et le meilleur résultat <b>marque des points</b>. Au fil des journées, chacun rencontre tous les autres. À la fin, le <b>champion</b> soulève la coupe 🏆 et le <b>dernier</b> fait un <b>gage</b> 🎭.":"Each <b>matchday</b>, you face <b>one opponent</b> in a <b>duel</b>: you both bet, and the better result <b>scores points</b>. Over the matchdays, everyone plays everyone. At the end, the <b>champion</b> lifts the cup 🏆 and the <b>last-placed player</b> does a <b>forfeit</b> 🎭.",
   "Avant de parier, une phase d'<b>enchères</b> permet de remporter des <b>bonus</b> qui peuvent tout changer. Tout l'art : bien gérer ton <b>capital</b>, tes <b>mises</b> et tes <b>bonus</b>.":"Before betting, an <b>auction</b> phase lets you win <b>bonuses</b> that can change everything. The whole art: managing your <b>capital</b>, your <b>stakes</b> and your <b>bonuses</b> well.",
-  "Vote pour le gage que tu aimerais voir. À la fin, le <b>dernier</b> du classement effectue le gage voté par le <b>vainqueur</b> 🏆. (Ici, pas de récompense : on joue pour l'honneur.)":"Vote for the forfeit you'd like to see. At the end, the <b>last-placed</b> player does the forfeit voted by the <b>winner</b> 🏆. (No reward here: we play for honour.)",
+  "Vote pour le gage que tu aimerais voir. À la fin, le <b>dernier</b> du classement effectue le gage choisi par le <b>vainqueur</b> 🏆. (Ici, pas de récompense : on joue pour l'honneur.)":"Vote for the forfeit you'd like to see. At the end, the <b>last-placed</b> player does the forfeit chosen by the <b>winner</b> 🏆. (No reward here: we play for honour.)",
   "Touche un bonus pour découvrir ses super-pouvoirs.":"Tap a bonus to discover its super-powers.",
   "Les 4 joueurs ont misé en secret. Le <b>plus offrant</b> remporte le bonus ; à <b>égalité</b>, le plus <b>rapide</b> l'emporte.":"All 4 players bid in secret. The <b>highest bidder</b> wins the bonus; on a <b>tie</b>, the <b>fastest</b> wins.",
   "{a} · {b} €":"{a} · {b} €",
@@ -4305,8 +4312,8 @@ const EN={
   "Chaque journée garde son <b>détail complet</b> et ses <b>statistiques</b> pour suivre ta forme.":"Every matchday keeps its <b>full breakdown</b> and <b>stats</b> to track your form.",
   "Donne un nom à ta ligue (tu en seras l'organisateur). {a} caractères max :":"Give your league a name (you'll be its organizer). {a} characters max:",
   "Ligue de {a}":"{a}'s League",
-  "🎭 <b>Gage :</b> personne n'a voté de gage à temps — pas de gage cette saison. On joue pour l'honneur… et la <b>première place</b> !":"🎭 <b>Forfeit:</b> nobody voted a forfeit in time — no forfeit this season. We play for honour… and <b>first place</b>!",
-  "🏆 <b>Récompense :</b> personne n'a voté de récompense à temps — il n'y en aura pas cette saison. On joue pour la gloire du classement !":"🏆 <b>Reward:</b> nobody voted a reward in time — there won't be one this season. We play for the glory of the standings!",
+  "🎭 <b>Gage :</b> personne n'a proposé de gage à temps — pas de gage cette saison. On joue pour l'honneur… et la <b>première place</b> !":"🎭 <b>Forfeit:</b> nobody proposed a forfeit in time — no forfeit this season. We play for honour… and <b>first place</b>!",
+  "🏆 <b>Récompense :</b> personne n'a proposé de récompense à temps — il n'y en aura pas cette saison. On joue pour la gloire du classement !":"🏆 <b>Reward:</b> nobody proposed a reward in time — there won't be one this season. We play for the glory of the standings!",
   // En-tête / navigation
   "← Mes ligues":"← My leagues", "📖 Règles":"📖 Rules", "Déconnexion":"Log out",
   "Les pronostics font gagner les <b>matchs</b>,<br>la stratégie fait gagner le <b>championnat</b>.":"Picks win you the <b>matches</b>,<br>strategy wins you the <b>championship</b>.",
@@ -4633,7 +4640,7 @@ const EN={
   "Si… gagne":"If… wins", "Gage infligé au dernier":"Forfeit for the last-placed player",
   "déclaré forfait (pronos non faits)":"forfeited (picks not submitted)",
   "🎭 Choisis d'abord un gage":"🎭 Choose a forfeit first", "🏆 Choisis d'abord une récompense":"🏆 Choose a reward first",
-  "Vote d'abord pour un gage.":"Vote for a forfeit first.", "Vote d'abord pour une récompense.":"Vote for a reward first.",
+  "Choisis d'abord un gage.":"Choose a forfeit first.", "Choisis d'abord une récompense.":"Choose a reward first.",
   "▶️ Publier les résultats maintenant (organisateur)":"▶️ Publish the results now (organizer)",
   "Publier les résultats maintenant ? On considère que tous les matchs (fictifs) sont joués.":"Publish the results now? All (simulated) matches will be treated as played.",
   "Clôturer les pronos maintenant ? Plus personne ne pourra modifier et les pronos de tout le monde seront révélés. Les résultats viendront ensuite (tu pourras les publier toi-même).":"Close picks now? No one can edit anymore and everyone's picks will be revealed. The results come next (you'll be able to publish them yourself).",
@@ -4664,9 +4671,9 @@ const EN={
   "C'est déjà la dernière journée — changer le format n'aurait aucun effet.":"This is already the last matchday — changing the format would have no effect.",
   "Passer la ligue en {a} à partir de la journée {b} ? Tous les joueurs en seront informés.":"Switch the league to {a} from matchday {b}? All players will be notified.",
   "✅ Format modifié : {a} dès la journée {b}. Les joueurs seront prévenus.":"✅ Format changed: {a} from matchday {b}. Players will be notified.",
-  "• À la fin : le <b>dernier</b> du classement fait le <b>gage</b> voté par le <b>vainqueur</b> 😅.":"• At the end: the <b>last</b> in the standings does the <b>forfeit</b> voted by the <b>winner</b> 😅.",
-  "• À la fin : le <b>champion</b> reçoit la <b>récompense</b> votée par le <b>dernier</b> 🏆.":"• At the end: the <b>champion</b> gets the <b>reward</b> voted by the <b>last-placed player</b> 🏆.",
-  "• À la fin : le <b>dernier</b> fait le <b>gage</b> voté par le vainqueur 😅, et le <b>champion</b> reçoit la <b>récompense</b> votée par le dernier 🏆.":"• At the end: the <b>last-placed player</b> does the <b>forfeit</b> voted by the winner 😅, and the <b>champion</b> gets the <b>reward</b> voted by the last-placed player 🏆.",
+  "• À la fin : le <b>dernier</b> du classement fait le <b>gage</b> choisi par le <b>vainqueur</b> 😅.":"• At the end: the <b>last</b> in the standings does the <b>forfeit</b> chosen by the <b>winner</b> 😅.",
+  "• À la fin : le <b>champion</b> reçoit la <b>récompense</b> choisie par le <b>dernier</b> 🏆.":"• At the end: the <b>champion</b> gets the <b>reward</b> chosen by the <b>last-placed player</b> 🏆.",
+  "• À la fin : le <b>dernier</b> fait le <b>gage</b> choisi par le vainqueur 😅, et le <b>champion</b> reçoit la <b>récompense</b> choisie par le dernier 🏆.":"• At the end: the <b>last-placed player</b> does the <b>forfeit</b> chosen by the winner 😅, and the <b>champion</b> gets the <b>reward</b> chosen by the last-placed player 🏆.",
   "CODE D'INVITATION":"INVITE CODE", "📋 Copier le code":"📋 Copy the code",
   "CODE DE LA LIGUE":"LEAGUE CODE",
   // — v7.67 : le gain potentiel sur l'écran de pari —
@@ -4899,19 +4906,20 @@ const EN={
      ⚠️ `check-i18n` ne pouvait PAS le voir : ces textes passent par `t(FORMULAS[k].d)`, donc un
      `t(variable)` — l'outil ne sait vérifier que les `t("texte littéral")`. Quand on modifie une
      description de formule, il faut donc reporter la clé À LA MAIN, ici. */
-  "Préparation : 24h pour voter et choisir ses bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 24h et 48h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to vote and pick your bonuses, same as Classic. Then each matchday: up to 12h to pick the matches, after which you can still change your picks until the first kick-off (at least 12h). The matches on offer kick off between 24h and 48h after the matchday starts. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
-  "Préparation : 24h pour voter et choisir ses bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 48h et 72h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to vote and pick your bonuses. Then each matchday: up to 24h to pick the matches, after which you can still change your picks until the first kick-off (at least 24h). The matches on offer kick off between 48h and 72h after the matchday starts. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
+  "Préparation : 24h pour choisir ton enjeu et tes bonus, comme en Classique. Ensuite chaque journée : jusqu'à 12h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 12h). Les matchs proposés se jouent entre 24h et 48h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to choose your stake and pick your bonuses, same as Classic. Then each matchday: up to 12h to pick the matches, after which you can still change your picks until the first kick-off (at least 12h). The matches on offer kick off between 24h and 48h after the matchday starts. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
+  "Préparation : 24h pour choisir ton enjeu et tes bonus. Ensuite chaque journée : jusqu'à 24h pour choisir les matchs, puis tu peux modifier tes pronos jusqu'au premier coup d'envoi (au moins 24h). Les matchs proposés se jouent entre 48h et 72h après le début de la journée. Parfois un peu au-delà : la fin de soirée est incluse, et si la période est creuse la fenêtre s'ouvre d'un jour ou deux pour aller chercher de belles affiches plutôt que des matchs anonymes.":"Preparation: 24h to choose your stake and pick your bonuses. Then each matchday: up to 24h to pick the matches, after which you can still change your picks until the first kick-off (at least 24h). The matches on offer kick off between 48h and 72h after the matchday starts. Sometimes a little beyond: the end of that evening is included, and in a quiet period the window opens up by a day or two to reach good fixtures rather than anonymous ones.",
   "Ce ne sont pas des horaires fixes : chaque phase démarre <b>quand la précédente est bouclée</b>. Les mises s'ouvrent dès que tous les matchs sont choisis, et la journée suivante démarre dès que les résultats sont tombés. En 📡 données réelles, la plupart des matchs se jouant en soirée, le rythme se cale sur eux et se décale donc de jour en jour.":"These aren't fixed times of day: each phase starts <b>once the previous one is wrapped up</b>. Betting opens as soon as every match has been picked, and the next matchday starts as soon as the results are in. In 📡 real-data mode, most matches being played in the evening, the rhythm follows them and therefore drifts from day to day.",
   "🚀 Tout le monde est prêt — lancement du championnat…":"🚀 Everyone's ready — starting the championship…",
   "⏳ On attend les autres joueurs — <b>{a}/{b}</b> prêts.":"⏳ Waiting for the other players — <b>{a}/{b}</b> ready.",
   "Le championnat démarre <b>tout seul</b> dès que tout le monde a validé (ou dans {a}).":"The championship starts <b>automatically</b> once everyone has confirmed (or in {a}).",
   "✅ Préparation validée":"✅ Preparation confirmed", "Ton choix et tes enchères sont enregistrés.":"Your choice and bids are saved.",
+  "✓ Ta préparation est terminée":"✓ Your preparation is done",
   "Joueurs":"Players", "IA":"AI", "✓ prêt":"✓ ready", "⏳ pas encore":"⏳ not yet", "✏️ Modifier ma préparation":"✏️ Edit my preparation",
   "🎬 Préparation":"🎬 Preparation", "Vote pour le gage <b>et</b> mise sur les bonus — sans attendre les autres.":"Vote for the forfeit <b>and</b> bid on the bonuses — without waiting for the others.",
   "👥 Joueurs de la ligue · {a}":"👥 League players · {a}", "🎭 Mon gage":"🎭 My forfeit",
   "🎭 Enjeu de la ligue":"🎭 League stakes", "🎭 Enjeu":"🎭 Stakes",
-  "🎭 Gage — au dernier":"🎭 Forfeit — for the last", "Le dernier du classement final réalise un gage voté par le vainqueur.":"The last-placed player performs a forfeit voted by the winner.",
-  "🏆 Récompense — au premier":"🏆 Reward — for the first", "Le champion reçoit une récompense votée par le dernier (aucun gage).":"The champion gets a reward voted by the last-placed player (no forfeit).",
+  "🎭 Gage — au dernier":"🎭 Forfeit — for the last", "Le dernier du classement final réalise un gage choisi par le vainqueur.":"The last-placed player performs a forfeit chosen by the winner.",
+  "🏆 Récompense — au premier":"🏆 Reward — for the first", "Le champion reçoit une récompense choisie par le dernier (aucun gage).":"The champion gets a reward chosen by the last-placed player (no forfeit).",
   "⚔️ Les deux — gage ET récompense":"⚔️ Both — forfeit AND reward",
   "Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.":"Forfeit for the last-placed player AND reward for the champion. Everyone proposes both at the preparation step.",
   "✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit.":"✏️ Each player will suggest <b>their forfeit</b> and <b>their reward</b> at the preparation step — <b>two votes</b>. 🏆 The <b>winner's</b> forfeit goes to the last-placed player, 🥄 the <b>last-placed player's</b> reward goes to the champion: whoever chooses is never the one who receives.",
@@ -4927,21 +4935,21 @@ const EN={
   "Écris le tien (max {a} car.) — réglé entre vous, l'application ne gère aucun argent.":"Write your own (max {a} chars) — settled between you, the app handles no money.",
   "Texte vide — rien n'a été enregistré.":"Empty text — nothing was saved.",
   "Gage personnalisé — réglé entre vous, hors application.":"Custom forfeit — settled between you, outside the app.",
-  "🏆 <b>Ta proposition ne s'appliquera que si tu finis 1er</b> — c'est le champion qui inflige son gage au dernier. Choisis bien le tien !":"🏆 <b>Your proposal only counts if you finish 1st</b> — the champion is the one who hands their forfeit to the last-placed player. Choose yours wisely!",
-  "🥄 <b>Ta proposition ne s'appliquera que si tu finis DERNIER</b> — c'est le dernier qui offre sa récompense au champion. Propose donc ce que tu accepterais de donner… en espérant ne pas avoir à le faire !":"🥄 <b>Your proposal only counts if you finish LAST</b> — the last-placed player is the one who hands their reward to the champion. So you're voting for what you'd be willing to give… and hoping you won't have to!",
-  "✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense votée par le <b>dernier</b> qui sera remise au champion.":"✏️ Each player can suggest <b>their own reward</b> at the preparation step. 🥄 The reward voted by the <b>last-placed player</b> is the one handed to the champion.",
+  "🏆 <b>Si tu deviens CHAMPION, c'est ce gage que tu pourras imposer au dernier.</b> Choisis-le bien !":"🏆 <b>If you become CHAMPION, this is the forfeit you'll be able to impose on the last-placed player.</b> Choose it wisely!",
+  "🥄 <b>Si tu termines DERNIER, c'est cette récompense que tu offriras au champion.</b> Écris ce que tu es prêt(e) à offrir… en espérant ne pas être toi-même dans cette position !":"🥄 <b>If you finish LAST, this is the reward you'll be giving the champion.</b> Write what you're willing to offer… while hoping you won't be the one in that spot!",
+  "✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense choisie par le <b>dernier</b> qui sera remise au champion.":"✏️ Each player can suggest <b>their own reward</b> at the preparation step. 🥄 The reward chosen by the <b>last-placed player</b> is the one handed to the champion.",
   "✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier.":"✏️ Each player can suggest <b>their own forfeit</b> at the preparation step. 🏆 The <b>winner's</b> forfeit is the one the last-placed player will do.",
   "Vote pour la récompense <b>et</b> mise sur les bonus — sans attendre les autres.":"Vote for the reward <b>and</b> bid on the bonuses — without waiting for the others.",
   "Récompense personnalisée — réglée entre vous, hors application.":"Custom reward — settled between you, outside the app.",
-  "La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :":"The <b>reward</b> handed to the champion is the one voted by the <b>last-placed player</b> 🥄 — whoever chooses is never the one who receives. Depending on who finishes last:",
+  "La <b>récompense</b> remise au champion est celle choisie par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :":"The <b>reward</b> handed to the champion is the one chosen by the <b>last-placed player</b> 🥄 — whoever chooses is never the one who receives. Depending on who finishes last:",
   "Récompense qu'il offre au champion":"Reward they hand to the champion",
   "Si… finit dernier":"If… finishes last",
-  "🏆 <b>Motivation express :</b> le champion repart avec la récompense votée par le dernier — une excellente raison de viser la <b>première</b> place !":"🏆 <b>Quick motivation:</b> the champion walks away with the reward voted by the last-placed player — a great reason to aim for <b>first</b> place!",
+  "🏆 <b>Motivation express :</b> le champion repart avec la récompense choisie par le dernier — une excellente raison de viser la <b>première</b> place !":"🏆 <b>Quick motivation:</b> the champion walks away with the reward chosen by the last-placed player — a great reason to aim for <b>first</b> place!",
   "Récompense (au premier)":"Reward (for the first)",
   "🏆 Récompense":"🏆 Reward", "{name} remporte : <b>{item}</b>.":"{name} wins: <b>{item}</b>.",
   "Gage projeté (au dernier)":"Projected forfeit (for the last)", "(choix de {a})":"({a}'s choice)", "(choisi par {a} 🏆)":"(chosen by {a} 🏆)",
   "🎭 L'enjeu du tournoi":"🎭 The tournament stakes",
-  "Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :":"The <b>forfeit</b> for the last-placed player is the one voted by the <b>winner</b> 🏆 — whoever chooses is never the one who takes it. Depending on who wins:",
+  "Le <b>gage</b> infligé au dernier est celui choisi par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :":"The <b>forfeit</b> for the last-placed player is the one chosen by the <b>winner</b> 🏆 — whoever chooses is never the one who takes it. Depending on who wins:",
   "(rien proposé)":"(nothing proposed)",
   "😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !":"😅 Aim for the win… or get ready to do the winner's forfeit if you finish last!",
   "🔒 Les choix des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).":"🔒 Other players' choices stay hidden until everyone has confirmed (results in the backstage).",
@@ -5034,7 +5042,7 @@ const EN={
   "Toi, Champion !":"You, Champion!", "🦊 Léa, Dernier":"🦊 Léa, Last place",
   "Chanter au bar 🎤":"Sing at the bar 🎤", "choisi par le vainqueur":"chosen by the winner",
   "💡 Voilà pourquoi on joue":"💡 That's why we play", "💡 L'essentiel":"💡 The key point",
-  "Le <b>dernier</b> fait un gage (voté par le vainqueur), le <b>champion</b> reçoit une récompense — réglés <b>entre vous</b>, hors application. C'est là toute la vanne. 😄":"The <b>last-placed player</b> does a forfeit (voted by the winner), the <b>champion</b> gets a reward — settled <b>between you</b>, outside the app. That's where all the fun is. 😄",
+  "Le <b>dernier</b> fait un gage (choisi par le vainqueur), le <b>champion</b> reçoit une récompense — réglés <b>entre vous</b>, hors application. C'est là toute la vanne. 😄":"The <b>last-placed player</b> does a forfeit (chosen by the winner), the <b>champion</b> gets a reward — settled <b>between you</b>, outside the app. That's where all the fun is. 😄",
   "J'ai tout vu →":"I've seen it all →",
   "Tu as tout vu !":"You've seen it all!", "Prêt à jouer pour de vrai. Deux façons de démarrer :":"Ready to play for real. Two ways to start:",
   "M'entraîner en solo":"Practise solo",
@@ -5073,7 +5081,7 @@ const EN={
   "🏆 LA RÉCOMPENSE":"🏆 THE REWARD",
   "pour le champion — {a}":"for the champion — {a}",
   "choisi par le dernier 🏆":"chosen by the last-placed player 🏆",
-  "Choisis le gage que <b>tu</b> infligerais si tu gagnes. Le dernier de la saison fera celui voté par le vainqueur.":"Choose the forfeit <b>you</b> would impose if you win. The last-placed player does the one voted by the winner.",
+  "Choisis le gage que <b>tu</b> infligerais si tu gagnes. Le dernier de la saison fera celui choisi par le vainqueur.":"Choose the forfeit <b>you</b> would impose if you win. The last-placed player does the one chosen by the winner.",
   "chaque joueur propose SON gage ; c'est celui du <b>vainqueur</b> qui s'applique au dernier.":"each player proposes THEIR forfeit; the <b>winner's</b> is the one applied to the last-placed player.",
   "Suivant : les bonus →":"Next: the bonuses →",
   "Chaque bonus revient au plus offrant (à égalité, le plus rapide). Total ≤ 40 € ; seules les mises gagnées sont retirées de tes 100 €.":"Each bonus goes to the highest bidder (on a tie, the fastest). Total ≤ €40; only winning bids are deducted from your €100.",
@@ -5152,8 +5160,8 @@ const EN={
   "Enchères enregistrées ✓":"Bids saved ✓", "Trêve terminée — la saison reprend ✓":"Truce over — the season resumes ✓",
   "trêve — prêt":"truce — ready", "trêve — enchères à faire":"truce — bids to place",
   // v8.100 — l'écran/l'étiquette « démarrage » ne doit pas s'afficher pendant la résolution de la trêve.
-  "Résolution de la trêve…":"Resolving the truce…",
-  "Attribution des bonus de mi-saison.":"Assigning the mid-season bonuses.",
+  "Attribution des bonus en cours…":"Assigning bonuses…",
+  "Les mises des joueurs sont comparées.":"Players' bids are being compared.",
   "trêve — résolution…":"truce — resolving…",
   // v8.93 — écran de révélation post-trêve et séparation aux Coulisses.
   "La trêve est terminée":"The truce is over",
@@ -6062,12 +6070,12 @@ const EN={
   "🎭 L'enjeu final":"🎭 The final stake",
   "À l'ouverture, l'organisateur choisit l'enjeu de la ligue : <b>gage</b> au dernier, <b>récompense</b> au champion, ou <b>les deux</b>.":"When opening the league, the organiser picks the stake: <b>forfeit</b> for the last-placed player, <b>reward</b> for the champion, or <b>both</b>.",
   "<b>La règle est unique : celui qui choisit n'est jamais le destinataire.</b>":"<b>One rule only: whoever chooses is never the one who receives.</b>",
-  "🎭 Le <b>gage</b> est infligé au <b>dernier</b>, et c'est le <b>vainqueur</b> qui l'a voté.":"🎭 The <b>forfeit</b> goes to the <b>last-placed player</b>, and it's the <b>winner</b> who voted for it.",
-  "🏆 La <b>récompense</b> revient au <b>champion</b>, et c'est le <b>dernier</b> qui l'a votée.":"🏆 The <b>reward</b> goes to the <b>champion</b>, and it's the <b>last-placed player</b> who voted for it.",
+  "🎭 Le <b>gage</b> est infligé au <b>dernier</b> : c'est celui que le <b>vainqueur</b> a choisi à la préparation.":"🎭 The <b>forfeit</b> goes to the <b>last-placed player</b>: it's the one the <b>winner</b> chose during preparation.",
+  "🏆 La <b>récompense</b> revient au <b>champion</b> : c'est celle que le <b>dernier</b> a choisie à la préparation.":"🏆 The <b>reward</b> goes to the <b>champion</b>: it's the one the <b>last-placed player</b> chose during preparation.",
   "<i>Pourquoi ce sens :</i> un gage n'est subi que par une personne, alors qu'une récompense est offerte par <b>tous les autres</b>. Faire choisir la récompense par celui qui la paiera évite qu'un joueur impose une dépense au groupe.":"<i>Why this way round:</i> a forfeit is borne by one person, whereas a reward is given by <b>everyone else</b>. Letting the reward be chosen by whoever will pay for it stops one player imposing a cost on the group.",
-  "Le choix a lieu à la <b>préparation</b>, avant la 1re journée : <b>personne ne sait où il finira</b>. Ta proposition est donc un pari à l'aveugle, révélée à la fin — c'est ce qui tient le suspense.":"The vote happens at the <b>preparation</b> step, before matchday 1: <b>nobody knows where they'll finish</b>. Your vote is therefore a blind wish, revealed at the end — that's what keeps the suspense.",
-  "Avec l'option premium <b>Gage sur mesure</b>, tu peux proposer <b>ton propre texte</b> (max {a} caractères) au lieu d'une option de la liste. <b>Le vote est obligatoire</b> pour valider ta préparation.":"With the premium option <b>Custom forfeit</b>, you can suggest <b>your own text</b> (max {a} characters) instead of an option from the list. <b>Voting is mandatory</b> to confirm your preparation.",
-  "Si celui du pôle n'a pas voté : on prend le choix <b>strictement majoritaire</b> ; sinon on avance depuis ce pôle (2ᵉ, 3ᵉ…) jusqu'au premier votant.":"If the player at that end didn't vote: the <b>strict majority</b> choice applies; otherwise we move along from that end (2nd, 3rd…) to the first voter.",
+  "Le choix a lieu à la <b>préparation</b>, avant la 1re journée : <b>personne ne sait où il finira</b>. Ta proposition est donc un pari à l'aveugle, révélée à la fin — c'est ce qui tient le suspense.":"The choice happens at the <b>preparation</b> step, before matchday 1: <b>nobody knows where they'll finish</b>. Your proposal is therefore a blind wish, revealed at the end — that's what keeps the suspense.",
+  "Tu écris directement ton propre texte (max {a} caractères) — le catalogue d'idées n'est là qu'en cas de panne d'inspiration. Choisir un gage (ou une récompense) est obligatoire pour valider ta préparation.":"You write your own text directly (max {a} characters) — the idea catalogue is only there if you're short on inspiration. Choosing a forfeit (or a reward) is mandatory to confirm your preparation.",
+  "Si le vainqueur (ou le dernier) n'a rien écrit à temps : on retient la proposition la plus reprise parmi les autres joueurs ; sinon on passe au suivant du classement (2ᵉ, 3ᵉ…) jusqu'au premier qui a proposé quelque chose.":"If the winner (or the last-placed player) didn't write anything in time: whichever proposal was most common among the other players is used; otherwise we move to the next in the standings (2nd, 3rd…) until we find the first who did propose something.",
   "⚠️ Gages et récompenses se règlent <b>entre vous, hors application</b> — elle ne gère aucun argent et n'encaisse rien.":"⚠️ Forfeits and rewards are settled <b>between you, outside the app</b> — it handles no money and collects nothing.",
   "🎛️ Les options de la ligue":"🎛️ League options",
   "Mode de jeu":"Game mode", "Formule de rythme":"Pace format", "Données":"Data",
@@ -6195,7 +6203,7 @@ const EN={
   "Capital final":"Final balance", "Pronos réussis":"Picks won",
   "La saison est jouée.":"The season is over.", "La revanche s'organise sur Tactizo.":"Plan your revenge on Tactizo.",
   // ⚠️ Port V2 Notifications (2026-09-06) — messages de notification navigateur, jusqu'ici en dur.
-  "Vote le gage et mise sur les bonus.":"Vote on the forfeit and bid on the bonuses.",
+  "Choisis ton gage et mise sur les bonus.":"Choose your forfeit and bid on the bonuses.",
   "👑 Match favori · Gain/perte ×2":"👑 Favourite match · Gain/loss ×2",
   // ⚠️ Port V2 Boutique (2026-09-06, boutique.html).
   "Offre globale":"All-in-one", "Toute l'expérience Tactizo. Un seul achat. 1 an.":"The whole Tactizo experience. One purchase. 1 year.",
@@ -6253,7 +6261,7 @@ const EN={
   "Budget d'enchères :":"Bidding budget:", "Répartis jusqu'à {a} entre les bonus que tu veux viser.":"Spread up to {a} across the bonuses you want.",
   "Seules tes enchères gagnantes seront réellement débitées de ton capital.":"Only your winning bids are actually taken from your capital.",
   "Bonus visés":"Targeted bonuses", "Définis d'abord l'enjeu de la ligue":"Set the league's stake first",
-  "Gage et récompense sont votés, puis débloquent la validation des enchères.":"The forfeit and reward are voted on first, which unlocks confirming your bids.",
+  "Gage et récompense sont choisis, puis débloquent la validation des enchères.":"The forfeit and reward are chosen first, which unlocks confirming your bids.",
   "{a} bonus visé{s} · {b} d'enchères":"{a} bonus targeted{s} · {b} in bids",
   "À TOI DE JOUER":"YOUR TURN", "ENCHÈRES DE TRÊVE":"TRUCE AUCTIONS", "CHOIX À FAIRE":"PICK MATCHES",
   "PRONOS À FAIRE":"BETS TO PLACE", "TRÊVE TERMINÉE":"TRUCE OVER", "SAISON DÉMARRÉE":"SEASON STARTED",
@@ -7424,7 +7432,7 @@ function myActionKey(){
 // dur en français, jamais passés par t() : un joueur en anglais les recevait en français alors que
 // le reste de l'app (dont les notifications de rachat, notifyTrades()) est bien localisé.
 function notifMsg(key){
-  if(key.indexOf("prep:")===0) return [t("🎬 Préparation"),t("Vote le gage et mise sur les bonus.")];
+  if(key.indexOf("prep:")===0) return [t("🎬 Préparation"),t("Choisis ton gage et mise sur les bonus.")];
   if(key.indexOf("sel:")===0)  return [t("🏠 À toi de jouer !"),t("Choisis les 5 matchs de la journée.")];
   if(key.indexOf("bet:")===0)  return [t("⚽ Paris ouverts"),t("À toi de faire tes pronostics !")];
   if(key.indexOf("recap:")===0) return [t("📊 Résultats dispo"),t("Les résultats de la journée sont là.")];
@@ -9259,9 +9267,9 @@ function statusLabel(lg){ const s=lg&&lg.status;
 // récompense, et incomplet en mode combiné.
 function howItWorksHTML(){
    const fin = !L ? t("• À la fin : le <b>vainqueur</b> remporte une <b>récompense</b> 🏆. <span class=\"muted\">(Selon les ligues, le <b>dernier</b> peut aussi devoir un <b>gage</b> 😅.)</span>")
-     : isBoth() ? t("• À la fin : le <b>dernier</b> fait le <b>gage</b> voté par le vainqueur 😅, et le <b>champion</b> reçoit la <b>récompense</b> votée par le dernier 🏆.")
-     : (isReward() ? t("• À la fin : le <b>champion</b> reçoit la <b>récompense</b> votée par le <b>dernier</b> 🏆.")
-                   : t("• À la fin : le <b>dernier</b> du classement fait le <b>gage</b> voté par le <b>vainqueur</b> 😅. <span class=\"muted\">(Une <b>récompense</b> pour le champion est aussi possible selon les ligues 🏆.)</span>"));
+     : isBoth() ? t("• À la fin : le <b>dernier</b> fait le <b>gage</b> choisi par le vainqueur 😅, et le <b>champion</b> reçoit la <b>récompense</b> choisie par le dernier 🏆.")
+     : (isReward() ? t("• À la fin : le <b>champion</b> reçoit la <b>récompense</b> choisie par le <b>dernier</b> 🏆.")
+                   : t("• À la fin : le <b>dernier</b> du classement fait le <b>gage</b> choisi par le <b>vainqueur</b> 😅. <span class=\"muted\">(Une <b>récompense</b> pour le champion est aussi possible selon les ligues 🏆.)</span>"));
    return `<div class="box" style="border-left:3px solid var(--blue)"><b class="mini">${t("💡 Comment ça marche ?")}</b>
    <div class="mini muted" style="margin-top:5px;line-height:1.7">${t("Championnat de pronos entre amis — tu démarres avec <b>100 € virtuels</b>.")}<br>
    ${t("• <b>🃏 Bonus = le nerf de la stratégie</b> : bien joués, ils peuvent <b>renverser une journée</b> — tripler un gain, <b>siphonner</b> l'adversaire, lui <b>voler</b> un bonus, amortir une perte… Tu les remportes aux <b>enchères</b> (mise en aveugle, jusqu'à <b>{a} €</b> ; ce que tu gagnes est retiré de tes 100 €).",{a:SHOP_CAP})}<br>
@@ -9851,8 +9859,8 @@ function viewCreate(){
   } else if(createStep===3){
     eyebrow=t("Étape 3 sur 3"); title=t("Pimente ta ligue"); sub=t("L'enjeu qui donne envie de gagner (ou de ne pas perdre).");
     body = !solo ? `<div class="a2-sec-title">${t("Enjeu")}</div>
-        ${opt(g.enjeu==='gage',false,"setNew('enjeu','gage')",'<img src="img/enjeu-gage.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Gage"),t("Le dernier du classement final réalise un gage voté par le vainqueur."))}
-        ${opt(g.enjeu==='reward',false,"setNew('enjeu','reward')",'<img src="img/enjeu-recompense.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Récompense"),t("Le champion reçoit une récompense votée par le dernier (aucun gage)."))}
+        ${opt(g.enjeu==='gage',false,"setNew('enjeu','gage')",'<img src="img/enjeu-gage.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Gage"),t("Le dernier du classement final réalise un gage choisi par le vainqueur."))}
+        ${opt(g.enjeu==='reward',false,"setNew('enjeu','reward')",'<img src="img/enjeu-recompense.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Récompense"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."))}
         ${opt(g.enjeu==='both',false,"setNew('enjeu','both')",'⚔️',t("Gage + Récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."))}`
       : `<div class="a2-note"><span>${t("🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça.")}</span></div>`;
     body+=`<div class="a2-sec-title">${t("🃏 Enchères de bonus")}${secInfo('treve')}</div>
@@ -10132,10 +10140,10 @@ function viewGame(){
   if(L.status==="truce") return viewTreve();
   // v8.319 : le dernier à avoir enchéri attend son propre clic sur `revealGate` (cf. saveTreve) —
   // même contenu que l'attente de "starting" juste en dessous, pour ne rien laisser deviner.
-  if(awaitingTreveReveal) return `<div class="box" style="text-align:center"><div style="font-size:30px">🔄</div><b>${t("Résolution de la trêve…")}</b><div class="mini muted" style="margin-top:6px">${t("Attribution des bonus de mi-saison.")}</div></div>`;
+  if(awaitingTreveReveal) return `<div class="box" style="text-align:center"><div class="tr-spinner"></div><b>${t("Attribution des bonus en cours…")}</b><div class="mini muted" style="margin-top:6px">${t("Les mises des joueurs sont comparées.")}</div></div>`;
   if(!treveResultSeen()) return viewTreveSummary();
   if(L.status==="starting") return treveEnResolution(L)
-    ? `<div class="box" style="text-align:center"><div style="font-size:30px">🔄</div><b>${t("Résolution de la trêve…")}</b><div class="mini muted" style="margin-top:6px">${t("Attribution des bonus de mi-saison.")}</div></div>`
+    ? `<div class="box" style="text-align:center"><div class="tr-spinner"></div><b>${t("Attribution des bonus en cours…")}</b><div class="mini muted" style="margin-top:6px">${t("Les mises des joueurs sont comparées.")}</div></div>`
     : `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
   if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">⚙️</div><b>Résolution de la journée…</b><div class="mini muted" style="margin-top:6px">Calcul des gains en cours.</div></div>`;
   // Ligue terminée → l'onglet Pronos annonce la fin de saison et RENVOIE au bilan (v7.23, demandé par
@@ -10281,8 +10289,8 @@ function enjeuTableHTML(r){
   // un gage/une récompense qui n'existent pas (signalé par Hervé, ligue 33K2E).
   const anyVote = hs.some(p=>gOf(p).txt!=null);
   if(!anyVote) return `<div class="enjeu-votes" style="margin-bottom:8px"><div class="lead">${rew
-    ? t("🏆 <b>Récompense :</b> personne n'a voté de récompense à temps — il n'y en aura pas cette saison. On joue pour la gloire du classement !")
-    : t("🎭 <b>Gage :</b> personne n'a voté de gage à temps — pas de gage cette saison. On joue pour l'honneur… et la <b>première place</b> !")}</div></div>`;
+    ? t("🏆 <b>Récompense :</b> personne n'a proposé de récompense à temps — il n'y en aura pas cette saison. On joue pour la gloire du classement !")
+    : t("🎭 <b>Gage :</b> personne n'a proposé de gage à temps — pas de gage cette saison. On joue pour l'honneur… et la <b>première place</b> !")}</div></div>`;
   // Tableau compact QUEL QUE SOIT l'effectif (choix d'Hervé après l'avoir vu à 8 joueurs). Il y
   // avait auparavant deux présentations — blocs empilés jusqu'à 5 joueurs, tableau au-delà — mais
   // le tableau se lit mieux dans tous les cas, et une seule mise en page vaut mieux que deux à
@@ -10290,9 +10298,9 @@ function enjeuTableHTML(r){
   const corps = `<div style="overflow-x:auto"><table class="vote-table">
         <tr><th>${rew?t("Si… finit dernier"):t("Si… gagne")}</th><th>${rew?t("Récompense qu'il offre au champion"):t("Gage infligé au dernier")}</th></tr>
         ${hs.map(p=>{ const g=gOf(p); return `<tr><td class="pname"><span>${avaName(p)}</span></td><td class="gage${g.perso?' custom':''}">${lbl(g)}</td></tr>`; }).join("")}</table></div>`;
-  return `<div class="enjeu-votes" style="margin-bottom:8px"><div class="lead">${rew?t("La <b>récompense</b> remise au champion est celle votée par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :"):t("Le <b>gage</b> infligé au dernier est celui voté par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :")}</div>
+  return `<div class="enjeu-votes" style="margin-bottom:8px"><div class="lead">${rew?t("La <b>récompense</b> remise au champion est celle choisie par le <b>dernier</b> 🥄 — celui qui choisit n'est jamais celui qui reçoit. Selon qui finit dernier :"):t("Le <b>gage</b> infligé au dernier est celui choisi par le <b>vainqueur</b> 🏆 — celui qui choisit n'est jamais celui qui subit. Selon qui gagne :")}</div>
      ${corps}
-     <div class="enjeu-note">${rew?t("🏆 <b>Motivation express :</b> le champion repart avec la récompense votée par le dernier — une excellente raison de viser la <b>première</b> place !"):t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`;
+     <div class="enjeu-note">${rew?t("🏆 <b>Motivation express :</b> le champion repart avec la récompense choisie par le dernier — une excellente raison de viser la <b>première</b> place !"):t("😅 Vise la victoire… ou prépare-toi à faire le gage du gagnant si tu finis dernier !")}</div></div>`;
 }
 /* ⚠️ v8.93 — RENDU D'UN TOUR D'ENCHÈRES, FACTORISÉ. Jusqu'ici ce bloc n'existait que dans
    `prepSummaryBody()`, pour le tour du départ. La trêve en rejoue un second, identique dans sa
@@ -10348,8 +10356,8 @@ function prepSummaryBody(){
   // ⚠️ ENJEU_INFO reprend le catalogue de viewCreate() (même clés t(), texte identique) pour le
   // résumé "⚔️ Les deux — gage ET récompense" façon maquette — pas un nouveau texte, juste sa
   // relecture ici en plus de l'écran de création.
-  const ENJEU_INFO={gage:[t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage voté par le vainqueur.")],
-    reward:[t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense votée par le dernier (aucun gage).")],
+  const ENJEU_INFO={gage:[t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],
+    reward:[t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage).")],
     both:[t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]}[s.enjeu];
   return `${isSolo()?'':`<div class="listsec">${t("🎭 L'enjeu du tournoi")}</div>
    ${ENJEU_INFO?`<div class="enjeu-box"><div><div class="name">${ENJEU_INFO[0]}</div><div class="desc">${ENJEU_INFO[1]}</div></div></div>`:''}
@@ -10676,8 +10684,8 @@ function viewLobby(){
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     ${solo?soloFormatHTML(org):`<h2>${t("🎭 Enjeu de la ligue")}</h2>
-    ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage voté par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense votée par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
-    <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense votée par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>`}
+    ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense choisie par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>`}
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?((solo?t("Lancer la partie solo"):t("Clôturer les inscriptions"))+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 1 joueur")}</button>
         <div class="mini muted" style="text-align:center;margin-top:8px">${solo?t("Tu joues <b>seul contre l'IA</b>. Tu peux encore inviter des amis avec le code <b>{a}</b> — dès qu'un deuxième joueur rejoint, la partie redevient normale (avec gage/récompense).",{a:esc(L.code)}):t("Tu es l'organisateur : tu peux <b>retirer</b> un joueur ci-dessus, ou en <b>ajouter</b> en partageant le code <b>{a}</b>. Clôture quand le nombre te convient — ensuite : choix du gage + enchères, puis le championnat démarre.",{a:esc(L.code)})}</div>`
@@ -11066,7 +11074,7 @@ function voteSectionHTML(r){
   // automatique au fur et à mesure (voir scheduleEnjeuSave()/flushEnjeuSave() ci-dessous), pour que
   // le seul CTA de l'écran reste "Passer aux enchères →" (déjà dans `foot`, prepGagesTab()).
   return `<h2 style="display:flex;align-items:center;gap:8px"><img src="img/${rw?'enjeu-recompense':'enjeu-gage'}.png" alt="" style="width:28px;height:28px;object-fit:contain;flex:0 0 auto">${rw?t("Ta récompense"):t("Ton gage")}</h2>
-   <div class="mini muted" style="margin:-4px 0 10px">${t("🔒 Les choix des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).")} ${rw?t("🥄 <b>Ta proposition ne s'appliquera que si tu finis DERNIER</b> — c'est le dernier qui offre sa récompense au champion. Propose donc ce que tu accepterais de donner… en espérant ne pas avoir à le faire !"):t("🏆 <b>Ta proposition ne s'appliquera que si tu finis 1er</b> — c'est le champion qui inflige son gage au dernier. Choisis bien le tien !")}</div>
+   <div class="mini muted" style="margin:-4px 0 10px">${t("🔒 Les choix des autres restent masqués jusqu'à ce que tout le monde ait validé (résultats dans les coulisses).")} ${rw?t("🥄 <b>Si tu termines DERNIER, c'est cette récompense que tu offriras au champion.</b> Écris ce que tu es prêt(e) à offrir… en espérant ne pas être toi-même dans cette position !"):t("🏆 <b>Si tu deviens CHAMPION, c'est ce gage que tu pourras imposer au dernier.</b> Choisis-le bien !")}</div>
    <div class="box">
      <div class="a2-field" style="margin-bottom:0">
        <input type="text" id="${inputId}" maxlength="${CUSTOM_MAX}" placeholder="${rw?t("Écris la récompense du champion…"):t("Écris le gage du dernier…")}" value="${esc(prefill)}"
@@ -11444,7 +11452,7 @@ function paramInfo(kind){
   if(kind==='formula'){ const f=leagueFormula(); emoji="⏱️"; title=t(f.n); body=t(f.d)+"<br><br>"+t("💡 La vitesse (classique / fast) est le <b>seul</b> réglage que l'organisateur pourra encore changer, en cours de partie."); }
   else if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=modeDesc(getMode(),isSolo()); }
   else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."); }
-  else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur.")); }
+  else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")); }
   else if(kind==='solo'){ emoji="🤖"; const one=(o.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
   else if(kind==='treve'){ emoji="🃏";
     title = hasTreve()?t("Enchères au départ et à la trêve"):t("Enchères au départ seulement");
@@ -11691,7 +11699,7 @@ function viewEncheresA2(){
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards; const miss=votesManquants(); const noVote=miss.length>0;
   const lockHTML = noVote ? `<div class="a2-enc-lock"><div class="a2-enc-lock-title">${t("Définis d'abord l'enjeu de la ligue")}</div>
-    <div class="a2-enc-lock-note">${t("Gage et récompense sont votés, puis débloquent la validation des enchères.")}</div></div>` : '';
+    <div class="a2-enc-lock-note">${t("Gage et récompense sont choisis, puis débloquent la validation des enchères.")}</div></div>` : '';
   const modeInfo=MODES[getMode()];
   const btn = (meP.shop_done && bidsSame(bidL, prepState().bids[S.myId]||{}))
     ? `<button class="btn ghost" id="prepValidate" disabled>${t("✅ Préparation validée")}</button><div class="mini muted" style="text-align:center;margin-top:5px">${t("Modifie une enchère (ou ton choix) pour la re-valider.")}</div>`
@@ -11805,13 +11813,21 @@ function votesManquants(){ if(isSolo()) return []; // solo : aucun vote requis (
   return m; }
 async function savePrep(){ if(busy)return;
   const miss=votesManquants(); // vote(s) obligatoire(s) — sécurité, en plus du bouton désactivé
-  if(miss.length){ toast(t(miss[0]==="reward"?"Vote d'abord pour une récompense.":"Vote d'abord pour un gage.")); return; }
+  if(miss.length){ toast(t(miss[0]==="reward"?"Choisis d'abord une récompense.":"Choisis d'abord un gage.")); return; }
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(x=>+x>0).length; const maxCards=maxBonusJoueur();   // v8.33 : borné par les bonus réellement offerts
   if(tot>SHOP_CAP||cnt>maxCards) return; busy=true;
   try{ const fresh=await q(db.from("leagues").select("gage").eq("id",L.id).single()); let st; try{st=JSON.parse(fresh.gage);}catch(e){st=null;} if(!st||!Array.isArray(st.options)){busy=false;return;}
     st.bids=st.bids||{}; st.bidTs=st.bidTs||{}; st.bids[S.myId]=Object.assign({},bidL); if(st.bidTs[S.myId]==null) st.bidTs[S.myId]=Date.now();
     await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id));
-    await q(db.from("players").update({shop_done:true}).eq("id",S.myId)); S.bidLLeague=null; await refresh();
+    await q(db.from("players").update({shop_done:true}).eq("id",S.myId)); S.bidLLeague=null;
+    // ⚠️ QA (2026-09-08, point 1, demandé par Hervé, test réel Entre amis) — AVANT : le joueur restait
+    // sur cet écran d'enchères une fois validé (bouton passé en "✅ Préparation validée" mais rien
+    // d'autre à y faire), donnant l'impression qu'il manquait une étape. `viewPrepHub()` répond déjà
+    // exactement au besoin (mon statut/celui des autres/ce qu'il reste avant le départ, via
+    // `readyBanner`/`prepRosterHTML()`, différencié organisateur/joueur) — il ne manquait que d'y
+    // renvoyer après une validation réussie, au lieu de laisser `S.ptab` sur "encheres".
+    S.ptab="infos"; toast(t("✓ Ta préparation est terminée"));
+    await refresh();
   }catch(e){ showErr("Préparation : "+e.message); } busy=false; }
 // Organisateur : clôturer la préparation sans attendre la deadline (24 h). On recule simplement
 // l'échéance stockée dans le JSON `gage` → refresh déclenche resolvePrep (allDone || dlPassed).
@@ -16389,7 +16405,7 @@ function showLeagueInfo(lid){
     ${solo
       ? row(t("🤖 Format"), soloAR===1?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"), t("Partie en solo contre l'IA : pas de gage ni de récompense, il faut au moins deux humains pour ça."))
       : row(t("🎭 Enjeu"), both?t("Gage + récompense"):(rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)")),
-      both?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(rew?t("Le champion reçoit une récompense votée par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage voté par le vainqueur.")))}
+      both?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(rew?t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")))}
     ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"), real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."))}
     ${/* ⚠️ v8.85 (demandé par Hervé) — LES ENCHÈRES FIGURENT DANS LES CARACTÉRISTIQUES. C'est un
          réglage figé au même titre que le mode ou l'enjeu, et il change la façon de jouer toute
@@ -19143,12 +19159,12 @@ function viewRulesFull(){
 
    ${sec(t("🎭 L'enjeu final"), `${t("À l'ouverture, l'organisateur choisit l'enjeu de la ligue : <b>gage</b> au dernier, <b>récompense</b> au champion, ou <b>les deux</b>.")}<br>
      ${t("<b>La règle est unique : celui qui choisit n'est jamais le destinataire.</b>")}<br>
-     ${t("🎭 Le <b>gage</b> est infligé au <b>dernier</b>, et c'est le <b>vainqueur</b> qui l'a voté.")}<br>
-     ${t("🏆 La <b>récompense</b> revient au <b>champion</b>, et c'est le <b>dernier</b> qui l'a votée.")}<br>
+     ${t("🎭 Le <b>gage</b> est infligé au <b>dernier</b> : c'est celui que le <b>vainqueur</b> a choisi à la préparation.")}<br>
+     ${t("🏆 La <b>récompense</b> revient au <b>champion</b> : c'est celle que le <b>dernier</b> a choisie à la préparation.")}<br>
      ${t("<i>Pourquoi ce sens :</i> un gage n'est subi que par une personne, alors qu'une récompense est offerte par <b>tous les autres</b>. Faire choisir la récompense par celui qui la paiera évite qu'un joueur impose une dépense au groupe.")}<br>
      ${t("Le choix a lieu à la <b>préparation</b>, avant la 1re journée : <b>personne ne sait où il finira</b>. Ta proposition est donc un pari à l'aveugle, révélée à la fin — c'est ce qui tient le suspense.")}<br>
-     ${t("Avec l'option premium <b>Gage sur mesure</b>, tu peux proposer <b>ton propre texte</b> (max {a} caractères) au lieu d'une option de la liste. <b>Le vote est obligatoire</b> pour valider ta préparation.",{a:CUSTOM_MAX})}<br>
-     ${t("Si celui du pôle n'a pas voté : on prend le choix <b>strictement majoritaire</b> ; sinon on avance depuis ce pôle (2ᵉ, 3ᵉ…) jusqu'au premier votant.")}<br>
+     ${t("Tu écris directement ton propre texte (max {a} caractères) — le catalogue d'idées n'est là qu'en cas de panne d'inspiration. Choisir un gage (ou une récompense) est obligatoire pour valider ta préparation.",{a:CUSTOM_MAX})}<br>
+     ${t("Si le vainqueur (ou le dernier) n'a rien écrit à temps : on retient la proposition la plus reprise parmi les autres joueurs ; sinon on passe au suivant du classement (2ᵉ, 3ᵉ…) jusqu'au premier qui a proposé quelque chose.")}<br>
      ${t("⚠️ Gages et récompenses se règlent <b>entre vous, hors application</b> — elle ne gère aucun argent et n'encaisse rien.")}`)}
 
    ${sec(t("🎛️ Les options de la ligue"), `<div class="smalllbl">${t("Mode de jeu")}</div>
