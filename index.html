@@ -1051,6 +1051,27 @@
      rognage en dimensionnant par la HAUTEUR seule (largeur automatique, même principe que
      `.a2-hero-maestro-img` déjà utilisé ailleurs dans l'app pour ces mêmes assets). */
   #t2Wrap .t2-intro-maestro{display:block;height:92px;width:auto;margin:0 auto 8px;}
+  /* ⚠️ v8.404 — retour vidéo (Hervé) : `qg-tactizo-classement-champion.png` (Étape 6 + écran
+     final) contient un cadre néon PEINT DANS L'IMAGE, laissé vide — donnait l'impression d'un
+     contenu manquant. Coordonnées du cadre mesurées au pixel (PIL) sur le PNG source 384×384 :
+     247,62 → 369,202, soit gauche 64 % / haut 16 % / droite 4 % / bas 47 % du canevas — même
+     principe que `.a2-maestro-pronos-box` (déjà dans l'app pour les cartes Pronos du QG) : texte
+     réel en HTML/CSS positionné en POURCENTAGE sur l'image, jamais peint, et qui reste donc
+     juste si l'image est un jour changée de taille. */
+  #t2Wrap .t2-maestro-box{position:relative;margin:0 auto;}
+  #t2Wrap .t2-maestro-box.champ{width:170px;height:170px;}
+  #t2Wrap .t2-maestro-box.xl{width:220px;height:220px;}
+  #t2Wrap .t2-maestro-box .t2-maestro{margin:0;}
+  #t2Wrap .t2-maestro-frame{position:absolute;left:64%;top:16%;right:4%;bottom:47%;
+    display:flex;align-items:center;justify-content:center;text-align:center;padding:4%;
+    opacity:0;transition:opacity .4s;pointer-events:none;}
+  #t2Wrap .t2-maestro-frame.vu{opacity:1;}
+  #t2Wrap .t2-maestro-frame span{font-size:7.5px;font-weight:700;line-height:1.22;color:#dcffd2;
+    text-shadow:0 1px 3px rgba(0,0,0,.9);}
+  /* v8.404 — écran final : phrase plus longue que celle de l'Étape 6 dans le même cadre 220 px ;
+     interligne resserré + taille mesurée pour tenir sans déborder (vérifié via scrollHeight). */
+  #t2Wrap .t2-maestro-box.xl .t2-maestro-frame span{font-size:7.75px;line-height:1.08;}
+  #t2Wrap .t2-maestro-frame span b{color:var(--a2-brass-light);}
   #t2Wrap .t2-aside{max-width:300px;width:100%;margin:14px auto 0;border:1.5px dashed var(--a2-border);
     border-radius:14px;padding:12px 14px;opacity:0;transform:translateY(8px);
     transition:opacity .35s,transform .35s;}
@@ -2466,7 +2487,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.403";
+const APP_VERSION = "v8.404";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4353,6 +4374,8 @@ const EN={
   "S'il perd":"If it loses",
   "Avec Assurance":"With Assurance",
   "Certains bonus peuvent aussi agir sur ton adversaire.":"Some bonuses can also affect your opponent.",
+  // ── v8.404 — retour vidéo (Hervé) : cadre néon peint (Étape 6 + écran final), resté vide ──
+  "Bravo ! Tu termines la saison au sommet.":"Congratulations! You finish the season on top.",
   "Les bonus disponibles dépendent des options de ta ligue.":"Available bonuses depend on your league's options.",
   "Pronostique, mise et utilise ta stratégie pour devenir champion.":"Predict, stake, and use strategy to become champion.",
   "Le meilleur NET remporte le face-à-face.":"The best NET wins the head-to-head.",
@@ -19261,11 +19284,16 @@ function t2RankRows(list){
 
 /* ⚠️ v8.403 — le Maestro (agrandi, `.champ` 170 px) est désormais placé AU-DESSUS du classement
    dans le DOM et ne le masque plus jamais : les deux restent visibles ensemble au moment
-   CHAMPION, au lieu de faire disparaître le classement pour le remplacer par le Maestro. */
+   CHAMPION, au lieu de faire disparaître le classement pour le remplacer par le Maestro.
+   ⚠️ v8.404 — retour vidéo (Hervé) : le cadre néon peint dans l'image reçoit son propre texte
+   (`.t2-maestro-frame`, cf. commentaire CSS) révélé au même instant que le Maestro lui-même. */
 function t2Step6Html(){ return `<div class="t2-stage">
   <div class="t2-dots" id="t2S6days" style="max-width:220px;margin:0 auto 10px">
     ${[0,1,2,3].map(k=>`<div class="t2-dot" id="t2S6d${k}"><i></i></div>`).join("")}</div>
-  <img class="t2-maestro champ" id="t2S6maestro" style="display:none" src="img/qg-tactizo-classement-champion.png" alt="${t("Le Maestro")}">
+  <div class="t2-maestro-box champ" id="t2S6maestroBox" style="display:none">
+    <img class="t2-maestro champ" id="t2S6maestro" src="img/qg-tactizo-classement-champion.png" alt="${t("Le Maestro")}">
+    <div class="t2-maestro-frame" id="t2S6frame"><span>${t("Bravo ! Tu termines la saison au sommet.")}</span></div>
+  </div>
   <div class="t2-rank" id="t2S6rank"></div>
   <div class="t2-aside" id="t2S6aside" style="display:none">
     <span class="t2-chip">${t("Entre amis")}</span>
@@ -19284,7 +19312,9 @@ function t2Play6(){
     t2Q("#t2S6rank").innerHTML=t2RankRows(day.slice().sort((a,b)=>b.pts-a.pts)); }));
   t2At(4700,()=>{ t2Q("#t2S6days").style.display="none";
     t2Q("#t2S6cap").textContent="🏆 "+t("CHAMPION"); t2Q("#t2S6cap").classList.add("vu");
-    const m=t2Q("#t2S6maestro"); m.style.display="block"; requestAnimationFrame(()=>m.classList.add("vu")); });
+    const box=t2Q("#t2S6maestroBox"); box.style.display="block";
+    const m=t2Q("#t2S6maestro"), fr=t2Q("#t2S6frame");
+    requestAnimationFrame(()=>{ m.classList.add("vu"); fr.classList.add("vu"); }); });
   t2At(6400,()=>{ const a=t2Q("#t2S6aside"); a.style.display="block"; requestAnimationFrame(()=>a.classList.add("vu")); });
 }
 
@@ -19302,10 +19332,17 @@ function t2Play6(){
    décentré et partiellement coupé. Remplacé par `qg-tactizo-classement-champion.png` (même
    asset déjà utilisé par le Champion de l'Étape 6, cf. `t2Step6Html()`) : 384×384 parfaitement
    carré, donc AUCUN rognage dans le cadre `.t2-maestro.xl`, et c'est une vraie scène illustrée
-   avec décor (salle des trophées) plutôt qu'une découpe flottante sur fond vide. */
+   avec décor (salle des trophées) plutôt qu'une découpe flottante sur fond vide.
+   ⚠️ v8.404 — retour vidéo (Hervé) : le même asset a aussi un cadre néon peint, resté vide —
+   reçoit désormais le même texte que `.t2-bubble` ci-dessous (cf. commentaire CSS
+   `.t2-maestro-frame`) ; la bulle en dessous n'est pas retirée, elle reste la version pleinement
+   lisible du même message. */
 function t2FinalHtml(){ return `<div class="t2-stage">
   <div class="t2-final">
-    <img class="t2-maestro xl vu" src="img/qg-tactizo-classement-champion.png" alt="${t("Le Maestro")}">
+    <div class="t2-maestro-box xl">
+      <img class="t2-maestro xl vu" src="img/qg-tactizo-classement-champion.png" alt="${t("Le Maestro")}">
+      <div class="t2-maestro-frame vu"><span><b>${t("À toi de jouer")}.</b> ${t("Pronostique, mise et utilise ta stratégie pour devenir champion.")}</span></div>
+    </div>
     <div class="t2-bubble vu"><b>${t("À toi de jouer")}.</b> ${t("Pronostique, mise et utilise ta stratégie pour devenir champion.")}</div>
     <div class="t2-cap vu" style="margin-top:16px">${t("Les pronostics font gagner les matchs.")}</div>
     <div class="t2-sub vu">${t("La stratégie fait gagner le championnat.")}</div>
