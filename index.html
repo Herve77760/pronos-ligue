@@ -1492,40 +1492,38 @@
   .a2-maestro-mood-chip.tier-4{background:var(--mm-tier-4-dim);color:var(--mm-tier-4-ink);border:1px solid rgba(199,217,74,.45)}
   .a2-maestro-mood-chip.tier-5{background:var(--mm-tier-5-dim);color:var(--mm-tier-5-ink);border:1px solid rgba(123,216,143,.45)}
   .a2-maestro-mood-chip.tier-6{background:var(--mm-tier-6-dim);color:var(--mm-tier-6-ink);border:1px solid rgba(63,202,133,.45)}
-  /* v8.393 — voyants dynamiques du QG (Forme/Classement/Stratégie/Gestion), superposés sur les
-     4 emplacements neutres peints dans les 6 illustrations Maestro (panneau de droite, mesuré par
-     pixel comme la bulle ci-dessus). Le palier 3 a sa propre pose (et ses propres dimensions
-     source, recadrées par object-fit:cover) donc ses propres coordonnées, même principe que
-     --mm-qb-l3 pour la bulle. Le libellé texte, trop étroit pour tenir DANS le panneau peint,
-     vit dans une légende juste sous la carte plutôt que d'être écrasé à 4 caractères. */
-  .a2-qg-status-dot{position:absolute;width:4.1%;aspect-ratio:1;left:83.1%;
-    border-radius:50%;transform:translate(-50%,-50%);z-index:3;pointer-events:none;
-    box-shadow:0 0 0 1px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.5)}
-  .a2-maestro-mood.tier-3 .a2-qg-status-dot{left:83.6%}
-  .a2-qg-status-dot:nth-of-type(1){top:19.4%} .a2-qg-status-dot:nth-of-type(2){top:28.3%}
-  .a2-qg-status-dot:nth-of-type(3){top:37.0%} .a2-qg-status-dot:nth-of-type(4){top:45.9%}
-  .a2-maestro-mood.tier-3 .a2-qg-status-dot:nth-of-type(1){top:11.4%}
-  .a2-maestro-mood.tier-3 .a2-qg-status-dot:nth-of-type(2){top:21.4%}
-  .a2-maestro-mood.tier-3 .a2-qg-status-dot:nth-of-type(3){top:31.4%}
-  .a2-maestro-mood.tier-3 .a2-qg-status-dot:nth-of-type(4){top:41.3%}
-  .a2-qg-status-dot.qs-green{background:radial-gradient(circle at 35% 30%,#8ff2b4,var(--green))}
-  .a2-qg-status-dot.qs-orange{background:radial-gradient(circle at 35% 30%,#ffd27a,#e0942e)}
-  .a2-qg-status-dot.qs-red{background:radial-gradient(circle at 35% 30%,#ff9a8f,var(--red))}
-  .a2-qg-status-dot.qs-gray{background:radial-gradient(circle at 35% 30%,#9ba2b0,#5a6072)}
-  .a2-qg-status-legend{display:flex;justify-content:space-between;gap:2px;padding:9px 6px 2px}
-  .a2-qg-status-title{font-size:9.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;
-    color:var(--muted);text-align:center;padding:0 6px 5px}
-  .a2-qg-status-item{position:relative;display:flex;flex-direction:column;align-items:center;gap:3px;
-    flex:1;min-width:0;background:none;border:none;font:inherit;color:inherit;cursor:pointer;padding:5px 2px}
-  .a2-qg-status-item::before{content:'';position:absolute;top:50%;left:50%;width:100%;height:44px;
-    min-width:44px;transform:translate(-50%,-50%)}
-  .a2-qg-status-item .qs-led{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
-  .a2-qg-status-item .qs-led.qs-green{background:var(--green)}
-  .a2-qg-status-item .qs-led.qs-orange{background:#e0942e}
-  .a2-qg-status-item .qs-led.qs-red{background:var(--red)}
-  .a2-qg-status-item .qs-led.qs-gray{background:#7d8496}
-  .a2-qg-status-item span.lbl{font-size:10.5px;font-weight:600;white-space:nowrap;overflow:hidden;
-    text-overflow:ellipsis;max-width:100%;color:var(--ink)}
+  /* v8.395 — voyants dynamiques du QG (Forme/Classement/Stratégie/Gestion), superposés sur les 4
+     cercles gris peints dans les 6 illustrations Maestro. ⚠️ Deux correctifs successifs (2026-09-09,
+     signalés par Hervé) :
+     1) la v8.393 supposait à tort que t1/t2/t4/t5/t6 partageaient les mêmes coordonnées (vu
+        "identiques" à l'œil) — une mesure par transformée de Hough sur les 6 PNG réels a montré des
+        écarts réels de 0,5 à 2,5% selon le palier. Coordonnées et diamètre sont désormais mesurés
+        et injectés PAR PALIER (QG_DOT_GEOM, JS) — le palier 3 (pose différente, object-fit:cover,
+        déjà transformé dans QG_DOT_GEOM) n'est plus un cas "spécial", juste un jeu de coordonnées.
+     2) la v8.394 groupait libellé+pastille dans un même bouton flex à largeur "auto" (shrink-to-fit)
+        et donnait à la pastille une LARGEUR EN % — un enfant flex avec width:% dans un conteneur qui
+        se dimensionne lui-même sur SON contenu est un cycle que les navigateurs ne résolvent pas
+        (la pastille rendait ~1-2px au lieu de ~4% de l'image). Le libellé ET la pastille sont donc
+        maintenant DEUX éléments positionnés indépendamment (chacun en % de .a2-maestro-mood-body,
+        qui a toujours une largeur déterminée) : la pastille exactement comme avant (centrée sur le
+        cercle mesuré), le libellé ancré par son bord DROIT juste avant le bord gauche de la pastille
+        (right calc(%+px), largeur naturelle du texte, jamais de largeur en % d'un parent auto). */
+  .a2-qg-dot{position:absolute;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%);
+    z-index:3;pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.5)}
+  .a2-qg-dot.qs-green{background:radial-gradient(circle at 35% 30%,#8ff2b4,var(--green))}
+  .a2-qg-dot.qs-orange{background:radial-gradient(circle at 35% 30%,#ffd27a,#e0942e)}
+  .a2-qg-dot.qs-red{background:radial-gradient(circle at 35% 30%,#ff9a8f,var(--red))}
+  .a2-qg-dot.qs-gray{background:radial-gradient(circle at 35% 30%,#9ba2b0,#5a6072)}
+  .a2-qg-row{position:absolute;transform:translateY(-50%);z-index:3;background:none;border:none;
+    font:inherit;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;
+    display:block;white-space:nowrap}
+  .a2-qg-row::before{content:'';position:absolute;top:50%;right:-22px;width:calc(100% + 44px);
+    height:30px;transform:translateY(-50%)}
+  .a2-qg-row-label{display:block;font-size:10.5px;font-weight:700;color:#f4f7fc;white-space:nowrap;
+    text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 3px rgba(0,0,0,.9),0 0 7px rgba(0,0,0,.65)}
+  .a2-qg-title{position:absolute;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
+    text-align:right;color:#e9ecf4;text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 7px rgba(0,0,0,.65);
+    z-index:3;pointer-events:none;white-space:nowrap}
   /* ⚠️ Correctif régression iPhone (2026-09-06) — hero "Pronos validés" (pronos-valides.html),
      REFAIT : la première version réutilisait .a2-hero-card (aspect-ratio:5/4 + object-position:
      100% = cadré sur le bord DROIT de l'image), pensé pour d'autres assets où le Maestro occupe le
@@ -2403,7 +2401,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.394";
+const APP_VERSION = "v8.395";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4184,9 +4182,9 @@ const EN={
   // === Voyants dynamiques du QG (v8.393) ===
   "TON ÉTAT":"YOUR STATUS",
   "Forme":"Form",
-  // "Classement" a déjà sa traduction ("Standings", onglet du bas) — pas de doublon ici, réutilisée telle quelle.
+  // "Classement"/"Gestion" gardent leur traduction existante ailleurs dans l'app ("Standings" l'onglet
+  // du bas) ; le panneau QG affiche "Ranking"/"Management" via un override ciblé (qgLabel()), pas ici.
   "Stratégie":"Strategy",
-  "Gestion":"Bankroll",
   "Pas assez de données récentes pour ce voyant.":"Not enough recent data for this indicator.",
   "Aucune journée récente exploitable pour mesurer ta forme.":"No recent day available to measure your form.",
   "Victoire sur ta dernière journée jouée.":"Win on your last played day.",
@@ -8975,18 +8973,38 @@ function maestroHeroHTML(){
     : mood.msgKey==="results" ? t("Les résultats sont tombés…")
     : mood.msgKey==="one" ? t("Une ligue t'attend ! <b>À toi de jouer.</b>")
     : t("Tout est sous contrôle. <b>Pour l'instant.</b>");
-  const dots=QG_IND_KEYS.map(k=>{const r=qgStatus&&qgStatus[k]; return `<div class="a2-qg-status-dot qs-${r?r.color:'gray'}"></div>`;}).join("");
-  const legend=QG_IND_KEYS.map(k=>{const r=qgStatus&&qgStatus[k];
-    return `<button class="a2-qg-status-item" onclick="qgStatusInfo('${k}')"><span class="qs-led qs-${r?r.color:'gray'}"></span><span class="lbl">${t(QG_IND_LABELS[k])}</span></button>`;}).join("");
+  const geo=QG_DOT_GEOM[tier];
+  // Bord droit du LIBELLÉ = bord gauche de la pastille moins un petit espace fixe (jamais une
+  // largeur en % — cf. note ci-dessus, c'est exactement ce qui rendait la pastille invisible).
+  const labelRight=`calc(${(100-(geo.cx-geo.d/2)).toFixed(2)}% + 6px)`;
+  const titleHTML=`<div class="a2-qg-title" style="top:${geo.titleY}%;right:${labelRight}">${t("TON ÉTAT")}</div>`;
+  const dots=QG_IND_KEYS.map((k,i)=>{ const r=qgStatus&&qgStatus[k]; const c=r?r.color:"gray";
+    return `<div class="a2-qg-dot qs-${c}" style="left:${geo.cx}%;top:${geo.cy[i]}%;width:${geo.d}%"></div>`;
+  }).join("");
+  const rows=QG_IND_KEYS.map((k,i)=>{
+    return `<button class="a2-qg-row" style="top:${geo.cy[i]}%;right:${labelRight}" onclick="qgStatusInfo('${k}')">`+
+      `<span class="a2-qg-row-label">${qgLabel(k)}</span></button>`;
+  }).join("");
   return `<div class="a2-maestro-mood tier-${tier}"><div class="a2-maestro-mood-body">
       <img class="a2-maestro-mood-img" src="img/qg-tactizo-maestro-t${tier}.png" alt="${t("Le Maestro")}">
       <div class="a2-maestro-mood-bubble"><span>${msg}</span>
         <div class="a2-maestro-mood-chip tier-${tier}">${MAESTRO_TIER_LABELS[tier]} ${t(MAESTRO_TIER_TXT[tier])}</div>
-      </div>${dots}</div>
-      <div class="a2-qg-status-title">${t("TON ÉTAT")}</div>
-      <div class="a2-qg-status-legend">${legend}</div>
+      </div>${titleHTML}${rows}${dots}</div>
     </div>`;
 }
+// Géométrie des 4 cercles gris mesurée sur chacun des 6 PNG réels (transformée de Hough, cf. note
+// ci-dessus) : cx/d en % de la LARGEUR (le ratio image ≈ ratio de la boîte CSS pour t1/t2/t4/t5/t6,
+// donc object-fit:cover n'y recadre presque rien — direct des pixels sources) ; pour t3 (pose et
+// dimensions natives différentes, 1445×1089 vs boîte 853/564), cy est le résultat DÉJÀ transformé
+// par le recadrage vertical réel de cover (source 1089px → fenêtre visible ~955px, centrée).
+const QG_DOT_GEOM={
+  1:{cx:83.1, d:3.8, cy:[19.35,28.29,37.24,45.94], titleY:11.0},
+  2:{cx:83.45,d:4.2, cy:[18.88,27.47,36.18,44.88], titleY:10.5},
+  3:{cx:83.6, d:4.4, cy:[11.41,19.83,28.24,36.79], titleY:3.0},
+  4:{cx:83.13,d:4.2, cy:[17.57,25.80,33.91,42.02], titleY:9.0},
+  5:{cx:83.08,d:4.2, cy:[17.10,25.33,33.56,41.78], titleY:8.5},
+  6:{cx:83.28,d:4.2, cy:[16.88,25.24,33.35,41.59], titleY:8.3},
+};
 // ⚠️ v8.393 — 4 voyants dynamiques (Forme/Classement/Stratégie/Gestion). LECTURE SEULE des données
 // existantes (bets/players/leagues déjà en base) : aucun de ces calculs n'écrit quoi que ce soit, ni
 // ne modifie computeMaestroMood()/classement/points/capital/résultat d'une journée/bonus/enchères —
@@ -8994,11 +9012,17 @@ function maestroHeroHTML(){
 // Un score `null` (palier "gray") signifie explicitement "pas assez de données", jamais un 0 déguisé.
 const QG_IND_KEYS=["forme","classement","strategie","gestion"];
 const QG_IND_LABELS={forme:"Forme",classement:"Classement",strategie:"Stratégie",gestion:"Gestion"};
+// ⚠️ "Classement"/"Gestion" ont déjà une traduction EN ailleurs dans l'app ("Standings" l'onglet du
+// bas ; "Bankroll" une proposition antérieure) — Hervé a explicitement redemandé "Ranking"/
+// "Management" ICI. Passer par t() réutiliserait l'autre traduction partout où ce mot apparaît :
+// override ciblé, sans toucher au dictionnaire EN global ni aux autres écrans.
+const QG_IND_LABELS_EN={classement:"Ranking",gestion:"Management"};
+function qgLabel(key){ return (lang==="en" && QG_IND_LABELS_EN[key]) || t(QG_IND_LABELS[key]); }
 let qgStatus=null, qgStatusLoaded=false;
 function qgTierFromScore(score){ return score==null?"gray":(score>=65?"green":(score>=35?"orange":"red")); }
 function qgStatusInfo(key){
   const r=qgStatus&&qgStatus[key];
-  const label=t(QG_IND_LABELS[key]);
+  const label=qgLabel(key);
   const chip={green:"🟢",orange:"🟠",red:"🔴",gray:"⚪"}[(r&&r.color)||"gray"];
   const body=`<div class="mini muted" style="text-align:left">${(r&&r.msg)||t("Pas assez de données récentes pour ce voyant.")}</div>`;
   infoModal(chip, label, body);
