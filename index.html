@@ -1043,7 +1043,14 @@
   #t2Wrap .t2-maestro.vu{opacity:1;transform:none;}
   #t2Wrap .t2-maestro.sm{width:52px;height:52px;border-radius:50%;}
   #t2Wrap .t2-maestro.lg{width:140px;height:140px;border-radius:20px;}
-  #t2Wrap .t2-maestro.xl{width:190px;height:190px;border-radius:22px;}
+  #t2Wrap .t2-maestro.champ{width:170px;height:170px;border-radius:20px;}
+  #t2Wrap .t2-maestro.xl{width:220px;height:220px;border-radius:24px;}
+  /* ⚠️ v8.403 — retour iPhone (Hervé) : les portraits "complet" (mains-jointes, doigt-levé…) sont
+     des découpes à fond transparent PAS centrées dans leur propre canevas (vérifié en ouvrant les
+     PNG) — un `object-fit:cover` carré les rognait de façon visible. `.t2-intro-maestro` évite tout
+     rognage en dimensionnant par la HAUTEUR seule (largeur automatique, même principe que
+     `.a2-hero-maestro-img` déjà utilisé ailleurs dans l'app pour ces mêmes assets). */
+  #t2Wrap .t2-intro-maestro{display:block;height:92px;width:auto;margin:0 auto 8px;}
   #t2Wrap .t2-aside{max-width:300px;width:100%;margin:14px auto 0;border:1.5px dashed var(--a2-border);
     border-radius:14px;padding:12px 14px;opacity:0;transform:translateY(8px);
     transition:opacity .35s,transform .35s;}
@@ -1101,6 +1108,15 @@
   #t2Wrap .t2-favband-title{font-size:19px;font-weight:900;color:var(--a2-brass-light);
     letter-spacing:.03em;text-transform:uppercase;}
   #t2Wrap .t2-favband-sub{font-size:13px;color:var(--a2-ink);margin-top:4px;font-weight:700;}
+  #t2Wrap .t2-favband-row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+    font-size:13px;margin:7px 0 0;text-align:left;}
+  #t2Wrap .t2-favband-row b{font-variant-numeric:tabular-nums;font-size:15px;}
+  /* v8.403 — étape 5 : chaîne de lecture "NET > NET → VICTOIRE → +pts" en une ligne. */
+  #t2Wrap .t2-chain{text-align:center;font-size:14.5px;font-weight:800;margin:10px 0 0;
+    line-height:1.6;opacity:0;transition:opacity .3s;}
+  #t2Wrap .t2-chain.vu{opacity:1;}
+  #t2Wrap .t2-chain .arrow{color:var(--a2-muted);margin:0 5px;font-weight:400;}
+  #t2Wrap .t2-chain .gold{color:var(--a2-brass-light);}
   /* Bulle de dialogue autonome (pas calée sur un visuel peint comme `.a2-maestro-mood-bubble` du
      QG) : utilisable avec n'importe quel portrait Maestro, ici pour l'écran final du tutoriel. */
   #t2Wrap .t2-bubble{position:relative;background:var(--a2-panel);border:1.5px solid var(--a2-border);
@@ -2450,7 +2466,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.402";
+const APP_VERSION = "v8.403";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4331,9 +4347,12 @@ const EN={
   "Perte ×2":"Loss ×2",
   // ── v8.401 — retouches étapes 3/4/5/écran final (retour iPhone) ──
   "TES BONUS = TES ARMES STRATÉGIQUES":"YOUR BONUSES ARE YOUR STRATEGIC WEAPONS",
-  "Avec bonus":"With a bonus",
-  "Certains bonus peuvent aussi perturber ton adversaire.":"Some bonuses can also disrupt your opponent.",
   "Si tu as des bonus, utilise-les au bon moment pour faire basculer le duel.":"If you have bonuses, play them at the right moment to swing the duel.",
+  // ── v8.403 — retouches 6 points UX (retour iPhone) ──
+  "Si ton prono gagne":"If your pick wins",
+  "S'il perd":"If it loses",
+  "Avec Assurance":"With Assurance",
+  "Certains bonus peuvent aussi agir sur ton adversaire.":"Some bonuses can also affect your opponent.",
   "Les bonus disponibles dépendent des options de ta ligue.":"Available bonuses depend on your league's options.",
   "Pronostique, mise et utilise ta stratégie pour devenir champion.":"Predict, stake, and use strategy to become champion.",
   "Le meilleur NET remporte le face-à-face.":"The best NET wins the head-to-head.",
@@ -18999,10 +19018,13 @@ const t2PtsDuel=(gagne,nul,netPos)=>(gagne?2:nul?1:0)+(netPos?1:0);
 
 
 /* ════════════════ INTRO — comprendre Tactizo en quelques secondes ═══════════════════════
-   Pas d'animation : la carte mentale complète (adversaires → pronostics/stratégie → duels →
-   points → classement → champion) tient dans le texte, donnée d'un coup. `sloganHTML()` est
-   la VRAIE fonction déjà utilisée sur l'écran d'accueil (Auth) — même texte, pas une variante. */
+   Textes et logique inchangés (pas d'animation, tout visible d'un coup) — seul ajout v8.403 :
+   un portrait Maestro discret en haut, pour que le tout premier écran se reconnaisse
+   immédiatement comme Tactizo. `.t2-intro-maestro` dimensionne par la hauteur (pas de crop,
+   cf. note CSS) ; `qg-tactizo-maestro-doigt-leve.png` est déjà utilisé ailleurs dans l'app
+   (partage de saison) comme portrait "neutre/attentif", pas un état d'humeur du QG. */
 function t2IntroHtml(){ return `<div class="t2-stage">
+  <img class="t2-intro-maestro" src="img/qg-tactizo-maestro-doigt-leve.png" alt="${t("Le Maestro")}">
   <div class="t2-cap vu" style="font-size:19px">${t("Affronte tes amis sur des pronostics sportifs et utilise ta stratégie pour remporter tes duels. Chaque duel te rapporte des points : termine premier du classement pour devenir champion. 🏆")}</div>
   ${sloganHTML("bas",false,true)}
   </div>
@@ -19107,12 +19129,18 @@ function t2Play2(){
    doublés, systématique chaque journée, pas un bonus. Tient sans scroll à 320 px. */
 const T2_FAV_IDX=3;   // même affiche que l'étape 2 (PSG–Monaco)
 
+/* ⚠️ v8.403 — retour iPhone (Hervé) : transformer visuellement la mise de 12 € en 24 € donnait
+   l'impression que le joueur MISAIT 24 € — faux, seul l'IMPACT (gain/perte) est doublé. La carte
+   garde donc sa mise et son gain de base INTACTS (identiques à l'étape 2) ; la bannière ci-dessous
+   explique l'effet séparément, avec les vrais montants calculés (`t2MatchGain`, `m.mise`), jamais
+   écrits en dur. */
 function t2Step3Html(){ const m=T2_MATCHS[T2_FAV_IDX]; return `<div class="t2-stage">
   <div id="t2S3wrap">
   <div id="t2S3card" style="max-width:320px;margin:0 auto">${t2MatchCardHtml(m,T2_FAV_IDX,{pfx:"3",stake:true,startVu:true})}</div>
   <div class="t2-favband" id="t2S3band">
-    <div class="t2-favband-title">👑 ${t("Favori")}</div>
-    <div class="t2-favband-sub">${t("Gain ×2")} · ${t("Perte ×2")}</div>
+    <div class="t2-favband-title">👑 ${t("Favori")} ×2</div>
+    <div class="t2-favband-row"><span>${t("Si ton prono gagne")}</span><b style="color:var(--a2-ready)">${T2_SG(t2MatchGain(m)*2)}</b></div>
+    <div class="t2-favband-row"><span>${t("S'il perd")}</span><b style="color:var(--a2-red)">−${T2_EUR(m.mise*2)} €</b></div>
   </div>
   </div>
   </div>
@@ -19120,33 +19148,31 @@ function t2Step3Html(){ const m=T2_MATCHS[T2_FAV_IDX]; return `<div class="t2-st
 
 function t2Play3(){
   const i=T2_FAV_IDX, m=T2_MATCHS[i];
-  const mv=t2Q("#t2S3m"+i), gv=t2Q("#t2S3g"+i);
-  if(mv) mv.textContent=T2_EUR(m.mise);
-  if(gv) gv.textContent=t("si ce prono passe")+" "+T2_SG(t2MatchGain(m));
-  t2At(150,()=>{ t2Q("#t2S3cap").classList.add("vu"); });
+  t2At(150,()=>{ t2Q("#t2S3cap").classList.add("vu");
+    const mv=t2Q("#t2S3m"+i); if(mv) mv.textContent=T2_EUR(m.mise); });
   t2At(1000,()=>{ const badge=t2Q("#t2S3fav"+i); if(badge) badge.textContent="👑";
     const card=t2Q("#t2S3c"+i); if(card) card.classList.add("on");
     if(badge) badge.classList.add("vu","gold"); });
-  t2At(1700,()=>{
-    if(mv) mv.innerHTML='<span style="color:var(--a2-red)">'+T2_EUR(m.mise*2)+'</span>';
-    if(gv) gv.textContent=t("si ce prono passe")+" "+T2_SG(t2MatchGain(m)*2);
-    const card=t2Q("#t2S3c"+i); if(card) card.classList.add("t2-pop"); });
-  t2At(2500,()=>{ const band=t2Q("#t2S3band"); if(band) band.classList.add("vu"); });
+  t2At(1900,()=>{ const band=t2Q("#t2S3band"); if(band) band.classList.add("vu"); });
 }
 
 /* ════════════════ ÉTAPE 4/6 — JOUE TA STRATÉGIE ══════════════════════════════════════════
-   ⚠️ v8.401 — retour iPhone (Hervé) : la disposition 3 colonnes n'était pas assez lisible.
-   Révélation VERTICALE en 3 temps (avant → bonus → après, jamais montrés ensemble d'un coup) sur
-   la même affiche que l'étape 2 (Assurance, mise 10 €). Puis, très brièvement, un bonus qui vise
-   le pari DE L'ADVERSAIRE. Aucune enchère ici (mécanique de préparation optionnelle, déjà
-   expliquée dans le jeu) ; jamais deux bonus empilés sur le même pari. */
+   ⚠️ v8.403 — retour iPhone (Hervé) : la règle de l'Assurance doit être ÉNONCÉE avant de la
+   MONTRER (le v8.401 montrait direct "-10€ → -5€" sans dire pourquoi). Nom + description
+   (`CARDS.assurance.d`, la vraie fiche du jeu, pas un texte réinventé) affichés d'abord ; la
+   révélation verticale en 3 temps (avant → bonus, muet → après) illustre ensuite la règle déjà
+   énoncée. Puis, très brièvement, un bonus qui vise le pari DE L'ADVERSAIRE — différence Favori
+   (obligatoire, amplifie) / Bonus (facultatif, effets variés) laissée à la prose, pas nouvelle
+   ici. Aucune enchère ; jamais deux bonus empilés sur le même pari. */
 function t2Step4Html(){ const m=T2_MATCHS[T2_ASSUR_IDX]; return `<div class="t2-stage">
   <div class="t2-cap vu" id="t2S4title" style="margin-top:0;font-size:17px">${t("TES BONUS = TES ARMES STRATÉGIQUES")}</div>
+  <div class="t2-mid vu" id="t2S4name">${CARDS.assurance.e} ${esc(t(CARDS.assurance.n))}</div>
+  <div class="t2-sub vu" id="t2S4rule">${esc(t(CARDS.assurance.d))}</div>
   <div id="t2S4wrap">
   <div id="t2S4card" style="max-width:320px;margin:10px auto 0">${t2MatchCardHtml(m,T2_ASSUR_IDX,{pfx:"4",startVu:true})}</div>
   <div class="t2-ptrow" id="t2S4before" style="max-width:320px;margin-left:auto;margin-right:auto"><span>${t("Sans bonus")}</span><b style="color:var(--a2-red)">−${T2_EUR(m.mise)} €</b></div>
-  <div class="t2-mid" id="t2S4mid">${CARDS.assurance.e} ${esc(t(CARDS.assurance.n))}</div>
-  <div class="t2-ptrow" id="t2S4after" style="max-width:320px;margin-left:auto;margin-right:auto"><span>${t("Avec bonus")}</span><b style="color:var(--a2-red)">−${T2_EUR(m.mise/2)} €</b></div>
+  <div class="t2-mid" id="t2S4pulse">${CARDS.assurance.e}</div>
+  <div class="t2-ptrow" id="t2S4after" style="max-width:320px;margin-left:auto;margin-right:auto"><span>${t("Avec Assurance")}</span><b style="color:var(--a2-red)">−${T2_EUR(m.mise/2)} €</b></div>
   <div id="t2S4adv" style="display:none"></div>
   </div>
   </div>
@@ -19155,14 +19181,14 @@ function t2Step4Html(){ const m=T2_MATCHS[T2_ASSUR_IDX]; return `<div class="t2-
 
 function t2Play4(){
   t2At(150,()=>{ t2Q("#t2S4before").classList.add("vu"); });
-  t2At(1300,()=>{ t2Q("#t2S4mid").classList.add("vu","t2-pop"); });
-  t2At(2400,()=>{ t2Q("#t2S4after").classList.add("vu"); });
-  t2At(3500,()=>{ const adv=t2Q("#t2S4adv"); if(!adv) return; adv.style.display="block";
+  t2At(1500,()=>{ t2Q("#t2S4pulse").classList.add("vu","t2-pop"); });
+  t2At(2600,()=>{ t2Q("#t2S4after").classList.add("vu"); });
+  t2At(3700,()=>{ const adv=t2Q("#t2S4adv"); if(!adv) return; adv.style.display="block";
     adv.innerHTML=`<div class="t2-card vu on" style="max-width:320px;margin:6px auto 0"><div class="t2-row">
       <div>${avatarHTML(T2_GIULIAN,26)} <b>Giulian</b>
-        <div class="t2-mini">${t("Certains bonus peuvent aussi perturber ton adversaire.")}</div></div>
+        <div class="t2-mini">⚔️ ${t("Certains bonus peuvent aussi agir sur ton adversaire.")}</div></div>
       <div class="t2-badges"><span class="t2-badge vu gold">${CARDS.cadeau.e}</span></div></div></div>`; });
-  t2At(4600,()=>{ t2Q("#t2S4cap").classList.add("vu"); t2Q("#t2S4sub").classList.add("vu"); });
+  t2At(4800,()=>{ t2Q("#t2S4cap").classList.add("vu"); t2Q("#t2S4sub").classList.add("vu"); });
 }
 
 /* ════════════════ ÉTAPE 5/6 — GAGNE LE DUEL ══════════════════════════════════════════════
@@ -19188,6 +19214,7 @@ function t2Step5Html(){ return `<div class="t2-stage">
   </div>
   <div class="t2-verdict" id="t2S5verdict"></div>
   <div class="t2-rank" id="t2S5pts" style="max-width:280px"></div>
+  <div class="t2-chain" id="t2S5chain"></div>
   </div>
   <div class="t2-cap" id="t2S5cap">${t("Le meilleur NET remporte le face-à-face.")}</div>`; }
 
@@ -19204,6 +19231,13 @@ function t2Play5(){
       <div class="t2-ptrow" id="t2S5p1"><span>${t("Net positif")}</span><b>${t("+{a} pt",{a:T2_S5_PTS_NET})}</b></div>
       <div class="t2-ptrow" id="t2S5p2" style="border-top:1px solid var(--a2-border);margin-top:4px;padding-top:8px"><b>${t("Total")}</b><b>${t("+{a} pts",{a:T2_S5_PTS_TOTAL})}</b></div>`;
     ["#t2S5p0","#t2S5p1","#t2S5p2"].forEach((s,k)=>t2At(160*k,()=>{ const el=t2Q(s); if(el) el.classList.add("vu"); })); });
+  // ⚠️ v8.403 — retour iPhone (Hervé) : chaîne de lecture unique, pour que la causalité
+  // "meilleur NET → duel gagné → points de championnat" soit lisible d'un coup d'œil.
+  t2At(4300,()=>{ const c=t2Q("#t2S5chain"); if(!c) return;
+    c.innerHTML=T2_SG(T2_S5_MOI)+' <span class="arrow">&gt;</span> '+T2_SG(T2_S5_GIULIAN)
+      +' <span class="arrow">→</span> <span class="gold">'+t("Victoire").toUpperCase()+'</span>'
+      +' <span class="arrow">→</span> <span class="gold">'+t("+{a} pts",{a:T2_S5_PTS_TOTAL})+'</span>';
+    c.classList.add("vu"); });
 }
 
 /* ════════════════ ÉTAPE 6/6 — DEVIENS CHAMPION ═══════════════════════════════════════════
@@ -19211,21 +19245,28 @@ function t2Play5(){
    (jamais comme la suite naturelle du classement) : gage/récompense, propres à Entre amis —
    jamais montrés comme existant en Solo ou systématiquement (`gageperso`/`enjeuOutcome`,
    §3 passation). */
+// ⚠️ v8.403 — retour iPhone (Hervé) : les 4 JOUEURS présentés à l'étape 1 (Toi/Karim/Giulian/
+// Inès, `T2_LEAGUE`) doivent se retrouver À L'IDENTIQUE ici, pour une vraie continuité
+// narrative — Inès (absente du v8.400/v8.401) est ajoutée, toujours dernière mais jamais
+// évacuée du classement. Les 3 autres gardent exactement leurs points d'origine.
 function t2S6Days(){ return [
-  [{n:"Karim",av:T2_KARIM,pts:3},{n:t("Toi"),av:T2_MOI,pts:2,moi:1},{n:"Giulian",av:T2_GIULIAN,pts:1}],
-  [{n:"Karim",av:T2_KARIM,pts:5},{n:t("Toi"),av:T2_MOI,pts:5,moi:1},{n:"Giulian",av:T2_GIULIAN,pts:4}],
-  [{n:t("Toi"),av:T2_MOI,pts:8,moi:1},{n:"Karim",av:T2_KARIM,pts:6},{n:"Giulian",av:T2_GIULIAN,pts:6}],
-  [{n:t("Toi"),av:T2_MOI,pts:11,moi:1},{n:"Karim",av:T2_KARIM,pts:8},{n:"Giulian",av:T2_GIULIAN,pts:7}],
+  [{n:"Karim",av:T2_KARIM,pts:3},{n:t("Toi"),av:T2_MOI,pts:2,moi:1},{n:"Giulian",av:T2_GIULIAN,pts:1},{n:"Inès",av:T2_INES,pts:0}],
+  [{n:"Karim",av:T2_KARIM,pts:5},{n:t("Toi"),av:T2_MOI,pts:5,moi:1},{n:"Giulian",av:T2_GIULIAN,pts:4},{n:"Inès",av:T2_INES,pts:2}],
+  [{n:t("Toi"),av:T2_MOI,pts:8,moi:1},{n:"Karim",av:T2_KARIM,pts:6},{n:"Giulian",av:T2_GIULIAN,pts:6},{n:"Inès",av:T2_INES,pts:4}],
+  [{n:t("Toi"),av:T2_MOI,pts:11,moi:1},{n:"Karim",av:T2_KARIM,pts:8},{n:"Giulian",av:T2_GIULIAN,pts:7},{n:"Inès",av:T2_INES,pts:5}],
 ]; }
 function t2RankRows(list){
   return list.map((p,k)=>`<div class="t2-rline vu${p.moi?' moi':''}"><b>${k+1}.</b>${avatarHTML(p.av,20)}
     <span class="nm">${esc(p.n)}</span><b>${t("{a} pts",{a:p.pts})}</b></div>`).join(""); }
 
+/* ⚠️ v8.403 — le Maestro (agrandi, `.champ` 170 px) est désormais placé AU-DESSUS du classement
+   dans le DOM et ne le masque plus jamais : les deux restent visibles ensemble au moment
+   CHAMPION, au lieu de faire disparaître le classement pour le remplacer par le Maestro. */
 function t2Step6Html(){ return `<div class="t2-stage">
   <div class="t2-dots" id="t2S6days" style="max-width:220px;margin:0 auto 10px">
     ${[0,1,2,3].map(k=>`<div class="t2-dot" id="t2S6d${k}"><i></i></div>`).join("")}</div>
+  <img class="t2-maestro champ" id="t2S6maestro" style="display:none" src="img/qg-tactizo-classement-champion.png" alt="${t("Le Maestro")}">
   <div class="t2-rank" id="t2S6rank"></div>
-  <img class="t2-maestro lg" id="t2S6maestro" style="display:none" src="img/qg-tactizo-classement-champion.png" alt="">
   <div class="t2-aside" id="t2S6aside" style="display:none">
     <span class="t2-chip">${t("Entre amis")}</span>
     <div class="t2-aside-row"><img src="img/enjeu-recompense.png" alt="">🎁 ${t("Le champion reçoit la récompense")}</div>
@@ -19241,7 +19282,7 @@ function t2Play6(){
   days.forEach((day,k)=>t2At(500+k*950,()=>{
     const d=t2Q("#t2S6d"+k); if(d){ d.classList.add("done"); d.querySelector("i").style.width="100%"; }
     t2Q("#t2S6rank").innerHTML=t2RankRows(day.slice().sort((a,b)=>b.pts-a.pts)); }));
-  t2At(4700,()=>{ t2Q("#t2S6days").style.display="none"; t2Q("#t2S6rank").style.display="none";
+  t2At(4700,()=>{ t2Q("#t2S6days").style.display="none";
     t2Q("#t2S6cap").textContent="🏆 "+t("CHAMPION"); t2Q("#t2S6cap").classList.add("vu");
     const m=t2Q("#t2S6maestro"); m.style.display="block"; requestAnimationFrame(()=>m.classList.add("vu")); });
   t2At(6400,()=>{ const a=t2Q("#t2S6aside"); a.style.display="block"; requestAnimationFrame(()=>a.classList.add("vu")); });
@@ -19249,17 +19290,22 @@ function t2Play6(){
 
 /* ════════════════ ÉCRAN FINAL ════════════════════════════════════════════════════════════
    ⚠️ v8.401 — retour iPhone (Hervé) : l'écran d'origine (v8.399/v8.400, texte seul) laissait un
-   grand vide et le Maestro n'apportait rien. Portrait nettement agrandi (`.t2-maestro.xl`,
-   190 px, même asset — `qg-tactizo-maestro-mains-jointes-complet.png` — que le hero "À toi de
-   jouer" du Hub Préparation, cf. `viewPrepHub()` : même moment ("prêt à commencer"), même
-   personnage, cohérent avec le reste de l'app) surmonté d'une VRAIE bulle de dialogue
-   (`.t2-bubble`, indépendante de tout visuel peint — réutilisable avec n'importe quel portrait,
-   contrairement à `.a2-maestro-mood-bubble` du QG qui est calée pixel par pixel sur les 6 images
-   de palier). "À toi de jouer" reprend la traduction déjà établie ailleurs dans l'app (Hub
-   Préparation, bandeaux d'accueil) — pas une nouvelle clé pour la même phrase. */
+   grand vide et le Maestro n'apportait rien. Portrait nettement agrandi (`.t2-maestro.xl`),
+   surmonté d'une VRAIE bulle de dialogue (`.t2-bubble`, indépendante de tout visuel peint —
+   réutilisable avec n'importe quel portrait, contrairement à `.a2-maestro-mood-bubble` du QG
+   qui est calée pixel par pixel sur les 6 images de palier). "À toi de jouer" reprend la
+   traduction déjà établie ailleurs dans l'app (Hub Préparation, bandeaux d'accueil) — pas une
+   nouvelle clé pour la même phrase.
+   ⚠️ v8.403 — retour iPhone (Hervé) : `qg-tactizo-maestro-mains-jointes-complet.png` (utilisé
+   jusqu'ici) est une découpe 1410×1116 dont le personnage n'est PAS centré dans son propre
+   canevas (vérifié en ouvrant le PNG) — recadré en carré via `object-fit:cover`, il ressortait
+   décentré et partiellement coupé. Remplacé par `qg-tactizo-classement-champion.png` (même
+   asset déjà utilisé par le Champion de l'Étape 6, cf. `t2Step6Html()`) : 384×384 parfaitement
+   carré, donc AUCUN rognage dans le cadre `.t2-maestro.xl`, et c'est une vraie scène illustrée
+   avec décor (salle des trophées) plutôt qu'une découpe flottante sur fond vide. */
 function t2FinalHtml(){ return `<div class="t2-stage">
   <div class="t2-final">
-    <img class="t2-maestro xl vu" src="img/qg-tactizo-maestro-mains-jointes-complet.png" alt="${t("Le Maestro")}">
+    <img class="t2-maestro xl vu" src="img/qg-tactizo-classement-champion.png" alt="${t("Le Maestro")}">
     <div class="t2-bubble vu"><b>${t("À toi de jouer")}.</b> ${t("Pronostique, mise et utilise ta stratégie pour devenir champion.")}</div>
     <div class="t2-cap vu" style="margin-top:16px">${t("Les pronostics font gagner les matchs.")}</div>
     <div class="t2-sub vu">${t("La stratégie fait gagner le championnat.")}</div>
