@@ -2403,7 +2403,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.393";
+const APP_VERSION = "v8.394";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4193,10 +4193,12 @@ const EN={
   "Défaite sur ta dernière journée jouée.":"Loss on your last played day.",
   "Match nul sur ta dernière journée jouée.":"Draw on your last played day.",
   "{w} victoire(s), {d} nul(s), {l} défaite(s) sur tes {n} dernières journées.":"{w} win(s), {d} draw(s), {l} loss(es) over your last {n} days.",
-  "Classement non applicable : tu ne joues qu'en Solo en ce moment.":"Ranking not applicable: you're only playing Solo right now.",
+  "Tu devances l'IA sur ta ligue Solo.":"You're ahead of the AI in your Solo league.",
   "Pas de classement exploitable pour l'instant.":"No usable ranking yet.",
   "{a}ᵉ sur {b} joueurs dans ta ligue.":"Rank {a} of {b} players in your league.",
-  "En moyenne {a}ᵉ sur tes {b} ligues {c}.":"On average, rank {a} across your {b} {c} leagues.",
+  "Moyenne sur tes {b} ligues {c} : {a}/100.":"Average across your {b} {c} leagues: {a}/100.",
+  "Tu es à égalité avec l'IA sur ta ligue Solo.":"You're tied with the AI in your Solo league.",
+  "Tu es derrière l'IA sur ta ligue Solo.":"You're behind the AI in your Solo league.",
   "récemment terminées":"recently finished",
   "Pas assez de données pour évaluer ta gestion.":"Not enough data to assess your bankroll management.",
   "Une recapitalisation récente pèse sur ce score : ton capital est reparti d'une base plancher.":"A recent bailout weighs on this score: your capital restarted from a floor amount.",
@@ -9078,30 +9080,50 @@ function qgComputeForme(ctx){
   return {score,color,msg,data:{N,w,d,l}};
 }
 
-// ───── CLASSEMENT ───── position compétitive réelle (classe()/competitionRanks(), pas un recalcul
-// maison) ; Solo exclu de cette composante (aucune place à disputer face à l'IA), retombe sur Forme.
+// ───── CLASSEMENT ───── position compétitive réelle. Entre amis : classe()/competitionRanks() réels
+// (pas un recalcul maison). Solo : le joueur EST en compétition — contre l'IA — donc exploitable ici
+// (⚠️ règle produit confirmée par Hervé le 2026-09-09, corrige une exclusion à tort en v8.393) :
+// devant l'IA→100, égalité→50, derrière→0, sur les POINTS de la vraie compétition (même donnée que
+// classe()/cmpV()), capital en simple départage — jamais le capital seul, qui mesurerait la Gestion,
+// pas le Classement. Une ligue Solo s'agrège ensuite comme une autre dans la moyenne du voyant.
 function qgComputeClassement(ctx){
   const {active,doneRecent,plys}=ctx;
   if(!active.length && !doneRecent.length) return {score:null,color:"gray",msg:t("Pas de classement exploitable pour l'instant.")};
-  let pool=active.filter(m=>!qgLeagueSolo(m.lg)), fromDone=false;
-  if(!pool.length){ pool=doneRecent.filter(m=>!qgLeagueSolo(m.lg)); fromDone=true; }
-  if(!pool.length) return {score:null,color:"gray",msg:t("Classement non applicable : tu ne joues qu'en Solo en ce moment.")};
-  const scores=[];
+  let pool=active, fromDone=false;
+  if(!pool.length){ pool=doneRecent; fromDone=true; }
+  if(!pool.length) return {score:null,color:"gray",msg:t("Pas de classement exploitable pour l'instant.")};
+  const entries=[];
   pool.forEach(m=>{
     const lg=m.lg, pid=m.pid;
-    const humans=classe((plys||[]).filter(p=>p.league_id===lg.id && !p.is_ai));
-    const of=humans.length; if(of<=1) return;
-    const idx=humans.findIndex(p=>p.id===pid); if(idx<0) return;
-    const rank=(competitionRanks(humans)[idx])||0; if(rank<1) return;
-    scores.push({score:100*(of-rank)/(of-1), rank, of});
+    if(qgLeagueSolo(lg)){
+      const me=(plys||[]).find(p=>p.league_id===lg.id && p.id===pid && !p.is_ai);
+      const ai=(plys||[]).find(p=>p.league_id===lg.id && p.is_ai);
+      if(!me || !ai) return;
+      let score,state;
+      if(me.points>ai.points || (me.points===ai.points && me.capital>ai.capital)){ score=100; state="ahead"; }
+      else if(me.points===ai.points && me.capital===ai.capital){ score=50; state="tied"; }
+      else { score=0; state="behind"; }
+      entries.push({score, solo:true, state});
+    } else {
+      const humans=classe((plys||[]).filter(p=>p.league_id===lg.id && !p.is_ai));
+      const of=humans.length; if(of<=1) return;
+      const idx=humans.findIndex(p=>p.id===pid); if(idx<0) return;
+      const rank=(competitionRanks(humans)[idx])||0; if(rank<1) return;
+      entries.push({score:100*(of-rank)/(of-1), solo:false, rank, of});
+    }
   });
-  if(!scores.length) return {score:null,color:"gray",msg:t("Pas de classement exploitable pour l'instant.")};
-  const avg=Math.round(scores.reduce((s,x)=>s+x.score,0)/scores.length);
-  const meanRank=Math.round(scores.reduce((s,x)=>s+x.rank,0)/scores.length);
-  const msg = scores.length===1
-    ? t("{a}ᵉ sur {b} joueurs dans ta ligue.",{a:scores[0].rank,b:scores[0].of})
-    : t("En moyenne {a}ᵉ sur tes {b} ligues {c}.",{a:meanRank,b:scores.length,c:fromDone?t("récemment terminées"):t("en cours")});
-  return {score:avg,color:qgTierFromScore(avg),msg,data:{scores,fromDone}};
+  if(!entries.length) return {score:null,color:"gray",msg:t("Pas de classement exploitable pour l'instant.")};
+  const avg=Math.round(entries.reduce((s,x)=>s+x.score,0)/entries.length);
+  let msg;
+  if(entries.length===1){
+    const e=entries[0];
+    msg = e.solo
+      ? (e.state==="ahead"?t("Tu devances l'IA sur ta ligue Solo."):e.state==="tied"?t("Tu es à égalité avec l'IA sur ta ligue Solo."):t("Tu es derrière l'IA sur ta ligue Solo."))
+      : t("{a}ᵉ sur {b} joueurs dans ta ligue.",{a:e.rank,b:e.of});
+  } else {
+    msg = t("Moyenne sur tes {b} ligues {c} : {a}/100.",{a:avg,b:entries.length,c:fromDone?t("récemment terminées"):t("en cours")});
+  }
+  return {score:avg,color:qgTierFromScore(avg),msg,data:{entries,fromDone}};
 }
 
 // ───── STRATÉGIE ───── 30% enchères (bonus obtenus/visés) + 70% efficacité tactique (Favori =
