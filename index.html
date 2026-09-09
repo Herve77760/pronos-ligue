@@ -2450,7 +2450,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.401";
+const APP_VERSION = "v8.402";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -8989,6 +8989,11 @@ async function loadMyLeagues(){
      seulement le même partage warn/good déjà utilisé pour construire `alerte` juste au-dessus. */
 let maestroMood=null, maestroMoodLoaded=false, qgStatusPromise=null;
 function maestroTierFromScore(score){ return Math.min(6, Math.floor(score/(100/6))+1); }
+// ⚠️ v8.402 (demandé par Hervé, bug audité le 2026-09-09) — fenêtre pendant laquelle une ligue qui
+// vient de passer `done` continue d'influencer le Maestro (cf. loadMaestroMood ci-dessous).
+// Volontairement plus courte que QG_WINDOW_MS (30j, voyants) : le Maestro reste un ressenti récent,
+// pas un bilan de fin de saison.
+const MAESTRO_DONE_WINDOW_MS=7*24*3600*1000;
 // ⚠️ v8.399 (demandé par Hervé, audit du 2026-09-09) — GARDE-FOU DE COHÉRENCE : Maestro garde sa
 // propre logique de momentum (ci-dessous, inchangée), mais ne peut plus afficher un palier
 // manifestement optimiste face à des voyants tous au rouge. Ce plafond ne fait QUE réduire le tier
@@ -9011,21 +9016,35 @@ function computeMaestroMood(act, plys, bts){
   if(actionItems.length>=2){ msgKey="many"; msgN=actionItems.length; }
   else if(actionItems.length===1){ msgKey=(["prep","trevebid"].includes(actionItems[0].kind))?"enchere":"one"; }
   else if(goodItems.length){ msgKey="results"; }
-  if(!act || !act.length) return {tier:Math.min(5,maestroTierCap()), msgKey, msgN};
+  // ⚠️ v8.402 (demandé par Hervé, bug audité le 2026-09-09) — plus de tier:5 en dur : sans historique
+  // sportif récent (aucune ligue active pertinente, aucune ligue `done` dans MAESTRO_DONE_WINDOW_MS),
+  // l'état neutre est T4 (aucune information n'est un ressenti neutre, pas "en confiance"). Le
+  // garde-fou reste un plafond appliqué APRÈS, comme partout ailleurs dans cette fonction.
+  if(!act || !act.length) return {tier:Math.min(4,maestroTierCap()), msgKey, msgN};
   const perLeague=act.map(m=>{
     const lg=m.lg;
-    if(lg.status!=="running") return {score:75, N:0};   // pas encore lancée : rien à mesurer
-    // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — `lg.current_day` compte les journées
-    // RÉSOLUES côté serveur, pas celles que CE joueur a acquittées (`getSeen()`/`viewRecap`). Sans
-    // ce garde, l'humeur du Maestro (palier 1-6, 🔴→🟢) et son message pouvaient déjà refléter le
-    // résultat d'une journée que le joueur n'avait pas encore découverte (points/capital déjà à
-    // jour en base dès la résolution serveur) — un gain récent se voyait dans l'humeur du QG avant
-    // même le rituel de révélation. Tant qu'une journée résolue n'est pas acquittée, cette ligue
-    // retombe sur le palier neutre (comme une ligue sans historique), exactement comme le cas
-    // "pas encore lancée" juste au-dessus — aucune donnée liée à cette journée n'entre dans le score.
-    if(lg.current_day>getSeen(lg.id,m.pid)) return {score:75, N:0};
-    const curDay=lg.current_day||0, wantN=Math.min(curDay,3);
-    const myNets=(bts||[]).filter(b=>b.league_id===lg.id && b.player_id===m.pid && b.net!=null && b.day>=curDay-wantN && b.day<curDay);
+    // ⚠️ v8.402 — une ligue `done` arrivant ici est FORCÉMENT une ligue récente déjà filtrée par
+    // loadMaestroMood() (fenêtre MAESTRO_DONE_WINDOW_MS + qgAlleeAuTerme) : elle est recalculée
+    // exactement comme une ligue `running`, jamais figée sur un ancien tier mémorisé. Les autres
+    // statuts (lobby/prep/starting/truce) restent neutres : rien à mesurer.
+    if(lg.status!=="running" && lg.status!=="done") return {score:75, N:0};
+    // ⚠️ v8.402 — le nombre de journées RÉSOLUES n'est `current_day` que pour une ligue `running` :
+    // pour une ligue `done`, c'est `num_days` qu'il faut lire (même idiome que partout ailleurs dans
+    // l'app pour "combien de journées cette ligue a-t-elle vraiment jouées", ex. `viewRecap`) —
+    // `current_day` resterait à sa valeur d'avant clôture pour une ligue fermée manuellement tôt,
+    // ce qui décalerait la fenêtre des 3 dernières journées.
+    const resolvedDays = lg.status==="done" ? (lg.num_days||0) : (lg.current_day||0);
+    // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — `resolvedDays` compte les journées RÉSOLUES
+    // côté serveur, pas celles que CE joueur a acquittées (`getSeen()`/`viewRecap`). Sans ce garde,
+    // l'humeur du Maestro (palier 1-6, 🔴→🟢) et son message pouvaient déjà refléter le résultat
+    // d'une journée que le joueur n'avait pas encore découverte (points/capital déjà à jour en base
+    // dès la résolution serveur) — un gain récent se voyait dans l'humeur du QG avant même le
+    // rituel de révélation, y compris pour la toute dernière journée d'une ligue qui vient de finir.
+    // Tant qu'une journée résolue n'est pas acquittée, cette ligue retombe sur le palier neutre
+    // (comme une ligue sans historique) — aucune donnée liée à cette journée n'entre dans le score.
+    if(resolvedDays>getSeen(lg.id,m.pid)) return {score:75, N:0};
+    const wantN=Math.min(resolvedDays,3);
+    const myNets=(bts||[]).filter(b=>b.league_id===lg.id && b.player_id===m.pid && b.net!=null && b.day>=resolvedDays-wantN && b.day<resolvedDays);
     const N=myNets.length;
     if(!N) return {score:75, N:0};
     const formScore=myNets.reduce((s,b)=>s+(b.net>0?100:(b.net<0?0:50)),0)/N;
@@ -9069,12 +9088,25 @@ function computeMaestroMood(act, plys, bts){
   return {tier, msgKey, msgN};
 }
 async function loadMaestroMood(){
-  const act=(myLeagues||[]).filter(m=>m.lg && m.lg.status!=="done");
-  const running=act.filter(m=>m.lg.status==="running");
+  const notDone=(myLeagues||[]).filter(m=>m.lg && m.lg.status!=="done");
+  // ⚠️ v8.402 (demandé par Hervé, bug audité le 2026-09-09) — une ligue qui vient de passer `done`
+  // disparaissait intégralement du calcul Maestro DANS LE MÊME INSTANT où sa dernière journée
+  // (bonne ou mauvaise) était enregistrée (`resolveDay()` écrit `current_day` ET `status:"done"`
+  // dans le même appel, index.html ~13812) : l'humeur remontait sans aucun mérite sportif, juste
+  // parce que la ligue disparaissait de la moyenne. `qgAlleeAuTerme()` exclut une ligue fermée
+  // tôt/abandonnée (mêmes critères que le `doneRecent` des 4 voyants) : sa "dernière journée"
+  // n'aurait aucun sens à recalculer.
+  const doneRecent=(myLeagues||[]).filter(m=>{ const lg=m.lg; if(!lg||lg.status!=="done"||!qgAlleeAuTerme(lg)) return false;
+    const ms=lg.finished_at?(Date.now()-new Date(lg.finished_at).getTime()):Infinity; return ms<=MAESTRO_DONE_WINDOW_MS; });
+  const act=[...notDone, ...doneRecent];
+  // ⚠️ v8.402 — les ligues `done` récentes ont, elles aussi, besoin de leurs `players`/`bets` pour
+  // être RÉELLEMENT recalculées (formScore/rankScore, jamais un ancien tier mémorisé) : leurs id
+  // rejoignent la requête, jusque-là limitée aux ligues `running`.
+  const scored=[...notDone.filter(m=>m.lg.status==="running"), ...doneRecent];
   let plys=[], bts=[];
-  if(running.length){
+  if(scored.length){
     try{
-      const lids=[...new Set(running.map(m=>m.lg.id))], pids=running.map(m=>m.pid);
+      const lids=[...new Set(scored.map(m=>m.lg.id))], pids=scored.map(m=>m.pid);
       const [p,b]=await Promise.all([
         q(db.from("players").select("league_id,id,points,capital,is_ai").in("league_id",lids)),
         q(db.from("bets").select("league_id,day,player_id,net").in("league_id",lids).in("player_id",pids))
