@@ -2487,7 +2487,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.404";
+const APP_VERSION = "v8.405";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6390,6 +6390,11 @@ const EN={
   // ⚠️ Port V2 Classement final (2026-09-06) — Maestro à 4 états, copie reprise de classement-final.html.
   "Champion":"Champion", "Sur le podium":"On the podium", "Dernier":"Last", "Hors podium":"Off the podium",
   "Saison de rêve !":"Dream season!", "Personne ne t'a détrôné.":"Nobody dethroned you.",
+  // ⚠️ v8.405 — narration du Champion adaptée au vrai parcours (cf. championNarrativeKey).
+  "Quel retournement !":"What a turnaround!", "Tu arraches le titre sur la dernière journée.":"You snatch the title on the final matchday.",
+  "Remontée incroyable !":"Incredible comeback!", "Tu termines la saison au sommet.":"You finish the season on top.",
+  "Jusqu'au bout !":"Right to the wire!", "Tu décroches le titre au terme d'une saison disputée.":"You take the title after a hard-fought season.",
+  "Champion !":"Champion!", "Tu termines la saison en tête.":"You finish the season in first place.",
   "Belle saison !":"Great season!", "Bientôt la bonne !":"The big one's coming!",
   "Saison rude.":"A rough season.", "Le gage t'attend…":"The dare awaits…",
   "Ta revanche t'attend.":"Your rematch awaits.",
@@ -16871,15 +16876,6 @@ function viewEnd(){
   // `aspect-ratio` posé sur l'image comme pour les autres Maestro déjà portés cette session, boîte
   // de texte repositionnée par mesure de pixels sur CES fichiers précis, pas sur les % de la
   // maquette (qui ne correspondent pas à ce carré 1:1).
-  const CLASSEMENT_ASSETS = {
-    champion:{img:'qg-tactizo-classement-champion.png', color:'var(--green)', eyebrow:"Champion", title:"Saison de rêve !", text:"Personne ne t'a détrôné."},
-    podium:{img:'qg-tactizo-classement-podium.png', color:'var(--blue)', eyebrow:"Sur le podium", title:"Belle saison !", text:"Bientôt la bonne !"},
-    // ⚠️ Solo (2026-09-06) — AUCUN gage en Solo (retour Hervé) : ce Maestro se lit sur "ai-je battu
-    // l'IA ou non" (cf. note ci-dessus), pas sur l'enjeu entre humains — le texte ne doit donc
-    // jamais mentionner "le gage", qui n'existe pas dans ce contexte.
-    dernier:{img:'qg-tactizo-classement-dernier.png', color:'var(--red)', eyebrow:"Dernier", title:"Saison rude.", text: isSolo() ? "Ta revanche t'attend." : "Le gage t'attend…"},
-    horspodium:{img:'qg-tactizo-classement-horspodium.png', color:'var(--gold)', eyebrow:"Hors podium", title:"Solide.", text:"Pas mal, sans plus."}
-  };
   const myRankFinal = myGlobalIdx>=0 ? finalRanksAll[myGlobalIdx] : 0;
   // ⚠️ Ordre de priorité CORRIGÉ vs la maquette (2026-09-06) — classement-final.html teste "podium"
   // (rang≤3) avant "dernier" (rang===dernier rang) ; avec ≤3 joueurs au total (dont le Solo, 2
@@ -16896,6 +16892,52 @@ function viewEnd(){
   const classementStateKey = (!abandoned && myRankFinal>0)
     ? (myRankFinal===1?'champion':myRankFinal===lastRankFinal?'dernier':myRankFinal<=3?'podium':'horspodium')
     : null;
+  // ⚠️ v8.405 (bug vécu par Hervé, 2026-09-09) — "Saison de rêve ! Personne ne t'a détrôné."
+  // s'affichait pour TOUT champion, y compris un joueur resté dernier presque toute la saison
+  // avant de prendre la tête à la toute dernière journée — une affirmation contredite par
+  // l'historique réel. Reconstruit le VRAI parcours du joueur qui regarde, jour par journée, via
+  // `computeStandHist()` (même rejeu que "Classement journée par journée", `classe()`/
+  // `competitionRanks()` — AUCUN second classement inventé), et choisit la narration la PLUS
+  // SPÉCIFIQUE que les données permettent réellement de prouver, dans l'ordre : leader du bout en
+  // bout > titre pris SEULEMENT à la dernière journée > remontée depuis la moitié basse du
+  // classement > tête ayant changé de mains au moins une fois. Sans historique fiable
+  // (`computeStandHist()` vide — ligue trop ancienne, ou joueur absent d'un instantané), repli sur
+  // un message neutre qui n'affirme rien de plus que le rang final : jamais d'histoire inventée.
+  const championNarrativeKey = (classementStateKey!=='champion' || !meP) ? null : (()=>{
+    const snaps=computeStandHist(); const N=snaps.length;
+    if(N<1) return 'fallback';
+    const ranksOfMe=[];
+    for(let d=0; d<N; d++){
+      const dayOrd=classe(snaps[d]); const dayRanks=competitionRanks(dayOrd);
+      const idx=dayOrd.findIndex(p=>p.id===meP.id);
+      if(idx<0) return 'fallback';   // joueur absent d'un instantané → donnée non fiable
+      ranksOfMe.push(dayRanks[idx]);
+    }
+    if(ranksOfMe.every(r=>r===1)) return 'leader';
+    if(N>=2 && ranksOfMe[N-2]!==1 && ranksOfMe[N-1]===1) return 'lastday';
+    if(ranksOfMe.some((r,d)=>r>Math.ceil(snaps[d].length/2))) return 'comeback';
+    const leadersSeen=new Set();
+    for(let d=0; d<N; d++){ const dayOrd=classe(snaps[d]); const dayRanks=competitionRanks(dayOrd);
+      dayOrd.forEach((p,i)=>{ if(dayRanks[i]===1) leadersSeen.add(p.id); }); }
+    return leadersSeen.size>=2 ? 'contested' : 'fallback';
+  })();
+  const CHAMPION_NARRATIVES = {
+    leader:    {title:"Saison de rêve !", text:"Personne ne t'a détrôné."},
+    lastday:   {title:"Quel retournement !", text:"Tu arraches le titre sur la dernière journée."},
+    comeback:  {title:"Remontée incroyable !", text:"Tu termines la saison au sommet."},
+    contested: {title:"Jusqu'au bout !", text:"Tu décroches le titre au terme d'une saison disputée."},
+    fallback:  {title:"Champion !", text:"Tu termines la saison en tête."}
+  };
+  const CLASSEMENT_ASSETS = {
+    champion:{img:'qg-tactizo-classement-champion.png', color:'var(--green)', eyebrow:"Champion",
+      ...(CHAMPION_NARRATIVES[championNarrativeKey]||CHAMPION_NARRATIVES.fallback)},
+    podium:{img:'qg-tactizo-classement-podium.png', color:'var(--blue)', eyebrow:"Sur le podium", title:"Belle saison !", text:"Bientôt la bonne !"},
+    // ⚠️ Solo (2026-09-06) — AUCUN gage en Solo (retour Hervé) : ce Maestro se lit sur "ai-je battu
+    // l'IA ou non" (cf. note ci-dessus), pas sur l'enjeu entre humains — le texte ne doit donc
+    // jamais mentionner "le gage", qui n'existe pas dans ce contexte.
+    dernier:{img:'qg-tactizo-classement-dernier.png', color:'var(--red)', eyebrow:"Dernier", title:"Saison rude.", text: isSolo() ? "Ta revanche t'attend." : "Le gage t'attend…"},
+    horspodium:{img:'qg-tactizo-classement-horspodium.png', color:'var(--gold)', eyebrow:"Hors podium", title:"Solide.", text:"Pas mal, sans plus."}
+  };
   const classementMaestroHTML = classementStateKey ? (()=>{ const cs=CLASSEMENT_ASSETS[classementStateKey];
     return `<div class="a2-classement-maestro st-${classementStateKey}"><img class="a2-classement-maestro-img" src="img/${cs.img}" alt="${t("Le Maestro")}" style="aspect-ratio:1/1">
       <div class="a2-classement-box"><div class="a2-classement-eyebrow" style="color:${cs.color}">${t(cs.eyebrow)}</div>
@@ -16967,10 +17009,19 @@ function viewEnd(){
    <button class="btn" onclick="closeLeague()">${t("🏠 Retour à l'accueil")}</button>
    <div class="mini muted" style="text-align:center;margin-top:6px">${t("Cette ligue est <b>terminée</b> — tu la retrouveras dans le dossier <b>« Ligues terminées »</b> de l'accueil.")}</div>`;
 }
-// On garde la section « terminées » DÉPLIÉE en sortant : on vient de fermer la ligue, c'est
-// exactement le moment où l'on veut la voir. (Avant : showFinished=false → la ligue qu'on venait
-// de terminer disparaissait dans la section repliée, au moment où elle avait le plus d'intérêt.)
-function closeLeague(){ showFinished=true; backToLeagues(); }
+// On garde la section « terminées » DÉPLIÉE pour la prochaine visite de l'onglet Ligues : on vient
+// de fermer la ligue, c'est exactement le moment où l'on veut la voir. (Avant : showFinished=false
+// → la ligue qu'on venait de terminer disparaissait dans la section repliée, au moment où elle
+// avait le plus d'intérêt.)
+// ⚠️ v8.405 (bug vécu par Hervé, 2026-09-09) — le bouton dit "🏠 Retour à l'accueil" mais appelait
+// `backToLeagues()`, qui envoie sur l'onglet LIGUES (`S.view="leagues"`, viewLeagues() — aucun hero
+// Maestro, jamais) et non sur le vrai QG (`S.view="home"`, viewHome() — hero Maestro TOUJOURS rendu,
+// cf. maestroHeroHTML()/computeMaestroMood()). Résultat : dernière ligue active terminée → plus
+// aucune ligue "running" → l'utilisateur revenait sur un écran Créer/Rejoindre/Mes ligues SANS
+// Maestro, en croyant être au QG. `goAccueil()` est la fonction déjà standard pour "aller au QG"
+// (même chemin que l'onglet 🏠 QG de la nav du bas et le bouton 🏠 du header) — aucun nouveau
+// composant Maestro, seulement la bonne destination.
+function closeLeague(){ showFinished=true; goAccueil(); }
 // Fiche « Caractéristiques de la ligue » depuis l'accueil (format, options, + fermeture pour l'organisateur)
 function showLeagueInfo(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m)return; const lg=m.lg;
