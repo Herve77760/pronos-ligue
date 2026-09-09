@@ -2422,7 +2422,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.397";
+const APP_VERSION = "v8.398";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4212,12 +4212,7 @@ const EN={
   "Défaite sur ta dernière journée jouée.":"Loss on your last played day.",
   "Match nul sur ta dernière journée jouée.":"Draw on your last played day.",
   "{w} victoire(s), {d} nul(s), {l} défaite(s) sur tes {n} dernières journées.":"{w} win(s), {d} draw(s), {l} loss(es) over your last {n} days.",
-  "Tu devances l'IA sur ta ligue Solo.":"You're ahead of the AI in your Solo league.",
   "Pas de classement exploitable pour l'instant.":"No usable ranking yet.",
-  "{a}ᵉ sur {b} joueurs dans ta ligue.":"Rank {a} of {b} players in your league.",
-  "Moyenne sur tes {b} ligues {c} : {a}/100.":"Average across your {b} {c} leagues: {a}/100.",
-  "Tu es à égalité avec l'IA sur ta ligue Solo.":"You're tied with the AI in your Solo league.",
-  "Tu es derrière l'IA sur ta ligue Solo.":"You're behind the AI in your Solo league.",
   "récemment terminées":"recently finished",
   "Pas assez de données pour évaluer ta gestion.":"Not enough data to assess your bankroll management.",
   "Une recapitalisation récente pèse sur ce score : ton capital est reparti d'une base plancher.":"A recent bailout weighs on this score: your capital restarted from a floor amount.",
@@ -4227,6 +4222,29 @@ const EN={
   "Pas assez de données pour évaluer ta stratégie.":"Not enough data to assess your strategy.",
   "Basé sur tes décisions récentes en journée (aucune enchère récente exploitable).":"Based on your recent in-game decisions (no recent auction data available).",
   "{a}% des bonus visés aux enchères obtenus ; décisions récentes prises en compte.":"{a}% of the bonuses you bid on were won at auction; recent decisions also factored in.",
+  // === v8.398 (demandé par Hervé) — explications concrètes des voyants, sans score technique brut ===
+  "le haut":"the top",
+  "le milieu":"the middle",
+  "le bas":"the bottom",
+  "devant l'IA":"ahead of the AI",
+  "à égalité avec l'IA":"tied with the AI",
+  "derrière l'IA":"behind the AI",
+  // "{a}ᵉ sur {b}" a déjà une entrée EN (section "MA SAISON") — même traduction, réutilisée telle
+  // quelle par qgComputeClassement() plutôt que dupliquée ici.
+  "Tu devances l'IA":"You're ahead of the AI",
+  "Tu es à égalité avec l'IA":"You're tied with the AI",
+  "Tu es derrière l'IA":"You're behind the AI",
+  "Tu es {a}ᵉ sur {b} joueurs":"You're rank {a} of {b} players",
+  "{a} dans ta ligue {b}. Tu es actuellement dans {c} de ce classement.":"{a} in your league {b}. You're currently in {c} of this ranking.",
+  "actuelle":"current",
+  "Ligue":"League",
+  "Ce voyant synthétise tes positions dans tes ligues récemment terminées.":"This indicator combines your positions across your recently finished leagues.",
+  "Ce voyant synthétise tes positions dans tes ligues en cours.":"This indicator combines your positions across your ongoing leagues.",
+  "Tu es actuellement dans {a} de tes classements.":"You're currently in {a} of your rankings.",
+  "capitaine gagnant {a}/{b} fois":"winning captain {a}/{b} times",
+  "bonus rentable {a}/{b} fois":"profitable bonus {a}/{b} times",
+  "Sur tes {n} dernières journées : {p}.":"Over your last {n} days: {p}.",
+  "{a}% des bonus visés aux enchères obtenus. {b}":"{a}% of the bonuses you bid on were won at auction. {b}",
   // === Connexion Google (v8.224) ===
   "Continuer avec Google":"Continue with Google",
   "ou":"or",
@@ -9041,6 +9059,9 @@ const QG_IND_LABELS_EN={classement:"Ranking",gestion:"Management"};
 function qgLabel(key){ return (lang==="en" && QG_IND_LABELS_EN[key]) || t(QG_IND_LABELS[key]); }
 let qgStatus=null, qgStatusLoaded=false;
 function qgTierFromScore(score){ return score==null?"gray":(score>=65?"green":(score>=35?"orange":"red")); }
+// ⚠️ v8.398 (demandé par Hervé) — le score 0-100 reste interne au moteur (seuils ci-dessus) ; ce mot
+// est la SEULE traduction du score montrée au joueur dans les fenêtres d'explication des voyants.
+function qgLevelWord(score){ return score>=65?t("le haut"):(score>=35?t("le milieu"):t("le bas")); }
 function qgStatusInfo(key){
   const r=qgStatus&&qgStatus[key];
   const label=qgLabel(key);
@@ -9148,25 +9169,35 @@ function qgComputeClassement(ctx){
       if(me.points>ai.points || (me.points===ai.points && me.capital>ai.capital)){ score=100; state="ahead"; }
       else if(me.points===ai.points && me.capital===ai.capital){ score=50; state="tied"; }
       else { score=0; state="behind"; }
-      entries.push({score, solo:true, state});
+      entries.push({score, solo:true, state, lgName:lg.name});
     } else {
       const humans=classe((plys||[]).filter(p=>p.league_id===lg.id && !p.is_ai));
       const of=humans.length; if(of<=1) return;
       const idx=humans.findIndex(p=>p.id===pid); if(idx<0) return;
       const rank=(competitionRanks(humans)[idx])||0; if(rank<1) return;
-      entries.push({score:100*(of-rank)/(of-1), solo:false, rank, of});
+      entries.push({score:100*(of-rank)/(of-1), solo:false, rank, of, lgName:lg.name});
     }
   });
   if(!entries.length) return {score:null,color:"gray",msg:t("Pas de classement exploitable pour l'instant.")};
   const avg=Math.round(entries.reduce((s,x)=>s+x.score,0)/entries.length);
+  const level=qgLevelWord(avg);
+  // ⚠️ v8.398 (demandé par Hervé) — le joueur ne doit jamais voir le score technique (ex. "25/100"),
+  // seulement les données concrètes qui l'ont produit : nom(s) de ligue(s), position réelle ou
+  // face à l'IA, et la conclusion en mot (qgLevelWord). Le score/100 reste interne (tri, seuils).
+  const entryPos=e=> e.solo
+    ? (e.state==="ahead"?t("devant l'IA"):e.state==="tied"?t("à égalité avec l'IA"):t("derrière l'IA"))
+    : t("{a}ᵉ sur {b}",{a:e.rank,b:e.of});
   let msg;
   if(entries.length===1){
     const e=entries[0];
-    msg = e.solo
-      ? (e.state==="ahead"?t("Tu devances l'IA sur ta ligue Solo."):e.state==="tied"?t("Tu es à égalité avec l'IA sur ta ligue Solo."):t("Tu es derrière l'IA sur ta ligue Solo."))
-      : t("{a}ᵉ sur {b} joueurs dans ta ligue.",{a:e.rank,b:e.of});
+    const pos = e.solo
+      ? (e.state==="ahead"?t("Tu devances l'IA"):e.state==="tied"?t("Tu es à égalité avec l'IA"):t("Tu es derrière l'IA"))
+      : t("Tu es {a}ᵉ sur {b} joueurs",{a:e.rank,b:e.of});
+    msg = t("{a} dans ta ligue {b}. Tu es actuellement dans {c} de ce classement.",{a:pos,b:esc(e.lgName||t("actuelle")),c:level});
   } else {
-    msg = t("Moyenne sur tes {b} ligues {c} : {a}/100.",{a:avg,b:entries.length,c:fromDone?t("récemment terminées"):t("en cours")});
+    const list = entries.map(e=>`${esc(e.lgName||t("Ligue"))} : ${entryPos(e)}`).join("<br>");
+    const synth = fromDone ? t("Ce voyant synthétise tes positions dans tes ligues récemment terminées.") : t("Ce voyant synthétise tes positions dans tes ligues en cours.");
+    msg = `${list}<br>${synth} ${t("Tu es actuellement dans {a} de tes classements.",{a:level})}`;
   }
   return {score:avg,color:qgTierFromScore(avg),msg,data:{entries,fromDone}};
 }
@@ -9220,7 +9251,7 @@ function qgComputeStrategie(ctx){
       else if(favScore!=null) dayScore=favScore;
       else if(bonusScore!=null) dayScore=bonusScore;
       else return;
-      dayScores.push({dayScore, ts:b.created_at?new Date(b.created_at).getTime():0});
+      dayScores.push({dayScore, favScore, bonusScore, ts:b.created_at?new Date(b.created_at).getTime():0});
     });
   });
   dayScores.sort((a,b)=>b.ts-a.ts);
@@ -9232,9 +9263,19 @@ function qgComputeStrategie(ctx){
 
   if(auctionScore==null && tacticalScore==null) return {score:null,color:"gray",msg:t("Pas assez de données pour évaluer ta stratégie.")};
   const score=Math.round(auctionScore==null?tacticalScore:(tacticalScore==null?auctionScore:0.3*auctionScore+0.7*tacticalScore));
+  // ⚠️ v8.398 (demandé par Hervé) — même principe que Classement : jamais de score technique nu.
+  // "décisions récentes prises en compte" ne disait rien de concret ; on détaille maintenant le
+  // capitaine et le bonus joué sur les journées comptées, sans toucher au calcul de tacticalScore.
+  const favD=last.filter(x=>x.favScore!=null), bonusD=last.filter(x=>x.bonusScore!=null);
+  const tacticalParts=[];
+  if(favD.length) tacticalParts.push(t("capitaine gagnant {a}/{b} fois",{a:favD.filter(x=>x.favScore===100).length,b:favD.length}));
+  if(bonusD.length) tacticalParts.push(t("bonus rentable {a}/{b} fois",{a:bonusD.filter(x=>x.bonusScore===100).length,b:bonusD.length}));
+  const tacticalMsg = tacticalParts.length ? t("Sur tes {n} dernières journées : {p}.",{n:last.length,p:tacticalParts.join(", ")}) : null;
   const msg = auctionScore==null
-    ? t("Basé sur tes décisions récentes en journée (aucune enchère récente exploitable).")
-    : t("{a}% des bonus visés aux enchères obtenus ; décisions récentes prises en compte.",{a:Math.round(auctionScore)});
+    ? (tacticalMsg || t("Basé sur tes décisions récentes en journée (aucune enchère récente exploitable)."))
+    : (tacticalMsg
+        ? t("{a}% des bonus visés aux enchères obtenus. {b}",{a:Math.round(auctionScore),b:tacticalMsg})
+        : t("{a}% des bonus visés aux enchères obtenus ; décisions récentes prises en compte.",{a:Math.round(auctionScore)}));
   return {score,color:qgTierFromScore(score),msg,data:{auctionScore,tacticalScore,totT,totO,nDays:last.length}};
 }
 
