@@ -1492,22 +1492,16 @@
   .a2-maestro-mood-chip.tier-4{background:var(--mm-tier-4-dim);color:var(--mm-tier-4-ink);border:1px solid rgba(199,217,74,.45)}
   .a2-maestro-mood-chip.tier-5{background:var(--mm-tier-5-dim);color:var(--mm-tier-5-ink);border:1px solid rgba(123,216,143,.45)}
   .a2-maestro-mood-chip.tier-6{background:var(--mm-tier-6-dim);color:var(--mm-tier-6-ink);border:1px solid rgba(63,202,133,.45)}
-  /* v8.395 — voyants dynamiques du QG (Forme/Classement/Stratégie/Gestion), superposés sur les 4
-     cercles gris peints dans les 6 illustrations Maestro. ⚠️ Deux correctifs successifs (2026-09-09,
-     signalés par Hervé) :
-     1) la v8.393 supposait à tort que t1/t2/t4/t5/t6 partageaient les mêmes coordonnées (vu
-        "identiques" à l'œil) — une mesure par transformée de Hough sur les 6 PNG réels a montré des
-        écarts réels de 0,5 à 2,5% selon le palier. Coordonnées et diamètre sont désormais mesurés
-        et injectés PAR PALIER (QG_DOT_GEOM, JS) — le palier 3 (pose différente, object-fit:cover,
-        déjà transformé dans QG_DOT_GEOM) n'est plus un cas "spécial", juste un jeu de coordonnées.
-     2) la v8.394 groupait libellé+pastille dans un même bouton flex à largeur "auto" (shrink-to-fit)
-        et donnait à la pastille une LARGEUR EN % — un enfant flex avec width:% dans un conteneur qui
-        se dimensionne lui-même sur SON contenu est un cycle que les navigateurs ne résolvent pas
-        (la pastille rendait ~1-2px au lieu de ~4% de l'image). Le libellé ET la pastille sont donc
-        maintenant DEUX éléments positionnés indépendamment (chacun en % de .a2-maestro-mood-body,
-        qui a toujours une largeur déterminée) : la pastille exactement comme avant (centrée sur le
-        cercle mesuré), le libellé ancré par son bord DROIT juste avant le bord gauche de la pastille
-        (right calc(%+px), largeur naturelle du texte, jamais de largeur en % d'un parent auto). */
+  /* v8.396 — voyants dynamiques du QG. Historique des correctifs (2026-09-09, signalés par Hervé) :
+     1) v8.393 supposait à tort t1/t2/t4/t5/t6 identiques — mesuré par palier depuis (QG_DOT_GEOM).
+     2) v8.394 : pastille en largeur % dans un flex-parent "auto" → cycle non résolu (rendait ~1px).
+        Pastille et libellé séparés, chacun en % de .a2-maestro-mood-body (largeur déterminée).
+     3) v8.395 ancrait le libellé à GAUCHE de la pastille (par-dessus le Maestro) — le texte doit en
+        réalité aller à DROITE, DANS le panneau peint. Le panneau n'a que ~11-12% de largeur libre
+        à droite de chaque pastille (mesuré : bord droit réel du panneau à 98,4-98,9% selon le
+        palier, avec une marge de sécurité à 97%) — d'où une police volontairement petite (7px,
+        cohérente avec le chip de palier existant à 6,5px sur cette même carte) pour que "Classement"/
+        "Management" y tiennent sans déborder ni sur le panneau ni sur le Maestro. */
   .a2-qg-dot{position:absolute;aspect-ratio:1;border-radius:50%;transform:translate(-50%,-50%);
     z-index:3;pointer-events:none;box-shadow:0 0 0 1px rgba(0,0,0,.45),0 1px 3px rgba(0,0,0,.5)}
   .a2-qg-dot.qs-green{background:radial-gradient(circle at 35% 30%,#8ff2b4,var(--green))}
@@ -1516,14 +1510,20 @@
   .a2-qg-dot.qs-gray{background:radial-gradient(circle at 35% 30%,#9ba2b0,#5a6072)}
   .a2-qg-row{position:absolute;transform:translateY(-50%);z-index:3;background:none;border:none;
     font:inherit;padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;
-    display:block;white-space:nowrap}
-  .a2-qg-row::before{content:'';position:absolute;top:50%;right:-22px;width:calc(100% + 44px);
+    display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .a2-qg-row::before{content:'';position:absolute;top:50%;left:-22px;width:calc(100% + 44px);
     height:30px;transform:translateY(-50%)}
-  .a2-qg-row-label{display:block;font-size:10.5px;font-weight:700;color:#f4f7fc;white-space:nowrap;
-    text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 3px rgba(0,0,0,.9),0 0 7px rgba(0,0,0,.65)}
-  .a2-qg-title{position:absolute;font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;
-    text-align:right;color:#e9ecf4;text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 7px rgba(0,0,0,.65);
-    z-index:3;pointer-events:none;white-space:nowrap}
+  /* ⚠️ Espace réellement disponible À DROITE de la pastille, DANS le panneau peint : ~12-12,5% de
+     la largeur (bord droit réel du panneau 98,4-98,9% mesuré par palier, pastille ~85-85,6%) — soit
+     à peine ~35-37px à 320px d'écran. "Management"/"Classement" n'y tiennent qu'à une police très
+     petite ET condensée (poids 700 + letter-spacing légèrement négatif, jamais 800 : le gras élargit
+     trop). Vérifié à 320px AVEC la vraie fenêtre : "Management" (le mot le plus large des deux
+     langues) rend à 35px pour une place disponible de 35,9px sur le palier le plus serré (t2). */
+  .a2-qg-row-label{display:block;font-size:5.5px;font-weight:700;letter-spacing:-.3px;color:#f4f7fc;
+    white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.9)}
+  .a2-qg-title{position:absolute;font-size:5.5px;font-weight:700;letter-spacing:-.6px;text-transform:uppercase;
+    color:#e9ecf4;text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 3px rgba(0,0,0,.9);
+    z-index:3;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* ⚠️ Correctif régression iPhone (2026-09-06) — hero "Pronos validés" (pronos-valides.html),
      REFAIT : la première version réutilisait .a2-hero-card (aspect-ratio:5/4 + object-position:
      100% = cadré sur le bord DROIT de l'image), pensé pour d'autres assets où le Maestro occupe le
@@ -2401,7 +2401,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.395";
+const APP_VERSION = "v8.396";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -8974,15 +8974,20 @@ function maestroHeroHTML(){
     : mood.msgKey==="one" ? t("Une ligue t'attend ! <b>À toi de jouer.</b>")
     : t("Tout est sous contrôle. <b>Pour l'instant.</b>");
   const geo=QG_DOT_GEOM[tier];
-  // Bord droit du LIBELLÉ = bord gauche de la pastille moins un petit espace fixe (jamais une
-  // largeur en % — cf. note ci-dessus, c'est exactement ce qui rendait la pastille invisible).
-  const labelRight=`calc(${(100-(geo.cx-geo.d/2)).toFixed(2)}% + 6px)`;
-  const titleHTML=`<div class="a2-qg-title" style="top:${geo.titleY}%;right:${labelRight}">${t("TON ÉTAT")}</div>`;
+  // Bord gauche du texte = bord droit de la pastille + petit espace fixe (jamais une largeur en %
+  // d'un parent "auto" — cf. note ci-dessus, c'est ce qui rendait la pastille invisible en v8.394).
+  // max-width borne le texte à l'intérieur du panneau réel (bord droit mesuré 98,4-98,9% selon le
+  // palier ; 98% garde ~5-13px de marge avant le bord peint, mesuré suffisant) — filet de sécurité,
+  // la police (5.5px condensée) est déjà dimensionnée pour que "Classement"/"Management" y tiennent
+  // en entier à 320px sur le palier le plus serré (t2, vérifié : 35px de texte pour 35,9px dispo).
+  const labelLeft=`calc(${(geo.cx+geo.d/2).toFixed(2)}% + 3px)`;
+  const maxW=(98-(geo.cx+geo.d/2)).toFixed(2);
+  const titleHTML=`<div class="a2-qg-title" style="top:${geo.titleY}%;left:${labelLeft};max-width:${maxW}%">${t("TON ÉTAT")}</div>`;
   const dots=QG_IND_KEYS.map((k,i)=>{ const r=qgStatus&&qgStatus[k]; const c=r?r.color:"gray";
     return `<div class="a2-qg-dot qs-${c}" style="left:${geo.cx}%;top:${geo.cy[i]}%;width:${geo.d}%"></div>`;
   }).join("");
   const rows=QG_IND_KEYS.map((k,i)=>{
-    return `<button class="a2-qg-row" style="top:${geo.cy[i]}%;right:${labelRight}" onclick="qgStatusInfo('${k}')">`+
+    return `<button class="a2-qg-row" style="top:${geo.cy[i]}%;left:${labelLeft};max-width:${maxW}%" onclick="qgStatusInfo('${k}')">`+
       `<span class="a2-qg-row-label">${qgLabel(k)}</span></button>`;
   }).join("");
   return `<div class="a2-maestro-mood tier-${tier}"><div class="a2-maestro-mood-body">
