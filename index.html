@@ -2487,7 +2487,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.405";
+const APP_VERSION = "v8.407";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4588,6 +4588,12 @@ const EN={
   "Matchs":"Matches", "Réels":"Real", "Simulés":"Simulated",
   "Résultats immédiats, sans vrais matchs.":"Instant results, no real matches.",
   "Vrais matchs, vraies cotes.":"Real matches, real odds.",
+  // Lot 2 (2026-09-10) — "direct" gratuit pour tous : nouveaux libellés Matchs réels / Partie express.
+  "⚽ Matchs réels":"⚽ Real matches", "⚡ Partie express":"⚡ Quick game",
+  "Pronostique sur les vraies rencontres.":"Predict on the real fixtures.",
+  "Joue immédiatement avec des matchs simulés.":"Play right away with simulated matches.",
+  "Matchs réels":"Real matches", "Partie express":"Quick game",
+  "⚽ Réels":"⚽ Real", "⚡ Express":"⚡ Quick",
   "Bonus":"Bonuses", "6 bonus essentiels.":"6 essential bonuses.", "14 bonus, plus de stratégie.":"14 bonuses, more strategy.",
   "Rythme":"Pace", "24h par étape.":"24h per step.", "12h par étape.":"12h per step.",
   "En simulé, la journée se résout dès que tout le monde a validé — ce délai ne sert que si quelqu'un tarde.":
@@ -6079,6 +6085,9 @@ const EN={
   "Archive la ligue dans « Ligues terminées ». Action irréversible.":"Archives the league under “Finished leagues”. This cannot be undone.",
   "Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.":"Fictional matches and odds, results drawn from their probabilities (a bit of randomness). No real match to wait for — made for playing among friends, even a whole game in a single evening.",
   "Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results: to prove who's the best forecaster for real. ⚠️ A matchday only resolves once the matches are actually played.",
+  // Lot 2 (2026-09-10) — nouveaux textes longs Matchs réels / Partie express (createOptInfo/paramInfo/showLeagueInfo).
+  "Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.":"Real matches, real odds, real results: predict on the real thing and prove who forecasts best. ⚠️ A matchday only resolves once the matches are actually played.",
+  "Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : idéal pour découvrir Tactizo tout de suite ou enchaîner une partie rapide entre amis.":"Simulated matches and results at realistic odds, with no real match to wait for: perfect for discovering Tactizo right away or squeezing in a quick game with friends.",
   "⏳ Chargement des vrais matchs à venir…":"⏳ Loading upcoming real matches…", "⏳ Chargement des matchs…":"⏳ Loading matches…", "🔄 Réessayer":"🔄 Retry",
   // ⚠️ Correctif audit V2 (2026-09-06) — l'ancienne clé ("...ou l'organisateur peut repasser la
   // ligue en mode simulé") promettait une action IMPOSSIBLE pour tout le monde, organisateur compris :
@@ -6973,8 +6982,8 @@ function estNatif(){ return !!(window.Capacitor && window.Capacitor.isNativePlat
 let revenueCatPret=false;
 // Configure le SDK RevenueCat (une seule fois) puis relie l'identité RevenueCat au compte
 // Supabase (`AUTH.id`) — c'est CE lien qui permet au webhook de savoir à qui accorder le droit
-// après un achat. Appelé partout où `AUTH` vient d'être posé (boot, connexion, inscription),
-// même schéma que `autoRedeemPromoIfAny`. Silencieux : ne doit jamais bloquer l'entrée dans l'app.
+// après un achat. Appelé partout où `AUTH` vient d'être posé (boot, connexion, inscription).
+// Silencieux : ne doit jamais bloquer l'entrée dans l'app.
 async function ensureRevenueCatLogin(){
   if(!estNatif() || !AUTH || !AUTH.id) return;
   const P=window.Capacitor.Plugins && window.Capacitor.Plugins.Purchases; if(!P) return;
@@ -7227,9 +7236,11 @@ function openShop(){ if(!AUTH) return; navOpen("shop"); }
 // convention que icone-ia.png/icone-donnees.png/icone-encheres.png).
 const OPT_ICONS={ bonuscomplets:'bonus-tout.png', treve:'icone-encheres.png', ia:'icone-ia.png', direct:'icone-donnees.png',
   live:'icone-live.png', voiradv:'icone-voir-adversaire.png', stats:'icone-stats-avancees.png', rachat:'icone-rachat-bonus.png' };
-// Port V2 (2026-09-06, boutique.html) — mêmes 8 options que SHOP_ORDER, réparties en 2 familles
-// exactement comme la maquette (payées par l'organisateur pour toute la ligue vs personnelles).
-const SHOP_LEAGUE=["bonuscomplets","treve","ia","direct"];
+// Port V2 (2026-09-06, boutique.html) — répartit les options en 2 familles exactement comme la
+// maquette (payées par l'organisateur pour toute la ligue vs personnelles). "direct" retiré de
+// SHOP_LEAGUE le 2026-09-10 (Lot 2) : gratuit pour tous, ne se vend plus seul dans la Boutique
+// (reste dans SHOP_ORDER/PITCHES/PRICES pour le Pack, cf. Lot 3 pour le nettoyage complet).
+const SHOP_LEAGUE=["bonuscomplets","treve","ia"];
 const SHOP_PERSONAL=["live","voiradv","stats","rachat"];
 // Économie du Pack — calculée depuis les prix RÉELS des 8 cartes (jamais un chiffre en dur), pour
 // ne jamais diverger silencieusement si un prix change (même règle que la maquette, computePackSavings()).
@@ -7288,10 +7299,9 @@ function viewShop(){
 }
 // Code promo : toutes les options offertes pour la durée fixée par le code, une seule fois par
 // compte (cf. redeem_promo_code, MIGRATION-promo-codes.sql — toute la validation vit côté serveur).
-// Cœur commun aux 3 points d'entrée : Boutique (saisie manuelle), inscription Google/Apple (session
-// déjà là) et 1ère connexion après inscription pseudo/mot de passe (cf. autoRedeemPromoIfAny, le
-// code est mémorisé le temps que l'e-mail soit confirmé). `silent` : n'affiche pas l'erreur — sert
-// à la reprise automatique, où le joueur n'a rien saisi lui-même à cet instant précis.
+// Cœur commun aux 2 points d'entrée réels : Boutique (saisie manuelle) et choix du pseudo
+// (doChoosePseudo, appelé directement dès que la session existe). `silent` : n'affiche pas
+// l'erreur — réservé à un futur appel automatique, aucun cas d'usage actif aujourd'hui.
 async function applyPromoCode(code,opts){
   opts=opts||{}; code=(code||"").trim().toUpperCase(); if(!code) return false;
   try{
@@ -7311,15 +7321,6 @@ async function redeemPromoCode(){
   const el=$("promoInput"); const code=((el&&el.value)||"").trim();
   if(!code){ showErr(t("Entre un code.")); return; }
   if(await applyPromoCode(code) && el) el.value="";
-}
-// Reprise automatique du code saisi À L'INSCRIPTION (pseudo/mot de passe) : à ce moment-là, aucune
-// session n'existe encore pour l'appliquer (confirmation par e-mail en attente), donc il voyage
-// avec le compte le temps qu'il faut. Tenté une seule fois, à la toute première connexion qui
-// suit, puis effacé du compte (réussi ou pas — jamais retenté après ce premier essai).
-async function autoRedeemPromoIfAny(meta){
-  const code=(meta&&meta.promo_code)||""; if(!code) return;
-  await applyPromoCode(code,{silent:true});
-  try{ await db.auth.updateUser({ data:{ promo_code:null } }); }catch(e){}
 }
 // Bonus d'un joueur (clic sur son nom au classement) : restants + utilisés (barrés). Données LIVE.
 /* ⚠️ v8.94 (demandé par Hervé) — TROIS GROUPES, PAS UN SEUL TAS. Sans trêve, « hand + cards_used »
@@ -8642,7 +8643,6 @@ async function doLogin(){
   await loadOpts();
   busy=false; btn.classList.remove("loading","off"); btn.removeAttribute("aria-disabled");
   S.view = AUTH.name ? "home" : "choosePseudo"; startPoll(); await loadMyLeagues();
-  await autoRedeemPromoIfAny(data.user.user_metadata);   // code promo saisi au choix du pseudo, en attente de l'e-mail confirmé
   await ensureRevenueCatLogin();
 }
 /* ⚠️ v8.224 — LA REDIRECTION QUITTE LA PAGE : rien à faire après le `signInWithOAuth` en cas de
@@ -10388,9 +10388,10 @@ const LEAGUE_NAME_MAX=30;
 // le lobby ne propose plus aucun réglage, seulement le partage du code + la clôture.
 let newLg=null;
 // Défauts = ce que le créateur peut réellement utiliser : s'il a l'option, on pré-sélectionne l'option
-// payante (complet / réel) ; sinon on reste sur le gratuit (simple / simulé) pour éviter tout blocage.
+// payante (complet) ; sinon on reste sur le gratuit (simple) pour éviter tout blocage. Les matchs
+// réels sont gratuits pour tous depuis Lot 2 (2026-09-10) : plus de condition sur `direct` ici.
 function newLgDefaults(){ return { name:t("Ligue de {a}",{a:AUTH?AUTH.name:''}), type:'amis',
-  formula:'classique', mode: hasOpt('bonuscomplets')?'complet':'simple', data: hasOpt('direct')?'real':'sim', enjeu:'gage', soloAR:2, treve:false }; }
+  formula:'classique', mode: hasOpt('bonuscomplets')?'complet':'simple', data:'real', enjeu:'gage', soloAR:2, treve:false }; }
 // ⚠️ Bloc 2 Tactizo V2 (2026-09-05) — l'ancien mécanisme de bulle d'info dépliable par groupe
 // (`createInfoOpen`/`toggleCreateInfo`, v8.124) disparaît avec le formulaire à une seule page qui
 // l'utilisait : le wizard qui le remplace (`createStep`, cf. `viewCreate()`) montre directement
@@ -10402,7 +10403,6 @@ function cancelCreate(){ newLg=null; navBack(); }
 function setNew(k,v){ if(!newLg) newLg=newLgDefaults();
   if(k==='type' && v==='solo' && !requireOpt('ia')) return;          // jouer seul vs IA = option premium
   if(k==='mode' && v==='complet' && !requireOpt('bonuscomplets')) return; // jeu complet des bonus = premium
-  if(k==='data' && v==='real' && !requireOpt('direct')) return;      // choisir des données réelles = option 📡 (le suivi en direct, lui, dépend de ⏱️ `live`)
   if(k==='treve' && v===true && !requireOpt('treve')) return;        // trêve de mi-saison = option premium
   /* ⚠️ v8.82 — COCHER LA TRÊVE FORCE 4 JOURNÉES, ET ON LE DIT (arbitré avec Hervé). Le seul format
      qui descend sous 4 journées est le solo en « 1 aller-retour » : une trêve y tomberait après
@@ -10453,8 +10453,8 @@ function viewCreate(){
     const secIc=src=>`<img src="img/${src}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-right:7px">`;
     body=`<div class="a2-sec-title">${secIc('icone-donnees.png')}${t("Matchs")}${secInfo('data')}</div>
       <div class="a2-pair-row">
-        ${pair(g.data==='sim',"setNew('data','sim')",t("🎮 Simulé"),t("Résultats immédiats, sans vrais matchs."))}
-        ${pair(g.data==='real',"setNew('data','real')",t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes."),premBadge('direct'))}
+        ${pair(g.data==='real',"setNew('data','real')",t("⚽ Matchs réels"),t("Pronostique sur les vraies rencontres."))}
+        ${pair(g.data==='sim',"setNew('data','sim')",t("⚡ Partie express"),t("Joue immédiatement avec des matchs simulés."))}
       </div>
       <div class="a2-sec-title">${secIc('icone-mode.png')}${t("Bonus")}${secInfo('mode')}</div>
       <div class="a2-pair-row">
@@ -10491,7 +10491,7 @@ function viewCreate(){
     const rrow=(label,val,field)=>`<button type="button" class="a2-recap-line" onclick="goCreateStep(${STEP_OF[field]})">
         <span class="rl-label">${label}</span><span class="rl-sep">—</span><span class="rl-val">${val}</span><span class="rl-sep">—</span><span class="rl-chev">›</span></button>`;
     let rows=rrow(t("Nom"),esc(g.name||''),'name') + rrow(t("Type"),solo?t("Solo"):t("Entre amis"),'type')
-      + rrow(t("Matchs"),g.data==='real'?t("Réels"):t("Simulés"),'data')
+      + rrow(t("Matchs"),g.data==='real'?t("Matchs réels"):t("Partie express"),'data')
       + rrow(t("Rythme"),g.formula==='fast'?t(FORMULAS.fast.n):t(FORMULAS.classique.n),'formula')
       + rrow(t("Bonus"),g.mode==='complet'?t("Complet (14)"):t("Simple (6)"),'mode');
     if(!solo) rows+=rrow(t("Enjeu"),g.enjeu==='gage'?t("Gage"):(g.enjeu==='reward'?t("Récompense"):t("Gage + Récompense")),'enjeu');
@@ -10576,7 +10576,7 @@ async function createLeague(){
     // Le code est tiré par insertLeagueCodeUnique (qui réessaie en cas de doublon) : on lit ensuite
     // `lg.code`, jamais un code tiré ici — sinon on afficherait au joueur un code différent du sien.
     const mode = (newLg.mode==='complet' && hasOpt('bonuscomplets')) ? 'complet' : 'simple';
-    const data = (newLg.data==='real' && hasOpt('direct')) ? 'real' : 'sim';
+    const data = (newLg.data==='real') ? 'real' : 'sim'; // gratuit pour tous depuis Lot 2 (2026-09-10)
     const formula = (newLg.formula==='fast') ? 'fast' : 'classique';
     const st = { mode };                         // réglages figés stockés dans le JSON `gage`
     // ⚠️ v8.82 — `hasOpt` VÉRIFIÉ ICI, PAS EN JEU : l'option autorise le choix, la ligue le fige.
@@ -11470,7 +11470,8 @@ async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode : "+e.message); } busy=false; }
 async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
-  if(m==="real" && !requireOpt('direct')) return;   // basculer la ligue en données réelles = option 📡 (pas ⏱️ : voir v6.99)
+  // ⚠️ Fonction morte (aucun écran vivant ne l'appelle, cf. commentaire ~L6083) — plus de verrou
+  // `direct` ici depuis Lot 2 (2026-09-10), par cohérence si elle était un jour réactivée.
   busy=true;
   try{ await q(db.from("leagues").update({data_mode:m}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Mode données : "+e.message+" (ajoute la colonne 'data_mode')"); } busy=false; }
@@ -12030,7 +12031,7 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
      Cacher le réglage le rendait invisible dans le seul cas où il décide de quelque chose. */
   return kv("⏱️ "+t("Rythme"), t(leagueFormula().n), 'formula')
    + kv("🎛️ "+t("Mode"), t(MODES[getMode()].n), 'mode')
-   + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("📡 Réelles"):t("🎮 Simulé"), 'data')
+   + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("⚽ Réels"):t("⚡ Express"), 'data')
    + kv("🃏 "+t("Enchères"), hasTreve()?t("Départ + trêve"):t("Au départ"), 'treve')
    + extra; }
 // ⚠️ QA (2026-09-07, point 1, demandé par Hervé) — MÊME CONTENU que `paramInfo()` juste en dessous
@@ -12041,8 +12042,8 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
 // des mêmes phrases, seule la source (brouillon vs ligue créée) change.
 function createOptInfo(kind){
   const g=newLg||{}; let emoji="ℹ️", title="", body="", premKey=null;
-  if(kind==='data'){ const real=(g.data==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); if(real) premKey='direct';
-    body=real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."); }
+  if(kind==='data'){ const real=(g.data==='real'); emoji="🎲"; title=real?t("⚽ Matchs réels"):t("⚡ Partie express");
+    body=real?t("Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : idéal pour découvrir Tactizo tout de suite ou enchaîner une partie rapide entre amis."); }
   else if(kind==='mode'){ const mk=(g.mode==='simple')?'simple':'complet'; const m=MODES[mk]; emoji="🎛️"; title=t(m.n); body=modeDesc(mk,g.type==='solo'); if(mk==='complet') premKey='bonuscomplets'; }
   else if(kind==='formula'){ const fk=(g.formula==='fast')?'fast':'classique'; const f=FORMULAS[fk]; emoji="⏱️"; title=t(f.n); body=t(f.d)+"<br><br>"+t("💡 La vitesse (classique / fast) est le <b>seul</b> réglage que l'organisateur pourra encore changer, en cours de partie."); }
   else if(kind==='treve'){ emoji="🃏";
@@ -12064,7 +12065,7 @@ function paramInfo(kind){
   let emoji="ℹ️", title="", body="";
   if(kind==='formula'){ const f=leagueFormula(); emoji="⏱️"; title=t(f.n); body=t(f.d)+"<br><br>"+t("💡 La vitesse (classique / fast) est le <b>seul</b> réglage que l'organisateur pourra encore changer, en cours de partie."); }
   else if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=modeDesc(getMode(),isSolo()); }
-  else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("📡 Données réelles (test)"):t("🎮 Simulé"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."); }
+  else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("⚽ Matchs réels"):t("⚡ Partie express"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : idéal pour découvrir Tactizo tout de suite ou enchaîner une partie rapide entre amis."); }
   else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")); }
   else if(kind==='solo'){ emoji="🤖"; const one=(o.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
   else if(kind==='treve'){ emoji="🃏";
@@ -17065,7 +17066,7 @@ function showLeagueInfo(lid){
       ? row(t("🤖 Format"), soloAR===1?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"), t("Partie en solo contre l'IA : pas de gage ni de récompense, il faut au moins deux humains pour ça."))
       : row(t("🎭 Enjeu"), both?t("Gage + récompense"):(rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)")),
       both?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(rew?t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")))}
-    ${row(t("🎲 Données"), real?t("📡 Réelles"):t("🎮 Simulé"), real?t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée."))}
+    ${row(t("🎲 Données"), real?t("⚽ Réels"):t("⚡ Express"), real?t("Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : idéal pour découvrir Tactizo tout de suite ou enchaîner une partie rapide entre amis."))}
     ${/* ⚠️ v8.85 (demandé par Hervé) — LES ENCHÈRES FIGURENT DANS LES CARACTÉRISTIQUES. C'est un
          réglage figé au même titre que le mode ou l'enjeu, et il change la façon de jouer toute
          la saison : sans lui, un joueur qui rejoint une ligue ne sait pas qu'il devra dépenser
@@ -19685,7 +19686,6 @@ db.auth.onAuthStateChange((event,session)=>{
      se passe dans les autres. L'accueil montre le statut de toutes d'un coup d'œil ; c'est
      désormais le seul écran de démarrage, quel que soit le nombre de ligues en cours. */
   S.view="home"; startPoll(); await loadMyLeagues();
-  await autoRedeemPromoIfAny(sessionMeta);   // code promo saisi à l'inscription, en attente de l'e-mail confirmé
   await ensureRevenueCatLogin();
 })();
 </script>
