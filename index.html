@@ -1840,6 +1840,7 @@
   .cap-row-b:last-child{border-bottom:0}
   .cap-row-b .cap-av{flex:0 0 auto}
   .cap-row-b .cap-name{flex:1;min-width:0;font-weight:600;font-size:13.5px;color:var(--a2-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cap-row-b .cap-spent{font-weight:400;font-size:10.5px;color:var(--a2-muted);white-space:nowrap;margin-top:1px}
   .cap-row-b .cap-amount{font-weight:700;font-size:13px;color:var(--a2-ready);white-space:nowrap;display:flex;align-items:center;gap:5px;flex:0 0 auto}
   .cap-row-b .cap-amount .badges{display:flex;align-items:center;gap:2px;font-size:12px;color:var(--a2-muted)}
   .mini-bonus{width:20px;height:20px;object-fit:contain;display:inline-block}
@@ -2479,7 +2480,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.414";
+const APP_VERSION = "v8.415";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6530,7 +6531,8 @@ const EN={
   "Si points et capital sont identiques, les joueurs sont <b>ex æquo</b>.":"If points and capital are both identical, players are <b>tied</b>.",
   "<b>Départage</b> (à points égaux) : <b>capital le plus élevé</b>. Si points ET capital sont identiques : <b>ex æquo</b> — aucun autre critère.":"<b>Tie-break</b> (equal points): <b>highest capital</b>. If points AND capital are both identical: <b>tied</b> — no other criterion.",
   "Budget d'enchères :":"Bidding budget:", "Répartis jusqu'à {a} entre les bonus que tu veux viser.":"Spread up to {a} across the bonuses you want.",
-  "Seules tes enchères gagnantes seront réellement débitées de ton capital.":"Only your winning bids are actually taken from your capital.",
+  "Seules tes enchères gagnantes seront débitées de ton capital de départ ({a}) — le même capital qui te servira à parier toute la saison.":"Only your winning bids will be taken from your starting capital ({a}) — the same capital you'll use to bet all season.",
+  "→ Capital restant si tu remportes tout : {a}":"→ Capital left if you win it all: {a}",
   "Bonus visés":"Targeted bonuses", "Définis d'abord l'enjeu de la ligue":"Set the league's stake first",
   "Gage et récompense sont choisis, puis débloquent la validation des enchères.":"The forfeit and reward are chosen first, which unlocks confirming your bids.",
   "{a} bonus visé{s} · {b} d'enchères":"{a} bonus targeted{s} · {b} in bids",
@@ -11367,7 +11369,12 @@ function coulBilanRowHTML(p, st){
   const ids=(p.hand||[]).filter(id=>CARDS[id]);
   if(st && st.closed_at) ids.push(...(st.auction||[]).filter(a=>a.winner===p.pid).map(a=>a.card).filter(id=>CARDS[id]));
   const badges = ids.length ? `<span class="badges">${ids.map(id=>`<img class="mini-bonus" src="img/${BONUS_ILLUS[id]||''}" alt="${esc(t(CARDS[id].n))}">`).join('')}</span>` : '<span class="badges">—</span>';
-  return `<div class="cap-row-b clik" onclick="showPlayerCards('${p.pid}')"><div class="cap-av">${avatarHTML(p.emoji)}</div><div class="cap-name">${esc(p.name||'?')}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</div><div class="cap-amount">${euro(p.capital)} ${badges}</div></div>`;
+  // ⚠️ (2026-09-10, demandé par Hervé, test réel) — `p.spent` EXISTE DÉJÀ dans l'instantané figé
+  // (`prep_summary.players`, posé par `resolvePrep()`) mais n'était jamais affiché ici : seul le
+  // capital résultant l'était, sans dire combien avait été dépensé pour y arriver. Sans ça, un
+  // joueur voit « 72 € » sans pouvoir relier ce chiffre à ses propres enchères.
+  const spentHTML = p.spent ? `<div class="cap-spent">${t("Dépensé")} ${euro(p.spent)}</div>` : '';
+  return `<div class="cap-row-b clik" onclick="showPlayerCards('${p.pid}')"><div class="cap-av">${avatarHTML(p.emoji)}</div><div class="cap-name">${esc(p.name||'?')}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${spentHTML}</div><div class="cap-amount">${euro(p.capital)} ${badges}</div></div>`;
 }
 function showCoulRoster(){
   const s=(L&&L.prep_summary)||{}; const st=s.treve_st||null; const ps=s.players||[];
@@ -11459,7 +11466,15 @@ function viewCoulisses(){
   // ── 4. Le mot des coulisses ─────────────────────────────────────────────────────────────────
   const motDepart = prepSuperlatives(s, false, true);
   const motTreve = treveDone ? prepSuperlatives({auction:st.auction, players:ps}, true, true) : '';
-  const motSection = (motDepart||motTreve) ? `<div class="ldB-section"><div class="ldB-title">${t("🎭 4. Le mot des coulisses")}</div>${motDepart}${motTreve}</div>` : '';
+  // ⚠️ (2026-09-10, demandé par Hervé, test réel) — SÉPARER LES DEUX PHASES. `motDepart`/`motTreve`
+  // sont deux tirages indépendants de `prepSuperlatives()` (un par enchère) : rien n'empêchait le
+  // même superlatif (ex. « Le coffre-fort ») de sortir deux fois de suite, pour deux joueurs et
+  // deux moments différents, sans aucun repère pour dire lequel est le départ et lequel est la
+  // trêve — lu comme une redite. Même label que la section 2 juste au-dessus (`auction-phase-lbl`),
+  // affiché seulement quand il y a deux phases à distinguer (comme `startAuctionBlock`).
+  const motSection = (motDepart||motTreve) ? `<div class="ldB-section"><div class="ldB-title">${t("🎭 4. Le mot des coulisses")}</div>
+    ${motDepart?`${treveDone?`<div class="auction-phase-lbl">${t("🔨 Début de saison")}</div>`:''}${motDepart}`:''}
+    ${motTreve?`<div class="auction-phase-lbl mid">${t("🔨 Enchères de mi-saison")}</div>${motTreve}`:''}</div>` : '';
 
   return `${infoStrip}${hero}${codeBlock}${enjeuSection}${encheresSection}${bilanSection}${motSection}
    ${(L.status==="running")?`<button class="btn" onclick="goGame()">⚽ ${t("Aller aux pronos →")}</button>`:''}`;
@@ -12545,7 +12560,8 @@ function viewEncheresA2(){
     ${lockHTML}
     ${encBudgetHTML(tot,over,cnt,tooMany,maxCards, t("Budget d'enchères :"), `
       <div class="a2-enc-budget-note">${t("Répartis jusqu'à {a} entre les bonus que tu veux viser.",{a:euro(SHOP_CAP)})}</div>
-      <div class="a2-enc-budget-note strong">${t("Seules tes enchères gagnantes seront réellement débitées de ton capital.")}</div>`)}
+      <div class="a2-enc-budget-note strong">${t("Seules tes enchères gagnantes seront débitées de ton capital de départ ({a}) — le même capital qui te servira à parier toute la saison.",{a:euro(100)})}</div>
+      <div class="a2-enc-budget-note" id="bidCapNote">${t("→ Capital restant si tu remportes tout : {a}",{a:euro(Math.max(0,100-tot))})}</div>`)}
     <div class="a2-enc-mode-title">${esc(t(modeInfo.n))}</div>
     <div class="a2-enc-mode-note">${esc(t(modeInfo.d))}</div>
     <div class="a2-enc-list">${ids.map(id=>encRowHTML(id,bidL[id])).join('')}</div>
@@ -12586,6 +12602,10 @@ function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else d
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   const bt=$("bt"); if(bt){bt.textContent=euro(tot); bt.className=over?'red':'';}
   const bc=$("bc"); if(bc){bc.textContent=cnt; bc.className=tooMany?'red':'';}
+  // ⚠️ (2026-09-10, demandé par Hervé, test réel) — n'existe QUE sur l'écran de début de saison
+  // (`bidCapNote`, cf. viewEncheresA2()) : absent en trêve, où l'argent ne vient PAS du capital
+  // (cf. les notes de viewTreve()) — `$` renvoie alors `null`, gardé comme `bt`/`bc`/`g` ci-dessus.
+  const cr=$("bidCapNote"); if(cr) cr.textContent=t("→ Capital restant si tu remportes tout : {a}",{a:euro(Math.max(0,100-tot))});
   // Cibler par ID, jamais par classe : l'écran de préparation contient DEUX .gauge — la progression
   // des étapes (en-tête) AVANT celle de l'argent. `querySelector(".gauge")` renvoyait donc la barre
   // d'étapes : la jauge d'argent ne bougeait jamais quand on saisissait une enchère (signalé par
