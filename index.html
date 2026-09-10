@@ -2487,7 +2487,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.409";
+const APP_VERSION = "v8.410";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -5834,10 +5834,19 @@ const EN={
   "🎭 gage · 🏆 récompense — ✓ voté / · à faire":"🎭 forfeit · 🏆 reward — ✓ voted / · to do",
   "🎭 gage · 🏆 récompense · 💰 enchères — ✓ fait / · à faire":"🎭 forfeit · 🏆 reward · 💰 auction — ✓ done / · to do",
   "Pronos des joueurs · {a}/{b}":"Players' picks · {a}/{b}",
-  "<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.":"<b>Premium option active</b>: as soon as betting closes (before the results), you see {a}'s picks + stakes. The 🃏 bonuses stay hidden until the results.",
-  "<b>Option premium</b> : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.":"<b>Premium option</b>: as soon as betting closes (before the results), you'd see {a}'s picks + stakes. Before the close, nobody sees anything. Without it → 🔒 until the results.",
-  "Grâce à ton option ⏱️ <b>Résultats en direct</b> : tu vois les matchs terminés au fil de l'eau, avec ✓ ou ✗ sur <b>tes</b> pronos. Les gains en € restent dévoilés à tous à la résolution.":"Thanks to your ⏱️ <b>Live results</b> option: you see matches as they finish, with ✓ or ✗ on <b>your</b> picks. The € winnings are still revealed to everyone at resolution.",
-  "🔒 Sans l'option « Voir l'adversaire », la colonne de {a} reste masquée jusqu'aux résultats.":"🔒 Without the “See the opponent” option, {a}'s column stays hidden until the results.",
+  // Lot 4 (2026-09-10) — noteBox afterCloseDuelHTML() : texte étendu (pronos+mises, résultats en
+  // direct, situation actuelle) puisque `duel_live` fusionne désormais les trois.
+  "<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}, tu suis les résultats au fil de l'eau, et tu as une situation actuelle indicative du duel. Les 🃏 bonus restent cachés jusqu'aux résultats.":"<b>Premium option active</b>: as soon as betting closes (before the results), you see {a}'s picks + stakes, you follow results live, and you get an indicative current state of the duel. The 🃏 bonuses stay hidden until the results.",
+  "<b>Option premium</b> ⚡ Duel Live : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}, tu suivrais les résultats au fil de l'eau, et une situation actuelle indicative du duel. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.":"<b>Premium option</b> ⚡ Live Duel: as soon as betting closes (before the results), you'd see {a}'s picks + stakes, follow results live, and get an indicative current state of the duel. Before the close, nobody sees anything. Without it → 🔒 until the results.",
+  "Situation actuelle":"Current state",
+  "{a} matchs terminés sur {b}":"{a} matches finished out of {b}",
+  "Tu es devant pour l'instant":"You're currently ahead",
+  "Tu es derrière pour l'instant":"You're currently behind",
+  "Vous êtes à égalité pour l'instant":"You're currently tied",
+  "Situation indicative basée sur les informations actuellement révélées. Les Favoris et bonus encore secrets peuvent modifier le résultat final.":"Indicative, based on what's currently revealed. Secret Favourites and bonuses can still change the final result.",
+  "Grâce à ton option ⚡ <b>Duel Live</b> : tu vois les pronos et mises de ton adversaire, tu suis les matchs terminés au fil de l'eau (avec ✓ ou ✗ sur <b>tes</b> pronos), et tu as une situation actuelle indicative du duel. Les gains en € officiels restent dévoilés à tous à la résolution.":"Thanks to your ⚡ <b>Live Duel</b> option: you see your opponent's picks and stakes, follow finished matches live (with ✓ or ✗ on <b>your</b> picks), and get an indicative current state of the duel. Official € winnings are still revealed to everyone at resolution.",
+  "⚡ Grâce à ton option <b>Duel Live</b>, tu vois aussi les pronos des autres duels.":"⚡ Thanks to your <b>Live Duel</b> option, you also see the picks from other duels.",
+  "Les pronos des autres duels sont masqués — l'option ⚡ <b>Duel Live</b> les révèle, comme ceux de ton adversaire.":"Other duels' picks are hidden — the ⚡ <b>Live Duel</b> option reveals them, just like your opponent's.",
   // Légende du classement (v6.12)
   "Comprendre le classement":"Understanding the standings", "monte":"up", "stable":"steady", "descend":"down", "comprendre le classement":"understand the standings",
   "les points gagnés en duel chaque journée (face à ton adversaire du jour), cumulés.":"the points won in duels each matchday (against your daily opponent), cumulated.",
@@ -7964,6 +7973,70 @@ function liveVerdict(f, sel){
   if(sel==null) return {txt:esc(w)+sc, ok:null};
   const ok=(r.res===sel);
   return {txt:(ok?"✓ ":"✗ ")+esc(w)+sc, ok};
+}
+// ⚠️ LOT 4 (2026-09-10) — "Situation actuelle du duel" : estimation indicative réservée à
+// `hasOpt('duel_live')`, une fois les paris clôturés. Fonction PARTAGÉE entre `afterCloseDuelHTML()`
+// (onglet Pronos) et `waitingResultsBody()` (onglet Résultats) plutôt que dupliquée une 3ᵉ fois —
+// les deux écrans dupliquaient déjà la même mise en page duel/résultats (cf. leur commentaire
+// mutuel), inutile d'ajouter un 3ᵉ endroit à tenir synchronisé.
+// ⚠️ CALCUL VOLONTAIREMENT SANS AUCUN EFFET DE BONUS (ni le sien, ni celui de l'adversaire) :
+// le bonus adverse reste TOUJOURS secret jusqu'au dénouement, même avec `duel_live` (cf.
+// PITCHES.duel_live : "Le bonus de l'adversaire reste secret jusqu'aux résultats, même avec
+// l'option"). Comparer un net qui inclut SON PROPRE bonus à un net qui ignore celui de
+// l'adversaire serait une comparaison non homogène — donc AUCUN bonus des deux côtés, seulement
+// `stake*(odd-1)` (ou `-stake`) et le doublement Favori (👑). Le doublement Favori N'A PAS besoin
+// d'être neutralisé : dès que ce bloc est visible (duel_live + clôture), les deux marqueurs 👑
+// sont déjà révélés ailleurs sur ce même écran (`ligne()`/`myTxt`/`opTxt`, juste au-dessus) — ce
+// n'est donc plus une information secrète à CET instant, contrairement au bonus adverse qui, lui,
+// ne l'est jamais avec cette option. Implémenté selon ce qui est effectivement visible, pas selon
+// une hypothèse générale sur le Favori.
+// Réutilise `liveVerdict()`/`oddOf()` (déjà utilisés par les deux écrans) plutôt que `pickCalc()`
+// (pensée pour l'écran Résultats une fois TOUT résolu, où les bonus sont publics : la réutiliser
+// ici inclurait par erreur des effets encore secrets côté adversaire).
+// ⚠️ Un match ANNULÉ compte comme "terminé" (mise rendue, net 0 des deux côtés — même convention
+// que `gainMise()`/`winCount()` ailleurs) ; un match pas encore résolu n'est ni compté ni chiffré.
+function duelSituationCalc(duel){
+  if(!duel || !Array.isArray(duel.fixtures)) return null;
+  const fx=duel.fixtures.filter(f=>f);
+  if(!fx.length) return null;
+  const homeB=(bets||[]).find(b=>b.player_id===duel.home_id);
+  const awayB=(bets||[]).find(b=>b.player_id===duel.away_id);
+  const legNet=(bt,f,i)=>{
+    if(!bt || !Array.isArray(bt.picks) || !bt.picks[i]) return 0;
+    const b=bt.picks[i]; if(b.sel==null) return 0;
+    const odd=oddOf(f,b.sel); if(!odd) return 0;
+    const win=(b.sel===f.res);
+    let g=win?(+b.stake||0)*(odd-1):-(+b.stake||0);
+    if(i===bt.captain) g*=2;
+    return g;
+  };
+  let nFini=0, gHome=0, gAway=0;
+  fx.forEach((f,i)=>{
+    if(f.canceled){ nFini++; return; }
+    if(!liveVerdict(f,null)) return;
+    nFini++;
+    gHome+=legNet(homeB,f,i); gAway+=legNet(awayB,f,i);
+  });
+  return {total:fx.length, nFini, gHome:Math.round(gHome*100)/100, gAway:Math.round(gAway*100)/100};
+}
+function duelSituationHTML(duel){
+  if(!duel) return '';
+  const calc=duelSituationCalc(duel); if(!calc) return '';
+  const iAmHome=(duel.home_id===S.myId);
+  const oppNom=avaName(pById(iAmHome?duel.away_id:duel.home_id)||{});
+  const gMoi=iAmHome?calc.gHome:calc.gAway, gAdv=iAmHome?calc.gAway:calc.gHome;
+  const cmp = gMoi>gAdv ? t("Tu es devant pour l'instant") : (gMoi<gAdv ? t("Tu es derrière pour l'instant") : t("Vous êtes à égalité pour l'instant"));
+  const mnt=v=>`<b class="${v>0?'green':(v<0?'red':'muted')}">${euroSigned(v)}</b>`;
+  return `<div class="box" style="border:1px dashed var(--gold-dim);background:rgba(231,184,75,.08)">
+    <div class="boxttl">⚡ ${t("Situation actuelle")}</div>
+    <div class="mini muted" style="margin:2px 0 10px">${t("{a} matchs terminés sur {b}",{a:calc.nFini,b:calc.total})}</div>
+    <div class="row" style="justify-content:space-between;gap:10px">
+      <div><div class="mini muted">${t("Toi")}</div>${mnt(gMoi)}</div>
+      <div style="text-align:right"><div class="mini muted">${oppNom}</div>${mnt(gAdv)}</div>
+    </div>
+    <div class="mini" style="margin-top:8px">${cmp}</div>
+    <div class="mini muted" style="margin-top:8px;line-height:1.5">${t("Situation indicative basée sur les informations actuellement révélées. Les Favoris et bonus encore secrets peuvent modifier le résultat final.")}</div>
+  </div>`;
 }
 // Double Chance : on gagne à la cote INITIALE du résultat qui sort (pas de cote combinée pondérée).
 function dcWinOdd(f,sel,sel2){ return (f.res===sel||f.res===sel2) ? oddOf(f,f.res) : oddOf(f,sel); }
@@ -13338,12 +13411,16 @@ function afterCloseDuelHTML(){
   const md=myDuel(); if(!md||!md.fixtures) return '';
   const iAmHome=md.home_id===S.myId; const opp=pById(iAmHome?md.away_id:md.home_id)||{};
   const mine=myBet(); const oppBet=bets.find(b=>b.player_id===(iAmHome?md.away_id:md.home_id));
-  const seeOpp=hasOpt('voiradv');
-  // v6.99 : le suivi en direct dépend de l'option `live`, PAS de `direct`. `direct` ouvre le type
-  // de ligue (jouer sur de vrais matchs), `live` ouvre le suivi PENDANT la journée. Les deux
-  // conditions restent nécessaires : en ligue simulée il n'y a rien à suivre au fil de l'eau.
-  const liveOn = L.data_mode==="real" && hasOpt('live');
-  const noteBox=`<div class="box" style="border:1px dashed var(--gold-dim);background:rgba(231,184,75,.08)"><div class="mini" style="color:var(--gold-hi);line-height:1.5">👁️ ${seeOpp?t("<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}. Les 🃏 bonus restent cachés jusqu'aux résultats.",{a:esc(opp.name||'?')}):t("<b>Option premium</b> : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.",{a:esc(opp.name||'?')})}</div>${seeOpp?'':`<div style="margin-top:6px">${premBadge('voiradv')}</div>`}</div>`;
+  // ⚠️ LOT 4 (2026-09-10) — `voiradv` + `live` FUSIONNÉES EN `duel_live` (le Lot 3 avait préparé le
+  // catalogue seul ; ce lot branche le comportement de jeu). Les deux capacités qui dépendaient de
+  // deux options distinctes (voir les pronos/mises adverses, suivre les résultats au fil de l'eau)
+  // dépendent désormais du MÊME hasOpt('duel_live') — plus jamais l'une sans l'autre.
+  const dl=hasOpt('duel_live');
+  const seeOpp=dl;
+  // Le suivi en direct dépend aussi des données réelles : en ligue simulée, la journée se résout
+  // d'un bloc, il n'y a rien à suivre au fil de l'eau même avec l'option.
+  const liveOn = L.data_mode==="real" && dl;
+  const noteBox=`<div class="box" style="border:1px dashed var(--gold-dim);background:rgba(231,184,75,.08)"><div class="mini" style="color:var(--gold-hi);line-height:1.5">👁️ ${seeOpp?t("<b>Option premium active</b> : dès la clôture des paris (avant les résultats), tu vois les pronos + mises de {a}, tu suis les résultats au fil de l'eau, et tu as une situation actuelle indicative du duel. Les 🃏 bonus restent cachés jusqu'aux résultats.",{a:esc(opp.name||'?')}):t("<b>Option premium</b> ⚡ Duel Live : dès la clôture des paris (avant les résultats), tu verrais les pronos + mises de {a}, tu suivrais les résultats au fil de l'eau, et une situation actuelle indicative du duel. Avant la clôture, personne ne voit rien. Sans l'option → 🔒 jusqu'aux résultats.",{a:esc(opp.name||'?')})}</div>${seeOpp?'':`<div style="margin-top:6px">${premBadge('duel_live')}</div>`}</div>`;
   /* ⚠️ v8.80 (relevé par Hervé sur capture) — LES DEUX ENCADRÉS N'AVAIENT PAS LA MÊME HAUTEUR (à
      l'époque du rendu flex ci-dessous, remplacé en v8.170 par `.two-col` — CSS GRID, dont les
      colonnes s'étirent l'une sur l'autre PAR DÉFAUT, `align-items:stretch` : le défaut d'alors ne
@@ -13408,7 +13485,7 @@ function afterCloseDuelHTML(){
           <div><div class="mini muted" style="text-align:center;padding:8px 12px 0">👤 ${t("Toi")}</div><div class="pick-row" style="border-left:2px solid var(--green)">${myTxt}</div></div>
           <div><div class="mini muted" style="text-align:center;padding:8px 12px 0">${avaName(opp)}</div><div class="pick-row">${opTxt}</div></div>
         </div></div>`; }).join("");
-  return noteBox+bonusBox+cards;
+  return noteBox+bonusBox+cards+(dl?duelSituationHTML(md):'');
 }
 function viewWait(dayLbl){
   const org=me()&&me().is_organizer;
@@ -14948,7 +15025,10 @@ function waitingResultsBody(d){
   const org=me()&&me().is_organizer;
   const isCurrent=(L.status==="running" && d===(L.current_day||0));
   const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
-  const liveShow = closed && L.data_mode==="real" && hasOpt('live');   // v6.99 : option `live`, distincte de `direct`
+  // ⚠️ LOT 4 (2026-09-10) — `voiradv`+`live` fusionnées en `duel_live` (même gate partout dans cette
+  // fonction : `liveShow` ci-dessous et `voirAdv` plus bas, cf. commentaire dans afterCloseDuelHTML()).
+  const dl=hasOpt('duel_live');
+  const liveShow = closed && L.data_mode==="real" && dl;
   /* ⚠️ v7.64 — LA BARRE DE NAVIGATION MANQUAIT ICI. Cet écran d'attente est celui qu'on voit dès
      que les paris sont clôturés, donc le plus souvent consulté — et c'était le seul de l'onglet
      Résultats sans les boutons ◀ Préc. / Suiv. ▶ : on s'y retrouvait sans aucun moyen de revenir
@@ -15062,13 +15142,14 @@ function waitingResultsBody(d){
     const pariDe=(pid)=> (bets||[]).find(x=>x.player_id===pid)||null;
     /* ⚠️ v7.43 — FUITE INTRODUITE EN v7.42, SIGNALÉE PAR HERVÉ EN TESTANT AVEC LE COMPTE DE
        GIULIAN. J'avais conditionné l'affichage des pronos adverses à `mine && closed` — c'est-à-dire
-       à la seule clôture. Or voir le pari de l'adversaire est une OPTION PAYANTE (`voiradv`), et
-       elle n'a rien à voir avec l'échéance : l'onglet Pronos, lui, teste bien `hasOpt('voiradv')`.
-       Résultat : n'importe qui voyait les pronos de son adversaire dès la clôture, l'option était
-       offerte à tout le monde et la règle du jeu contournée.
+       à la seule clôture. Or voir le pari de l'adversaire est une OPTION PAYANTE (`voiradv` à
+       l'époque, fusionnée dans `duel_live` au Lot 4), et elle n'a rien à voir avec l'échéance :
+       l'onglet Pronos, lui, teste bien `hasOpt()`. Résultat : n'importe qui voyait les pronos de
+       son adversaire dès la clôture, l'option était offerte à tout le monde et la règle du jeu
+       contournée.
        ⚠️ LA LEÇON : cette page recopiait la mise en page de l'onglet Pronos sans en recopier les
        CONDITIONS. Avant de dupliquer un affichage, vérifier ce qui le protégeait. */
-    const voirAdv=hasOpt('voiradv');
+    const voirAdv=dl;
     /* ⚠️ v8.26 (décision d'Hervé, qui tranche contre mon choix de v8.21) — TOUS LES DUELS ONT LA
        MÊME MISE EN PAGE, avec ou sans l'option. J'avais gardé la ligne simple pour ceux qui ne
        paient pas, en jugeant que deux colonnes cadenassées n'apprenaient rien. Hervé retient la
@@ -15139,7 +15220,7 @@ function waitingResultsBody(d){
                 const visible=(moi||voirAdv);
                 const contenu=visible
                   ? ligne(b,b?b.captain:-1,f,i)
-                  : `<span class="mini clik" style="color:var(--muted);letter-spacing:2px" title="${t("Fonction premium")}" onclick="event.stopPropagation();showPremiumInfo('voiradv')">🔒 •••</span>`;
+                  : `<span class="mini clik" style="color:var(--muted);letter-spacing:2px" title="${t("Fonction premium")}" onclick="event.stopPropagation();showPremiumInfo('duel_live')">🔒 •••</span>`;
                 /* ⚠️ TROIS CONDITIONS, ET AUCUNE N'EST FACULTATIVE.
                    1. `liveShow` — le verdict est sous l'option ⏱️. `f.res` est écrit dès que le
                       score tombe (v8.27) pour TOUT LE MONDE : colorer sans cette garde livrerait
@@ -15193,24 +15274,28 @@ function waitingResultsBody(d){
     // ⚠️ v7.42 — L'ENCART DE L'OPTION PREMIUM REMONTE TOUT EN HAUT (demandé par Hervé). Il était
     // collé au-dessus de la liste des duels, donc noyé au milieu de l'écran ; c'est pourtant lui
     // qui explique pourquoi on voit des ✓ et des ✗ que les autres ne voient pas.
-    if(liveShow) h=`<div class="box" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10)"><b class="mini gold">⏱️ ${t("Résultats en direct")}</b><div class="mini muted" style="margin-top:2px">${t("Grâce à ton option ⏱️ <b>Résultats en direct</b> : tu vois les matchs terminés au fil de l'eau, avec ✓ ou ✗ sur <b>tes</b> pronos. Les gains en € restent dévoilés à tous à la résolution.")}</div></div>`+h;
-    h+=`<div class="box"><div class="boxttl">${liveShow?'⏱️ '+t("Résultats en direct"):t("Les affiches du jour")}</div>${mienD.map(affiche).join('')}</div>`;
+    if(liveShow) h=`<div class="box" style="border-color:var(--gold-dim);background:rgba(231,184,75,.10)"><b class="mini gold">⚡ ${t("Duel Live")}</b><div class="mini muted" style="margin-top:2px">${t("Grâce à ton option ⚡ <b>Duel Live</b> : tu vois les pronos et mises de ton adversaire, tu suis les matchs terminés au fil de l'eau (avec ✓ ou ✗ sur <b>tes</b> pronos), et tu as une situation actuelle indicative du duel. Les gains en € officiels restent dévoilés à tous à la résolution.")}</div></div>`+h;
+    h+=`<div class="box"><div class="boxttl">${liveShow?'⚡ '+t("Duel Live"):t("Les affiches du jour")}</div>${mienD.map(affiche).join('')}</div>`;
+    // ⚠️ LOT 4 (2026-09-10) — "Situation actuelle" seulement sur MON duel (pas sur "les autres
+    // duels" ci-dessous, qui affichent déjà pronos/résultats via `voirAdv`/`liveShow` mais n'ont
+    // pas de sens pour la promesse "vis TON face-à-face" — cf. duelSituationHTML()).
+    if(closed && dl){ const sit=duelSituationHTML(myDuel()); if(sit) h+=sit; }
     /* Bloc séparé pour les autres duels. Le compte est dans le bouton : replié, l'écran doit
        encore dire CE QU'IL CACHE — sinon on ne sait pas qu'il y a quelque chose à ouvrir. */
     if(autresD.length){
       h+=`<div class="box"><button class="btn ghost sm" style="width:100%;text-align:left" onclick="toggleAutresDuels()">
             ${autresOuvert?'▾':'▸'} <b>${t("Les autres duels")}</b> <span class="muted">(${autresD.length})</span></button>
           ${/* ⚠️ v8.22 — NOMMER LA BONNE OPTION. J'avais écrit « 👁️ Voir les pronos », un nom qui
-               n'existe pas : la vraie s'appelle 🕵️ <b>Voir l'adversaire</b>. Inventer un libellé
-               approchant est pire qu'une faute de frappe — le joueur cherche dans la boutique une
-               option qui n'y figure pas, et rien ne lui dit qu'il s'agit de la même.
-               ⚠️ ET SURTOUT, NE PAS LA CONFONDRE AVEC ⏱️ RÉSULTATS EN DIRECT (précision d'Hervé) :
-               celle-ci dit si les pronos sont BONS avant le dévoilement de la journée ; c'est
-               `voiradv` — et elle seule — qui décide si les pronos sont VISIBLES. Elles se croisent
-               à l'écran mais ne commandent rien en commun. */''}
-          ${autresOuvert?`<div class="mini muted" style="margin-top:8px">${hasOpt('voiradv')
-              ? t("🕵️ Grâce à ton option <b>Voir l'adversaire</b>, tu vois aussi les pronos des autres duels.")
-              : t("Les pronos des autres duels sont masqués — l'option 🕵️ <b>Voir l'adversaire</b> les révèle, comme ceux de ton adversaire.")+' '+premBadge('voiradv')
+               n'existe pas. Inventer un libellé approchant est pire qu'une faute de frappe — le
+               joueur cherche dans la boutique une option qui n'y figure pas.
+               ⚠️ LOT 4 (2026-09-10) — 🕵️ Voir l'adversaire ET ⏱️ Résultats en direct, décrites ici
+               comme deux options qui « ne commandent rien en commun », sont désormais LA MÊME
+               option (⚡ Duel Live) : la précision d'Hervé qui suivait ce commentaire (« ne pas les
+               confondre ») ne s'applique plus, elle est devenue la règle inverse — c'est
+               précisément le même hasOpt() qui décide des deux, partout. */''}
+          ${autresOuvert?`<div class="mini muted" style="margin-top:8px">${dl
+              ? t("⚡ Grâce à ton option <b>Duel Live</b>, tu vois aussi les pronos des autres duels.")
+              : t("Les pronos des autres duels sont masqués — l'option ⚡ <b>Duel Live</b> les révèle, comme ceux de ton adversaire.")+' '+premBadge('duel_live')
               /* ⚠️ v8.29 — LA PASTILLE, PAS UNE CARTE. `premBadge` est une puce en ligne de quelques
                  pixels ; elle se glisse au bout de la phrase qui explique déjà ce qui manque.
                  Elle ne s'affiche que SANS l'option (elle est dans la branche `else`) : proposer
@@ -15228,7 +15313,7 @@ function waitingResultsBody(d){
        mais pas la proposition faite à ceux qui ne l'ont PAS : elle restait sous la liste des matchs,
        donc invisible sans faire défiler tout l'écran. C'est pourtant le seul endroit où l'on
        explique ce qui manque — et le seul endroit où l'option se vend. */
-    if(closed && L.data_mode==="real" && !hasOpt('live')) h=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">⏱️ ${t("Voir les matchs terminés en direct")}</span>${premBadge('live')}</div>`+h;
+    if(closed && L.data_mode==="real" && !dl) h=`<div class="box row" style="justify-content:space-between;align-items:center"><span class="mini muted">⚡ ${t("Voir les matchs terminés en direct")}</span>${premBadge('duel_live')}</div>`+h;
   }
   if(closed){
     h+=`<div class="box mini muted" style="text-align:center">${(L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Pronos clôturés — résolution automatique en cours…")}</div>`;
