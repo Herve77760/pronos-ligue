@@ -2149,6 +2149,18 @@
   .a2-res-bonus-banner.effect .ic img{width:28px;height:28px;object-fit:contain;display:block}
   .a2-res-bonus-banner.effect .t{color:var(--a2-purple-light,#c9b6f5)}
   .a2-res-bonus-banner.effect .amt{font-weight:800}
+  /* ⚠️ (2026-09-11, demandé par Hervé) — Lecture immédiate des bonus joués : 1 LIGNE COMPACTE par
+     bonus (pas la bannière .a2-res-bonus-banner.effect ci-dessus, gardée pour l'étoile ⭐ seule mais
+     trop large dès que 2 bonus ont joué le même jour — un pour chaque camp). Même donnée/même clic
+     (showBonusImpact), seul l'habillage change. */
+  .a2-res-bonus-list{margin-bottom:12px}
+  .a2-res-bonus-list .hd{font-size:10px;font-weight:800;color:var(--muted);letter-spacing:.04em;margin-bottom:5px}
+  .a2-res-bonus-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;
+    background:rgba(156,127,224,.10);border:1px solid var(--a2-purple,#9c7fe0);margin-bottom:5px;cursor:pointer}
+  .a2-res-bonus-row .ic{font-size:14px;flex:0 0 auto;display:flex}
+  .a2-res-bonus-row .ic img{width:17px;height:17px;object-fit:contain;display:block}
+  .a2-res-bonus-row .nm{font-size:11.5px;font-weight:700;color:var(--ink);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .a2-res-bonus-row .amt{font-size:12px;font-weight:800;flex:0 0 auto}
   /* ⚠️ Port V2 Résultats (2026-09-06) — navigation jour de resultats.html : mêmes gardes/handlers que
      l'ancien recapNav() (off1/off2/navDay), seul l'habillage change (flèches rondes + jour visé). */
   .a2-res-day-nav{display:flex;align-items:center;justify-content:space-between;margin:2px 0 12px;gap:8px}
@@ -2507,7 +2519,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.418";
+const APP_VERSION = "v8.419";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -6148,8 +6160,10 @@ const EN={
   "L'accessoire ridicule 🧢":"The silly accessory 🧢", "Porter un accessoire ridicule (perruque, bonnet, lunettes…) toute la prochaine soirée.":"Wear a silly accessory (wig, hat, glasses…) for the whole next night out.",
   "L'interview décalée 🎙️":"The offbeat interview 🎙️", "Répondre en direct à 5 questions gênantes posées par le groupe.":"Answer 5 awkward questions from the group, live.",
   "Le défi 10 000 pas 🚶":"The 10,000-step challenge 🚶", "Faire 10 000 pas dans la journée — preuve à l'appui (appli santé).":"Walk 10,000 steps in the day — proof required (health app).",
-  "🎛️ Mode de jeu":"🎛️ Game mode", "🎛️ Complet":"🎛️ Full", "🎯 Simple":"🎯 Simple", "✓ choisi":"✓ chosen",
+  "🎛️ Mode de jeu":"🎛️ Game mode", "🎛️ Mode":"🎛️ Mode", "🎛️ Complet":"🎛️ Full", "🎯 Simple":"🎯 Simple", "✓ choisi":"✓ chosen",
   "🎲 Données":"🎲 Data", "🎮 Simulé":"🎮 Simulated", "📡 Données réelles (test)":"📡 Real data (test)",
+  "À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € — hors cagnotte — pour tout racheter.":"Halfway through the matchdays, unplayed bonuses are lost and everyone gets {a} € — outside your bankroll — to buy back into any bonus.",
+  "Ces réglages restent modifiables tant que les inscriptions sont ouvertes. Ils sont figés dès que tu clôtures.":"These settings stay editable while registration is open. They're locked once you close it.",
   "Caractéristiques de la ligue":"League settings", "Code":"Code", "Format":"Format",
   "Simple":"Simple", "Complet":"Full", "📡 Réelles":"📡 Real", "🎯 Gage personnalisé":"🎯 Custom forfeit", "{a} journées":"{a} matchdays",
   "Archive la ligue dans « Ligues terminées ». Action irréversible.":"Archives the league under “Finished leagues”. This cannot be undone.",
@@ -6461,6 +6475,7 @@ const EN={
   "de capital":"of capital", "Aucun point gagné aujourd'hui":"No points earned today",
   "Victoire":"Win", "Net positif":"Positive net", "Tes points de la journée":"Your points today",
   "points":"points",
+  "BONUS JOUÉS":"BONUSES PLAYED",
   "Meilleur pronostiqueur de la journée !":"Top forecaster of the day!",
   "Bravo Maestro, personne n'a fait mieux que toi.":"Well played, Maestro — nobody did better than you.",
   "Les autres duels de la journée":"The other duels of the day", "🤝 nul":"🤝 tie",
@@ -6550,7 +6565,6 @@ const EN={
   "% de pronostics réussis":"% of correct picks", "Meilleur net cumulé":"Best cumulative net result",
   "Plus de bonus Meilleur pronostiqueur":"Most Best Predictor bonuses", "{a} fois":"{a} times",
   "{a} · J{b}":"{a} · MD{b}", "Tes confrontations":"Your head-to-heads",
-  "Ton bonus a joué sur ta journée":"Your bonus affected your day", "Le bonus de {a} a joué sur ta journée":"{a}'s bonus affected your day",
   "Classement actuel":"Current standings", "Classement à l'issue de cette journée":"Standings at the end of this matchday",
   "Bilan de la saison":"Season recap", "Les moments qui ont marqué cette ligue":"The moments that defined this league",
   "Voir le bilan":"See the recap", "🎯 <b>Le plus précis :</b> {name} — <b>{r} %</b> de pronostics réussis.":"🎯 <b>The most accurate:</b> {name} — <b>{r}%</b> of correct picks.",
@@ -11778,20 +11792,43 @@ async function sendReport(kind){
   infoModal("✅", idea?t("Idée enregistrée"):t("Bug enregistré"),
     `<div style="text-align:center;line-height:1.55;font-size:15px">${t("C'est bien enregistré.")}<br>${t("Merci — elle sera lue.")}</div>`);
 }
+// ⚠️ (2026-09-11, demandé par Hervé) — RÉOUVRE LE MODAL APRÈS COUP si "Paramètres de la ligue" est
+// affiché : infoModal() fige un innerHTML statique (document.body, hors du cycle render()), donc sans
+// ça la coche "✓ choisi" ne bougerait jamais à l'écran malgré l'écriture réussie en base.
+function refreshParamsModalSiOuvert(){ if(document.getElementById("cardModal")) openLeagueParamsModal(); }
 async function setFormula(f){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
-  try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); }
+  try{ await q(db.from("leagues").update({formula:f}).eq("id",L.id)); await refresh(); refreshParamsModalSiOuvert(); }
   catch(e){ showErr("Formule : "+e.message+" (ajoute la colonne 'formula' — voir schema.sql)"); } busy=false; }
 async function setMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
   if(m==="complet" && !requireOpt('bonuscomplets')) return;   // jeu complet des bonus = option premium
   busy=true;
-  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
+  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.mode=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); refreshParamsModalSiOuvert(); }
   catch(e){ showErr("Mode : "+e.message); } busy=false; }
+// ⚠️ (2026-09-11) — RÉACTIVÉE (Paramètres modifiables en lobby, demande d'Hervé). N'était plus
+// appelable depuis aucun écran vivant (cf. commentaire ~L6083, viewLobby() remplacée par
+// viewLobbyA2()) : la clé i18n associée a été RACCOURCIE en conséquence à l'époque, elle reste
+// juste (elle ne parlait que du changement EN COURS DE PARTIE, toujours impossible, pas du lobby).
+// ⚠️ `engine` DOIT être écrit EN MÊME TEMPS que `data_mode` (même paire que createLeague()/
+// relaunchLeague()) : c'est `engine` (pas `data_mode`) que lit la résolution serveur des ligues
+// fictives (v8.334, cf. supabase/functions/resolve) pour savoir si ELLE doit faire avancer la ligue
+// toute seule. Les désynchroniser laisserait une ligue réelle tourner en fictif côté serveur, ou une
+// ligue redevenue fictive ne plus jamais avancer sans qu'un joueur ait l'app ouverte.
 async function setDataMode(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
-  // ⚠️ Fonction morte (aucun écran vivant ne l'appelle, cf. commentaire ~L6083) — plus de verrou
-  // `direct` ici depuis Lot 2 (2026-09-10), par cohérence si elle était un jour réactivée.
   busy=true;
-  try{ await q(db.from("leagues").update({data_mode:m}).eq("id",L.id)); await refresh(); }
+  try{ await q(db.from("leagues").update({data_mode:m, engine:(m==='real'?'client':'server')}).eq("id",L.id)); await refresh(); refreshParamsModalSiOuvert(); }
   catch(e){ showErr("Mode données : "+e.message+" (ajoute la colonne 'data_mode')"); } busy=false; }
+// ⚠️ (2026-09-11, demandé par Hervé) — Enchères modifiables en lobby : AUCUNE mise n'existe encore à
+// ce stade (l'écran d'enchères n'est atteignable qu'une fois les inscriptions closes, cf.
+// viewGame()/viewLobbyA2()), donc rien à migrer ni à perdre. Seule règle à respecter : ACTIVER exige
+// l'option Premium (même garde qu'à la création, cf. setNew() : `k==='treve' && v===true`) ;
+// DÉSACTIVER reste toujours permis, sans jamais relire `hasOpt('treve')` une fois la ligue lancée
+// (cf. commentaire "LE RÉGLAGE EST FIGÉ DANS LA LIGUE" plus haut sur hasTreve()).
+async function setTreve(v){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
+  if(v && !requireOpt('treve')) return;
+  busy=true;
+  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} if(v) o.treve=true; else delete o.treve;
+    await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); refreshParamsModalSiOuvert(); }
+  catch(e){ showErr("Enchères : "+e.message); } busy=false; }
 async function setSoloAR(k){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
   try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.soloAR=+k; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr("Format : "+e.message); } busy=false; }
@@ -11826,17 +11863,40 @@ async function setFormulaNext(){
       ? t("✅ Changement annulé : la journée {b} reste en {a}.",{a:FORMULAS[nat].n,b:day+1})
       : t("✅ Format modifié : {a} dès la journée {b}. Les joueurs seront prévenus.",{a:FORMULAS[next].n,b:day+1}),"⏱️");
   }catch(e){ showErr("Format : "+e.message); } busy=false; }
+// ⚠️ (2026-09-11, demandé par Hervé) — REDESSINE `options`/`optionsR` ET REMET LES VOTES À ZÉRO quand
+// l'enjeu change réellement. `options` est un tableau ADRESSÉ PAR INDEX dont le CONTENU dépend de
+// l'enjeu (itemPool() : GAGES vs REWARDS — `mode` n'y joue aucun rôle) : le laisser tel quel après un
+// changement d'enjeu afficherait un pool de la mauvaise nature (ex. des gages présentés comme des
+// récompenses). Sans risque pour un vote déjà casté : aucun écran vivant ne permet de voter avant la
+// clôture des inscriptions (le lobby n'affiche que Rythme/Mode/Données/Enchères/Enjeu, jamais le vote
+// lui-même), `votes`/`votesR` sont donc toujours `{}` à ce stade en pratique — la remise à zéro est
+// une garantie, pas un correctif d'un cas déjà vécu.
 async function setEnjeu(m){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return; busy=true;
-  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){} o.enjeu=m; await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); }
+  try{ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
+    if((o.enjeu||'gage')!==m){
+      const both=(m==='both');
+      o.enjeu=m; o.options=drawItems(both?'gage':m, o.mode||'simple');
+      o.votes={}; o.voteTs={};
+      if(both){ o.optionsR=drawItems('reward', o.mode||'simple'); o.votesR={}; o.voteTsR={}; }
+      else { delete o.optionsR; delete o.votesR; delete o.voteTsR; }
+    }
+    await q(db.from("leagues").update({gage:JSON.stringify(o)}).eq("id",L.id)); await refresh(); refreshParamsModalSiOuvert(); }
   catch(e){ showErr("Enjeu : "+e.message); } busy=false; }
 async function kickPlayer(pid){ if(busy||!L||L.status!=="lobby")return; if(!(me()&&me().is_organizer))return;
   const p=players.find(x=>x.id===pid)||{}; if(!await confirmTxt("🚪",t("Retirer un joueur"),t("Retirer {a} du tournoi ?",{a:(p.name||"ce joueur")})))return;
   busy=true; try{ await q(db.from("players").delete().eq("id",pid).eq("league_id",L.id)); await refresh(); }
   catch(e){ showErr("Retrait : "+e.message); } busy=false; }
 async function relaunchLeague(){
-  if(busy||!L||!AUTH)return; if(!(me()&&me().is_organizer))return; busy=true; showErr("");
+  if(busy||!L||!AUTH)return; if(!(me()&&me().is_organizer))return;
+  const humans=players.filter(p=>!p.is_ai && p.user_id); // on réutilise les joueurs humains
+  const soloNow=(humans.length===1);
+  // ⚠️ (2026-09-11, demandé par Hervé) — une relance Solo est une NOUVELLE saison, donc soumise à la
+  // même règle Monétisation que closeRegistration() (LOT 6, 2026-09-10) : 3 relances gratuites, puis
+  // IA/Premium requis. Vérifié ICI, AVANT toute création de ligue (contrairement à closeRegistration()
+  // qui gate une ligue déjà en lobby) pour ne jamais laisser de ligue orpheline si le crédit manque.
+  if(soloNow && !requireIaForSolo()) return;
+  busy=true; showErr("");
   try{
-    const humans=players.filter(p=>!p.is_ai && p.user_id); // on réutilise les joueurs humains
     // Code tiré par insertLeagueCodeUnique → on lit `lg.code` ensuite, pas un code tiré ici.
     // Le lobby est désormais verrouillé (réglages figés à la création) → on reporte les réglages de la
     // ligue précédente sur la nouvelle, sinon l'organisateur n'aurait aucun moyen de les définir.
@@ -11846,7 +11906,12 @@ async function relaunchLeague(){
     const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:p.emoji||EMOJIS[i]||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
     const inserted=await q(db.from("players").insert(rows).select());
     const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
-    openLeague(lg.id, mine.id, true); leagueCreatedModal(lg.code);
+    // ⚠️ Solo IA : pas de lobby d'inscription ni de code à partager (personne d'autre ne peut/ne doit
+    // rejoindre) — on enchaîne directement sur startLeagueCore(), le même chemin « SOLO DIRECT » que
+    // createLeague() (cf. sa définition juste au-dessus) : ajout de l'IA, calendrier, enchères IA,
+    // passage direct au statut "prep". Entre amis : comportement inchangé (lobby + code à partager).
+    if(soloNow){ await startLeagueCore(lg); openLeague(lg.id, mine.id, true); }
+    else { openLeague(lg.id, mine.id, true); leagueCreatedModal(lg.code); }
   }catch(e){ showErr((e&&e.codesSatures)?t("Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours."):"Relance : "+e.message); } busy=false; }
 // Confirmation de création — dans une fenêtre fermable (et non un toast fugace) pour laisser le
 // temps de lire et de noter le code à partager. Le modal survit au render() du lobby (appendChild body).
@@ -11961,11 +12026,38 @@ async function maybeAutoStartFull(){
    appelants passaient `sched.length` — le total — et l'IA achetait pour une saison entière.
    ⚠️ Renommé `maxCartes` exprès : un nom qui décrit ce que la valeur EST empêche de lui repasser
    un jour le nombre de journées « parce que ça marchait avant ». */
-function aiPrep(maxCartes, mode, optCount, optCountR){ const nDays=maxCartes; const ids=modeCards(mode||"complet").slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
-  // Enchères des IA : elles VISENT plusieurs bonus et engagent une bonne part de leur budget, sinon
-  // la vente aux enchères paraît morte (avant : souvent 1 seul petit bonus → IA passives, signalé par
-  // Hervé). ~15 % d'IA « prudentes » ne misent presque rien, pour garder de la variété.
+function aiPrep(maxCartes, mode, optCount, optCountR, treve){ const nDays=maxCartes; const ids=modeCards(mode||"complet").slice(); for(let i=ids.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[ids[i],ids[j]]=[ids[j],ids[i]];}
   const maxCards=Math.max(1,nDays);
+  // ⚠️ (2026-09-11, demandé par Hervé, test réel : IA n'ayant engagé que 20 € sur 40 à la trêve) —
+  // BRANCHE DÉDIÉE, PAS UNE VARIANTE DU BUDGET PARTIEL CI-DESSOUS. Au départ, un budget partiel est
+  // une VRAIE prudence stratégique : ce qui n'est pas misé RESTE dans le capital de pari (cf.
+  // `resolvePrep()`, `capital:100-paid`). À la trêve, la règle est strictement inverse (cf.
+  // `viewTreve()`, `ouvrirTreve()`/`resolveTreve()`, "hand SEULEMENT : ni capital, ni shop_done...
+  // ce qui n'a pas été converti en bonus est perdu") : les 40 € ne sortent JAMAIS du capital, et un
+  // reliquat non engagé ne PROTÈGE rien — il est simplement gaspillé. Une IA "prudente" à la trêve
+  // n'a donc aucune raison d'exister ; elle doit engager la TOTALITÉ du budget, répartie de façon
+  // variée (pas un remplissage uniforme) sur autant de bonus que `maxCards`/le catalogue le permet.
+  if(treve){
+    const nb=Math.max(1, Math.min(maxCards, ids.length, 3+Math.floor(Math.random()*4))); // 3-6, borné par les cartes/bonus dispo
+    const poids=[]; for(let k=0;k<nb;k++) poids.push(0.5+Math.random());
+    const psum=poids.reduce((a,b)=>a+b,0);
+    const amounts=poids.map(w=>Math.max(1,Math.round(w/psum*SHOP_CAP)));
+    // Répartition proportionnelle puis arrondi entier (mises en euros ronds, cf. `step="1"` du champ
+    // de saisie) : l'écart d'arrondi est absorbé par la PLUS GROSSE mise, jamais par la plus petite
+    // (qui pourrait tomber à 0 ou en dessous). Avec nb∈[1,6] et SHOP_CAP=40, l'écart possible est
+    // toujours minime (quelques euros au plus) — retomber EXACTEMENT sur SHOP_CAP est donc toujours
+    // possible ici, contrairement à un cas dégénéré (nb proche ou supérieur à SHOP_CAP) qui ne peut
+    // pas se produire avec ces bornes.
+    let diff=SHOP_CAP-amounts.reduce((a,b)=>a+b,0);
+    let iMax=0; for(let k=1;k<amounts.length;k++) if(amounts[k]>amounts[iMax]) iMax=k;
+    amounts[iMax]=Math.max(1,amounts[iMax]+diff);
+    const bids={}; ids.slice(0,nb).forEach((id,k)=>{ bids[id]=amounts[k]; });
+    return {vote:0, voteR:0, bids};
+  }
+  // Enchères des IA (départ) : elles VISENT plusieurs bonus et engagent une bonne part de leur
+  // budget, sinon la vente aux enchères paraît morte (avant : souvent 1 seul petit bonus → IA
+  // passives, signalé par Hervé). ~15 % d'IA « prudentes » ne misent presque rien, pour garder de
+  // la variété — comportement VOULU ici (le budget non misé reste dans le capital de pari).
   const frileux=Math.random()<0.05;                                   // rare minorité « prudente » (mais plus radine du tout)
   const nb=Math.min(maxCards, ids.length, frileux?(2+Math.floor(Math.random()*2)) : (3+Math.floor(Math.random()*4))); // frileux 2-3, sinon 3-6
   const budget=Math.round(frileux?rnd(16,26):rnd(30,SHOP_CAP));       // budget total engagé (plancher relevé)
@@ -12252,6 +12344,14 @@ function viewTreve(){
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   const humans=players.filter(p=>!p.is_ai); const prets=humans.filter(p=>(st.done||{})[p.id]).length;
+  // ⚠️ (2026-09-11, demandé par Hervé, test réel) — "Clôturer la trêve maintenant" MASQUÉ EN SOLO
+  // IA (`isSolo()`, exactement 1 humain), plus bas dans ce template. Ce bouton force la clôture
+  // AVANT que tout le monde ait validé — utile en Entre amis si un joueur ne répond pas. En Solo,
+  // il n'existe aucun AUTRE participant humain à attendre : dès que l'unique joueur valide,
+  // `refresh()` clôt déjà tout seul (`humans.every(p=>st.done[p.id])`, vrai dès sa propre
+  // validation). Le bouton n'a donc jamais rien à débloquer ici — et cliquer dessus AVANT d'avoir
+  // validé couperait sa propre trêve trop tôt, sans aucun autre joueur à accuser. Comportement
+  // Entre amis inchangé (organisateur, avec confirmation).
   // ⚠️ QA (2026-09-07, demandé par Hervé, point 4) — LISTE ET BLOC BUDGET désormais MUTUALISÉS avec
   // l'écran de début de saison (`encRowHTML`/`encBudgetHTML`/`encSummaryTxt`, cf. leurs notes) au
   // lieu de l'ancienne liste `.box row` avec description complète pour chaque bonus (page inutilement
@@ -12275,7 +12375,7 @@ function viewTreve(){
     <div class="a2-enc-summary" id="encSummary">${encSummaryTxt(cnt,tot)}</div>
     <button class="btn" id="essaibidbtn" ${(over||tooMany)?'disabled':''} onclick="saveTreve()">${over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →")))}</button>
     ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`:''}
-    ${meP.is_organizer?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceTreveEnd()">${t("🔒 Clôturer la trêve maintenant (organisateur)")}</button>`:''}
+    ${(meP.is_organizer && !isSolo())?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceTreveEnd()">${t("🔒 Clôturer la trêve maintenant (organisateur)")}</button>`:''}
   </div>`;
 }
 async function saveTreve(){ if(busy)return;
@@ -12450,8 +12550,33 @@ function prepInfosTab(){
 // closeRegistration, kickPlayer, copyCode, forcePrepEnd, votesManquants, prepState…) sont appelées
 // SANS AUCUNE MODIFICATION — seule la mise en page autour change, via les surcharges CSS `.a2-wrap`
 // ajoutées plus haut. Aucune donnée ni règle métier n'est recalculée ici.
+// ⚠️ (2026-09-11, demandé par Hervé) — RÉGLAGES MODIFIABLES TANT QUE LES INSCRIPTIONS SONT OUVERTES.
+// Le TYPE de ligue (Solo IA / Entre amis) reste figé pour toujours, jamais montré ici ni convertible
+// (aucune ligne ci-dessous n'y touche). Repris du même patron visuel que l'ancien viewLobby() (mort
+// depuis viewLobbyA2()) pour Rythme/Mode/Données/Enjeu ; Enchères s'y ajoute, en lecture seule dans
+// cette ancienne version — demande explicite cette fois, auditée comme sûre en lobby (cf. setTreve()).
+// N'affiche pas de format aller-retour (soloAR) : un Solo IA ne passe jamais par le lobby (démarrage
+// direct via startLeagueCore(), cf. createLeague()/relaunchLeague()) — seules les ligues Entre amis
+// atteignent jamais ce modal en statut "lobby".
+function lobbyParamsEditHTML(){
+  return `<h2 style="margin-top:0">${t("⏱️ Rythme")}</h2>
+    ${['classique','fast'].map(k=>{const f=FORMULAS[k]; const cur=((L.formula||'classique')===k); return `<div class="box row clik" onclick="setFormula('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${t(f.n)}</b><div class="mini muted">${t(f.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisie"):t("choisir")}</span></div>`;}).join("")}
+    <h2>${t("🎛️ Mode")}</h2>
+    ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row clik" onclick="setMode('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
+    <h2>${t("🎲 Données")}</h2>
+    ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row clik" onclick="setDataMode('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
+    <h2>${t("🃏 Enchères de bonus")}</h2>
+    ${[[false,t("🎯 Au départ seulement"),t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison.")],[true,t("🔄 Au départ et à mi-parcours"),t("À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € — hors cagnotte — pour tout racheter.",{a:SHOP_CAP})]].map(([v,nm,de])=>{const cur=(hasTreve()===v); return `<div class="box row clik" onclick="setTreve(${v})" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b>${v?' '+premBadge('treve'):''}<div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
+    <h2>${t("🎭 Enjeu de la ligue")}</h2>
+    ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row clik" onclick="setEnjeu('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
+    <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense choisie par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>
+    <div class="mini muted" style="margin-top:6px">${t("Ces réglages restent modifiables tant que les inscriptions sont ouvertes. Ils sont figés dès que tu clôtures.")}</div>`;
+}
 function openLeagueParamsModal(){
-  infoModal("📋", t("Paramètres de la ligue"), `<div class="a2-wrap" style="padding:0;min-height:0;background:none">${prepParamsHTML()}</div>`);
+  // Éditable UNIQUEMENT pour l'organisateur, tant que les inscriptions sont ouvertes ; en lecture
+  // seule dans tous les autres cas (autres joueurs, ou ligue déjà lancée) — comportement inchangé.
+  const editable = L.status==="lobby" && me() && me().is_organizer;
+  infoModal("📋", t("Paramètres de la ligue"), `<div class="a2-wrap" style="padding:0;min-height:0;background:none">${editable?lobbyParamsEditHTML():prepParamsHTML()}</div>`);
 }
 // Lobby — écran dédié (maquette lobby-inscriptions.html), remplace l'ancien shell à onglets pour ce
 // statut. `prepRosterHTML(true)` (sièges) et le bouton de clôture reprennent EXACTEMENT le contenu
@@ -13977,7 +14102,7 @@ async function ouvrirTreve(lg, jour, ps){
     for(const p of joueurs){
       const main=Array.isArray(p.hand)?p.hand.slice():[];
       if(main.length) st.perdus[p.id]=main;                    // archivé AVANT d'effacer
-      if(p.is_ai){ const ap=aiPrep(reste, mode, 0, 0); st.bids[p.id]=ap.bids; st.bidTs[p.id]=Date.now(); st.done[p.id]=true; }
+      if(p.is_ai){ const ap=aiPrep(reste, mode, 0, 0, true); st.bids[p.id]=ap.bids; st.bidTs[p.id]=Date.now(); st.done[p.id]=true; }
       await q(db.from("players").update({hand:[]}).eq("id",p.id));
     }
     sum.treve_st=st;
@@ -14973,8 +15098,14 @@ function recapBody(D){
     // ne s'affiche". `showBonusImpact()` existe déjà et sait construire la fiche complète (joueur/
     // cible/effet) à partir d'un `pid` : `fp` pour la ligne "mine" (le joueur dont on regarde le
     // récap), `oppId` pour la ligne adverse — les deux déjà en portée dans `recapBody`.
-    return lines.map(l=>`<div class="a2-res-bonus-banner effect clik" onclick="showBonusImpact('${l.mine?fp:oppId}',${D})"><div class="ic">${bonusIconHTML(l.icon)}</div><div><div class="t">${esc(l.name)}</div>
-      <div class="s">${l.mine?t("Ton bonus a joué sur ta journée"):t("Le bonus de {a} a joué sur ta journée",{a:esc(oppName)})} <span class="amt ${l.amt>=0?'green':'red'}">${euroSigned(l.amt)}</span></div></div></div>`).join('');
+    // ⚠️ (2026-09-11, demandé par Hervé) — 1 LIGNE COMPACTE par bonus (icône/nom/montant), plus la
+    // bannière 2 lignes ci-dessus (gardée pour l'étoile ⭐ seule) : dès que 2 bonus jouent le même
+    // jour (le sien + celui de l'adverse), deux grosses bannières prenaient trop de place pour ce
+    // qui n'est qu'un premier coup d'œil — le détail complet (qui/cible/effet) reste dans la fiche
+    // ouverte au clic, jamais dupliqué ici.
+    return `<div class="a2-res-bonus-list"><div class="hd">🎴 ${t("BONUS JOUÉS")}</div>${lines.map(l=>
+      `<div class="a2-res-bonus-row clik" onclick="showBonusImpact('${l.mine?fp:oppId}',${D})"><span class="ic">${bonusIconHTML(l.icon)}</span><span class="nm">${esc(l.name)}</span><span class="amt ${l.amt>=0?'green':'red'}">${euroSigned(l.amt)}</span></div>`
+    ).join('')}</div>`;
   })();
   // « Autres duels de la journée » — liste compacte + panneau détail (pas une navigation de page
   // entière) : reprend `line()`/`explain()` pour CE duel-là exactement comme pour le sien, jamais
