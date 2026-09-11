@@ -2493,7 +2493,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.416";
+const APP_VERSION = "v8.417";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -14916,7 +14916,13 @@ function recapBody(D){
     if(cMine&&CARDS[cMine.id]&&Math.abs(imSelf)>=0.005) lines.push({icon:(cMine.cloned&&CARDS.clone)?'clone':cMine.id, name:cardName(cMine), amt:imSelf, mine:true});
     if(oppCardX&&CARDS[oppCardX.id]&&Math.abs(imOpp)>=0.005) lines.push({icon:(oppCardX.cloned&&CARDS.clone)?'clone':oppCardX.id, name:cardName(oppCardX), amt:imOpp, mine:false});
     if(!lines.length) return '';
-    return lines.map(l=>`<div class="a2-res-bonus-banner effect"><div class="ic">${bonusIconHTML(l.icon)}</div><div><div class="t">${esc(l.name)}</div>
+    // ⚠️ (2026-09-11, demandé par Hervé, test réel sur tactizo.com) — CE BANDEAU N'AVAIT AUCUN
+    // onclick : c'est pourtant le PREMIER indice de bonus joué visible sur l'écran (avant même
+    // "Voir détails des matchs"), donc le plus probable à être touché — d'où "je tape dessus, rien
+    // ne s'affiche". `showBonusImpact()` existe déjà et sait construire la fiche complète (joueur/
+    // cible/effet) à partir d'un `pid` : `fp` pour la ligne "mine" (le joueur dont on regarde le
+    // récap), `oppId` pour la ligne adverse — les deux déjà en portée dans `recapBody`.
+    return lines.map(l=>`<div class="a2-res-bonus-banner effect clik" onclick="showBonusImpact('${l.mine?fp:oppId}',${D})"><div class="ic">${bonusIconHTML(l.icon)}</div><div><div class="t">${esc(l.name)}</div>
       <div class="s">${l.mine?t("Ton bonus a joué sur ta journée"):t("Le bonus de {a} a joué sur ta journée",{a:esc(oppName)})} <span class="amt ${l.amt>=0?'green':'red'}">${euroSigned(l.amt)}</span></div></div></div>`).join('');
   })();
   // « Autres duels de la journée » — liste compacte + panneau détail (pas une navigation de page
