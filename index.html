@@ -2530,7 +2530,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.421";
+const APP_VERSION = "v8.422";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4432,6 +4432,9 @@ const EN={
   "Le champion reçoit la récompense":"The champion receives the reward",
   "Pas de gage ni de récompense en Solo.":"No forfeit or reward in Solo.",
   "Le dernier relève le gage":"The last player takes on the forfeit",
+  "À retenir":"Good to know",
+  "Pronos non validés à temps : duel perdu d'office, −{a} % de capital et −{b} pt.":"Predictions not submitted in time: automatic duel loss, −{a}% capital and −{b} pt.",
+  "Capital sous {a} € : remonté à {b} €, contre −1 pt.":"Capital under {a} €: topped back up to {b} €, for −1 pt.",
   "Les pronostics font gagner les matchs.":"Predictions win the matches.",
   "La stratégie fait gagner le championnat.":"Strategy wins the championship.",
   "Commencer à jouer":"Start playing",
@@ -11922,6 +11925,15 @@ async function relaunchLeague(){
     // ligue précédente sur la nouvelle, sinon l'organisateur n'aurait aucun moyen de les définir.
     let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
     const st={ mode:(o.mode||'simple') }; if(o.soloAR!=null) st.soloAR=o.soloAR; else st.enjeu=o.enjeu||'gage';
+    // ⚠️ (2026-09-11, audit final, bug confirmé par Hervé) — LA TRÊVE N'ÉTAIT PAS REPORTÉE ICI, alors
+    // que soloAR/enjeu le sont juste au-dessus : une ligue relancée perdait silencieusement sa trêve.
+    // Sans conséquence visible en Entre amis (l'organisateur peut encore la recocher dans le lobby,
+    // cf. setTreve()) — mais DÉFINITIVE en Solo depuis v8.419, qui saute désormais le lobby
+    // (startLeagueCore() direct, cf. plus bas). Même garde qu'à la création (createLeague(),
+    // `if(newLg.treve && hasOpt('treve')) st.treve = true;`) : une relance est une NOUVELLE ligue,
+    // donc un nouveau "choix" au sens de la règle "l'option autorise le choix, la ligue le fige" — si
+    // l'option a expiré entre-temps, la trêve ne doit pas survivre gratuitement à la relance.
+    if(o.treve && hasOpt('treve')) st.treve = true;
     const lg=await insertLeagueCodeUnique({name:L.name,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula:(L.formula||'classique'),data_mode:(L.data_mode||'sim'),engine:((L.data_mode||'sim')==='real'?'client':'server'),gage:JSON.stringify(st)});
     const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:p.emoji||EMOJIS[i]||"🎮",is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
     const inserted=await q(db.from("players").insert(rows).select());
@@ -20092,6 +20104,17 @@ function t2Step6Html(){ return `<div class="t2-stage">
     <div class="t2-aside-row"><img src="img/enjeu-gage.png" alt="">😈 ${t("Le dernier relève le gage")}</div>
     <div class="t2-mini" style="margin-top:4px">${t("Pas de gage ni de récompense en Solo.")}</div>
   </div>
+  ${/* ⚠️ (2026-09-11, audit final, demandé par Hervé) — RÉINTRODUIT : forfait et recapitalisation
+       existaient dans l'ancien tutoriel et ont disparu au portage V2. Pas une nouvelle étape (le
+       Tutoriel V2 a été volontairement simplifié) : un second aside compact, même patron visuel
+       que celui d'au-dessus (Entre amis), révélé juste après. Valeurs INJECTÉES depuis les vraies
+       constantes du moteur (forgotPenShown()/forgotPtsShown()/RECAP_THRESHOLD/RECAP_TARGET, mêmes
+       fonctions que viewRulesFull() — jamais recopiées) : si le barème change, ce bloc suit tout seul. */''}
+  <div class="t2-aside" id="t2S6aside2" style="display:none">
+    <span class="t2-chip">⚠️ ${t("À retenir")}</span>
+    <div class="t2-aside-row">😴 ${t("Pronos non validés à temps : duel perdu d'office, −{a} % de capital et −{b} pt.",{a:pct(forgotPenShown()),b:Math.abs(forgotPtsShown())})}</div>
+    <div class="t2-aside-row">💸 ${t("Capital sous {a} € : remonté à {b} €, contre −1 pt.",{a:RECAP_THRESHOLD,b:RECAP_TARGET})}</div>
+  </div>
   </div>
   <div class="t2-cap" id="t2S6cap">${t("Tes points s'additionnent tout au long de la saison.")}</div>`; }
 
@@ -20107,6 +20130,7 @@ function t2Play6(){
     const m=t2Q("#t2S6maestro"), fr=t2Q("#t2S6frame");
     requestAnimationFrame(()=>{ m.classList.add("vu"); fr.classList.add("vu"); }); });
   t2At(6400,()=>{ const a=t2Q("#t2S6aside"); a.style.display="block"; requestAnimationFrame(()=>a.classList.add("vu")); });
+  t2At(6700,()=>{ const a=t2Q("#t2S6aside2"); a.style.display="block"; requestAnimationFrame(()=>a.classList.add("vu")); });
 }
 
 /* ════════════════ ÉCRAN FINAL ════════════════════════════════════════════════════════════
