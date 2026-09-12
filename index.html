@@ -2530,7 +2530,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.425";
+const APP_VERSION = "v8.426";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4368,6 +4368,9 @@ const EN={
   "C'est le nom que verront tes adversaires.":"This is the name your opponents will see.",
   "Valider":"Confirm",
   "Connexion Google : ":"Google sign-in: ",
+  // === Retour OAuth natif (Lot Mobile 1, v8.426) ===
+  "Connexion : lien de retour invalide.":"Sign-in: invalid return link.",
+  "Connexion : ":"Sign-in: ",
   // === Connexion Apple (v8.227) ===
   "Continuer avec Apple":"Continue with Apple",
   "Connexion Apple : ":"Apple sign-in: ",
@@ -9025,12 +9028,33 @@ async function doLogin(){
   S.view = AUTH.name ? "home" : "choosePseudo"; startPoll(); await loadMyLeagues();
   await ensureRevenueCatLogin();
 }
-/* ⚠️ v8.224 — LA REDIRECTION QUITTE LA PAGE : rien à faire après le `signInWithOAuth` en cas de
-   succès, le navigateur part vers l'écran de consentement Google puis revient sur cette même URL
-   avec une session dans le hash — `boot()` la lit au rechargement (supabase-js détecte la session
-   dans l'URL par défaut, aucune config supplémentaire nécessaire). */
+/* ⚠️ v8.426 (demandé par Hervé, audit Lot Mobile 1 du 2026-09-12) — SUR LE WEB, LA REDIRECTION
+   QUITTE LA PAGE : rien à faire après le `signInWithOAuth` en cas de succès (comportement v8.224,
+   inchangé ci-dessous). EN NATIF (Capacitor), il n'y a PAS de page à quitter : la webview de l'app
+   reste affichée sous un navigateur système séparé (SFSafariViewController/Custom Tabs) — testé
+   réellement sur iOS ET Android, Google ET Apple confirmés atteindre leur vraie page de connexion
+   dans ce navigateur isolé. Le retour, lui, ne fonctionnait pas : `redirectTo` valait
+   `window.location.origin` évalué DANS LA WEBVIEW (`capacitor://localhost` sur iOS, jamais
+   enregistré comme URL scheme ⇒ Safari échoue à rouvrir l'app, jeton perdu). Voir
+   `CAP_OAUTH_REDIRECT` et `brancherRetourOAuthNatif()` plus bas pour le mécanisme de retour
+   (deep link vers un schéma personnalisé, capté par `@capacitor/app`). */
+const CAP_OAUTH_REDIRECT = "com.tactizo.app://auth-callback";
+function capNatif(){ return !!(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App); }
+// ⚠️ Sur web, `signInWithOAuth` sans `skipBrowserRedirect` navigue IMMÉDIATEMENT (avant même que la
+// promesse ne se résolve dans certains navigateurs) : `busy` reste à `true` pendant la transition,
+// sans conséquence puisque la page part. En natif, `skipBrowserRedirect:true` empêche cette
+// navigation (qui casserait/quitterait la webview) et renvoie l'URL dans `data.url`, ouverte à la
+// place via `Browser.open()` — un navigateur SÉPARÉ, la webview de l'app n'est jamais quittée.
+// `busy` est donc remis à `false` dès l'ouverture (pas d'attente possible d'un retour de page).
 async function loginGoogle(){
   if(busy)return; busy=true; showErr("");
+  if(capNatif()){
+    const { data, error } = await db.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: CAP_OAUTH_REDIRECT, skipBrowserRedirect:true } });
+    busy=false;
+    if(error){ showErr(t("Connexion Google : ")+error.message); return; }
+    const B=window.Capacitor.Plugins.Browser; if(data && data.url && B) await B.open({url:data.url});
+    return;
+  }
   const { error } = await db.auth.signInWithOAuth({ provider:"google", options:{ redirectTo: window.location.origin + window.location.pathname } });
   if(error){ showErr(t("Connexion Google : ")+error.message); busy=false; }
 }
@@ -9039,9 +9063,20 @@ async function loginGoogle(){
    configuration côté Apple Developer + Supabase change, jamais ce code. `boot()` et
    `viewChoosePseudo()` sont déjà génériques (ils testent juste `AUTH.name` vide), donc un nouveau
    compte Apple retombe automatiquement sur le même écran « Choisis ton pseudo » que Google — rien
-   à dupliquer. */
+   à dupliquer.
+   ⚠️ v8.426 — testé réellement en natif : Apple, comme Google, reste le flux WEB de Supabase
+   (Safari/Custom Tabs vers appleid.apple.com), jamais le SDK natif ASAuthorizationController —
+   donc AUCUNE capacité « Sign in with Apple » ni entitlement à ajouter dans Xcode pour ce correctif
+   précis ; seul le retour (deep link) manquait, même mécanisme que Google ci-dessus. */
 async function loginApple(){
   if(busy)return; busy=true; showErr("");
+  if(capNatif()){
+    const { data, error } = await db.auth.signInWithOAuth({ provider:"apple", options:{ redirectTo: CAP_OAUTH_REDIRECT, skipBrowserRedirect:true } });
+    busy=false;
+    if(error){ showErr(t("Connexion Apple : ")+error.message); return; }
+    const B=window.Capacitor.Plugins.Browser; if(data && data.url && B) await B.open({url:data.url});
+    return;
+  }
   const { error } = await db.auth.signInWithOAuth({ provider:"apple", options:{ redirectTo: window.location.origin + window.location.pathname } });
   if(error){ showErr(t("Connexion Apple : ")+error.message); busy=false; }
 }
@@ -20491,6 +20526,37 @@ function brancherRetourAndroid(){
     if(P.minimizeApp) P.minimizeApp();                                     // 4. arrière-plan, jamais quitter
   });
 }
+/* ⚠️ v8.426 (Lot Mobile 1, demandé par Hervé) — RETOUR OAuth NATIF (Google/Apple, cf. `loginGoogle`/
+   `loginApple` et `CAP_OAUTH_REDIRECT`). Google/Apple redirigent en fin de connexion vers
+   `com.tactizo.app://auth-callback#access_token=…&refresh_token=…` — un schéma personnalisé, jamais
+   une vraie page web, donc capté par le SYSTÈME (iOS/Android) qui relance l'app plutôt que de
+   naviguer nulle part. `@capacitor/app` reçoit cette relance comme un évènement `appUrlOpen`,
+   AUSSI BIEN si l'app était encore ouverte en arrière-plan QUE si le système l'avait totalement
+   arrêtée entre-temps (Capacitor conserve l'URL de lancement et la rejoue au premier listener posé
+   — d'où l'appel ici, dès `boot()`, comme `brancherRetourAndroid()` juste au-dessus).
+   ⚠️ Mêmes champs que `boot()` (relecture de session) et `viewLogin()` (connexion mot de passe) pour
+   construire `AUTH` depuis les métadonnées utilisateur — non factorisé ici pour rester un correctif
+   ciblé, pas une refonte du chargement de session. */
+function brancherRetourOAuthNatif(){
+  const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+  if(!P || !P.addListener) return;
+  P.addListener('appUrlOpen', async (ev)=>{
+    const url = ev && ev.url; if(!url || url.indexOf(CAP_OAUTH_REDIRECT)!==0) return;
+    const B = window.Capacitor.Plugins.Browser; if(B && B.close) try{ await B.close(); }catch(e){}
+    const hash = url.split('#')[1] || '';
+    const params = new URLSearchParams(hash);
+    const access_token = params.get('access_token'), refresh_token = params.get('refresh_token');
+    if(!access_token || !refresh_token){ showErr(t("Connexion : lien de retour invalide.")); render(); return; }
+    const { data, error } = await db.auth.setSession({ access_token, refresh_token });
+    if(error){ showErr(t("Connexion : ")+error.message); render(); return; }
+    AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||"", avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null, email:data.user.email||"", createdAt:data.user.created_at||null, tutorialSeenAt:(data.user.user_metadata&&data.user.user_metadata.tutorial_seen_at)||null };
+    await loadOpts(); await loadSoloCredits();
+    if(!AUTH.name){ S.view="choosePseudo"; render(); return; }
+    S.view="home"; startPoll(); await loadMyLeagues();
+    await ensureRevenueCatLogin();
+    render();
+  });
+}
 
 
 // ⚠️ v8.278 — DOIT ÊTRE POSÉ AVANT TOUT `getSession()` (donc hors de `boot()`, au chargement du
@@ -20512,6 +20578,7 @@ db.auth.onAuthStateChange((event,session)=>{
 });
 (async function boot(){
   brancherRetourAndroid();
+  brancherRetourOAuthNatif();
   if(!window.supabase){ showErr("Librairie Supabase non chargée (vérifie ta connexion Internet)."); return; }
   // (v7.92 : `initSwipeNav()` retiré ici — voir la note à l'endroit de la définition supprimée.)
   checkForUpdate();
