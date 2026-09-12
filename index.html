@@ -2530,7 +2530,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.422";
+const APP_VERSION = "v8.423";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4635,6 +4635,7 @@ const EN={
   "L'enjeu qui donne envie de gagner (ou de ne pas perdre).":"The stakes that make you want to win (or not lose).",
   "Ta ligue est prête":"Your league is ready", "Vérifie, ajuste si besoin, puis lance.":"Check, adjust if needed, then launch.",
   "Solo":"Solo", "Jouer contre l'IA.":"Play against the AI.", "Solo · Terminé":"Solo · Complete",
+  "{a} parties gratuites restantes":"{a} free games left", "{a} partie gratuite restante":"{a} free game left",
   "Matchs":"Matches", "Réels":"Real", "Simulés":"Simulated",
   "Résultats immédiats, sans vrais matchs.":"Instant results, no real matches.",
   "Vrais matchs, vraies cotes.":"Real matches, real odds.",
@@ -4787,6 +4788,7 @@ const EN={
   "👋 Bonjour {a}":"👋 Hello {a}", "Ex : {a}":"e.g. {a}",
   "Retour à mes stats":"Back to my stats",
   "Pari par pari":"Bet by bet", "Somme des paris :":"Bets total:",
+  "Bonus : {n}":"Bonus: {n}",
   "Comment ce montant est calculé":"How this amount is worked out",
   "Comment ces points sont attribués":"How these points are awarded",
   // — v8.02 : la durée d'une ligue à deux, choisie au moment de clôturer —
@@ -6938,8 +6940,18 @@ function showGainInfo(){
         note=`<div class="mini muted" style="margin-left:2px">${CARDS.chance.e} ${
           t("couvre aussi <b>{a}</b> @{b} → <b>{c}</b> si c'est cette issue qui sort.",
             {a:esc(labelSel(f,c.sel2)),b:cote(o2),c:euro(st*(o2-1)*mult)})}</div>`; }
+      // ⚠️ (2026-09-12, bug reel signale par Herve : "Deux pour le prix d'un" cible sur ses 2
+      // premiers matchs -- les cartes Pronos disaient bien "2 matchs cibles", mais ICI seul le
+      // bloc GLOBAL en bas de fiche (variable `supp`, plus bas) mentionne le bonus : rien sur les lignes
+      // PAR MATCH elle-memes ne les relie a lui, donc AUCUNE des deux n'est vraiment "identifiee"
+      // par une ligne qui lui est propre -- seule la position du bloc global, juste apres la
+      // DERNIERE ligne, donnait l'illusion que "le second match" etait concerne. `cardOnMatch()`
+      // (deja utilise cote Resultats pour la meme raison) verifie `target` ET `target2` -- generique
+      // a tout futur bonus `.two`, pas seulement "dbl" en dur. AFFICHAGE SEUL : le calcul du gain
+      // (`g`, `mult`) et le bloc global `supp` plus bas restent totalement inchanges.
+      const dblTag = (c&&CARDS[c.id]&&CARDS[c.id].two&&cardOnMatch(c,i)) ? `<div class="mini muted" style="margin-left:2px">${t("Bonus : {n}",{n:t(CARDS[c.id].n)})}</div>` : '';
       return `<div style="margin:5px 0"><span class="mini">${esc(f.home)}–${esc(f.away)} · <b>${esc(labelSel(f,b.sel))}</b> · ${euro(st)} @${cote(od)}${
-        tags.length?' · '+tags.join(' · '):''}</span> <b class="mini green">${euroSigned(g)}</b>${note}</div>`;
+        tags.length?' · '+tags.join(' · '):''}</span> <b class="mini green">${euroSigned(g)}</b>${note}${dblTag}</div>`;
     }).join("");
     /* ⚠️ v8.00 — 🏷️ Deux pour le prix d'un A SA PROPRE LIGNE, et c'est indispensable : son gain
        est ADDITIF (versé une fois si les deux pronos passent), il n'appartient à aucun des deux
@@ -7751,7 +7763,9 @@ function showBonusImpact(pid,day){
     <div class="mini" style="text-align:left;margin-top:10px;border-top:1px solid var(--border);padding-top:8px">${t("L'<b>effet</b> = le gain <b>avec</b> le bonus moins le gain qu'il y aurait eu <b>sans</b> le bonus.")}</div>`;
   // 🥷 / 🧬 : sans cette ligne, l'impact chiffré est incompréhensible — on ne sait ni ce qui a été
   // pris, ni ce qui a été copié, ni pourquoi le bonus n'a rien donné.
-  const nomC=id=>(CARDS[id]?CARDS[id].e+" "+t(CARDS[id].n):id);
+  // ⚠️ (2026-09-12, audit pictogrammes) — nomme un bonus DANS UNE PHRASE (celui vole/clone, pas
+  // celui de la fiche elle-meme, deja illustre en tete de modale) : nom en texte, plus d'ancien emoji.
+  const nomC=id=>(CARDS[id]?t(CARDS[id].n):id);
   const nomJ=p=>{ const x=pById(p); return x?avatarHTML(x.emoji)+' '+esc(x.name||'?'):"?"; };
   let mot="";
   if(c.stole) mot=t("🥷 Bonus pris à {a} : son {b} n'a pas été appliqué, et le bonus est passée dans ta main.",{a:nomJ(oppId),b:nomC(c.stole)});
@@ -7763,7 +7777,11 @@ function showBonusImpact(pid,day){
   if(hasSelf){ const wo=r2(net-im.self); body+=`<div class="mini" style="text-align:left;margin-top:7px">🧑 <b>${t("Sur son gain du jour :")}</b><br>${t("• avec le bonus :")} <b>${euroSigned(net)}</b><br>${t("• sans le bonus :")} <b>${euroSigned(wo)}</b><br>${t("• effet :")} <b class="${im.self>=0?'green':'red'}">${euroSigned(im.self)}</b></div>`; }
   if(hasOpp){ const wo=r2(oppNet-im.opp); body+=`<div class="mini" style="text-align:left;margin-top:7px">🥊 <b>${t("Sur le gain de l'adversaire :")}</b><br>${t("• avec le bonus :")} <b>${euroSigned(oppNet)}</b><br>${t("• sans le bonus :")} <b>${euroSigned(wo)}</b><br>${t("• effet :")} <b class="${im.opp>=0?'green':'red'}">${euroSigned(im.opp)}</b></div>`; }
   if(!hasSelf&&!hasOpp) body+=`<div class="mini muted" style="text-align:left;margin-top:8px">${t("Aucun effet chiffré ce jour-là.")}</div>`;
-  infoModal(cardEmoji(c), esc(cardName(c))+" — "+t("l'effet"), body);
+  // ⚠️ (2026-09-12, audit pictogrammes, demande d'Hervé) — CETTE FICHE EST UN "ÉLÉMENT PRINCIPAL"
+  // au sens de la nouvelle règle visuelle (citée nommément par Hervé, au même titre que la sélection
+  // aux enchères) : illustration officielle (`bonusIconHTML`, déjà 34px = même taille que l'ancien
+  // emoji dans `infoModal()`, aucun ajustement de mise en page nécessaire), pas l'ancien pictogramme.
+  infoModal(bonusIconHTML(c.cloned?'clone':c.id), esc(cardName(c))+" — "+t("l'effet"), body);
 }
 /* ---- FENÊTRE DE CONFIRMATION À LA CHARTE DU JEU (v7.53, demandé par Hervé) -----------------
    `confirm()` du navigateur ne peut pas être mis en forme : ni emoji mis en valeur, ni couleur,
@@ -10788,7 +10806,18 @@ function viewCreate(){
         <input id="newName" maxlength="${LEAGUE_NAME_MAX}" value="${esc(g.name||'')}" oninput="if(newLg)newLg.name=this.value"></div>
       <div class="a2-sec-title">${t("👥 Type de partie")}</div>
       ${opt(g.type==='amis',false,"setNew('type','amis')",'👥',t("Entre amis"),t("Avec un code"))}
-      ${opt(solo,false,"setNew('type','solo')",'<img src="img/icone-ia.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Solo"),t("Jouer contre l'IA."),premBadge('ia'))}`;
+      ${/* ⚠️ (2026-09-12, teste en reel mobile, demande d'Herve) — CETTE CARTE PROMETTAIT "🔒
+           Premium" MEME a un nouveau joueur disposant encore de ses 3 saisons Solo decouverte
+           gratuites (Lot 1) : rien ici ne consultait `soloCreditsLeft()`, seulement `hasOpt('ia')`
+           via `premBadge('ia')`. Aucune modale supplementaire (tranche par Herve) : la carte
+           s'adapte elle-meme, toujours normalement selectionnable tant qu'un credit gratuit ou un
+           droit actif permet reellement de creer la saison -- `canPlaySolo()` (deja la REGLE
+           SERVEUR du Lot 1, cf. requireIaForSolo() plus loin) fait foi, aucune nouvelle mecanique. */''}
+      ${opt(solo,false,"setNew('type','solo')",'<img src="img/icone-ia.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Solo"),
+        canPlaySolo()
+          ? (hasOpt('ia') ? t("Jouer contre l'IA.") : t("Jouer contre l'IA.")+`<br><span class="chip g" style="margin-top:2px">🎁 ${soloCreditsLeft()>1?t("{a} parties gratuites restantes",{a:soloCreditsLeft()}):t("{a} partie gratuite restante",{a:soloCreditsLeft()})}</span>`)
+          : t("Jouer contre l'IA."),
+        canPlaySolo()?'':premBadge('ia'))}`;
   } else if(createStep===2){
     eyebrow=t("Étape 2 sur 3"); title=t("Ton expérience"); sub=t("Trois réglages indépendants, à ton goût.");
     const secIc=src=>`<img src="img/${src}" alt="" style="width:18px;height:18px;object-fit:contain;vertical-align:-4px;margin-right:7px">`;
@@ -14603,11 +14632,14 @@ function recapBody(D){
       txt= flip + (win?t("a parié <b>{a}</b> ({b}€ @{c}) → gagné : {b}×({c}−1)={d}",{a:esc(labelSel(f,b.sel)),b:b.stake,c:odd,d:euroSigned(base)})
              :t("a parié <b>{a}</b> ({b}€) → perdu : −{b}€",{a:esc(labelSel(f,b.sel)),b:b.stake})); }
     if(i===bt.captain){ g=base*2; txt+=' · '+t("👑 Match favori ×2 → {a}",{a:euroSigned(g)}); }
-    if(c&&c.target===i&&!isDC){ const ce=cardEmoji(c), cn=cardName(c);   // v8.317 : emoji/nom clone-aware, cf. leur définition
-      if(c.id==="double"&&win){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}",{n:cn,a:euroSigned(g)});}
-      else if(c.id==="tout"){g*=(win?3:2);txt+=' · '+ce+' '+t("{n} {m} → {a}",{n:cn,m:win?'×3':'×2',a:euroSigned(g)});}
-      else if(c.id==="joker"){g*=2;txt+=' · '+ce+' '+t("{n} ×2 → {a}",{n:cn,a:euroSigned(g)});}
-      else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);txt+=' · '+ce+' '+t("{n} : moitié de la mise remboursée → {a}",{n:cn,a:euroSigned(g)});} }
+    // ⚠️ (2026-09-12, audit pictogrammes, demande d'Hervé) — PLUS D'ANCIEN EMOJI ICI (`ce` retiré) :
+    // cette phrase est de l'information compacte dans un calcul, pas un écran de sélection de bonus
+    // — le nom du bonus en texte suffit, comme dans Temps forts (même règle visuelle).
+    if(c&&c.target===i&&!isDC){ const cn=cardName(c);   // v8.317 : nom clone-aware, cf. sa définition
+      if(c.id==="double"&&win){g*=2;txt+=' · '+t("{n} ×2 → {a}",{n:cn,a:euroSigned(g)});}
+      else if(c.id==="tout"){g*=(win?3:2);txt+=' · '+t("{n} {m} → {a}",{n:cn,m:win?'×3':'×2',a:euroSigned(g)});}
+      else if(c.id==="joker"){g*=2;txt+=' · '+t("{n} ×2 → {a}",{n:cn,a:euroSigned(g)});}
+      else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);txt+=' · '+t("{n} : moitié de la mise remboursée → {a}",{n:cn,a:euroSigned(g)});} }
     if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; txt+=' · '+t("🤛 Dans ta face adverse : gain <b>réduit de moitié</b> → {a}",{a:euroSigned(g)}); }
     txt+=` = <b class="${g>=0?'green':'red'}">${euroSigned(g)}</b>`; return txt; };
   const badge=(bt,who,i)=>{ let s=''; if(bt&&i===bt.captain) s+=`<span class="chip gold" title="Match favori : gain et perte doublés">👑 Match favori (${esc(who)})</span> `; if(cardOnMatch(bt.card,i)) s+=`<span class="chip b clik" onclick="showCardInfo('${bt.card.cloned?'clone':bt.card.id}')">${cardEmoji(bt.card)} ${esc(cardName(bt.card))} (${esc(who)})</span> `; return s; };
@@ -14632,7 +14664,8 @@ function recapBody(D){
     if(p.state==='noBet') return `<div class="${cls}">${who}<div class="mini red" style="margin-top:4px"><b>🚫 ${t("n'a pas parié")}</b></div></div>`;
     if(p.state==='noPick') return `<div class="${cls}">${who}<div class="muted" style="margin-top:4px">—</div></div>`;
     const badges=[]; if(p.isCaptain) badges.push(`<div class="a2-res-mbe-badge favori">${whoName} · 👑 ${t("Favori")}</div>`);
-    if(cardOnMatch(p.card,i)) badges.push(`<div class="a2-res-mbe-badge bonus">${whoName} · ${cardEmoji(p.card)} ${esc(cardName(p.card))}</div>`);
+    // ⚠️ (2026-09-12, audit pictogrammes) — badge compact : nom du bonus en texte, plus d'ancien emoji.
+    if(cardOnMatch(p.card,i)) badges.push(`<div class="a2-res-mbe-badge bonus">${whoName} · ${esc(cardName(p.card))}</div>`);
     // ⚠️ Port V2 Résultats (2026-09-06, écart constaté par l'audit) — resultats.html accompagne
     // TOUJOURS le badge 👑 d'une ligne d'explication (`.mbe-effect`, "Match favori · Gain/perte ×2")
     // sous les badges. Seul le favori est repris ici : le bonus a aussi son `.mbe-effect` dans la
@@ -14703,7 +14736,10 @@ function recapBody(D){
     // centralisé : espace insécable, virgule FR, jamais de centimes réels supprimés).
     const bonusMini=(bt)=>{ if(!bt||!bt.card||!bt.card.id) return ''; const c=bt.card,im=c.impact||{};
       const ps=[]; if(im.self!=null&&Math.abs(im.self)>=1) ps.push(`${t("son gain")} <b class="${im.self>=0?'green':'red'}">${euroSigned(im.self)}</b>`); if(im.opp!=null&&Math.abs(im.opp)>=1) ps.push(`${t("gain adverse")} <b class="${im.opp>=0?'green':'red'}">${euroSigned(im.opp)}</b>`);
-      return `<div class="duel-bonus-line clik" onclick="showBonusImpact('${bt.player_id}',${D})" title="${t("Toucher pour le détail : gain avec le bonus vs sans le bonus")}"><span class="duel-bonus-ic">${cardEmoji(c)}</span><span class="duel-bonus-txt"><b>🃏 ${esc(cardName(c))}</b>${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</span></div>`; };
+      // ⚠️ (2026-09-12, audit pictogrammes) — plus d'ancien emoji de bonus (`duel-bonus-ic`
+      // retiré) : le 🃏 générique (marqueur "ceci est un bonus", pas un des 14 bonus) et le nom en
+      // texte suffisent, comme partout ailleurs sur cet écran.
+      return `<div class="duel-bonus-line clik" onclick="showBonusImpact('${bt.player_id}',${D})" title="${t("Toucher pour le détail : gain avec le bonus vs sans le bonus")}"><span class="duel-bonus-txt"><b>🃏 ${esc(cardName(c))}</b>${ps.length?` — ${t("effet :")} ${ps.join(' · ')}`:''}</span></div>`; };
     // ⚠️ Port V2 Résultats (2026-09-06) — le duel « en détail » reprend le gabarit mbe-score/
     // mbe-cols de resultats.html (score réel en évidence, colonnes Toi/Adversaire), MAIS
     // `line()`/`explain()` (calcul + texte, juste au-dessus dans ce fichier) restent APPELÉS TELS
@@ -14783,7 +14819,13 @@ function recapBody(D){
        « sur ? » au lieu de ne rien afficher : `showBonusJoue` teste déjà `cible?...:''`, mais
        une chaîne vide devenue "?" via `esc2` est VRAIE, donc jamais reconnue comme absente. */
     const escCible=n=>esc((n||'').replace(/'/g,"\\'"));
-    const cardLblJoue=(c,qui,adv,cible,self,opp)=>`<span class="clik" onclick="showBonusJoue('${c.id}','${c.cloned||''}','${esc2(qui)}','${esc2(adv)}','${escCible(cible)}',${+self||0},${+opp||0})" title="${t("Voir le détail de ce coup")}">${cardEmoji(c)} ${esc(cardName(c))}</span>`;
+    // ⚠️ (2026-09-12, demandé par Hervé, tests reels mobile) — PLUS D'EMOJI DE BONUS ICI. Temps
+    // forts est un bloc EDITORIAL (une phrase qui se lit), pas un ecran de selection de bonus : les
+    // anciens pictogrammes (✂️ Demi-portion, ❄️ Effet Kiss Cool…) y restaient visibles alors que le
+    // reste de l'app en est sorti — nom du bonus en TEXTE SEUL, l'emoji narratif de la phrase (😅/
+    // 🎯/🥷, poses par les appelants ci-dessous) suffit deja a donner le ton. `cardEmoji(c)` retire
+    // ici uniquement -- cette fonction n'a aucun autre appelant (grep verifie).
+    const cardLblJoue=(c,qui,adv,cible,self,opp)=>`<span class="clik" onclick="showBonusJoue('${c.id}','${c.cloned||''}','${esc2(qui)}','${esc2(adv)}','${escCible(cible)}',${+self||0},${+opp||0})" title="${t("Voir le détail de ce coup")}">${esc(cardName(c))}</span>`;
   bets.forEach(b=>{ if(!b.card||!b.card.id||!CARDS[b.card.id]) return; const c=b.card, im=c.impact||{};
     const self=+im.self||0, opp=+im.opp||0;
     // ⚠️ `wp` SERT ENCORE PLUS BAS, en COMPLÉMENT (« contre toi », « pour toi ») — emplois
@@ -15119,10 +15161,24 @@ function recapBody(D){
   // plus. Icône réelle (bonusIconHTML), pas l'emoji — même correctif que Coulisses/Boutique.
   const bonusEffectHTML = (()=>{ if(!revealed) return '';
     const cMine=meB&&meB.card, oppCardX=oppId!=null?cardMap[oppId]:null;
-    const imSelf=(cMine&&cMine.impact&&cMine.impact.self)||0, imOpp=(oppCardX&&oppCardX.impact&&oppCardX.impact.opp)||0;
+    // ⚠️ (2026-09-12, bug confirmé par Hervé, test réel mobile) — LE BLOC N'AFFICHAIT QUE RAREMENT
+    // LE BONUS ADVERSE. La ligne adverse ne lisait QUE `impact.opp` (l'effet de SA carte SUR MOI) —
+    // or la majorité des bonus (Assurance, Coup Double, Ça passe ou ça casse, Parachute, Coup de
+    // Chance…) n'agissent QUE sur le net de leur propre propriétaire : leur `impact.opp` vaut
+    // TOUJOURS 0, quel que soit l'effet réel qu'ils ont eu. La ligne adverse disparaissait donc dans
+    // la plupart des cas, même bonus joué et mesurable. Symétriquement, "mon" bonus avait le même
+    // défaut inversé s'il s'agissait d'un bonus purement offensif (Demi-portion, Sangsue visant
+    // l'adversaire) : `impact.self` y vaut 0, seul `impact.opp` porte l'effet réel.
+    // ⚠️ CORRECTIF : chaque ligne prend désormais SA PROPRE carte et regarde `self` D'ABORD (l'effet
+    // sur celui qui l'a jouée — le cas le plus courant), et ne retombe sur `opp` QUE si `self` est
+    // nul (bonus purement offensif, dont le seul effet mesurable touche l'autre joueur). Aucun
+    // second calcul : les deux valeurs existaient déjà, seule la LECTURE était incomplète.
+    const pickImpact=c=>{ if(!c||!c.impact) return null; const s=+c.impact.self||0, o=+c.impact.opp||0;
+      if(Math.abs(s)>=0.005) return s; if(Math.abs(o)>=0.005) return o; return null; };
+    const imSelf=pickImpact(cMine), imOpp=pickImpact(oppCardX);
     const lines=[];
-    if(cMine&&CARDS[cMine.id]&&Math.abs(imSelf)>=0.005) lines.push({icon:(cMine.cloned&&CARDS.clone)?'clone':cMine.id, name:cardName(cMine), amt:imSelf, mine:true});
-    if(oppCardX&&CARDS[oppCardX.id]&&Math.abs(imOpp)>=0.005) lines.push({icon:(oppCardX.cloned&&CARDS.clone)?'clone':oppCardX.id, name:cardName(oppCardX), amt:imOpp, mine:false});
+    if(cMine&&CARDS[cMine.id]&&imSelf!=null) lines.push({icon:(cMine.cloned&&CARDS.clone)?'clone':cMine.id, name:cardName(cMine), amt:imSelf, who:(isMe?t("Toi"):esc(fpName)), mine:true});
+    if(oppCardX&&CARDS[oppCardX.id]&&imOpp!=null) lines.push({icon:(oppCardX.cloned&&CARDS.clone)?'clone':oppCardX.id, name:cardName(oppCardX), amt:imOpp, who:esc(oppName), mine:false});
     if(!lines.length) return '';
     // ⚠️ (2026-09-11, demandé par Hervé, test réel sur tactizo.com) — CE BANDEAU N'AVAIT AUCUN
     // onclick : c'est pourtant le PREMIER indice de bonus joué visible sur l'écran (avant même
@@ -15135,8 +15191,11 @@ function recapBody(D){
     // jour (le sien + celui de l'adverse), deux grosses bannières prenaient trop de place pour ce
     // qui n'est qu'un premier coup d'œil — le détail complet (qui/cible/effet) reste dans la fiche
     // ouverte au clic, jamais dupliqué ici.
+    // ⚠️ (2026-09-12) — "qui a joué quoi" : chaque ligne nomme désormais son joueur ("Toi" ou le nom
+    // de l'adversaire), exhaustif pour le duel (Solo IA comme Entre amis — `oppName` porte déjà le
+    // nom du 🤖 joueur IA en solo, aucune distinction supplémentaire nécessaire).
     return `<div class="a2-res-bonus-list"><div class="hd">🎴 ${t("BONUS JOUÉS")}</div>${lines.map(l=>
-      `<div class="a2-res-bonus-row clik" onclick="showBonusImpact('${l.mine?fp:oppId}',${D})"><span class="ic">${bonusIconHTML(l.icon)}</span><span class="nm">${esc(l.name)}</span><span class="amt ${l.amt>=0?'green':'red'}">${euroSigned(l.amt)}</span></div>`
+      `<div class="a2-res-bonus-row clik" onclick="showBonusImpact('${l.mine?fp:oppId}',${D})"><span class="ic">${bonusIconHTML(l.icon)}</span><span class="nm"><b>${l.who}</b> — ${esc(l.name)}</span><span class="amt ${l.amt>=0?'green':'red'}">${euroSigned(l.amt)}</span></div>`
     ).join('')}</div>`;
   })();
   // « Autres duels de la journée » — liste compacte + panneau détail (pas une navigation de page
@@ -15275,8 +15334,9 @@ function showGainDetail(pid){
     if(Math.abs(adj)>=0.005){
       const imSelf=(c&&c.impact&&c.impact.self)||0, imOpp=(oppCard&&oppCard.impact&&oppCard.impact.opp)||0;
       const sources=[];
-      if(c&&CARDS[c.id]&&Math.abs(imSelf)>=0.005) sources.push(cardEmoji(c)+' '+esc(cardName(c)));
-      if(oppCard&&CARDS[oppCard.id]&&Math.abs(imOpp)>=0.005) sources.push(cardEmoji(oppCard)+' '+esc(cardName(oppCard)));
+      // ⚠️ (2026-09-12, audit pictogrammes) — nom du bonus en texte, plus d'ancien emoji ici.
+      if(c&&CARDS[c.id]&&Math.abs(imSelf)>=0.005) sources.push(esc(cardName(c)));
+      if(oppCard&&CARDS[oppCard.id]&&Math.abs(imOpp)>=0.005) sources.push(esc(cardName(oppCard)));
       rows+=`<div class="mini" style="margin-top:2px">${t("🃏 Bonus & ajustements")}${sources.length?' ('+sources.join(' + ')+')':''} : <b class="${adj>=0?'green':'red'}">${euroSigned(adj)}</b></div>`;
     }
   } else rows=`<div class="mini muted">${t("Pas de détail disponible pour ce joueur.")}</div>`;
