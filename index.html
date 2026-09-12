@@ -2539,7 +2539,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.429";
+const APP_VERSION = "v8.430";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -8940,7 +8940,7 @@ function viewAuth(){
       <div class="a2-lang"><button class="${lang==='fr'?'on':''}" onclick="setLang2('fr')">FR</button><button class="${lang==='en'?'on':''}" onclick="setLang2('en')">EN</button></div>
     </div>
     <div style="border-radius:16px;overflow:hidden;margin-bottom:16px;background:#0d0a1f">
-      <img src="${HERO_LOGIN_B64}" alt="Tactizo" style="display:block;width:100%;height:200px;object-fit:cover;object-position:50% 70%">
+      <img src="${HERO_LOGIN_B64}" alt="Tactizo" style="display:block;width:100%;height:200px;object-fit:cover;object-position:50% 30%">
     </div>
     ${sloganHTML("bas",false,true)}
     <div style="margin-top:16px">
@@ -16813,8 +16813,14 @@ const CARD_W=1080, CARD_H=1920;
 // non recadré) : c'est lui qu'il faut recadrer pour toute future version, pas le .jpg dérivé.
 // Zone d'affichage réelle (viewAuth()) : conteneur 100% de large, coins arrondis 16px, fond de
 // repli #0d0a1f ; l'image est recadrée en <img style="width:100%;height:200px;object-fit:cover;
-// object-position:50% 70%">, donc SEUL le centre-bas de l'image est garanti visible sur mobile —
-// tout sujet important doit rester dans cette bande, pas dans les 30% du haut.
+// object-position:50% 30%">. ⚠️ v8.430 (cas réel constaté par Hervé sur iPhone) — le conteneur est
+// souvent plus LARGE que le ratio de l'image (200px de haut fixe vs ~343-358px de large en mobile
+// courant) : `object-fit:cover` rogne alors le HAUT et le BAS de l'image, pas les côtés. Avec 70%
+// (ancien réglage, hérité du professeur), le rognage mordait sur les cheveux du Maestro (~35px sur
+// 460 de haut) dès que le conteneur dépassait ~360px de large. 30% laisse une petite marge visible
+// au-dessus des cheveux sur 320/375/390px, sans jamais réduire le visage ni cacher le tableau
+// tactique (`object-fit:cover` ne change QUE la fenêtre visible, jamais le zoom). Revérifier cette
+// valeur si l'image change de composition (position de la tête dans le cadre).
 // Remplacement futur : déposer le nouveau master en app/hero-login-source.png, recadrer/redimensionner
 // en 700×460 (ratio 1,52:1, cf. ci-dessus) vers app/hero-login.jpg, régénérer son base64
 // (python3 -c "import base64;print(base64.b64encode(open('app/hero-login.jpg','rb').read()).decode())"),
