@@ -2530,7 +2530,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.424";
+const APP_VERSION = "v8.425";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -9748,6 +9748,17 @@ function qgAuctionCounts(lg,pid){
   }
   return {targeted,obtained};
 }
+// ⚠️ v8.425 (demandé par Hervé, choix validé après audit chiffré du 2026-09-12, modèle 1 sur 3
+// proposés) — lissage bayésien additif, prior neutre à 50% équivalent à k observations : une petite
+// série d'observations ne doit pas peser comme un gros historique confirmé. Avec k=3 : 1/1 (100%)
+// devient 62,5% (jamais une confiance pleine sur 1 seule observation) ; 0/1 (0%) devient 37,5%
+// (jamais une sanction extrême immédiate) ; un gros historique (ex. 30/30) converge presque vers
+// son taux réel (95,5%, pas 100%) — la formule s'auto-annule quand n grandit. Utilisé UNIQUEMENT
+// pour le score/couleur de Stratégie (Enchères et Tactique récente) ; n'importe où ailleurs
+// (Forme/Classement/Gestion, seuils vert/orange/rouge, pondérations 30/70 et 20/30/50) reste hors
+// périmètre de cette demande, volontairement inchangé.
+const QG_STRATEGIE_SMOOTH_K=3;
+function qgBayesSmooth(rate0to100,n,k){ return n>0 ? 100*((rate0to100/100)*n+k*0.5)/(n+k) : rate0to100; }
 function qgComputeStrategie(ctx){
   const {pooled,bts,dls,now}=ctx;
   let totT=0, totO=0;
@@ -9788,13 +9799,22 @@ function qgComputeStrategie(ctx){
   });
   dayScores.sort((a,b)=>b.ts-a.ts);
   const last=dayScores.slice(0,3);
+  const favD=last.filter(x=>x.favScore!=null), bonusD=last.filter(x=>x.bonusScore!=null);
   let tacticalScore=null;
   if(last.length===1) tacticalScore=last[0].dayScore;
   else if(last.length===2) tacticalScore=0.4*last[1].dayScore+0.6*last[0].dayScore;
   else if(last.length>=3) tacticalScore=0.2*last[2].dayScore+0.3*last[1].dayScore+0.5*last[0].dayScore;
 
   if(auctionScore==null && tacticalScore==null) return {score:null,color:"gray",msg:t("Pas assez de données pour évaluer ta stratégie.")};
-  const score=Math.round(auctionScore==null?tacticalScore:(tacticalScore==null?auctionScore:0.3*auctionScore+0.7*tacticalScore));
+  // ⚠️ v8.425 — le lissage (ci-dessus) s'applique ICI, sur le score/couleur uniquement : Enchères
+  // (n = total de bonus visés, totT) et Tactique récente (n = nombre d'observations capitaine+bonus
+  // sur les journées comptées, favD+bonusD). Les pourcentages BRUTS affichés dans la fiche (ci-
+  // dessous, `Math.round(auctionScore)` et les ratios `{a}/{b}` de favD/bonusD) restent les vrais
+  // chiffres observés, jamais les valeurs lissées — le joueur voit toujours ce qui s'est réellement
+  // passé, seule la couleur/le niveau tient compte de la fiabilité de l'échantillon.
+  const smoothedAuctionScore = auctionScore==null ? null : qgBayesSmooth(auctionScore,totT,QG_STRATEGIE_SMOOTH_K);
+  const smoothedTacticalScore = tacticalScore==null ? null : qgBayesSmooth(tacticalScore,favD.length+bonusD.length,QG_STRATEGIE_SMOOTH_K);
+  const score=Math.round(smoothedAuctionScore==null?smoothedTacticalScore:(smoothedTacticalScore==null?smoothedAuctionScore:0.3*smoothedAuctionScore+0.7*smoothedTacticalScore));
   const color=qgTierFromScore(score);
   // ⚠️ v8.424 (demandé par Hervé, cas réel : 86% d'enchères affiché EN PREMIER donnait l'impression
   // que ce sous-score EST la note Stratégie, alors qu'il ne pèse que 30% du total) — REFONTE de la
@@ -9803,7 +9823,6 @@ function qgComputeStrategie(ctx){
   // pourcentage composite nu — il n'a pas vocation à être lu comme une probabilité), PUIS détaille
   // Enchères et Tactique récente comme deux composantes distinctes, chacune sur sa propre ligne.
   const level = color==="green" ? t("élevé") : (color==="orange" ? t("intermédiaire") : t("faible"));
-  const favD=last.filter(x=>x.favScore!=null), bonusD=last.filter(x=>x.bonusScore!=null);
   const tacticalParts=[];
   if(favD.length) tacticalParts.push(t("Capitaine gagnant {a}/{b}",{a:favD.filter(x=>x.favScore===100).length,b:favD.length}));
   if(bonusD.length) tacticalParts.push(t("Bonus rentable {a}/{b}",{a:bonusD.filter(x=>x.bonusScore===100).length,b:bonusD.length}));
@@ -9811,7 +9830,7 @@ function qgComputeStrategie(ctx){
   if(auctionScore!=null) lines.push(t("Enchères — {a}% des bonus visés obtenus.",{a:Math.round(auctionScore)}));
   if(tacticalParts.length) lines.push(t("Tactique récente (sur tes {n} dernières journées) — {p}.",{n:last.length,p:tacticalParts.join(' · ')}));
   const msg=lines.join('<br>');
-  return {score,color,msg,data:{auctionScore,tacticalScore,totT,totO,nDays:last.length}};
+  return {score,color,msg,data:{auctionScore,tacticalScore,smoothedAuctionScore,smoothedTacticalScore,totT,totO,nDays:last.length}};
 }
 
 // ───── GESTION ───── 70% santé du capital (capital actuel vs référence de départ, recapitalisation
