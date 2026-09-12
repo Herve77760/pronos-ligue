@@ -87,8 +87,17 @@
      DEVINER, `render()` MESURE la hauteur réelle de #topBar après chaque rendu et la pose dans
      --topbar-h ; .app lit cette variable. `93px` ne reste que comme repli AVANT la première mesure
      (premier paint, un instant avant que le JS tourne) — plus une hypothèse qu'on applique partout. */
+  /* ⚠️ v8.427 (demandé par Hervé, cas réel : grand vide sous la barre du haut sur iPhone natif,
+     absent sur le web) — `env(safe-area-inset-top)` était compté DEUX FOIS : une fois DANS
+     `--topbar-h` (mesuré par `render()` via `getBoundingClientRect().height` sur `#topBar`, qui
+     inclut déjà sa propre marge de sécurité posée par `.bar` ci-dessous), et une seconde fois ici,
+     explicitement ajouté par-dessus. Sur le web, `env(safe-area-inset-top)` vaut 0 : le doublon
+     s'annule silencieusement, invisible. En natif (encoche/Dynamic Island), sa vraie valeur
+     (~47-59px) est comptée deux fois → exactement le grand vide constaté. Retiré d'ici ; conservé
+     dans le REPLI (avant la toute première mesure JS) pour ne pas réintroduire l'écrasement par
+     l'heure/l'encoche documenté en v8.198, juste au-dessus de `.bar`. */
   .app{max-width:540px;margin:0 auto;
-    padding:calc(var(--topbar-h, 93px) + 12px + env(safe-area-inset-top)) 16px calc(92px + env(safe-area-inset-bottom));}
+    padding:calc(var(--topbar-h, calc(93px + env(safe-area-inset-top))) + 12px) 16px calc(92px + env(safe-area-inset-bottom));}
   /* ⚠️ v8.344 (Tactizo V2) — écrans Auth/Profil : la barre fixe du haut et la nav du bas sont
      masquées (render() bascule cette classe), donc l'espace qu'elles réservaient normalement dans
      .app doit disparaître avec elles — sinon un grand vide reste en haut/bas. Remplace le bidouillage
@@ -2530,7 +2539,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.426";
+const APP_VERSION = "v8.427";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
