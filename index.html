@@ -2530,7 +2530,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.423";
+const APP_VERSION = "v8.424";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -4332,8 +4332,6 @@ const EN={
   "Ton capital reste proche de ta mise de départ.":"Your capital stays close to your starting stake.",
   "Ton capital s'est significativement dégradé par rapport à ta mise de départ.":"Your capital has significantly declined compared to your starting stake.",
   "Pas assez de données pour évaluer ta stratégie.":"Not enough data to assess your strategy.",
-  "Basé sur tes décisions récentes en journée (aucune enchère récente exploitable).":"Based on your recent in-game decisions (no recent auction data available).",
-  "{a}% des bonus visés aux enchères obtenus ; décisions récentes prises en compte.":"{a}% of the bonuses you bid on were won at auction; recent decisions also factored in.",
   // === v8.398 (demandé par Hervé) — explications concrètes des voyants, sans score technique brut ===
   "le haut":"the top",
   "le milieu":"the middle",
@@ -4353,10 +4351,16 @@ const EN={
   "Ce voyant synthétise tes positions dans tes ligues récemment terminées.":"This indicator combines your positions across your recently finished leagues.",
   "Ce voyant synthétise tes positions dans tes ligues en cours.":"This indicator combines your positions across your ongoing leagues.",
   "Tu es actuellement dans {a} de tes classements.":"You're currently in {a} of your rankings.",
-  "capitaine gagnant {a}/{b} fois":"winning captain {a}/{b} times",
-  "bonus rentable {a}/{b} fois":"profitable bonus {a}/{b} times",
-  "Sur tes {n} dernières journées : {p}.":"Over your last {n} days: {p}.",
-  "{a}% des bonus visés aux enchères obtenus. {b}":"{a}% of the bonuses you bid on were won at auction. {b}",
+  // === v8.424 (demandé par Hervé, fiche Stratégie : le verdict global d'abord, jamais un
+  // pourcentage composite nu — pas de vocation à être lu comme une probabilité) ===
+  "élevé":"high",
+  "intermédiaire":"average",
+  "faible":"low",
+  "Stratégie : niveau {a}.":"Strategy: {a} level.",
+  "Enchères — {a}% des bonus visés obtenus.":"Auctions — {a}% of targeted bonuses won.",
+  "Tactique récente (sur tes {n} dernières journées) — {p}.":"Recent tactics (over your last {n} days) — {p}.",
+  "Capitaine gagnant {a}/{b}":"Winning captain {a}/{b}",
+  "Bonus rentable {a}/{b}":"Profitable bonus {a}/{b}",
   // === Connexion Google (v8.224) ===
   "Continuer avec Google":"Continue with Google",
   "ou":"or",
@@ -9438,7 +9442,14 @@ function maestroTierCap(){
   const nRed=QG_IND_KEYS.filter(isRed).length;
   if(nRed>=3) return 3;
   if(nRed===2) return 4;
-  return 6;   // 0 ou 1 voyant rouge : pas de plafond supplémentaire
+  // ⚠️ v8.424 (demandé par Hervé, cas réel : Forme/Classement/Stratégie 🟢 + Gestion 🔴 affichait
+  // quand même le Maestro T6 "ultra-dominant" — incohérent dès qu'une dimension est franchement
+  // rouge). Règle de cohérence visuelle pure : ≥1 voyant rouge → jamais T6. Un seul plafonnement du
+  // TIER final (Math.min à l'appel, comme les caps ci-dessus) — ni pondération, ni pénalité du score
+  // pondéré lui-même (MAESTRO_WEIGHTS inchangés) : 3 voyants excellents + 1 rouge reste T5 possible,
+  // jamais écrasé au milieu de l'échelle.
+  if(nRed===1) return 5;
+  return 6;   // 0 voyant rouge : pas de plafond supplémentaire
 }
 function computeMaestroMood(){
   const ACTION_KINDS=["prep","trevebid","choix","pronos"], GOOD_KINDS=["prepdeclencher","resultats","trevedeclencher","treve","coulisses","declencher"];
@@ -9784,20 +9795,23 @@ function qgComputeStrategie(ctx){
 
   if(auctionScore==null && tacticalScore==null) return {score:null,color:"gray",msg:t("Pas assez de données pour évaluer ta stratégie.")};
   const score=Math.round(auctionScore==null?tacticalScore:(tacticalScore==null?auctionScore:0.3*auctionScore+0.7*tacticalScore));
-  // ⚠️ v8.398 (demandé par Hervé) — même principe que Classement : jamais de score technique nu.
-  // "décisions récentes prises en compte" ne disait rien de concret ; on détaille maintenant le
-  // capitaine et le bonus joué sur les journées comptées, sans toucher au calcul de tacticalScore.
+  const color=qgTierFromScore(score);
+  // ⚠️ v8.424 (demandé par Hervé, cas réel : 86% d'enchères affiché EN PREMIER donnait l'impression
+  // que ce sous-score EST la note Stratégie, alors qu'il ne pèse que 30% du total) — REFONTE de la
+  // fiche uniquement (le calcul de `score` juste au-dessus, lui, n'a pas bougé) : elle commence
+  // désormais TOUJOURS par le verdict global du voyant (même mot que la couleur du point, jamais un
+  // pourcentage composite nu — il n'a pas vocation à être lu comme une probabilité), PUIS détaille
+  // Enchères et Tactique récente comme deux composantes distinctes, chacune sur sa propre ligne.
+  const level = color==="green" ? t("élevé") : (color==="orange" ? t("intermédiaire") : t("faible"));
   const favD=last.filter(x=>x.favScore!=null), bonusD=last.filter(x=>x.bonusScore!=null);
   const tacticalParts=[];
-  if(favD.length) tacticalParts.push(t("capitaine gagnant {a}/{b} fois",{a:favD.filter(x=>x.favScore===100).length,b:favD.length}));
-  if(bonusD.length) tacticalParts.push(t("bonus rentable {a}/{b} fois",{a:bonusD.filter(x=>x.bonusScore===100).length,b:bonusD.length}));
-  const tacticalMsg = tacticalParts.length ? t("Sur tes {n} dernières journées : {p}.",{n:last.length,p:tacticalParts.join(", ")}) : null;
-  const msg = auctionScore==null
-    ? (tacticalMsg || t("Basé sur tes décisions récentes en journée (aucune enchère récente exploitable)."))
-    : (tacticalMsg
-        ? t("{a}% des bonus visés aux enchères obtenus. {b}",{a:Math.round(auctionScore),b:tacticalMsg})
-        : t("{a}% des bonus visés aux enchères obtenus ; décisions récentes prises en compte.",{a:Math.round(auctionScore)}));
-  return {score,color:qgTierFromScore(score),msg,data:{auctionScore,tacticalScore,totT,totO,nDays:last.length}};
+  if(favD.length) tacticalParts.push(t("Capitaine gagnant {a}/{b}",{a:favD.filter(x=>x.favScore===100).length,b:favD.length}));
+  if(bonusD.length) tacticalParts.push(t("Bonus rentable {a}/{b}",{a:bonusD.filter(x=>x.bonusScore===100).length,b:bonusD.length}));
+  const lines=[t("Stratégie : niveau {a}.",{a:level})];
+  if(auctionScore!=null) lines.push(t("Enchères — {a}% des bonus visés obtenus.",{a:Math.round(auctionScore)}));
+  if(tacticalParts.length) lines.push(t("Tactique récente (sur tes {n} dernières journées) — {p}.",{n:last.length,p:tacticalParts.join(' · ')}));
+  const msg=lines.join('<br>');
+  return {score,color,msg,data:{auctionScore,tacticalScore,totT,totO,nDays:last.length}};
 }
 
 // ───── GESTION ───── 70% santé du capital (capital actuel vs référence de départ, recapitalisation
