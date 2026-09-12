@@ -11162,16 +11162,14 @@ async function createLeague(){
     const lg=await insertLeagueCodeUnique({name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,engine:(data==='real'?'client':'server'),gage:JSON.stringify(st)});
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||defaultAvatar(0),is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     newLg=null;
-    if(solo){ await startLeagueCore(lg); openLeague(lg.id, pl.id, true); }  // SOLO : démarre direct (pas de lobby)
-    else { openLeague(lg.id, pl.id, true); leagueCreatedModal(lg.code); }
-    // v8.432 (bug vécu par Hervé, test réel iPhone 12/09) — DÉPLACÉ ICI ET DIFFÉRÉ : appelé avant
-    // (juste après l'insert du joueur, sans attendre), la fenêtre "Activer les notifications" se
-    // faisait recouvrir et fermer par `leagueCreatedModal()`/la transition d'ouverture avant que le
-    // joueur ait pu cliquer — `infoModal()` ferme TOUJOURS le modal précédent (`closeCardInfo()`,
-    // cf. le même piège documenté plus haut pour `consentementAchat()`). Le délai laisse le temps de
-    // voir "Ligue créée !"/l'écran de la ligue AVANT que le prompt ne s'affiche à son tour, en
-    // dernier, sans concurrent pour le fermer avant le clic.
-    setTimeout(()=>maybeShowPushPrompt("firstleague"), 2500);
+    // v8.432 (bug vécu par Hervé, test réel iPhone 12/09) — `maybeShowPushPrompt` appelé ici même,
+    // avant `openLeague`/`leagueCreatedModal`, se faisait recouvrir et fermer par cette dernière
+    // avant que le joueur ait pu cliquer : `infoModal()` ferme TOUJOURS le modal précédent
+    // (`closeCardInfo()`, même piège que celui documenté pour `consentementAchat()`). SOLO : pas de
+    // fenêtre intermédiaire, donc appel direct après l'ouverture. MULTI : enchaîné sur la FERMETURE
+    // de "Ligue créée !" (clic OK), pas sur un délai arbitraire — cf. `leagueCreatedModal(code,onClose)`.
+    if(solo){ await startLeagueCore(lg); openLeague(lg.id, pl.id, true); maybeShowPushPrompt("firstleague"); }  // SOLO : démarre direct (pas de lobby)
+    else { openLeague(lg.id, pl.id, true); leagueCreatedModal(lg.code, ()=>maybeShowPushPrompt("firstleague")); }
   }catch(e){ showErr((e&&e.codesSatures)?t("Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours."):msgErreurIa(e,"Création")); } busy=false;
 }
 async function joinLeague(code){
@@ -11195,7 +11193,7 @@ async function joinLeague(code){
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[ord]||"🎮",join_order:ord,user_id:AUTH.id}).select().single());
     toast(t("Tu as rejoint {a} 🎉",{a:lg.name||t("la ligue")}));
     openLeague(lg.id, pl.id, true);
-    setTimeout(()=>maybeShowPushPrompt("firstleague"), 2500);   // v8.432 — même correctif que createLeague() (voir son commentaire)
+    maybeShowPushPrompt("firstleague");   // v8.432 — pas de fenêtre modale concurrente ici (toast() n'appelle pas closeCardInfo()), donc appel direct
   }catch(e){ joinSetErr(t("Impossible de rejoindre")+" : "+e.message); } busy=false;
 }
 
@@ -12179,11 +12177,19 @@ async function relaunchLeague(){
   }catch(e){ showErr((e&&e.codesSatures)?t("Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours."):"Relance : "+e.message); } busy=false; }
 // Confirmation de création — dans une fenêtre fermable (et non un toast fugace) pour laisser le
 // temps de lire et de noter le code à partager. Le modal survit au render() du lobby (appendChild body).
-function leagueCreatedModal(code){ infoModal("🎉", t("Ligue créée !"),
+// `onClose` (v8.432, optionnel) : callback exécuté à la fermeture (clic OK) — utilisé par
+// createLeague() pour enchaîner sur le prompt notifications SEULEMENT une fois cette fenêtre-ci
+// fermée, jamais en concurrence avec elle. `relaunchLeague()` appelle cette même modale sans
+// `onClose` : une relance n'est pas une des « 2 occasions » du brief, donc pas de prompt là.
+let _leagueCreatedOnClose=null;
+function _leagueCreatedClose(){ const f=_leagueCreatedOnClose; _leagueCreatedOnClose=null; closeCardInfo(); if(f) f(); }
+function leagueCreatedModal(code, onClose){ _leagueCreatedOnClose=onClose||null;
+  infoModal("🎉", t("Ligue créée !"),
   `<div class="mini muted" style="text-align:left">${t("Partage ce code avec tes amis pour qu'ils rejoignent :")}</div>
    <div class="code" style="margin:10px 0">${esc(code)}</div>
    <div style="text-align:center;margin-bottom:6px"><button class="btn sm" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(code)}');toast(t('Code copié : {a}',{a:'${esc(code)}'}))">${t("📋 Copier le code")}</button></div>
-   <div class="mini muted" style="text-align:left">${t("Les réglages sont <b>figés</b> — seule la vitesse (classique / fast) restera modifiable, en cours de partie. Clôture les inscriptions quand tout le monde a rejoint.")}</div>`); }
+   <div class="mini muted" style="text-align:left">${t("Les réglages sont <b>figés</b> — seule la vitesse (classique / fast) restera modifiable, en cours de partie. Clôture les inscriptions quand tout le monde a rejoint.")}</div>
+   <button class="btn" style="margin-top:16px" onclick="_leagueCreatedClose()">${t("OK")} 👍</button>`, true); }
 async function closeRegistration(){
   if(busy)return;
   const nH=players.filter(p=>!p.is_ai).length; const soloNow=(nH===1);
