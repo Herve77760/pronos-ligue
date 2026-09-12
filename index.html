@@ -2539,7 +2539,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.431";
+const APP_VERSION = "v8.432";
 const SB_URL = "https://mdqmhrorpdyrsjsbawdl.supabase.co";
 const SB_KEY = "sb_publishable_1xe1X9iIPahncWpQpRkrdg_Hw49QXO0";
 const db = window.supabase.createClient(SB_URL, SB_KEY);
@@ -11162,9 +11162,16 @@ async function createLeague(){
     const lg=await insertLeagueCodeUnique({name:nm,status:"lobby",num_participants:MAX_PLAYERS,num_days:0,formula,data_mode:data,engine:(data==='real'?'client':'server'),gage:JSON.stringify(st)});
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||defaultAvatar(0),is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
     newLg=null;
-    maybeShowPushPrompt("firstleague");   // v8.431 — 2ᵉ occasion (brief §6) ; sans effet si déjà montrée/autorisée
     if(solo){ await startLeagueCore(lg); openLeague(lg.id, pl.id, true); }  // SOLO : démarre direct (pas de lobby)
     else { openLeague(lg.id, pl.id, true); leagueCreatedModal(lg.code); }
+    // v8.432 (bug vécu par Hervé, test réel iPhone 12/09) — DÉPLACÉ ICI ET DIFFÉRÉ : appelé avant
+    // (juste après l'insert du joueur, sans attendre), la fenêtre "Activer les notifications" se
+    // faisait recouvrir et fermer par `leagueCreatedModal()`/la transition d'ouverture avant que le
+    // joueur ait pu cliquer — `infoModal()` ferme TOUJOURS le modal précédent (`closeCardInfo()`,
+    // cf. le même piège documenté plus haut pour `consentementAchat()`). Le délai laisse le temps de
+    // voir "Ligue créée !"/l'écran de la ligue AVANT que le prompt ne s'affiche à son tour, en
+    // dernier, sans concurrent pour le fermer avant le clic.
+    setTimeout(()=>maybeShowPushPrompt("firstleague"), 2500);
   }catch(e){ showErr((e&&e.codesSatures)?t("Impossible de trouver un code libre pour ta ligue. Retouche le bouton : un nouveau tirage suffit presque toujours."):msgErreurIa(e,"Création")); } busy=false;
 }
 async function joinLeague(code){
@@ -11187,8 +11194,8 @@ async function joinLeague(code){
     const ord=humans.length;
     const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||EMOJIS[ord]||"🎮",join_order:ord,user_id:AUTH.id}).select().single());
     toast(t("Tu as rejoint {a} 🎉",{a:lg.name||t("la ligue")}));
-    maybeShowPushPrompt("firstleague");   // v8.431 — 2ᵉ occasion (brief §6) ; sans effet si déjà montrée/autorisée
     openLeague(lg.id, pl.id, true);
+    setTimeout(()=>maybeShowPushPrompt("firstleague"), 2500);   // v8.432 — même correctif que createLeague() (voir son commentaire)
   }catch(e){ joinSetErr(t("Impossible de rejoindre")+" : "+e.message); } busy=false;
 }
 
