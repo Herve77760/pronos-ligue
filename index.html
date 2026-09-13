@@ -2576,7 +2576,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.438";
+const APP_VERSION = "v8.439";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -2596,6 +2596,27 @@ const MAINTENANCE_MODE = true;
 // "Giulian" → giulian@bbb.app, compte existant depuis 2026-07-14) — jamais par pseudo/email au
 // runtime : seul cet uid, déjà résolu, compte ici. Même idée qu'ADMIN_ID, juste une petite liste.
 const MAINTENANCE_ALLOWED_IDS = [ADMIN_ID, "4716935b-9023-4737-a3b3-e9326b6a93fa"];
+// ⚠️ Lot A (2026-09-13, audit demandé par Hervé) — VRAI mode maintenance, séparé et orthogonal au
+// mécanisme ci-dessus : piloté par `app_config.maintenance` (MIGRATION-maintenance-config.sql),
+// donc activable par l'Admin SANS redéploiement de code, et SANS liste blanche de testeurs — seul
+// le compte Admin (ADMIN_ID) passe encore, pour pouvoir vérifier/désactiver depuis l'app elle-même.
+// Lu une seule fois au démarrage (boot()) ; `false` par défaut et en cas d'échec de lecture.
+let REAL_MAINTENANCE = false;
+// ⚠️ Lot A (2026-09-13) — VERSION MINIMALE NATIVE (mise à jour obligatoire), point 14 du brief.
+// Le web a déjà son mécanisme (checkForUpdate()/showUpdateBanner(), plus bas) : un simple bandeau
+// "Recharger", puisque la page web se re-télécharge elle-même. AUCUN équivalent n'existe pour le
+// natif : les apps iOS/Android embarquent leur COPIE de ce fichier au moment du build (`npx cap
+// copy/sync`), jamais en direct — un joueur sur une vieille app ne recharge jamais rien tout seul.
+// Piloté par `app_config.min_version_ios`/`min_version_android` (MIGRATION-version-minimale.sql,
+// même modèle que `maintenance` : `note` porte ici la version minimale exigée (ex. "vX.XXX"),
+// `actif` active/désactive le contrôle) — modifiable par l'Admin SANS redéploiement.
+// ⚠️ URLS STORE : `STORE_URL_ANDROID` est DÉFINITIVE (com.tactizo.app, identifiant déjà fixé) même
+// avant publication effective. `STORE_URL_IOS` reste un espace réservé — aucun identifiant App
+// Store Connect n'existe encore (app jamais soumise) : à remplacer par l'URL réelle dès que
+// disponible (cf. STORES-FICHES-SOUMISSION.md), une seule ligne à changer, aucun autre branchement.
+const STORE_URL_ANDROID = "https://play.google.com/store/apps/details?id=com.tactizo.app";
+const STORE_URL_IOS = "https://apps.apple.com/app/id0000000000"; // TODO : identifiant réel une fois l'app soumise
+let MIN_VERSION_GATE = null;   // {version, storeUrl} si le natif courant est trop ancien, sinon null
 const AUTH_DOMAIN = "bbb.app"; // e-mail synthétique invisible pour l'utilisateur (Supabase Auth) : pseudo@bbb.app
 // ⚠️ NE PAS normaliser les accents ici : l'email technique dérive du pseudo de CRÉATION du compte.
 // La normalisation (v6.52) cassait la connexion des comptes créés avec un accent (« Hervé » →
@@ -5732,6 +5753,12 @@ const EN={
   "Points Tactizo":"Tactizo Points", "0 point":"0 points",
   "Gagne des Points Tactizo en faisant découvrir Tactizo à de nouveaux joueurs actifs.":"Earn Tactizo Points by introducing new active players to Tactizo.",
   "Gérée par ton compte Google":"Managed by your Google account", "Gérée par ton compte Apple":"Managed by your Apple account", "Compte externe":"External account",
+  "Vérifie ta connexion Internet et réessaie.":"Check your Internet connection and try again.", "Réessayer":"Retry",
+  "Mise à jour nécessaire":"Update required", "Mettre à jour":"Update", "Nous contacter":"Contact us",
+  "Cette version de Tactizo n'est plus prise en charge. Mets à jour l'application pour continuer à jouer.":"This version of Tactizo is no longer supported. Update the app to keep playing.",
+  "Tactizo évolue":"Tactizo is evolving", "Une nouvelle version est en cours de préparation.":"A new version is being prepared.",
+  "Le jeu est temporairement indisponible pendant la mise à jour.":"The game is temporarily unavailable during the update.",
+  "Reviens très bientôt !":"Come back very soon!",
   "Recrue":"Recruit", "Tacticien":"Tactician", "Stratège":"Strategist", "Visionnaire":"Visionary",
   "Maestro":"Maestro", "Grand Maestro":"Grand Maestro",
   "{a} pronostics":"{a} predictions", "{a} / {b} pronostics":"{a} / {b} predictions",
@@ -6767,8 +6794,29 @@ const esc2=n=>esc((n||'?').replace(/'/g,"\\'"));
 // `lecture_seule` : message technique lancé par `q()` quand une écriture est tentée en mode
 // consultation (v7.11). Il remonte par les `catch` de tout l'app — on le traduit ici, en un
 // seul endroit, plutôt que d'aller modifier chaque appelant.
+// ⚠️ Lot A (2026-09-13, demandé par Hervé) — MÊME PRINCIPE pour une panne réseau : le message brut
+// du navigateur ("Failed to fetch", "Load failed", "NetworkError when attempting to fetch
+// resource"…) ne veut rien dire pour un joueur. `!navigator.onLine` (hors connexion CONNUE du
+// navigateur) est vérifié EN PREMIER — plus fiable qu'un texte d'erreur qui varie d'un moteur à
+// l'autre — puis un repli sur la forme du message pour les cas où `navigator.onLine` ment (faux
+// positif classique : Wi-Fi connecté mais sans sortie Internet réelle).
+const RESEAU_KO_RE=/Failed to fetch|Load failed|NetworkError|network request failed|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED/i;
+function reessayerReseau(){ showErr(""); if(S.leagueId) refresh(); else if(S.view==="home" && AUTH) loadMyLeagues().then(render); else location.reload(); }
+function showReseauKo(){ $("err").innerHTML=`<div class="err">${esc(t("Vérifie ta connexion Internet et réessaie."))} <button type="button" class="ghost-btn-sm" onclick="reessayerReseau()">${esc(t("Réessayer"))}</button></div>`; }
 function showErr(m){ if(m && /lecture_seule/.test(m)) m="👁️ Mode consultation : aucune modification n'est possible sur la ligue d'un autre groupe.";
+  if(m && (!navigator.onLine || RESEAU_KO_RE.test(m))){ showReseauKo(); return; }
   $("err").innerHTML = m?`<div class="err">${esc(m)}</div>`:""; }
+// ⚠️ Lot A (2026-09-13) — l'état hors connexion doit s'afficher MÊME SANS action tentée par le
+// joueur (pas seulement au prochain clic qui échoue) : écouteurs globaux `online`/`offline`. Au
+// retour du réseau, en plus du polling existant (`startPoll()`, qui aurait fini par rattraper au
+// prochain passage), un rafraîchissement IMMÉDIAT est déclenché — la reprise n'attend pas le tick.
+// ⚠️ COUVERTURE NATIVE (iOS/Android, Capacitor) : `online`/`offline` sont relayés par la WebView
+// elle-même — testé fonctionnel en pratique, mais moins fiable qu'une lecture directe de l'état
+// réseau du système (coupures Wi-Fi/cellulaire parfois détectées avec un délai). Piste pour plus
+// de robustesse plus tard : le plugin `@capacitor/network` (non installé aujourd'hui), qui
+// interroge l'OS directement — hors périmètre de ce lot (nouvelle dépendance native + resync).
+window.addEventListener("offline", showReseauKo);
+window.addEventListener("online", reessayerReseau);
 // Erreur affichée SOUS un champ précis plutôt qu'en haut de l'écran (v8.298, demandé par Hervé sur
 // le formulaire d'inscription) — même esprit que #repErr sur la remontée de bug : sur un long
 // formulaire, une bannière tout en haut ne dit pas quel champ corriger.
@@ -18500,7 +18548,7 @@ async function adminDeleteUser(uid){ const u=(adminUsers||[]).find(x=>x.id===uid
     infoWin("🗑️ Compte « "+esc(u.username||"?")+" » supprimé."+(nl?(" Il reste inscrit dans "+nl+" ligue"+(nl>1?"s":"")+", où sa place est désormais inoccupée."):" Il n'était inscrit dans aucune ligue.")); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis)."
     :(/cannot_delete_admin/.test(e.message)?"Le compte admin ne peut pas être supprimé."
-    :(/admin_delete_user|schema cache|function/i.test(e.message)?("Suppression : "+e.message+" (exécute SUPPRIMER-COMPTE-ADMIN.sql dans Supabase)")
+    :(/admin_delete_user|schema cache|function/i.test(e.message)?("Suppression : "+e.message+" (exécute MIGRATION-admin-id.sql dans Supabase — SUPPRIMER-COMPTE-ADMIN.sql est périmé)")
     :("Suppression : "+e.message)))); } }
 // Activer / verrouiller une option premium sur un compte (pour TESTER le futur modèle payant en te
 // connectant avec ce compte). `u.options` null = tout offert (défaut test) : on matérialise alors la
@@ -18516,12 +18564,12 @@ async function adminSetOptions(uid, key){ const u=(adminUsers||[]).find(x=>x.id=
   if(!dedans && SHOP_ORDER.indexOf(key)>=0) cur.push(optAvecFin(key));
   try{ await q(db.rpc("admin_set_options",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_options:cur}));
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
-  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute OPTIONS-ADMIN.sql dans Supabase)")); } }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute MIGRATION-admin-id.sql dans Supabase — OPTIONS-ADMIN.sql est périmé)")); } }
 async function adminSetAllOptions(uid, all){
   // v7.45 : « Tout activer » accorde des options DATÉES (un an), comme un achat.
   try{ await q(db.rpc("admin_set_options",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_options:all?SHOP_ORDER.map(optAvecFin):[]}));
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
-  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute OPTIONS-ADMIN.sql dans Supabase)")); } }
+  catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute MIGRATION-admin-id.sql dans Supabase — OPTIONS-ADMIN.sql est périmé)")); } }
 // Libellés courts des options pour l'écran Admin (français ; l'écran Admin n'est pas traduit).
 const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Bonus complètes", treve:"🔄 Trêve", ia:"🤖 Joueur IA", stats:"📊 Stats perso", duel_live:"⚡ Duel Live", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
@@ -19149,36 +19197,78 @@ function viewAdmin(){
   const nouv=adminReports?adminReports.filter(r=>r.status==="nouveau").length:0;
   const quotaTxt=(()=>{ const nb=(a.quota&&a.quota.remaining!=null)?a.quota.remaining:liveQuota;
     return nb==null?"jamais relevé":(nb+" crédits"); })();
+  // ⚠️ Lot A (2026-09-13, audit admin demandé par Hervé) — REGROUPEMENT VISUEL en 5 sections
+  // (Joueurs / Ligues & gameplay / Monétisation / Notifications-Technique / Configuration),
+  // AUCUN changement de logique : seuls l'ORDRE de concaténation et cette fonction purement
+  // décorative `groupe()` changent. `sec()`/`toggleAdm()`/`admOpen` ne dépendent d'aucun ordre —
+  // chaque chapitre s'ouvre/se ferme indépendamment de sa position dans le HTML.
+  const groupe=titre=>`<div class="mini muted" style="margin:18px 0 4px;text-transform:uppercase;letter-spacing:.04em">${titre}</div>`;
   return `${back}
     <div class="box"><h2 style="margin-top:0">🛠 Tableau de bord admin</h2>
       <div class="mini muted">Touche un chapitre pour l'ouvrir. Un seul à la fois.</div></div>
-    ${sec("ligues","🏆 Ligues", (a.leagues+" au total"+(nbDort?" · "+nbDort+" à l'arrêt":"")), cLigues)}
-    ${sec("stats","💳 Comptes & abonnements", (adminStats?adminStats.total_accounts+" comptes · "+adminStats.entitlements_actifs+" options actives":"non chargés"), cStats)}
+    ${groupe("Joueurs")}
     ${sec("comptes","👤 Gestion des comptes", (adminUsers?adminUsers.length+" comptes":"non chargés"), cComptes)}
-    ${sec("promo","🎟️ Codes promo testeurs", (adminPromo?adminPromo.length+" code"+(adminPromo.length>1?'s':''):"non chargés"), cPromo)}
+    ${groupe("Ligues & gameplay")}
+    ${sec("ligues","🏆 Ligues", (a.leagues+" au total"+(nbDort?" · "+nbDort+" à l'arrêt":"")), cLigues)}
     ${sec("activiteUsage","📈 Activité & usage", a.totalBets+" paris", cActiviteUsage)}
     ${sec("jeu","🃏 Bonus, gages & récompenses", a.cardsPlayed+" bonus", cJeu)}
+    ${groupe("Monétisation")}
+    ${sec("stats","💳 Comptes & abonnements", (adminStats?adminStats.total_accounts+" comptes · "+adminStats.entitlements_actifs+" options actives":"non chargés"), cStats)}
+    ${sec("promo","🎟️ Codes promo testeurs", (adminPromo?adminPromo.length+" code"+(adminPromo.length>1?'s':''):"non chargés"), cPromo)}
+    ${groupe("Notifications / Technique")}
     ${sec("api","📡 Crédits API", quotaTxt, cApi)}
     ${sec("remontees","✉️ Remontées des joueurs", (adminReports?(adminReports.length+" au total"+(nouv?" · "+nouv+" 🆕":"")):"non chargées"), cRemontees)}
     ${sec("connex","⏳ Connexions (mesure temporaire)", (adminConnex?adminConnex.length+" lignes":"non chargées"), cConnex)}
+    ${groupe("Configuration")}
     ${sec("moi","🔑 Mon compte admin", "", cMoi)}`;
 }
 
 /* ============ render / poll ============ */
 let rootAffiche=null;   // dernier HTML réellement posé dans #root (cf. la note dans render)
-// Écran affiché à tout compte hors MAINTENANCE_ALLOWED_IDS tant que MAINTENANCE_MODE est actif.
+// Écran affiché à tout compte hors MAINTENANCE_ALLOWED_IDS tant que MAINTENANCE_MODE est actif
+// (fermeture temporaire "bêta fermée"), OU quand la vraie maintenance admin (app_config.maintenance,
+// cf. isMaintenanceOn()) est active — même écran pour les deux, seul le déclencheur diffère.
+// ⚠️ Lot A (2026-09-13, audit demandé par Hervé) — FR/EN via t() (c'était 100% français en dur
+// jusqu'ici, invisible à check-i18n.ps1 puisque hors du dictionnaire) + identité Tactizo actuelle
+// (même classe .a2-title que le bandeau du Profil, pas une image lourde à charger sur un écran de
+// panne). Message inchangé dans le fond : pas d'"ancien professeur", pas de mention "prototype".
 function maintenanceHTML(){
   return '<div style="max-width:420px;margin:60px auto;padding:28px 22px;text-align:center;color:#f4ecd8;'
     +'background:#161221;border-radius:16px;border:1px solid rgba(255,255,255,.08)">'
-    +'<h2 style="margin:0 0 14px;font-size:20px;color:#f4ecd8">Tactizo évolue</h2>'
-    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">Une nouvelle version est en cours de préparation.</p>'
-    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">Le jeu est temporairement indisponible pendant la mise à jour.</p>'
-    +'<p style="margin:0;line-height:1.5;font-weight:600;color:#f4ecd8">Reviens très bientôt !</p>'
+    +'<div class="a2-title" style="margin:0 0 16px;color:#f4ecd8">TACTIZO</div>'
+    +'<h2 style="margin:0 0 14px;font-size:20px;color:#f4ecd8">'+esc(t("Tactizo évolue"))+'</h2>'
+    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">'+esc(t("Une nouvelle version est en cours de préparation."))+'</p>'
+    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">'+esc(t("Le jeu est temporairement indisponible pendant la mise à jour."))+'</p>'
+    +'<p style="margin:0;line-height:1.5;font-weight:600;color:#f4ecd8">'+esc(t("Reviens très bientôt !"))+'</p>'
+    +'</div>';
+}
+// Écran bloquant affiché sur une app native trop ancienne (MIN_VERSION_GATE posé au démarrage,
+// cf. boot()) — même identité visuelle que maintenanceHTML(), bouton vers le store adapté.
+function updateRequiredHTML(){
+  const g=MIN_VERSION_GATE||{};
+  return '<div style="max-width:420px;margin:60px auto;padding:28px 22px;text-align:center;color:#f4ecd8;'
+    +'background:#161221;border-radius:16px;border:1px solid rgba(255,255,255,.08)">'
+    +'<div class="a2-title" style="margin:0 0 16px;color:#f4ecd8">TACTIZO</div>'
+    +'<h2 style="margin:0 0 14px;font-size:20px;color:#f4ecd8">'+esc(t("Mise à jour nécessaire"))+'</h2>'
+    +'<p style="margin:0 0 18px;line-height:1.5;color:#f4ecd8">'+esc(t("Cette version de Tactizo n'est plus prise en charge. Mets à jour l'application pour continuer à jouer."))+'</p>'
+    +'<a class="btn" style="display:inline-block;text-decoration:none" href="'+esc(g.storeUrl||"")+'" target="_blank" rel="noopener">'+esc(t("Mettre à jour"))+'</a>'
     +'</div>';
 }
 
 function render(){
-  if(MAINTENANCE_MODE && AUTH && !MAINTENANCE_ALLOWED_IDS.includes(AUTH.id)){
+  // ⚠️ Lot A (2026-09-13) — vérifié AVANT la maintenance : une app native trop ancienne pour
+  // fonctionner correctement doit le savoir même si la maintenance n'est pas par ailleurs active.
+  // Pas de repli AUTH ici (contrairement à la maintenance) : une version incompatible se détecte
+  // dès le démarrage, avant même une connexion — mais MIN_VERSION_GATE n'est jamais posé sur web,
+  // donc cette branche ne s'active jamais en dehors du natif (cf. `estNatif()` dans boot()).
+  if(MIN_VERSION_GATE){
+    $("topBar").classList.add("hide");
+    $("root").innerHTML = updateRequiredHTML();
+    const bn=$("bottomnav"); if(bn){ bn.innerHTML=""; bn.classList.add("hide"); }
+    const fo=$("foot"); if(fo) fo.innerHTML="Tactizo · "+APP_VERSION;
+    return;
+  }
+  if(AUTH && ((MAINTENANCE_MODE && !MAINTENANCE_ALLOWED_IDS.includes(AUTH.id)) || (REAL_MAINTENANCE && AUTH.id!==ADMIN_ID))){
     $("topBar").classList.add("hide");
     $("root").innerHTML = maintenanceHTML();
     const bn=$("bottomnav"); if(bn){ bn.innerHTML=""; bn.classList.add("hide"); }
@@ -19672,6 +19762,16 @@ function viewProfil(){
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Revoir la présentation")}</span></span>
         <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
       </div>
+      <!-- ⚠️ Lot A (2026-09-13, demandé par Hervé) — l'ancien système Bug/Idée a été retiré (Lot
+           Nuit), pas de nouveau système de tickets : un canal existait déjà (contact@tactizo.com,
+           déjà publié dans confidentialite.html) mais n'était découvrable NULLE PART dans l'app
+           elle-même — un joueur qui veut signaler un problème n'avait aucun moyen évident d'y penser.
+           lien mailto avec sujet PRÉ-REMPLI (version + pseudo) : le contexte le plus utile à un
+           support est justement ce qu'un joueur oublie de préciser spontanément. -->
+      <a class="a2-menu-row" style="cursor:pointer;text-decoration:none;color:inherit" href="mailto:contact@tactizo.com?subject=${encodeURIComponent('Tactizo '+APP_VERSION+' — '+(AUTH.name||''))}">
+        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
+        <span class="a2-menu-text"><span class="a2-menu-label">${t("Nous contacter")}</span><span class="a2-menu-sub">contact@tactizo.com</span></span>
+      </a>
       ${admin?`<div class="a2-menu-row" style="cursor:pointer" onclick="openAdmin()">
         <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2"/></svg></span>
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Espace admin")}</span></span>
@@ -20975,6 +21075,25 @@ db.auth.onAuthStateChange((event,session)=>{
     if(session){ sessionMeta=session.user.user_metadata; AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null, email:session.user.email||"", createdAt:session.user.created_at||null, tutorialSeenAt:(session.user.user_metadata&&session.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(session.user.user_metadata&&session.user.user_metadata.level_picks_max)|0, statsResetAt:(session.user.user_metadata&&session.user.user_metadata.stats_reset_at)||null, provider:(session.user.app_metadata&&session.user.app_metadata.provider)||'email' }; }
     await loadOpts();                       // v8.191 : droits premium lus sur le serveur
     await loadSoloCredits();                // Lot 6 (2026-09-10) : crédits Solo gratuits lus sur le serveur
+    // ⚠️ Lot A (2026-09-13) — vrai mode maintenance, lu une fois au démarrage (comme le reste de
+    // cette section). Repli MUET sur `false` en cas d'échec (réseau, table absente...) : une
+    // panne de LECTURE de ce flag ne doit jamais, par accident, bloquer tout le monde.
+    try{ const rows=await q(db.from("app_config").select("actif").eq("k","maintenance")); REAL_MAINTENANCE=!!(rows&&rows[0]&&rows[0].actif); }catch(e){}
+    // ⚠️ Lot A (2026-09-13) — version minimale native : NATIF UNIQUEMENT (le web a déjà son propre
+    // mécanisme, checkForUpdate() plus bas). Repli MUET (aucun blocage) en cas d'échec de lecture.
+    if(estNatif()){
+      try{
+        const plateforme=(window.Capacitor.getPlatform&&window.Capacitor.getPlatform())||"";
+        const k=plateforme==="android"?"min_version_android":(plateforme==="ios"?"min_version_ios":null);
+        if(k){
+          const rows=await q(db.from("app_config").select("actif,note").eq("k",k));
+          const row=rows&&rows[0];
+          if(row && row.actif && row.note && verNum(APP_VERSION)<verNum(row.note)){
+            MIN_VERSION_GATE={ version:row.note, storeUrl: plateforme==="android"?STORE_URL_ANDROID:STORE_URL_IOS };
+          }
+        }
+      }catch(e){}
+    }
   }catch(e){}
   if(modeRecuperation) return;   // le listener ci-dessus a déjà posé l'écran — ne pas l'écraser
   // ⚠️ 2026-09-06 (demandé par Hervé) — lien de réinitialisation expiré/invalide : voir la note de
