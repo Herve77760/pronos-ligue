@@ -2598,7 +2598,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.446";
+const APP_VERSION = "v8.447";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -3289,14 +3289,46 @@ const GROUP_EMOJI={Soccer:"⚽",Basketball:"🏀",Tennis:"🎾"};
 // à une seconde liste. Les matchs simulés utilisent les mêmes emojis (voir SPORTS), donc cette
 // liste vaut pour les deux modes. Sert au détail « Par sport » des stats (v7.02).
 const SPORT_EMOJIS=Object.keys(GROUP_EMOJI).map(k=>GROUP_EMOJI[k]);
+/* ⚠️ GARDE-FOU QUALITÉ DES COTES (2026-09-13, demandé par Hervé) — un vrai match observé en ligue
+   (Genoa – Südtirol, foot) est arrivé avec des cotes 1,40/1,10/1,07 (somme 3,57) : manifestement
+   incohérent pour un marché 1/N/2 — une vraie cotation de bookmaker a toujours une somme largement
+   > 1 en cotes décimales (l'écart au-dessus de 1 est la marge du bookmaker), une somme aussi basse
+   ne peut être qu'une erreur du fournisseur ou un marché suspendu/mal coté. Seuils fixés par
+   Hervé, à ne jamais recalculer soi-même si les chiffres réels semblent trop stricts : lui
+   redonner les chiffres plutôt que changer le seuil.
+   ⚠️ CHOKE POINT UNIQUE : ce contrôle vit ICI, dans `oddsEventToFixture`, PAS sur un écran de
+   sélection — un match qui échoue ne devient jamais une fixture, il ne peut donc être ni proposé
+   automatiquement (fetchRealPool/selectPool/ensureFixtures) ni choisi à la main (saveSelection) :
+   les trois consomment tous la même réserve construite par cette fonction (cf. audit du
+   2026-09-13). ON NE RECALCULE NI NE CORRIGE JAMAIS LES COTES REÇUES : un match qui échoue est
+   simplement écarté, jamais recoté.
+   ⚠️ PAS DE TÉLÉMÉTRIE UTILISATEUR : `logOddsReject` écrit dans `odds_reject_log`
+   (MIGRATION-odds-reject-log.sql), une table de monitoring qualité des données, sans player_id ni
+   league_id — `fetchRealPool` tourne sur la réserve COMMUNE, jamais rattachée à un joueur. */
+const ODDS_QC_MIN_FOOT=7, ODDS_QC_MIN_2WAY=3;
+function oddQC(v){ return typeof v==="number" && isFinite(v) && v>0; }
+function logOddsReject(group, compKey, ev, oh, od, oa, sum, reason){
+  try{ q(db.from("odds_reject_log").insert({ sport:group, competition:compKey||null,
+    home:(ev&&ev.home_team)||null, away:(ev&&ev.away_team)||null, event_id:(ev&&ev.id)||null,
+    oh:(oh==null?null:oh), od:(od==null?null:od), oa:(oa==null?null:oa),
+    odds_sum:(sum==null?null:sum), reason })); }catch(e){}
+}
 // Convertit un événement The Odds API en "fixture" du jeu, avec cotes h2h figées.
-function oddsEventToFixture(ev, group){
+function oddsEventToFixture(ev, group, compKey){
   const bk=(ev.bookmakers||[])[0]; if(!bk) return null;
   const mk=(bk.markets||[]).find(m=>m.key==="h2h"); if(!mk||!mk.outcomes) return null;
   const oc=mk.outcomes; const pr=n=>{ const o=oc.find(x=>x.name===n); return o?+o.price:null; };
   const oh=pr(ev.home_team), oa=pr(ev.away_team), od=pr("Draw");
-  if(!oh||!oa) return null;
   const draw=(group==="Soccer")&&(od!=null);
+  if(group==="Soccer"){
+    if(!oddQC(oh)||!oddQC(od)||!oddQC(oa)){ logOddsReject(group,compKey,ev,oh,od,oa,null,"cote_manquante_ou_invalide"); return null; }
+    const sum=Math.round((oh+od+oa)*100)/100;
+    if(sum<ODDS_QC_MIN_FOOT){ logOddsReject(group,compKey,ev,oh,od,oa,sum,"somme_insuffisante"); return null; }
+  }else{
+    if(!oddQC(oh)||!oddQC(oa)){ logOddsReject(group,compKey,ev,oh,od,oa,null,"cote_manquante_ou_invalide"); return null; }
+    const sum=Math.round((oh+oa)*100)/100;
+    if(sum<ODDS_QC_MIN_2WAY){ logOddsReject(group,compKey,ev,oh,od,oa,sum,"somme_insuffisante"); return null; }
+  }
   const f={ sport:GROUP_EMOJI[group]||"🎯", home:ev.home_team, away:ev.away_team,
     oh:Math.round(oh*100)/100, oa:Math.round(oa*100)/100, draw:!!draw,
     evId:ev.id, sportKey:ev.sport_key, commence:ev.commence_time };
@@ -3566,7 +3598,7 @@ async function fetchRealPool(){
     noteQuota(r.headers.get("x-requests-remaining"));   // c'est le poste le plus coûteux : on en profite pour relever le solde
     if(!r.ok) continue; const arr=await r.json();
     const avant=out.length;
-    arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
+    arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k],k); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
     // « Vide » = n'a rien rapporté d'UTILISABLE dans la fenêtre. Ce n'est pas la même chose qu'une
     // réponse vide de l'API : un championnat peut renvoyer des matchs tous situés au-delà des
     // 8 jours. Dans les deux cas le crédit est parti et la compétition n'a rien apporté.
@@ -3617,7 +3649,7 @@ async function fetchRealPool(){
         noteQuota(r.headers.get("x-requests-remaining"));
         if(r.ok){ const arr=await r.json(); const avant=out.length;
           arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return;
-            const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
+            const f=oddsEventToFixture(ev,grp[k],k); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
           if(out.length===avant) memo[k]=true; else delete memo[k];
         }
       }catch(e){}
@@ -3638,7 +3670,7 @@ async function fetchRealPool(){
       try{ const r=await oddsFetch("odds",k);
         noteQuota(r.headers.get("x-requests-remaining"));
         if(!r.ok) continue; const arr=await r.json(); const avant=out.length;
-        arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k]); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
+        arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k],k); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
         if(out.length===avant) memo[k]=true; else delete memo[k];
       }catch(e){}
       if(comps.size>=6 && out.length>=30) break;
@@ -7367,7 +7399,7 @@ async function achatNatif(key){
   if(!P) throw new Error("Achats indisponibles sur cet appareil.");
   const offerings=await P.getOfferings();
   const paquets=(offerings&&offerings.current&&offerings.current.availablePackages)||[];
-  const pkg=paquets.find(p=>p.identifier===key || (p.storeProduct&&p.storeProduct.identifier==="com.tactizo.app."+key));
+  const pkg=paquets.find(p=>p.identifier===key);
   if(!pkg) throw new Error("Cette option n'est pas encore disponible à l'achat.");
   await P.purchasePackage({ aPackage:pkg });
   await new Promise(r=>setTimeout(r,1500));
@@ -18412,8 +18444,24 @@ function showLeagueInfo(lid){
      t(...), donc aucune nouvelle traduction à ajouter) : cohérent avec ce qui est déjà dit ailleurs
      dans l'app plutôt que d'inventer une troisième formulation pour la même règle. */
   const row=(lab,val,desc)=>`<div class="info-row clik" onclick="this.nextElementSibling.classList.toggle('hide')"><b>${lab}</b><span class="val">${val} ℹ️</span></div><div class="mini muted hide" style="margin:-2px 2px 10px">${desc}</div>`;
+  /* ⚠️ v8.447 (2026-09-13, demandé par Hervé — « je ne sais pas où est la page paramètres de la
+     ligue sinon ») — LE CHANGEMENT DE FORMAT MANQUAIT ICI. Le Lot C (772234d) l'avait placé dans
+     prepParamsHTML() (accessible depuis L'INTÉRIEUR d'une ligue ouverte) mais pas dans cette fiche
+     « Caractéristiques », accessible depuis l'accueil sur N'IMPORTE LAQUELLE des ligues de
+     l'utilisateur — deux écrans qui affichent la même info (Rythme/Mode/Enjeu/Données/Enchères)
+     sans jamais avoir été fusionnés (déjà signalé par les notes v8.212/v7.43 juste au-dessus).
+     ⚠️ NE PAS RÉUTILISER setFormulaNext() TEL QUEL : cette fonction lit/écrit tout sur le global
+     `L` (la ligue actuellement OUVERTE dans la partie), alors que `lg` ici peut être n'importe
+     quelle ligue de `myLeagues` — potentiellement différente de `L`, voire alors que `L` est nul.
+     Utiliser `L` aurait modifié la MAUVAISE ligue en silence. Convention déjà en place dans ce
+     fichier (cf. closeLeagueFromHome vs closeLeagueInGame, notes lignes ~11162) : un chemin
+     "depuis l'accueil" prend son id en paramètre et ne touche jamais `L` — `setFormulaNextFromHome`
+     ci-dessous suit ce même chemin, jamais celui de setFormulaNext(). */
+  let pend=null; try{ const o2=JSON.parse(lg.gage); if(o2&&Array.isArray(o2.fmtSchedule)) pend=o2.fmtSchedule.filter(c=>c&&FORMULAS[c.formula]&&c.from>(lg.current_day||0)).sort((a,b)=>a.from-b.from)[0]; }catch(e){}
+  const formatChangeHome=(m.org&&lg.status==="running")?`<button class="btn ghost sm" style="width:100%;margin:2px 0 10px" onclick="setFormulaNextFromHome('${lg.id}')">${t("🔄 Changer le format (dès la journée suivante)")}</button>${pend?`<div class="mini muted" style="margin:-6px 2px 10px">${t("passe en {a} à la J{b}",{a:FORMULAS[pend.formula].n,b:pend.from+1})}</div>`:''}`:'';
   let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
     ${row(t("⏱️ Rythme"), t(f.n), t(f.d))}
+    ${formatChangeHome}
     ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"), modeDesc(mode,solo))}
     ${/* ⚠️ Bloc 3A, correctif (2026-09-05, signalé par Hervé) — LE CAS "both" (Gage + Récompense)
          N'ÉTAIT JAMAIS TESTÉ : le ternaire `rew?...:...` ne distinguait que reward vs pas-reward,
@@ -18436,6 +18484,37 @@ function showLeagueInfo(lid){
     ${(m.org&&lg.status!=="done")?`<div style="height:6px"></div><button class="btn ghost sm" style="border-color:var(--red);color:var(--red);width:100%" onclick="closeLeagueFromHome('${lg.id}')">${t("🛑 Fermer la ligue")}</button><div class="mini muted" style="margin-top:6px">${t("Archive la ligue dans « Ligues terminées ». Action irréversible.")}</div>`:''}`;
   infoModal("⚙️", t("Caractéristiques de la ligue"), body);
 }
+/* ⚠️ v8.447 — VARIANTE "DEPUIS L'ACCUEIL" DE setFormulaNext(), MÊME LOGIQUE MÉTIER (bascule
+   fast/classique à partir de la journée suivante, annule si ça ramène au format déjà en place),
+   mais ciblée par `lid` de bout en bout — jamais `L`, jamais `me()` — exactement comme
+   closeLeagueFromHome() ci-dessous cible `lid` plutôt que `L.id`. `formulaKey(lg)` accepte déjà un
+   argument explicite (v7.43) : pas besoin de dupliquer sa logique de résolution. */
+async function setFormulaNextFromHome(lid){
+  const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m||!m.org)return; const lg=m.lg;
+  if(busy||lg.status!=="running")return;
+  const day=((lg.current_day||0)+1);
+  if(day>=(lg.num_days||0)){ infoWin(t("C'est déjà la dernière journée — changer le format n'aurait aucun effet."),"⏱️"); return; }
+  const nat=formulaKey(lg);
+  let st0={}; try{st0=JSON.parse(lg.gage)||{};}catch(e){}
+  const pend0=(Array.isArray(st0.fmtSchedule)?st0.fmtSchedule.find(c=>c&&c.from===day&&FORMULAS[c.formula]):null);
+  const planned = pend0? pend0.formula : nat;
+  const next=(planned==='fast')?'classique':'fast';
+  const revert=(next===nat);
+  if(!await confirmTxt("⏱️",t("Changement de format"), revert
+      ? t("Annuler le changement et rester en {a} à la journée {b} ?",{a:FORMULAS[nat].n,b:day+1})
+      : t("Passer la ligue en {a} à partir de la journée {b} ? Tous les joueurs en seront informés.",{a:FORMULAS[next].n,b:day+1}))) return;
+  busy=true;
+  try{ const fresh=await q(db.from("leagues").select("gage").eq("id",lid).single()); let st; try{st=JSON.parse(fresh.gage)||{};}catch(e){st={};}
+    st.fmtSchedule=(Array.isArray(st.fmtSchedule)?st.fmtSchedule.filter(c=>c&&c.from!==day):[]);
+    if(!revert){ st.fmtSchedule.push({from:day,formula:next}); st.fmtCancel=null; }
+    else { st.fmtCancel={from:day, at:Date.now()}; }
+    await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",lid));
+    try{ localStorage.setItem(revert?("pl_fmtcancel_"+lid+"_"+day+"_"+st.fmtCancel.at):("pl_fmtpend_"+lid+"_"+day+"_"+next),"1"); }catch(e){}
+    closeCardInfo(); await loadMyLeagues();
+    infoWin(revert
+      ? t("✅ Changement annulé : la journée {b} reste en {a}.",{a:FORMULAS[nat].n,b:day+1})
+      : t("✅ Format modifié : {a} dès la journée {b}. Les joueurs seront prévenus.",{a:FORMULAS[next].n,b:day+1}),"⏱️");
+  }catch(e){ showErr("Format : "+e.message); } busy=false; }
 async function closeLeagueFromHome(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m||!m.org)return;
   if(!await confirmTxt("📦",t("Fermer la ligue"),t("Fermer définitivement cette ligue ? Elle sera archivée dans « Ligues terminées ». Action irréversible."),t("Fermer"))) return;
@@ -19625,8 +19704,22 @@ function render(){
      null en même temps.
      Effet de bord voulu : les animations en cours (classes ajoutées après le rendu) ne
      sont plus réinitialisées toutes les 4 s. */
+  /* ⚠️ v8.448 (2026-09-13, bug pré-lancement signalé par Hervé — très reproductible sur Android,
+     intermittent sur iOS : « quand on descend dans le QG, l'auto-refresh ~4 s peut faire remonter
+     la page vers le haut ») — LA VRAIE CAUSE N'EST PAS LE POLLING (rien à ralentir ici) : c'est le
+     remplacement d'`innerHTML` lui-même. Détruire puis recréer tout le sous-arbre de `#root` fait
+     que la plupart des WebView (Android de façon fiable, WKWebView iOS de façon intermittente selon
+     le timing) réinitialisent le défilement du DOCUMENT à 0 — sans qu'aucun code n'appelle
+     `scrollTo()`. Il n'existe pas de conteneur scrollable dédié ici (le vrai défilement a lieu au
+     niveau du DOCUMENT, cf. le commentaire sur `overflow-x:hidden` en tête de fichier) : c'est
+     `window.scrollY` qu'il faut sauver puis restaurer, jamais un `scrollTop` d'élément.
+     Sur le QG, ce réaffichage arrive à CHAQUE poll dès qu'un détail change (compte à rebours
+     `qgCountdownHTML()`, apparition/disparition d'une carte) — largement plus souvent qu'un vrai
+     changement d'écran, d'où le bug vécu en lisant la liste des ligues. */
   const rootNeuf = bandeauConsultation()+bandeauMesLigues()+html;
-  if(rootNeuf !== rootAffiche){ $("root").innerHTML = rootNeuf; rootAffiche = rootNeuf; }
+  const ecritRacine = (rootNeuf !== rootAffiche);
+  const _scrollAvantEcriture = ecritRacine ? window.scrollY : 0;
+  if(ecritRacine){ $("root").innerHTML = rootNeuf; rootAffiche = rootNeuf; }
   // ⚠️ v8.343 (Tactizo V2) — l'écran Profil a désormais sa propre topbar/retour (maquette
   // consolidée) : la nav du bas, pensée pour les onglets Accueil/Ligues/…, ne doit plus s'y
   // afficher (elle s'affichait avant car "profil" fait partie de HOME_VIEWS pour bottomBar()).
@@ -19651,6 +19744,14 @@ function render(){
   const sig=S.view+"|"+(L?L.status:"")+"|"+(S.recap?"r":"")+"|"+(S.leagueId||"")+"|"+(S.ptab||"")
     +"|"+(standHist?"h":"")+"|"+(standDay==null?"":("d"+standDay))+gsub;
   if(sig!==lastScreenSig){ lastScreenSig=sig; try{ window.scrollTo(0,0); }catch(e){} }
+  // ⚠️ v8.448 — MÊME ÉCRAN (sig inchangé) mais `#root` a quand même été réécrit (countdown QG,
+  // carte qui apparaît/disparaît…) : on restaure la position lue AVANT l'écriture plutôt que de
+  // laisser le reset du WebView remonter la page pendant que le joueur lit plus bas. Appliqué deux
+  // fois (immédiat + prochaine frame) : sur certains WebView Android le reset du navigateur n'est
+  // constaté qu'au reflow suivant, pas de façon synchrone avec l'affectation d'innerHTML — sans
+  // second appel, la restauration immédiate serait elle-même écrasée par ce reset tardif.
+  else if(ecritRacine){ try{ window.scrollTo(0,_scrollAvantEcriture);
+    requestAnimationFrame(()=>{ try{ window.scrollTo(0,_scrollAvantEcriture); }catch(e){} }); }catch(e){} }
 }
 // pendant la composition (choix des matchs à domicile ou saisie des pronos), on ne rafraîchit pas
 // pour ne pas re-dessiner et fermer le champ en cours de saisie.
