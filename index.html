@@ -2576,7 +2576,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.440";
+const APP_VERSION = "v8.441";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -4366,6 +4366,7 @@ let adminConnex=null;   // ⏳ mesure temporaire des connexions — supprimer av
 let adminStats=null;    // comptes créés + options prises, par source (test/admin/stripe)
 let adminPromo=null;    // codes promo testeurs : liste + nb d'utilisations + revenu attribué
 let adminReports=null, repOpen="";   // remontées des joueurs (v6.98) + n° de celle dépliée
+let adminConfig=null;   // Lot A — correctifs (2026-09-13) : phase_test/maintenance/version minimale (app_config)
 let admOpen="";                      // chapitre ouvert de l'écran Admin (v7.02)
 let endStats=null; // bilan de fin de ligue (calculé une fois quand la ligue est terminée)
 
@@ -10041,17 +10042,32 @@ function qgComputeClassement(ctx){
 
 // ───── STRATÉGIE ───── 30% enchères (bonus obtenus/visés) + 70% efficacité tactique (Favori =
 // capitaine ✅mesurable ; bonus via bets.card.impact, 13/14 mesurables cf. QG_MEASURABLE_BONUSES).
-function qgAuctionCounts(lg,pid){
-  const sp=lg.prep_summary||{}, tv=sp.treve_st;
-  let targeted=0, obtained=0;
-  if(tv && Array.isArray(tv.auction)){ // trêve déjà résolue : session la plus récente, bids complets
-    const bids=(tv.bids||{})[pid]||{};
-    targeted=Object.values(bids).filter(v=>+v>0).length;
-    obtained=tv.auction.filter(a=>a.winner===pid).length;
-  } else if(Array.isArray(sp.auction)){ // ⚠️ bids visibles seulement pour les cartes ATTRIBUÉES (cf. audit)
-    sp.auction.forEach(a=>{ if((a.bids||[]).some(b=>b.pid===pid&&+b.amt>0)) targeted++; if(a.winner===pid) obtained++; });
+// ⚠️ Lot A #4 (audit chiffré du 2026-09-13, tranché par Hervé le 2026-09-13) — FENÊTRE des
+// QG_STRATEGIE_AUCTION_WINDOW=10 DERNIERS bonus VISÉS aux enchères, remplace l'agrégat "carrière
+// entière" précédent (confirmé par simulation comme nettement moins réactif à un changement
+// récent). Un bonus VISÉ = un événement individuel (gagné ou perdu), poolé sur TOUTES les
+// sessions (prep + trêve) de TOUTES les ligues du joueur, trié par date de SA SESSION (la plus
+// récente d'abord) — pas un mélange par session entière : une session avec plusieurs cartes
+// visées compte pour plusieurs événements, chacun sa propre place dans le tri.
+// ⚠️ HORODATAGE : `tv.closed_at` pour une trêve (précis, posé à sa résolution) ; `lg.created_at`
+// pour une prep — AUCUN horodatage de clôture n'existe pour cette session (vérifié : ni
+// resolvePrep() côté client, ni doResolvePrep() côté serveur n'en posent un), c'est le seul
+// repère persistant disponible. Imprécision assumée : elle ne joue que sur le tri ENTRE ligues
+// différentes (une prep de la ligue A vs une trêve de la ligue B) — l'ordre prep→trêve À
+// L'INTÉRIEUR d'une même ligue reste garanti par construction (la trêve arrive toujours après).
+// k=3 (lissage bayésien) et la pondération 30 % Enchères / 70 % Tactique restent inchangés.
+const QG_STRATEGIE_AUCTION_WINDOW=10;
+function qgAuctionEvents(lg,pid){
+  const sp=lg.prep_summary||{}, tv=sp.treve_st, out=[];
+  if(Array.isArray(sp.auction)){
+    const ts=lg.created_at?new Date(lg.created_at).getTime():0;
+    sp.auction.forEach(a=>{ if((a.bids||[]).some(b=>b.pid===pid&&+b.amt>0)) out.push({won:a.winner===pid, ts}); });
   }
-  return {targeted,obtained};
+  if(tv && Array.isArray(tv.auction)){
+    const ts=tv.closed_at?new Date(tv.closed_at).getTime():0;
+    tv.auction.forEach(a=>{ if((a.bids||[]).some(b=>b.pid===pid&&+b.amt>0)) out.push({won:a.winner===pid, ts}); });
+  }
+  return out;
 }
 // ⚠️ v8.425 (demandé par Hervé, choix validé après audit chiffré du 2026-09-12, modèle 1 sur 3
 // proposés) — lissage bayésien additif, prior neutre à 50% équivalent à k observations : une petite
@@ -10066,8 +10082,11 @@ const QG_STRATEGIE_SMOOTH_K=3;
 function qgBayesSmooth(rate0to100,n,k){ return n>0 ? 100*((rate0to100/100)*n+k*0.5)/(n+k) : rate0to100; }
 function qgComputeStrategie(ctx){
   const {pooled,bts,dls,now}=ctx;
-  let totT=0, totO=0;
-  pooled.forEach(m=>{ const c=qgAuctionCounts(m.lg,m.pid); totT+=c.targeted; totO+=c.obtained; });
+  let auctionEvents=[];
+  pooled.forEach(m=>{ auctionEvents=auctionEvents.concat(qgAuctionEvents(m.lg,m.pid)); });
+  auctionEvents.sort((a,b)=>b.ts-a.ts);
+  const lastAuctions=auctionEvents.slice(0,QG_STRATEGIE_AUCTION_WINDOW);
+  const totT=lastAuctions.length, totO=lastAuctions.filter(e=>e.won).length;
   const auctionScore = totT>0 ? 100*totO/totT : null; // aucune session exploitable → poids reporté sur la tactique
 
   const dayScores=[];
@@ -18334,7 +18353,7 @@ function viewPalmaresMoi(){
 // la fois précédente, ce qui fait arriver au milieu d'un contenu qu'on n'a pas demandé.
 // ⚠️ `quitterConsultation` ne passe PAS par ici et pose volontairement `admOpen="ligues"` : après
 // avoir consulté la ligue d'un autre, on revient là d'où l'on vient. Ne pas uniformiser.
-async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; adminReports=null; repOpen=""; admOpen=""; render(); await loadAdmin(); render(); }
+async function openAdmin(){ if(!(AUTH&&AUTH.id===ADMIN_ID))return; S.view="admin"; adminData=null; adminUsers=null; adminReports=null; adminConfig=null; repOpen=""; admOpen=""; render(); await loadAdmin(); render(); }
 // Remontées des joueurs — lecture réservée à l'admin. La table est SCELLÉE (aucune policy) :
 // impossible de la lire avec la clé publique, tout passe par cette RPC protégée par mot de passe.
 async function adminLoadReports(){
@@ -18396,6 +18415,33 @@ async function adminLoadStats(){
             :(/schema cache|function/i.test(e.message)?"Vue d'ensemble non installée — lance MIGRATION-admin-stats.sql."
             :("Erreur : "+e.message))); } }
 // Codes promo testeurs — mêmes conventions que adminLoadStats (mot de passe partagé).
+// ⚠️ Lot A — correctifs (2026-09-13, demandé par Hervé) — phase_test/maintenance/version minimale
+// pilotables depuis l'écran Admin, sans requête SQL manuelle. `app_config` n'a AUCUNE donnée
+// personnelle (juste des réglages globaux) : la policy RLS `cfg_admin` (ALL, qual=tml_est_admin())
+// suffit, lecture/écriture directe via le client — pas de RPC à mot de passe comme pour les
+// comptes/codes promo, qui eux touchent de vraies données de joueurs.
+async function adminLoadConfig(){
+  try{ adminConfig=await q(db.from("app_config").select("k,actif,note")); }
+  catch(e){ adminConfig={error:e.message}; }
+  render();
+}
+async function adminToggleConfig(k){
+  const row=(adminConfig||[]).find(r=>r.k===k); if(!row) return;
+  try{ await q(db.from("app_config").update({actif:!row.actif}).eq("k",k)); await adminLoadConfig(); }
+  catch(e){ showErr("Configuration : "+e.message); }
+}
+async function adminSetConfigVersion(k){
+  const row=(adminConfig||[]).find(r=>r.k===k)||{};
+  _pwdBuf={v:row.note||""};
+  const body=`<label class="mini muted" style="display:block;text-align:left">Version minimale exigée (ex. v8.440)</label>
+    <input type="text" value="${esc(row.note||"")}" oninput="_pwdBuf['v']=this.value" placeholder="v8.440"
+       style="width:100%;box-sizing:border-box;padding:9px;margin-top:4px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:inherit">`;
+  const ok=await confirmModal("📱","Version minimale",body,"Enregistrer");
+  const v=ok?(_pwdBuf.v||"").trim():null; _pwdBuf={};
+  if(!v) return;
+  try{ await q(db.from("app_config").update({note:v}).eq("k",k)); await adminLoadConfig(); }
+  catch(e){ showErr("Configuration : "+e.message); }
+}
 async function adminLoadPromo(){
   const pwd=(($("adminPwdP")||{}).value||"")||adminPwd||(($("adminPwd")||{}).value||"");
   if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
@@ -19138,6 +19184,30 @@ function viewAdmin(){
         <button class="btn ghost sm" onclick="adminConnex=null;render()">↻ Recharger</button>`)}`;
   const cMoi=`<div class="mini muted" style="margin-bottom:8px">Tu es connecté : tu peux changer <b>ton propre</b> mot de passe sans connaître l'ancien.</div>
       <button class="btn ghost" style="border-color:var(--gold);color:var(--gold)" onclick="changeMyPassword()">🔑 Changer MON mot de passe</button>`;
+  // ⚠️ Lot A — correctifs (2026-09-13, demandé par Hervé) — piloter phase_test/maintenance/version
+  // minimale SANS requête SQL manuelle. `app_config` a déjà une policy RLS `cfg_admin` (ALL,
+  // qual=tml_est_admin()) : un admin peut lire/écrire directement via le client, aucune RPC à
+  // mot de passe nécessaire (à la différence de admin_list_users etc., qui touchent des données de
+  // JOUEURS — app_config ne contient que des réglages globaux, pas de donnée personnelle).
+  const cConfig=(()=>{
+    if(!adminConfig) return `<button class="btn ghost" onclick="adminLoadConfig()">🔓 Charger la configuration</button>`;
+    if(adminConfig.error) return `<div class="err">${esc(adminConfig.error)}</div>`;
+    const row=k=>(adminConfig||[]).find(r=>r.k===k)||{k,actif:false,note:''};
+    const toggleBtn=r=>`<button class="btn ghost sm" style="flex:0 0 auto;border-color:${r.actif?'var(--red)':'var(--green)'};color:${r.actif?'var(--red)':'var(--green)'}" onclick="adminToggleConfig('${r.k}')">${r.actif?'Désactiver':'Activer'}</button>`;
+    const flagRow=(k,label,note)=>{ const r=row(k); return `<div class="box" style="text-align:left"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="min-width:0"><b class="mini">${label}</b><div class="mini muted">${note}</div></div>
+        <span class="chip" style="flex:0 0 auto;background:${r.actif?'rgba(229,105,95,.15)':'rgba(122,201,138,.15)'};color:${r.actif?'var(--red)':'var(--green)'};border:1px solid ${r.actif?'rgba(229,105,95,.4)':'rgba(122,201,138,.4)'}">${r.actif?'Actif':'Inactif'}</span></div>
+        <div style="margin-top:8px">${toggleBtn(r)}</div></div>`; };
+    const versionRow=(k,label)=>{ const r=row(k); return `<div class="box" style="text-align:left"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="min-width:0"><b class="mini">${label}</b><div class="mini muted">${r.actif?('Bloque en dessous de '+esc(r.note||'?')):'Désactivé — aucun blocage'}</div></div>
+        <span class="chip" style="flex:0 0 auto;background:${r.actif?'rgba(229,105,95,.15)':'rgba(122,201,138,.15)'};color:${r.actif?'var(--red)':'var(--green)'};border:1px solid ${r.actif?'rgba(229,105,95,.4)':'rgba(122,201,138,.4)'}">${r.actif?'Actif':'Inactif'}</span></div>
+        <div class="row" style="gap:6px;margin-top:8px">${toggleBtn(r)}<button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetConfigVersion('${k}')">✏️ Version…</button></div></div>`; };
+    return `${flagRow('phase_test','🧪 Phase de test','Actif = un joueur peut s\'accorder lui-même une option premium gratuitement. Inactif = seul l\'Admin attribue les options (souscription/paiement réel prennent le relais).')}
+      ${flagRow('maintenance','🔧 Mode maintenance','Actif = seul le compte Admin peut utiliser l\'app, tous les autres voient l\'écran de maintenance. Distinct de la fermeture bêta actuelle (celle-ci reste pilotée par le code).')}
+      ${versionRow('min_version_ios','📱 Version minimale iOS')}
+      ${versionRow('min_version_android','🤖 Version minimale Android')}
+      <button class="btn ghost sm" onclick="adminLoadConfig()">🔄 Rafraîchir</button>`;
+  })();
   const cComptes=`<label class="mini muted">Ton mot de passe admin</label>
       <input id="adminPwd" type="password" value="${esc(adminPwd)}" placeholder="••••••" autocomplete="off">
       <div style="height:8px"></div>
@@ -19229,6 +19299,7 @@ function viewAdmin(){
     ${sec("remontees","✉️ Remontées des joueurs", (adminReports?(adminReports.length+" au total"+(nouv?" · "+nouv+" 🆕":"")):"non chargées"), cRemontees)}
     ${sec("connex","⏳ Connexions (mesure temporaire)", (adminConnex?adminConnex.length+" lignes":"non chargées"), cConnex)}
     ${groupe("Configuration")}
+    ${sec("config","⚙️ Phase de test / Maintenance / Version minimale", (adminConfig&&!adminConfig.error?adminConfig.filter(r=>r.actif).length+" actif(s)":"non chargée"), cConfig)}
     ${sec("moi","🔑 Mon compte admin", "", cMoi)}`;
 }
 
