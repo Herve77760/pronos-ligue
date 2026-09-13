@@ -2488,6 +2488,18 @@
   .a2-stats-maestro-img{display:block;width:100%}
   .a2-stats-box{position:absolute;left:55%;top:15%;right:4%;bottom:50%;display:flex;align-items:center;overflow:hidden;padding:4px 14px}
   .a2-stats-text{font-size:12.5px;line-height:1.4;color:var(--a2-ink,#f4ecd8);opacity:.95;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+  /* ================= Bandeaux photo Ligues/Stats (Lot Visuel Final, 2026-09-13) =================
+     Header compact réutilisé par viewLeagues() et viewStats() : image d'ambiance (assets validés,
+     jamais de texte incrusté dedans) + titre superposé en HTML/CSS. `aspect-ratio` = ratio NATIF des
+     photos (2048×768) : `object-fit:cover` ne rogne alors ni les portes (Ligues) ni les graphiques
+     (Stats), quelle que soit la largeur réelle (l'app est plafonnée à 540px, cf. .app) — juste un
+     agrandissement/réduction proportionnel, jamais de recadrage sur un bord. */
+  .a2-photo-header{position:relative;width:100%;aspect-ratio:2048/768;border-radius:16px;overflow:hidden;margin-bottom:14px;background:#120c22}
+  .a2-photo-header img{width:100%;height:100%;object-fit:cover;display:block}
+  .a2-photo-header::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(to bottom, rgba(8,5,18,.68) 0%, rgba(8,5,18,.15) 38%, transparent 60%)}
+  .a2-photo-header-ttl{position:absolute;left:14px;top:11px;z-index:1;font-size:16.5px;font-weight:800;
+    color:var(--a2-ink,#f4ecd8);text-shadow:0 2px 6px rgba(0,0,0,.8);letter-spacing:.01em}
   /* ⚠️ Bloc 3A, correctif iPhone (2026-09-05) — `margin-top:56px` réservait de la place pour laisser
      le Maestro DÉBORDER au-dessus de la carte (effet repris de la maquette) : sur Lobby/Prépa, la
      barre du haut restant visible (contrairement à Auth/Profil), ce débord tombait dans le vide
@@ -2586,7 +2598,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.442";
+const APP_VERSION = "v8.443";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -4882,6 +4894,7 @@ const EN={
   "résultats en attente":"awaiting results",
   "✅ à jour":"✅ up to date",
   "Toutes mes ligues":"All my leagues",
+  "Ligues actives":"Active leagues",
   "Créer ma première ligue":"Create my first league",
   "Rejoindre avec un code":"Join with a code",
   "Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.":"No ongoing league. Create one, or join a friend's with their code.",
@@ -10925,7 +10938,13 @@ function viewHome(){
   // un écran que personne d'autre ne voit. ⚠️ Ne pas le remettre « pour aller plus vite ».
 }
 function viewLeagues(){
-  return `<div class="box"><button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
+  // ⚠️ Lot Visuel Final (2026-09-13) — bandeau photo compact (asset validé par Hervé, jamais de
+  // texte incrusté dedans) + titre superposé « Mes ligues »/« My leagues ». Posé EN TÊTE d'écran,
+  // juste au-dessus de Créer/Rejoindre : ces deux CTA restent donc les tout premiers éléments
+  // actionnables sous le bandeau, aucune perte de visibilité (exigence explicite d'Hervé).
+  const photoHeader=`<div class="a2-photo-header"><img src="img/header-ligues.jpg" alt="">
+    <div class="a2-photo-header-ttl">🏆 ${t("Mes ligues")}</div></div>`;
+  return photoHeader+`<div class="box"><button class="btn" onclick="openCreate()">${t("➕ Créer une ligue")}</button>
       <div style="height:12px"></div><label>${t("Rejoindre avec un code")}</label>
       <div class="row" style="gap:8px">
         <input id="joinCode" maxlength="${CODE_LEN}" placeholder="${t("Ex : {a}",{a:codeExemple()})}" style="text-transform:uppercase;flex:1;min-width:0">
@@ -10939,7 +10958,11 @@ function viewLeagues(){
       const active=myLeagues.filter(m=>m.lg.status!=='done');
       // Terminées : les DERNIÈRES finies en haut → tri par finished_at, repli sur created_at (ligues finies avant la migration).
       const finished=myLeagues.filter(m=>m.lg.status==='done').sort((a,b)=>{ const fa=a.lg.finished_at||a.lg.created_at||''; const fb=b.lg.finished_at||b.lg.created_at||''; return fa<fb?1:(fa>fb?-1:0); });
-      let h=`<div class="listsec">${t("Mes ligues")}${active.length?`<span class="n">· ${active.length}</span>`:''}</div>`;
+      // ⚠️ Lot Visuel Final (2026-09-13) — « Mes ligues » RETIRÉ ICI : devenu redondant avec le
+      // titre désormais superposé sur le bandeau photo en tête d'écran (juste au-dessus). Seul le
+      // compteur reste utile ; il garde son propre libellé (« Ligues actives ») au lieu de répéter
+      // le titre de la page.
+      let h=active.length?`<div class="listsec">${t("Ligues actives")}<span class="n">· ${active.length}</span></div>`:'';
       h+= active.length? active.map(m=>row(m,false)).join("") : `<div class="empty-box"><div class="ic">🏆</div><p>${t("Aucune ligue en cours. Crée-en une, ou rejoins celle d'un ami avec son code.")}</p></div>`;
       if(finished.length){
         h+=`<div class="lgrow" onclick="showFinished=!showFinished;render()"><div class="info"><div class="nm">${t("🏁 Ligues terminées · {a}",{a:finished.length})}</div></div><span class="chip b">${showFinished?t("▲ masquer"):t("▼ afficher")}</span></div>`;
@@ -16991,7 +17014,13 @@ function viewStats(){
   const line=(lab,val,noBorder)=>`<div class="statrow"${noBorder?' style="border-bottom:none"':''}><span class="mini muted">${lab}</span><b class="mini">${val}</b></div>`;
   // Ligne CLIQUABLE : le libellé porte un ⓘ discret et ouvre la fiche du chiffre.
   const lineI=(k,lab,val,noBorder)=>`<div class="statrow clik"${noBorder?' style="border-bottom:none"':''} onclick="showStatInfo('${k}')"><span class="mini muted">${lab} <span style="opacity:.55">ⓘ</span></span><b class="mini">${val}</b></div>`;
-  let h=`<div class="box"><div class="boxttl">📊 ${t("Mes stats")} ${premBadge('stats')}</div>
+  // ⚠️ Lot Visuel Final (2026-09-13) — bandeau photo compact (asset validé par Hervé, jamais de
+  // texte incrusté dedans) + titre superposé « Mes stats »/« My stats ». Le `boxttl` "📊 Mes stats"
+  // qui vivait juste en dessous est RETIRÉ (devenu redondant avec ce titre) ; le badge Premium et le
+  // sous-texte explicatif (pas un titre, un vrai complément d'info) restent affichés.
+  const photoHeader=`<div class="a2-photo-header"><img src="img/header-stats.jpg" alt="">
+    <div class="a2-photo-header-ttl">📊 ${t("Mes stats")}</div></div>`;
+  let h=photoHeader+`<div class="box">${premBadge('stats')?`<div style="text-align:right;margin-bottom:6px">${premBadge('stats')}</div>`:''}
       <div class="mini muted">${t("Ton dossier complet, toutes tes ligues. Touche une ligne pour savoir ce que le chiffre veut dire.")}</div></div>`;
   // ⚠️ L'erreur vit sur `myStatsData`, PAS sur le dossier d'un onglet : elle est levée avant même
   // que les trois dossiers existent. La tester sur `d` la rendrait invisible (v7.24).
