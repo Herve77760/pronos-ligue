@@ -1,0 +1,111 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tactizo</title>
+<style>
+  body{margin:0;background:#0b0c14;color:#eef1f6;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center;padding:24px;box-sizing:border-box}
+  .wrap{max-width:340px}
+  .spin{width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.15);border-top-color:#e0b64f;
+    animation:sp .8s linear infinite;margin:0 auto 18px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  h1{font-size:17px;margin:0 0 6px}
+  p{font-size:13px;color:#a3adc4;line-height:1.5;margin:0 0 18px}
+  a.btn{display:inline-block;background:#e0b64f;color:#241a04;font-weight:800;text-decoration:none;
+    padding:11px 22px;border-radius:999px;font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="spin"></div>
+  <h1 id="t1">Ouverture de Tactizo…</h1>
+  <p id="t2">Si rien ne se passe, touche le bouton ci-dessous.</p>
+  <a class="btn" id="fallbackLink" href="https://tactizo.com">Continuer</a>
+</div>
+<script>
+/* ════════════════════════════════════════════════════════════════════════════════════════
+   Tactizo — lien intelligent (Lot B, points 7/8, 2026-09-13, demandé par Hervé)
+   ────────────────────────────────────────────────────────────────────────────────────────
+   Page UNIQUE partagée par deux usages :
+     - "Partager ma saison" (point 7) : ouvre cette page SANS paramètre `c`.
+     - Invitation de ligue (point 8) : ouvre cette page AVEC `?c=<code 5 caractères>`.
+
+   COMPORTEMENT VOULU :
+     - app installée (iOS/Android)  → ouvrir Tactizo directement (et, si un code est fourni,
+       arriver droit sur l'écran "Rejoindre une ligue" avec le code déjà rempli) ;
+     - app non installée            → Store adapté (iOS App Store / Google Play) ;
+     - desktop / pas de mobile      → tactizo.com (l'app web), avec le code conservé.
+
+   MÉCANISME : tentative d'ouverture via le schéma personnalisé DÉJÀ enregistré nativement
+   (`com.tactizo.app://`, utilisé aujourd'hui pour le retour OAuth Google/Apple — cf.
+   `CAP_OAUTH_REDIRECT`/`brancherRetourOAuthNatif()` dans app/index.html). Si l'app est
+   installée, l'OS intercepte l'URL et relance Tactizo ; cette page se retrouve alors en
+   arrière-plan et le repli ci-dessous ne s'exécute jamais. Si l'app n'est PAS installée, le
+   système ignore silencieusement le schéma inconnu et cette page reste au premier plan : le
+   `setTimeout` ci-dessous s'exécute alors et bascule vers le repli.
+
+   ⚠️ CE N'EST PAS UN UNIVERSAL LINK / APP LINK — cela demanderait de publier un fichier de
+   vérification (`apple-app-site-association` / `assetlinks.json`) à la racine de tactizo.com
+   ET une capacité "Associated Domains" côté Xcode, plus l'équivalent Android — infrastructure
+   volontairement PAS montée ici car elle exige un app_id/SHA de signature définitifs, qui ne
+   seront connus qu'à la soumission réelle aux stores (jamais faite à ce jour). Le mécanisme du
+   schéma personnalisé ci-dessus, lui, fonctionne DÈS AUJOURD'HUI, sans dépendre des stores.
+
+   ⚠️ RELIQUAT DOCUMENTÉ (ne peut pas être résolu sans Universal/App Links) : si l'app n'est PAS
+   installée, le code de ligue ne peut PAS traverser le passage par le Store — Apple/Google ne
+   transmettent aucun paramètre à l'app fraîchement installée sans Universal/App Links configurés.
+   Le joueur devra donc retaper le code après installation (message ci-dessous le prévient). Une
+   fois les Stores et les fichiers de vérification en place, ce mécanisme pourra être remplacé par
+   un vrai lien différé (deferred deep link) qui, lui, survit à l'installation.
+
+   CE QUI DOIT ÊTRE RENSEIGNÉ APRÈS CRÉATION DES FICHES STORE (cf. STORE_IOS / STORE_ANDROID
+   ci-dessous, aujourd'hui vides à dessein) : l'URL App Store et l'URL Google Play réelles. Tant
+   qu'elles sont vides, cette page renvoie vers tactizo.com — jamais une URL technique cassée. */
+
+// Mêmes valeurs que STORE_URL_IOS/STORE_URL_ANDROID dans app/index.html (source de vérité,
+// déjà utilisées par le mécanisme "version minimale native" du Lot A) — à garder synchronisées.
+var STORE_ANDROID = "https://play.google.com/store/apps/details?id=com.tactizo.app"; // identifiant définitif, déjà correct
+var STORE_IOS = "https://apps.apple.com/app/id0000000000"; // ⚠️ À RENSEIGNER : identifiant réel une fois l'app soumise (aucune fiche n'existe à ce jour)
+var WEB_FALLBACK = "https://tactizo.com";
+
+var qs = new URLSearchParams(location.search);
+var code = (qs.get("c") || "").toUpperCase().slice(0, 5);
+var ua = navigator.userAgent || "";
+var isIOS = /iPad|iPhone|iPod/.test(ua);
+var isAndroid = /Android/.test(ua);
+var isMobile = isIOS || isAndroid;
+var isFr = !/^en/i.test(navigator.language || "fr");
+
+document.getElementById("t1").textContent = isFr ? "Ouverture de Tactizo…" : "Opening Tactizo…";
+document.getElementById("t2").textContent = isFr
+  ? "Si rien ne se passe, touche le bouton ci-dessous."
+  : "If nothing happens, tap the button below.";
+
+function webUrl(){ return WEB_FALLBACK + (code ? ("/?c=" + encodeURIComponent(code)) : ""); }
+function storeUrl(){
+  if(isIOS) return STORE_IOS || webUrl();
+  if(isAndroid) return STORE_ANDROID || webUrl();
+  return webUrl();
+}
+
+var fallback = document.getElementById("fallbackLink");
+fallback.href = isMobile ? storeUrl() : webUrl();
+fallback.textContent = isFr ? "Continuer" : "Continue";
+
+if(isMobile){
+  var appUrl = "com.tactizo.app://" + (code ? ("join?code=" + encodeURIComponent(code)) : "open");
+  var left = false;
+  document.addEventListener("visibilitychange", function(){ if(document.hidden) left = true; });
+  window.location.href = appUrl;
+  setTimeout(function(){
+    if(left || document.hidden) return;   // l'app s'est ouverte : ne rien faire de plus
+    window.location.href = storeUrl();
+  }, 1200);
+} else {
+  window.location.href = webUrl();
+}
+</script>
+</body>
+</html>
