@@ -2576,7 +2576,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.436";
+const APP_VERSION = "v8.437";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5566,6 +5566,12 @@ const EN={
   "Uniquement tes ligues en matchs simulés, où les cotes sont tirées au sort.":"Only your leagues on simulated matches, where odds are drawn at random.",
   "Aucune ligue jouée sur de vrais matchs pour l'instant.":"No league played on real matches yet.",
   "Aucune ligue jouée en matchs simulés pour l'instant.":"No league played on simulated matches yet.",
+  // — Lot Nuit (2026-09-13) : "Nouveau départ" (Stats avancées) —
+  "🔄 Depuis mon nouveau départ":"🔄 Since my fresh start", "🏅 Toute ma carrière":"🏅 My whole career",
+  "Faire un nouveau départ":"Make a fresh start",
+  "À partir d'aujourd'hui, tes Stats seront calculées par défaut sur tes nouvelles performances. Ton historique, ton Palmarès et Toute ma carrière restent intacts. Aucune donnée ne sera supprimée.":"From today, your Stats will be calculated by default on your new performances. Your history, your Hall of Fame and Your whole career remain intact. No data will be deleted.",
+  "Nouveau départ effectué ✓":"Fresh start done ✓",
+  "Pas encore de nouvelles données depuis ton nouveau départ.":"No new data yet since your fresh start.",
   // Onglet Pronos d'une ligue terminée (v7.23) — il annonce la fin et renvoie au bilan.
   "Saison terminée":"Season over",
   "Il n'y a plus de pronostics à saisir pour cette ligue.":"There are no more predictions to enter for this league.",
@@ -9096,7 +9102,7 @@ async function doLogin(){
   }
   const { data, error } = await db.auth.setSession({ access_token:session.access_token, refresh_token:session.refresh_token });
   if(error){ a2SetErr("aPassFld", t("Email ou mot de passe incorrect.")); busy=false; btn.classList.remove("loading","off"); btn.removeAttribute("aria-disabled"); return; }
-  AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||"", avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null, email:data.user.email||"", createdAt:data.user.created_at||null, tutorialSeenAt:(data.user.user_metadata&&data.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(data.user.user_metadata&&data.user.user_metadata.level_picks_max)|0 };
+  AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||"", avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null, email:data.user.email||"", createdAt:data.user.created_at||null, tutorialSeenAt:(data.user.user_metadata&&data.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(data.user.user_metadata&&data.user.user_metadata.level_picks_max)|0, statsResetAt:(data.user.user_metadata&&data.user.user_metadata.stats_reset_at)||null };
   await loadOpts(); await loadSoloCredits();
   busy=false; btn.classList.remove("loading","off"); btn.removeAttribute("aria-disabled");
   S.view = AUTH.name ? "home" : "choosePseudo"; startPoll(); await loadMyLeagues();
@@ -9488,7 +9494,7 @@ async function doSetNewPassword(){
   if(error){ a2FErr("npPassFld","npPassErr","Mot de passe : "+error.message); return; }
   toast(t("Mot de passe changé ✓"));
   const { data:{ session } } = await db.auth.getSession();
-  if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null, email:session.user.email||"", createdAt:session.user.created_at||null, tutorialSeenAt:(session.user.user_metadata&&session.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(session.user.user_metadata&&session.user.user_metadata.level_picks_max)|0 }; }
+  if(session){ AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null, email:session.user.email||"", createdAt:session.user.created_at||null, tutorialSeenAt:(session.user.user_metadata&&session.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(session.user.user_metadata&&session.user.user_metadata.level_picks_max)|0, statsResetAt:(session.user.user_metadata&&session.user.user_metadata.stats_reset_at)||null }; }
   await loadOpts(); await loadSoloCredits();
   S.view= AUTH&&AUTH.name ? "home" : "choosePseudo"; startPoll(); await loadMyLeagues();
 }
@@ -9528,7 +9534,7 @@ async function doSignup(){
   // Filet : si la confirmation e-mail est désactivée côté Supabase, la session existe déjà — sans
   // `username`, AUTH.name est vide : direction choosePseudo comme après une 1ère connexion OAuth
   // (voir boot()), le code promo éventuel s'y saisit désormais.
-  AUTH={ id:data.user.id, name:"", avatar:"", options:null, email:data.user.email||"", createdAt:data.user.created_at||null, tutorialSeenAt:null, levelPicksMax:0 };
+  AUTH={ id:data.user.id, name:"", avatar:"", options:null, email:data.user.email||"", createdAt:data.user.created_at||null, tutorialSeenAt:null, levelPicksMax:0, statsResetAt:null };
   await loadOpts(); await loadSoloCredits();
   S.view="choosePseudo"; startPoll(); await loadMyLeagues();
   await ensureRevenueCatLogin();
@@ -16336,8 +16342,15 @@ function seasonHighlightsHTML(){
 // ⚠️ Dossier VIDE à la forme des trois onglets (v7.24). Les sorties anticipées ci-dessous rendaient
 // l'ancienne forme plate `{leagues,agg,h2h}` : l'écran, qui lit maintenant `jeux[onglet]`, n'y aurait
 // rien trouvé et serait resté bloqué sur « Chargement… » pour un joueur sans aucune ligue.
+// ⚠️ Lot Nuit (2026-09-13, demandé par Hervé) — `periode` AJOUTÉE ("carriere"/"depuis"), même
+// principe que `onglet` (Tout/Réelles/Simulées) : un second pointeur, pas une refonte. Par défaut
+// "depuis" si un Nouveau départ existe déjà (cf. décision produit : "vue par défaut après reset =
+// Depuis mon nouveau départ"), sinon "carriere" (rien à filtrer). `jeux.depuis` reste `null` tant
+// qu'aucun Nouveau départ n'a été fait — distinct de `{tous:v,reel:v,sim:v}` vide, qui voudrait dire
+// "Nouveau départ fait mais aucune donnée encore" (cf. viewStats()).
 function statsVides(){ const v={agg:{},leagues:[],h2h:{}};
-  return { onglet:"tous", jeux:{tous:v, reel:v, sim:v} }; }
+  return { onglet:"tous", periode:(AUTH&&AUTH.statsResetAt)?"depuis":"carriere",
+    jeux:{ carriere:{tous:v,reel:v,sim:v}, depuis:(AUTH&&AUTH.statsResetAt)?{tous:v,reel:v,sim:v}:null } }; }
 async function loadMyStats(){
   try{
     if(!AUTH){ myStatsData=statsVides(); return; }
@@ -16352,7 +16365,11 @@ async function loadMyStats(){
     const lgs=await q(db.from("leagues").select("id,name,code,status,num_days,current_day,created_at,finished_at,data_mode").in("id",ids));
     const pls=await q(db.from("players").select("id,name,emoji,is_ai,user_id,league_id,points,capital,duel_wins,best_day,best_odd").in("league_id",ids));
     const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").in("league_id",ids).not("net","is",null));
-    const dls=await q(db.from("duels").select("id,league_id,day,home_id,away_id,fixtures").in("league_id",ids));
+    // ⚠️ Lot Nuit (2026-09-13) — `resolved_at` AJOUTÉ (base du filtre "Nouveau départ" ci-dessous) :
+    // coupure à la date/heure EXACTE de résolution de la journée, jamais par ligue entière (une
+    // ligue en cours peut donc avoir des journées avant et après un Nouveau départ). Aucun coût
+    // supplémentaire : même requête, une colonne de plus.
+    const dls=await q(db.from("duels").select("id,league_id,day,home_id,away_id,fixtures,resolved_at").in("league_id",ids));
     const lgMap={}; lgs.forEach(l=>lgMap[l.id]=l);
     const plMap={}; pls.forEach(p=>plMap[p.id]=p);
     const myPid={}; mine.forEach(m=>myPid[m.league_id]=m.id);
@@ -16384,8 +16401,11 @@ async function loadMyStats(){
        ⚠️ Les compteurs sont déclarés DANS la fonction : laissés à l'extérieur, le deuxième appel
        repartirait des totaux du premier et les trois onglets afficheraient des chiffres cumulés.
        ⚠️ Le mélange des deux types n'aurait de toute façon pas beaucoup de sens à comparer : en
-       simulé les cotes sont tirées au sort, en réel elles viennent du marché. */
-    const calcule=garde=>{
+       simulé les cotes sont tirées au sort, en réel elles viennent du marché.
+       ⚠️ Lot Nuit (2026-09-13) — SECOND PARAMÈTRE `depuis` (ISO ou `null`) : filtre supplémentaire
+       PAR JOURNÉE (pas par ligue, cf. `myBets` plus bas), pour "Nouveau départ". `null` = aucun
+       filtre ("Toute ma carrière"), comportement strictement identique à avant cet ajout. */
+    const calcule=(garde,depuis)=>{
     const leagues=[]; const h2h={};
     let tPicks=0,tWon=0,tStaked=0,tNet=0,titles=0,podiums=0,gBestOdd=0,nbLigues=0; let gBest={net:-1e9,lg:null};
     /* ---- v7.00 : le dossier détaillé de l'option payante 📊 (demandé par Hervé) --------------
@@ -16415,7 +16435,15 @@ async function loadMyStats(){
       // ligue pouvait déjà apparaître dans « Mes stats » (accueil, hors ligue ouverte), avec son
       // numéro de journée et son montant exact — avant le rituel de découverte (suspense 3-2-1).
       const seenLid=getSeen(lid,mp);
-      const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp && (b.day|0)<seenLid).sort((x,y)=>(x.day|0)-(y.day|0));
+      // ⚠️ Lot Nuit (2026-09-13) — filtre "Nouveau départ" : comparaison de DATES (jamais de
+      // chaînes ISO brutes — Postgres et `toISOString()` ne formatent pas forcément le fuseau/les
+      // décimales à l'identique). Une journée SANS `resolved_at` (jamais résolue avec ce mécanisme,
+      // ou ligue antérieure à la migration) reste exclue de "depuis" — jamais comptée par erreur.
+      const depuisMs=depuis?new Date(depuis).getTime():0;
+      const myBets=(betsByLg[lid]||[]).filter(b=>b.player_id===mp && (b.day|0)<seenLid
+        && (!depuis || (()=>{ const d=dlById[b.duel_id]; const ts=d&&d.resolved_at?new Date(d.resolved_at).getTime():NaN;
+              return !isNaN(ts) && ts>=depuisMs; })())
+      ).sort((x,y)=>(x.day|0)-(y.day|0));
       let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
       run=0;   // une série de duels ne traverse pas deux championnats différents : elle repart à zéro
       myBets.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures; days++;
@@ -16577,10 +16605,36 @@ async function loadMyStats(){
     // ⚠️ Les ligues d'avant la colonne `data_mode` (ou créées sans elle) sont du SIMULÉ : c'est le
     // défaut du jeu, et c'est le même repli que partout ailleurs dans l'app — `(L.data_mode||'sim')`.
     const estReel=lg=>(lg.data_mode||"sim")==="real";
-    myStatsData={ onglet:"tous", jeux:{ tous:calcule(()=>true), reel:calcule(estReel), sim:calcule(lg=>!estReel(lg)) } };
+    // ⚠️ Lot Nuit (2026-09-13) — SIX dossiers désormais (3 onglets × 2 périodes) au lieu de 3,
+    // même principe qu'en v7.24 : tout depuis les mêmes données déjà chargées, aucune requête de
+    // plus. `depuis` reste `null` (donc `jeux.depuis` aussi) tant qu'aucun Nouveau départ n'existe.
+    const resetAt=AUTH.statsResetAt||null;
+    myStatsData={ onglet:"tous", periode:resetAt?"depuis":"carriere",
+      jeux:{
+        carriere:{ tous:calcule(()=>true,null), reel:calcule(estReel,null), sim:calcule(lg=>!estReel(lg),null) },
+        depuis: resetAt?{ tous:calcule(()=>true,resetAt), reel:calcule(estReel,resetAt), sim:calcule(lg=>!estReel(lg),resetAt) }:null
+      } };
   }catch(e){ myStatsData={error:e.message}; }
 }
 async function openStats(){ if(!requireOpt('stats')) return; myStatsData=null; navOpen("stats"); await loadMyStats(); render(); }
+/* ─── "Nouveau départ" (Lot Nuit, 2026-09-13, demandé par Hervé) ────────────────────────────────
+   Inclus dans Stats avancées, aucun achat de plus (déjà derrière `requireOpt('stats')` sur cet
+   écran). Aucune donnée supprimée : `stats_reset_at` (métadonnées de compte, même mécanique légère
+   que `tutorial_seen_at`) n'est qu'une DATE DE COUPURE pour le filtre de calcule() — Palmarès,
+   l'historique et "Toute ma carrière" restent lus tels quels, rien n'est effacé nulle part.
+   Un seul Nouveau départ actif : refaire l'action REMPLACE simplement la date, jamais un empilement. */
+async function confirmNouveauDepart(){
+  if(!AUTH) return;
+  const ok=await confirmTxt("🔄", t("Faire un nouveau départ"),
+    t("À partir d'aujourd'hui, tes Stats seront calculées par défaut sur tes nouvelles performances. Ton historique, ton Palmarès et Toute ma carrière restent intacts. Aucune donnée ne sera supprimée."),
+    t("Faire un nouveau départ"));
+  if(!ok) return;
+  const iso=new Date().toISOString();
+  try{ await db.auth.updateUser({ data:{ stats_reset_at: iso } }); }catch(e){ showErr("Nouveau départ : "+e.message); return; }
+  AUTH.statsResetAt=iso;
+  toast(t("Nouveau départ effectué ✓"));
+  myStatsData=null; await loadMyStats(); render();
+}
 // ⚠️ LOT 5 (2026-09-10) — SEUILS DE FIABILITÉ, règle produit validée par Hervé : en dessous de 5
 // échantillons, une statistique ANALYTIQUE (celle qui prétend dire quelque chose de ton niveau —
 // ROI, réussite, par sport, par tranche de cote, profil de risque…) ne s'affiche pas du tout ;
@@ -16647,13 +16701,20 @@ function sparkROI(curve){
 }
 /* ---- Onglets du dossier de stats (v7.24, demandé par Hervé) ---------------------------------
    Les trois dossiers sont calculés d'avance par `loadMyStats` : changer d'onglet ne relance aucun
-   calcul ni aucune requête, c'est un simple changement de pointeur. */
-function statsVue(){ const D=myStatsData; return (D&&D.jeux)?D.jeux[D.onglet||"tous"]:null; }
-function setStatTab(k){ if(!myStatsData||!myStatsData.jeux||!myStatsData.jeux[k]) return;
-  myStatsData.onglet=k; render(); }
+   calcul ni aucune requête, c'est un simple changement de pointeur.
+   ⚠️ Lot Nuit (2026-09-13) — SECOND POINTEUR `periode` ("carriere"/"depuis"), même principe,
+   orthogonal à `onglet` : les deux se combinent (6 dossiers déjà calculés, cf. loadMyStats()). */
+function statsVue(){ const D=myStatsData; if(!D||!D.jeux) return null;
+  const per=D.jeux[D.periode||"carriere"]; return per?per[D.onglet||"tous"]:null; }
+function setStatTab(k){ const D=myStatsData; if(!D||!D.jeux) return;
+  const per=D.jeux[D.periode||"carriere"]; if(!per||!per[k]) return;
+  D.onglet=k; render(); }
+function setStatPeriod(p){ const D=myStatsData; if(!D||!D.jeux||!D.jeux[p]) return;
+  D.periode=p; render(); }
 function statTabsHTML(){
   const D=myStatsData; if(!D||!D.jeux) return "";
-  const on=D.onglet||"tous";
+  const on=D.onglet||"tous", per=D.jeux[D.periode||"carriere"];
+  if(!per) return "";
   // Un onglet VIDE reste visible mais grisé : le masquer laisserait croire que les stats réelles
   // n'existent pas, alors qu'il n'y a simplement pas encore joué de ligue de ce type.
   /* ⚠️ v8.81 (relevé par Hervé) — LES TROIS ONGLETS N'AVAIENT PAS LA MÊME HAUTEUR quand ils
@@ -16662,12 +16723,22 @@ function statTabsHTML(){
      ⚠️ v8.178 — LE CORRECTIF DEVIENT INUTILE : `.stat-tab` est un composant DÉDIÉ (padding propre,
      pas celui de `.btn.sm`) dans un conteneur `.stat-tabs{align-items:stretch}` — les deux causes
      d'origine ne peuvent plus se produire, la classe n'a plus besoin de contournement au cas par cas. */
-  const b=(k,lab)=>{ const n=(D.jeux[k].leagues||[]).length;
+  const b=(k,lab)=>{ const n=(per[k].leagues||[]).length;
     return `<button class="stat-tab${on===k?' active':''}" style="${n?'':'opacity:.5'}" onclick="setStatTab('${k}')">${lab} <span class="n">${n}</span></button>`; };
-  return `<div class="stat-tabs">${b("tous",t("🔀 Tout"))}${b("reel",t("📡 Réelles"))}${b("sim",t("🎮 Simulées"))}</div>
+  // ⚠️ Lot Nuit (2026-09-13, demandé par Hervé) — bandeau "Nouveau départ" : le sélecteur de
+  // période ne s'affiche QUE si un Nouveau départ existe déjà (rien à choisir sinon — un seul
+  // dossier, "Toute ma carrière") ; le bouton pour EN faire un est, lui, toujours visible.
+  const resetAt=AUTH&&AUTH.statsResetAt;
+  const periodeHTML = resetAt ? `<div class="stat-tabs" style="margin-bottom:8px">
+      <button class="stat-tab${D.periode==='depuis'?' active':''}" onclick="setStatPeriod('depuis')">${t("🔄 Depuis mon nouveau départ")}</button>
+      <button class="stat-tab${D.periode==='carriere'?' active':''}" onclick="setStatPeriod('carriere')">${t("🏅 Toute ma carrière")}</button>
+    </div>` : '';
+  return `${periodeHTML}
+    <div class="stat-tabs">${b("tous",t("🔀 Tout"))}${b("reel",t("📡 Réelles"))}${b("sim",t("🎮 Simulées"))}</div>
     <div class="mini muted">${on==="reel"?t("Uniquement tes ligues jouées sur de vrais matchs, avec les cotes du marché.")
       :(on==="sim"?t("Uniquement tes ligues en matchs simulés, où les cotes sont tirées au sort.")
-      :t("Tes ligues des deux types réunies. Touche 📡 ou 🎮 pour séparer."))}</div>`;
+      :t("Tes ligues des deux types réunies. Touche 📡 ou 🎮 pour séparer."))}</div>
+    <button class="btn ghost sm" style="margin-top:8px;width:100%" onclick="confirmNouveauDepart()">🔄 ${t("Faire un nouveau départ")}</button>`;
 }
 /* 🔗 Repère cliquable d'un record : « Ligue (CODE) · J3 », qui OUVRE la journée citée (v7.62).
    Demande d'Hervé : « c'est juste indiqué le nom de la ligue, il faudrait soit y mettre le code
@@ -16737,6 +16808,12 @@ function viewStats(){
   if(myStatsData&&myStatsData.error) return h+`<div class="err">${esc(myStatsData.error)}</div>`;
   if(!d) return h+`<div class="box mini muted">${t("Chargement…")}</div>`;
   h+=`<div class="box">${statTabsHTML()}</div>`;
+  // ⚠️ Lot Nuit (2026-09-13, demandé par Hervé) — "remise à zéro visuelle immédiate" : juste après
+  // un Nouveau départ, les ligues existent toujours (`d.leagues.length` non nul) mais aucun pari
+  // ne passe encore le filtre de date (`a.picks===0`) — sans ce cas à part, l'écran afficherait un
+  // dossier complet rempli de zéros plutôt que le message "pas encore de données" attendu.
+  if(myStatsData.periode==="depuis" && !(d.agg&&d.agg.picks)) return h+`<div class="box mini muted">${
+    t("Pas encore de nouvelles données depuis ton nouveau départ.")}</div>`;
   if(!d.leagues.length) return h+`<div class="box mini muted">${
     (myStatsData.onglet==="reel")?t("Aucune ligue jouée sur de vrais matchs pour l'instant.")
     :((myStatsData.onglet==="sim")?t("Aucune ligue jouée en matchs simulés pour l'instant.")
@@ -20836,7 +20913,7 @@ function brancherRetourOAuthNatif(){
     if(!access_token || !refresh_token){ showErr(t("Connexion : lien de retour invalide.")); render(); return; }
     const { data, error } = await db.auth.setSession({ access_token, refresh_token });
     if(error){ showErr(t("Connexion : ")+error.message); render(); return; }
-    AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||"", avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null, email:data.user.email||"", createdAt:data.user.created_at||null, tutorialSeenAt:(data.user.user_metadata&&data.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(data.user.user_metadata&&data.user.user_metadata.level_picks_max)|0 };
+    AUTH={ id:data.user.id, name:(data.user.user_metadata&&data.user.user_metadata.username)||"", avatar:(data.user.user_metadata&&data.user.user_metadata.avatar)||"", options:(data.user.user_metadata&&Array.isArray(data.user.user_metadata.options))?data.user.user_metadata.options:null, email:data.user.email||"", createdAt:data.user.created_at||null, tutorialSeenAt:(data.user.user_metadata&&data.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(data.user.user_metadata&&data.user.user_metadata.level_picks_max)|0, statsResetAt:(data.user.user_metadata&&data.user.user_metadata.stats_reset_at)||null };
     await loadOpts(); await loadSoloCredits();
     if(!AUTH.name){ S.view="choosePseudo"; render(); return; }
     S.view="home"; startPoll(); await loadMyLeagues();
@@ -20871,7 +20948,7 @@ db.auth.onAuthStateChange((event,session)=>{
   checkForUpdate();
   let sessionMeta=null;
   try{ const { data:{ session } } = await db.auth.getSession();
-    if(session){ sessionMeta=session.user.user_metadata; AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null, email:session.user.email||"", createdAt:session.user.created_at||null, tutorialSeenAt:(session.user.user_metadata&&session.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(session.user.user_metadata&&session.user.user_metadata.level_picks_max)|0 }; }
+    if(session){ sessionMeta=session.user.user_metadata; AUTH={ id:session.user.id, name:(session.user.user_metadata&&session.user.user_metadata.username)||"", avatar:(session.user.user_metadata&&session.user.user_metadata.avatar)||"", options:(session.user.user_metadata&&Array.isArray(session.user.user_metadata.options))?session.user.user_metadata.options:null, email:session.user.email||"", createdAt:session.user.created_at||null, tutorialSeenAt:(session.user.user_metadata&&session.user.user_metadata.tutorial_seen_at)||null, levelPicksMax:(session.user.user_metadata&&session.user.user_metadata.level_picks_max)|0, statsResetAt:(session.user.user_metadata&&session.user.user_metadata.stats_reset_at)||null }; }
     await loadOpts();                       // v8.191 : droits premium lus sur le serveur
     await loadSoloCredits();                // Lot 6 (2026-09-10) : crédits Solo gratuits lus sur le serveur
   }catch(e){}
