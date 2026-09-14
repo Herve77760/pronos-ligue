@@ -5840,6 +5840,7 @@ const EN={
   "{a} pts disponibles":"{a} pts available", "{a} pts disponibles · {b} en validation":"{a} pts available · {b} pending",
   "{a} pts en validation":"{a} pts pending", "Tes points":"Your points", "Historique":"History",
   "Parrainage de {a}":"Referral from {a}", "Achat {a}":"Purchase: {a}", "Ajustement":"Adjustment",
+  "✅ Ajustement enregistré.":"✅ Adjustment recorded.",
   "En validation":"Pending", "Validé":"Confirmed", "Gelé":"Frozen", "Annulé":"Cancelled",
   "disponible le {a}":"available on {a}",
   "Payer en Points ({a})":"Pay with Points ({a})", "Payer en Points":"Pay with Points",
@@ -9841,10 +9842,13 @@ async function loadMyLeagues(){
   // ligues autres que celle ouverte (cf. la note sur `getSeen`/`setSeen`).
   // ⚠️ v8.337 : `treve_seen_at` AJOUTÉ, même principe — c'est ce que lit le bandeau « trêve
   // terminée » de l'accueil (cf. la note sur `treveResultSeen`/`ackTreveResult`).
-  try{ const mine=await q(db.from("players").select("id,league_id,is_organizer,shop_done,last_seen_day,treve_seen_at").eq("user_id",AUTH.id));
+  // ⚠️ v8.459 : `prep_seen_at` AJOUTÉ, même principe — remplace le `localStorage["pl_preps_..."]`
+  // qui causait le bandeau "La saison a démarré" rejoué après un vidage de stockage (mode nuit,
+  // bug vécu par Hervé). Cf. `prepResultSeen()`/`ackPrepSeen()`.
+  try{ const mine=await q(db.from("players").select("id,league_id,is_organizer,shop_done,last_seen_day,treve_seen_at,prep_seen_at").eq("user_id",AUTH.id));
     if(mine.length){ const ids=[...new Set(mine.map(m=>m.league_id))];
       const lgs=await q(db.from("leagues").select("*").in("id",ids));
-      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id, org:!!(mine.find(m=>m.league_id===l.id)||{}).is_organizer, shopDone:!!(mine.find(m=>m.league_id===l.id)||{}).shop_done, lastSeen:(mine.find(m=>m.league_id===l.id)||{}).last_seen_day|0, treveSeen:(mine.find(m=>m.league_id===l.id)||{}).treve_seen_at||null}))
+      myLeagues=lgs.map(l=>({lg:l, pid:(mine.find(m=>m.league_id===l.id)||{}).id, org:!!(mine.find(m=>m.league_id===l.id)||{}).is_organizer, shopDone:!!(mine.find(m=>m.league_id===l.id)||{}).shop_done, lastSeen:(mine.find(m=>m.league_id===l.id)||{}).last_seen_day|0, treveSeen:(mine.find(m=>m.league_id===l.id)||{}).treve_seen_at||null, prepSeen:(mine.find(m=>m.league_id===l.id)||{}).prep_seen_at||null}))
         .sort((a,b)=> (a.lg.created_at<b.lg.created_at?1:-1));
     } else myLeagues=[];
   }catch(e){ showErr(/issued.*future|future.*issued/i.test(e.message||"")
@@ -10667,12 +10671,18 @@ async function loadHomeTodo(){
          de départ) NE PASSAIENT QU'EN RAPPEL DE DERNIER RANG (ancienne boucle à part, après celle-ci,
          seulement si RIEN d'autre n'avait été poussé) : sur une ligue toute fraîche, le joueur à qui
          il revenait de choisir ses matchs voyait « choisis tes matchs » AVANT d'avoir vu ce résumé —
-         Hervé voulait l'inverse. `viewCoulisses()` marque `pl_preps_` DÈS que l'écran s'affiche
-         (même juste en le traversant, cf. sa définition) : le faire passer devant ne bloque donc
+         Hervé voulait l'inverse. `viewCoulisses()` marque `prep_seen_at` DÈS que l'écran s'affiche
+         (même juste en le traversant, cf. `ackPrepSeen()`) : le faire passer devant ne bloque donc
          rien de durable — un seul tour d'écran de plus, puis choix/pronos reprennent la main
          normalement dès le rendu suivant. `current_day===0` UNIQUEMENT : passé la première journée,
-         cette priorité s'efface d'elle-même. */
-      if((m.lg.current_day|0)===0 && m.lg.prep_summary && localStorage.getItem("pl_preps_"+m.lg.id+"_"+m.pid)!=="1"){
+         cette priorité s'efface d'elle-même.
+         ⚠️ v8.459 (mode nuit, bug vécu par Hervé) — CE REPÈRE VIVAIT DANS LE `localStorage`
+         (`pl_preps_<ligue>_<joueur>`), DONC PAR APPAREIL : vider le stockage (ou changer
+         d'appareil) faisait réapparaître ce bandeau sur une ligue déjà bien avancée, exactement le
+         même défaut déjà corrigé pour `last_seen_day` (v8.123) et `treve_seen_at` (v8.337), jamais
+         reporté ici. Passé en base (`players.prep_seen_at`, comparé par instant via
+         `prepResultSeen()`), sur le même modèle que `treveResultSeen()`/`ackTreveResult()`. */
+      if((m.lg.current_day|0)===0 && m.lg.prep_summary && !prepResultSeen(m)){
         homeTodo.push({lg:m.lg, pid:m.pid, kind:"coulisses"});
         return;
       }
@@ -11782,8 +11792,7 @@ function viewGame(){
   // résultat ici. Le résumé d'ouverture (gage + enchères) vit dans l'onglet 🎬 Coulisses.
   return viewDay();
 }
-function prepSeen(){ return localStorage.getItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"))==="1"; }
-function ackPrep(){ localStorage.setItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"),"1"); render(); }
+async function ackPrep(){ await ackPrepSeen(); render(); }
 function prepSuperlatives(s, treve, anec){
   const auction=s.auction||[]; const ps=(s.players||[]);
   if(ps.length<2 || !auction.length) return '';
@@ -12058,6 +12067,18 @@ async function ackTreveResult(){ const s=L&&L.prep_summary; const clos=s&&s.trev
     const m=myLeagues.find(x=>x.lg.id===L.id && x.pid===S.myId); if(m) m.treveSeen=clos;
     try{ await q(db.from("players").update({treve_seen_at:clos}).eq("id",S.myId)); }catch(e){} }
   render(); }
+// ⚠️ v8.459 (mode nuit, bug vécu par Hervé) — même correctif que `treveResultSeen()`/
+// `ackTreveResult()` ci-dessus, pour les Coulisses de l'OUVERTURE de saison (bandeau "La saison a
+// démarré"). `prepResultSeen(m)` prend `m` (l'entrée `myLeagues` correspondante) en paramètre,
+// contrairement à `treveResultSeen()` : appelée depuis la boucle `loadHomeTodo()` sur CHAQUE
+// ligue, jamais uniquement sur la ligue actuellement ouverte (`L`).
+function prepResultSeen(m){ const s=m&&m.lg&&m.lg.prep_summary; const done=s&&s.resolvedAt;
+  if(!done) return true;   // ligue antérieure à ce correctif, sans repère → jamais bloquant
+  return memeInstant(m.prepSeen, done); }
+async function ackPrepSeen(){ const s=L&&L.prep_summary; const done=s&&s.resolvedAt;
+  if(done){ const pl=pById(S.myId); if(pl) pl.prep_seen_at=done;
+    const m=myLeagues.find(x=>x.lg.id===L.id && x.pid===S.myId); if(m) m.prepSeen=done;
+    try{ await q(db.from("players").update({prep_seen_at:done}).eq("id",S.myId)); }catch(e){} } }
 function viewTreveSummary(){
   const s=L.prep_summary||{}; const st=s.treve_st||{};
   const pName=pid=>{const p=pById(pid)||{};return avatarHTML(p.emoji)+' '+esc(p.name||'?');};
@@ -12172,9 +12193,12 @@ function showCoulRoster(){
 function viewCoulisses(){
   // Repère « vu » pour le bandeau d'accueil (cf. `loadHomeTodo`, kind:"coulisses") — posé dès que
   // cet écran s'affiche réellement, quel que soit le chemin emprunté pour y arriver (onglet,
-  // bandeau, ou l'ancien renvoi automatique de `refresh()`). Réécrire la même valeur à chaque
-  // rendu ne casse rien.
-  if(L && L.prep_summary){ try{ localStorage.setItem("pl_preps_"+S.leagueId+"_"+(S.myId||"?"),"1"); }catch(e){} }
+  // bandeau, ou l'ancien renvoi automatique de `refresh()`).
+  // ⚠️ v8.459 — GARDE AJOUTÉE (absente sur l'ancien `localStorage.setItem`, qui pouvait se
+  // permettre de réécrire la même valeur à chaque rendu sans coût) : `ackPrepSeen()` fait
+  // désormais un aller-retour réseau réel, donc on ne l'appelle QUE si ce n'est pas déjà marqué —
+  // sinon chaque simple passage sur cet écran écrirait en base à chaque rendu/poll.
+  if(L && L.prep_summary && !prepResultSeen({lg:L, prepSeen:(pById(S.myId)||{}).prep_seen_at||null})) ackPrepSeen();
   const s=L.prep_summary||null;
   const solo=isSolo();
   // Info-strip (Journée/Classement) — Journée reprend le champ déjà utilisé par le port V2 Pronos
@@ -13625,7 +13649,10 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
     for(const p of ps){ await q(db.from("players").update({hand:won[p.id],capital:Math.max(0,100-paid[p.id]),shop_done:true}).eq("id",p.id)); }
     // récap de préparation (affiché avant le coup d'envoi)
     // ⚠️ v8.89 — `treve` RECOPIÉ ICI : c'est le seul endroit qui survit au lancement (voir hasTreve).
-    const summary={ gage, enjeu, treve:!!(st&&st.treve), mode:((st&&st.mode)==='simple'?'simple':'complet'), gageDesc:(options[winIdx]&&options[winIdx].d)||gageDescOf(gage),
+    // ⚠️ v8.459 (mode nuit, bug vecu par Herve) — `resolvedAt` AJOUTE, meme principe que
+    // `treve_st.closed_at` : c'est ce que compare `prepResultSeen()` pour savoir si CE joueur a
+    // deja vu ces Coulisses, cote serveur (`players.prep_seen_at`) plutot que localStorage.
+    const summary={ resolvedAt:new Date().toISOString(), gage, enjeu, treve:!!(st&&st.treve), mode:((st&&st.mode)==='simple'?'simple':'complet'), gageDesc:(options[winIdx]&&options[winIdx].d)||gageDescOf(gage),
       options: options.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})), voteMap: votes, customs, // pour l'enjeu « façon championnat » (choix du pôle opposé appliqué à la fin) + textes perso de chacun
       gageVotes: options.map((o,i)=>({t:(o&&o.t)||o, d:(o&&o.d)||'', count:Object.values(votes).filter(v=>v===i).length, win:i===winIdx})),
       auction,
@@ -13652,7 +13679,7 @@ async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
     if(both){ summary.optionsR=optionsR.map(o=>({t:(o&&o.t)||o, d:(o&&o.d)||''})); summary.votesR=votesR; summary.customsR=customsR; }
     await q(db.from("leagues").update({status:"running",gage,current_day:0,prep_summary:summary}).eq("id",L.id));
     try{ await q(db.from("leagues").update({day_started_at:new Date().toISOString(),day_pool:null}).eq("id",L.id)); }catch(e){} // début J1 (défensif)
-    resolving=false; setSeen(0); localStorage.removeItem("pl_preps_"+L.id+"_"+(S.myId||"?")); await refresh(); infoWin(t("🚀 Le championnat est lancé ! Bonne chance."),"🚀");
+    resolving=false; setSeen(0); await refresh(); infoWin(t("🚀 Le championnat est lancé ! Bonne chance."),"🚀");
   }catch(e){ showErr("Démarrage : "+e.message); resolving=false; } }
 
 // ⚠️ Port V2 Pronos (2026-09-06) — composants partagés par les 4 écrans (attente/choix/miser/
