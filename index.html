@@ -2598,7 +2598,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.452";
+const APP_VERSION = "v8.453";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -18778,6 +18778,29 @@ async function adminCreatePromo(){
             :("Création : "+e.message))); } }
 // v8.452 (2026-09-14) — mécanisme minimum d'ajustement des Points d'un compte, cf. commentaire de
 // cAjustPoints ci-dessus. Même patron mot de passe que les autres actions admin (adminPwd partagé).
+// v8.453 : Hervé a tenté un 1er ajustement sans aucun retour visible ("je n'ai pas eu de fenêtre de
+// validation donc je ne sais pas si ça a été pris en compte") -- ajoute une recherche de solde AVANT
+// (adminLookupPoints, via admin_lookup_points()) et une confirmation explicite avant tout ajustement,
+// avec le solde rafraîchi juste après (aucun changement du calcul cote serveur, uniquement du retour
+// visible cote client).
+async function adminLookupPoints(){
+  const pwd=(($("adminPwdPts")||{}).value||"")||adminPwd||(($("adminPwd")||{}).value||"");
+  if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
+  const email=(($("ptsAdjEmail")||{}).value||"").trim();
+  if(!email){ showErr("Entre un e-mail."); return; }
+  const soldeEl=$("ptsAdjSolde");
+  try{
+    const r=await q(db.rpc("admin_lookup_points",{p_admin_id:AUTH.id,p_admin_password:pwd,p_user_email:email}));
+    adminPwd=pwd; showErr("");
+    const row=(Array.isArray(r)?r[0]:r)||{disponible:0,en_validation:0};
+    if(soldeEl) soldeEl.textContent="Solde actuel : "+(row.disponible||0)+" pts disponibles, "+(row.en_validation||0)+" pts en validation";
+  }catch(e){
+    if(soldeEl) soldeEl.textContent='';
+    showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect."
+      :(/compte_introuvable/.test(e.message)?"Aucun compte avec cet e-mail."
+      :("Erreur : "+e.message)));
+  }
+}
 async function adminAdjustPoints(){
   const pwd=(($("adminPwdPts")||{}).value||"")||adminPwd||(($("adminPwd")||{}).value||"");
   if(!pwd){ showErr("Entre ton mot de passe admin."); return; }
@@ -18785,10 +18808,13 @@ async function adminAdjustPoints(){
   const montant=parseInt((($("ptsAdjMontant")||{}).value||"0"),10)||0;
   const motif=(($("ptsAdjMotif")||{}).value||"").trim();
   if(!email||!montant||!motif){ showErr("E-mail, montant et motif sont tous requis."); return; }
+  const verbe=montant>0?"Créditer":"Débiter";
+  if(!await confirmTxt("🪙","Ajuster les Points",verbe+" "+Math.abs(montant)+" Points pour "+email+" ?\nMotif : "+motif,"Confirmer")) return;
   try{ await q(db.rpc("admin_adjust_points",{p_admin_id:AUTH.id,p_admin_password:pwd,p_user_email:email,p_amount:montant,p_reason:motif}));
     adminPwd=pwd; showErr("");
-    const e1=$("ptsAdjEmail"),e2=$("ptsAdjMontant"),e3=$("ptsAdjMotif"); if(e1)e1.value=''; if(e2)e2.value=''; if(e3)e3.value='';
-    infoWin(t("✅ Ajustement enregistré."),"🪙"); }
+    const e2=$("ptsAdjMontant"),e3=$("ptsAdjMotif"); if(e2)e2.value=''; if(e3)e3.value='';
+    infoWin(t("✅ Ajustement enregistré."),"🪙");
+    adminLookupPoints(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Mot de passe admin incorrect."
             :(/compte_introuvable/.test(e.message)?"Aucun compte avec cet e-mail."
             :(/motif_requis/.test(e.message)?"Le motif est obligatoire."
@@ -19477,6 +19503,9 @@ function viewAdmin(){
       <div class="mini muted" style="margin-bottom:6px">Crédite (ou débite, montant négatif) le solde de Points d'un compte — outil de test, jamais un parrainage</div>
       <input id="ptsAdjEmail" type="email" placeholder="E-mail du compte" autocomplete="off">
       <div style="height:6px"></div>
+      <button class="btn ghost sm" onclick="adminLookupPoints()">🔍 Voir le solde</button>
+      <div id="ptsAdjSolde" class="mini muted" style="margin-top:6px"></div>
+      <div style="height:10px"></div>
       <input id="ptsAdjMontant" type="number" placeholder="Montant (ex. 250, ou -50 pour débiter)">
       <div style="height:6px"></div>
       <input id="ptsAdjMotif" placeholder="Motif (obligatoire)" maxlength="120">
