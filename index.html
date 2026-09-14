@@ -19139,9 +19139,18 @@ function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
     // `data_mode` (v7.26) : le palmarès se lit lui aussi par type de données — voir `calcule` plus bas.
-    const lgs=await q(db.from("leagues").select("id,name,num_participants,status,data_mode"));
-    const pls=await q(db.from("players").select("id,name,emoji,league_id,is_ai,user_id,last_seen_day"));
-    const btsAll=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").not("net","is",null));
+    // ⚠️ Mode nuit (item 44, perf) — ces 3 requêtes lisaient TOUTES les lignes de l'appli entière
+    // (ligues/joueurs/paris de TOUT LE MONDE), filtrées seulement APRÈS coup côté client sur
+    // `mesLigues`/`connus` juste plus bas. Or ce classement ne compare de toute façon jamais qu'aux
+    // gens avec qui TOI tu as déjà partagé une ligue : borner la lecture aux MÊMES ligues (déjà
+    // connues via `myLeagues`, chargé ailleurs — même source que `loadPalmaresMoi()`) ne change
+    // AUCUN résultat affiché, seulement son coût, qui grossit sinon avec l'appli entière plutôt
+    // qu'avec les ligues du joueur. `duels` reste global : ce n'est pas une donnée par joueur mais
+    // le cache des matchs réels/simulés (public par nature, pas de fuite possible).
+    const monId=(myLeagues||[]).map(m=>m.lg.id);
+    const lgs=monId.length?await q(db.from("leagues").select("id,name,num_participants,status,data_mode").in("id",monId)):[];
+    const pls=monId.length?await q(db.from("players").select("id,name,emoji,league_id,is_ai,user_id,last_seen_day").in("league_id",monId)):[];
+    const btsAll=monId.length?await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").not("net","is",null).in("league_id",monId)):[];
     const dls=await q(db.from("duels").select("id,fixtures"));
     const lgMap={},plMap={},dlMap={}; lgs.forEach(l=>lgMap[l.id]=l); pls.forEach(p=>plMap[p.id]=p); dls.forEach(d=>dlMap[d.id]=d);
     // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — CROSS-JOUEURS : sans ce filtre, le résultat
@@ -21599,11 +21608,19 @@ function viewRulesFull(){
 // reste sur une vieille version. Solution : au démarrage (et au retour d'onglet), on re-télécharge
 // SA PROPRE page en `no-store` (même origine, donc pas de CORS), on lit l'APP_VERSION servie, et si
 // elle est plus récente que celle en cours d'exécution, on affiche un bandeau « Recharger ».
+// ⚠️ Mode nuit (item 24, perf) — ce fichier pèse ~2,3 Mo, et ce contrôle se déclenche à CHAQUE
+// retour au premier plan (pas qu'au démarrage) : sans rien d'autre, c'était 2,3 Mo retéléchargés
+// chaque fois qu'on revient sur l'onglet/l'appli, juste pour lire une chaîne de caractères vers le
+// début du fichier. Un `Range` HTTP borne la lecture aux premiers 600 Ko (large marge : APP_VERSION
+// vit vers 340 Ko aujourd'hui) — UNE SEULE source de vérité (toujours le vrai fichier servi, jamais
+// un second fichier `version.txt` à tenir à jour en parallèle, qui pourrait se périmer en silence).
+// Repli sans risque : un serveur qui ignore `Range` renvoie 200 avec le fichier entier — `r.ok`
+// reste vrai, la lecture fonctionne quand même, juste sans le gain de bande passante.
 function verNum(v){ const p=String(v||"").replace(/^v/,'').split('.').map(n=>parseInt(n,10)||0); return (p[0]||0)*100000+(p[1]||0); }
 let updBannerShown=false;
 async function checkForUpdate(){
   try{
-    const r=await fetch(location.pathname+"?v="+Date.now(), {cache:"no-store"}); if(!r.ok) return;
+    const r=await fetch(location.pathname+"?v="+Date.now(), {cache:"no-store", headers:{Range:"bytes=0-614399"}}); if(!r.ok) return;
     const txt=await r.text(); const m=txt.match(/APP_VERSION\s*=\s*"(v[\d.]+)"/);
     if(m && verNum(m[1])>verNum(APP_VERSION)) showUpdateBanner();
   }catch(e){}
