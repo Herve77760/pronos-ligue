@@ -2598,7 +2598,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.455";
+const APP_VERSION = "v8.456";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5833,7 +5833,8 @@ const EN={
   "Identité":"Identity", "Compte":"Account", "Adresse e-mail":"Email address", "Tactizo":"Tactizo",
   "Points Tactizo":"Tactizo Points", "0 point":"0 points",
   "{a} pts disponibles":"{a} pts available", "{a} pts disponibles · {b} en validation":"{a} pts available · {b} pending",
-  "{a} pts en validation":"{a} pts pending", "Tes points":"Your points", "Parrainages":"Referrals",
+  "{a} pts en validation":"{a} pts pending", "Tes points":"Your points", "Historique":"History",
+  "Parrainage de {a}":"Referral from {a}", "Achat {a}":"Purchase: {a}", "Ajustement":"Adjustment",
   "En validation":"Pending", "Validé":"Confirmed", "Gelé":"Frozen", "Annulé":"Cancelled",
   "disponible le {a}":"available on {a}",
   "Payer en Points ({a})":"Pay with Points ({a})", "Payer en Points":"Pay with Points",
@@ -20115,26 +20116,43 @@ async function confirmDeleteSheet(){
 // seule, jamais un nom/montant inventé) ; la carte Profil elle-même (le "0 point"/pointsBalanceLabel
 // visible SANS ouvrir cette modale) n'est volontairement PAS touchée par ce lot.
 async function showPointsTactizoInfo(){
-  let detail=[];
-  try{ const r=await q(db.rpc("points_referrals_detail")); if(Array.isArray(r)) detail=r; }catch(e){}
+  // v8.456 (2026-09-14) — demandé par Hervé après avoir vérifié en base son 1er achat réel en
+  // Points : la popup n'affichait que les crédits de parrainage (points_referrals_detail()), les
+  // achats Boutique et les ajustements admin étaient réels en base mais invisibles pour le joueur.
+  // points_ledger_history() renvoie DÉSORMAIS tous les mouvements ; le libellé de chaque ligne est
+  // calculé ici, PAS côté serveur — le texte technique "ajustement_admin" ne doit jamais atteindre
+  // l'affichage (demande explicite d'Hervé), seulement un "Ajustement" générique.
+  let hist=[];
+  try{ const r=await q(db.rpc("points_ledger_history")); if(Array.isArray(r)) hist=r; }catch(e){}
   const statutLabel=s=>s==='disponible'?t("Validé"):s==='gele'?t("Gelé"):s==='annule'?t("Annulé"):t("En validation");
+  const nomOpt=k=>k==='stats'?t("Stats avancées"):t((PITCHES[k]||{}).t||k||"");
   const soldeHTML=`<div class="mini" style="text-align:left;line-height:1.7;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--panel2);margin-bottom:10px">
      <div class="smalllbl" style="margin-bottom:4px">${t("Tes points")}</div>
      ${t("{a} pts disponibles",{a:(myPoints&&myPoints.disponible)||0})}<br>
      ${t("{a} pts en validation",{a:(myPoints&&myPoints.en_validation)||0})}
    </div>`;
-  const parrainagesHTML=detail.length?`<div class="mini" style="text-align:left;line-height:1.6;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--panel2);margin-bottom:10px">
-     <div class="smalllbl" style="margin-bottom:6px">${t("Parrainages")}</div>
-     ${detail.map(d=>{
-       const delai=(d.status==='en_validation'&&d.available_at)?` · ${t("disponible le {a}",{a:new Date(d.available_at).toLocaleDateString('fr-FR')})}`:'';
-       return `<div class="row" style="justify-content:space-between;gap:8px;padding:3px 0">
-         <span>${esc(d.referred_name)} — <b>+${(+d.amount||0)} pts</b></span>
-         <span class="muted">${statutLabel(d.status)}${delai}</span>
-       </div>`;
-     }).join('')}
+  const ligneHTML=m=>{
+    const montant=(+m.amount||0), signe=m.kind==='credit'?'+':'−';
+    let libelle, droite;
+    if(m.reason==='parrainage_actif'){
+      const delai=(m.status==='en_validation'&&m.available_at)?` · ${t("disponible le {a}",{a:new Date(m.available_at).toLocaleDateString('fr-FR')})}`:'';
+      libelle=t("Parrainage de {a}",{a:esc(m.referred_name||'—')});
+      droite=`${statutLabel(m.status)}${delai}`;
+    } else {
+      libelle=/^achat_boutique:/.test(m.reason||'')?t("Achat {a}",{a:esc(nomOpt(m.spent_opt))}):t("Ajustement");
+      droite=m.created_at?new Date(m.created_at).toLocaleDateString('fr-FR'):'';
+    }
+    return `<div class="row" style="justify-content:space-between;gap:8px;padding:3px 0">
+      <span>${libelle} — <b>${signe}${montant} pts</b></span>
+      <span class="muted">${droite}</span>
+    </div>`;
+  };
+  const histHTML=hist.length?`<div class="mini" style="text-align:left;line-height:1.6;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--panel2);margin-bottom:10px">
+     <div class="smalllbl" style="margin-bottom:6px">${t("Historique")}</div>
+     ${hist.map(ligneHTML).join('')}
    </div>`:'';
   infoModal("🪙", t("Comment fonctionnent les Points Tactizo ?"),
-   `${soldeHTML}${parrainagesHTML}
+   `${soldeHTML}${histHTML}
    <div class="mini" style="text-align:left;line-height:1.7;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--panel2)">
      <div class="smalllbl" style="margin-bottom:6px">${t("Comment les gagner")}</div>
      ${t("Amène un <b>nouveau joueur actif</b> — quelqu'un qui rejoint sa <b>première ligue chez toi</b> et valide ses <b>premiers pronostics</b> — et tu gagnes <b>10 Points Tactizo</b>.")}<br>
