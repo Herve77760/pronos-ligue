@@ -12056,6 +12056,8 @@ function prepSummaryBody(){
    reformaté par Postgres (ex. "…T10:00:00+00:00") — même instant, texte différent. Un `===` entre
    les deux resterait bloqué sur « jamais vu » y compris juste après le clic qui vient de l'écrire. */
 function memeInstant(a,b){ if(!a||!b) return false; const ta=new Date(a).getTime(), tb=new Date(b).getTime(); return !isNaN(ta) && ta===tb; }
+// `a` est-il strictement postérieur à `b` ? `b` absent = tout est postérieur (rien acquitté pour l'instant).
+function instantApres(a,b){ if(!b) return true; const ta=new Date(a).getTime(), tb=new Date(b).getTime(); return !isNaN(ta) && ta>tb; }
 function treveResultSeen(){ const s=L&&L.prep_summary; const clos=s&&s.treve_st&&s.treve_st.closed_at;
   if(!clos) return true;   // rien à montrer → jamais bloquant
   const pl=pById(S.myId); return !!(pl && memeInstant(pl.treve_seen_at,clos)); }
@@ -20486,10 +20488,16 @@ const NOTIF_CENTER_V1=false;
 function openNotifCenter(){ toast(t("🔔 Centre de notifications à venir.")); }
 function openTrade(){ if(!AUTH || !S.leagueId) return; tradeAckAll(); navOpen("trade"); }
 // Réponses à mes offres que je n'ai pas encore vues (pastille côté acheteur + toasts).
-function tradeAckKey(){ return "pl_tradeack_"+S.leagueId; }
-function tradeAck(){ try{ return new Set(JSON.parse(localStorage.getItem(tradeAckKey())||"[]")); }catch(e){ return new Set(); } }
-function tradeAckAll(){ const s=tradeAck(); myResolvedOut.forEach(o=>s.add(o.id)); try{ localStorage.setItem(tradeAckKey(),JSON.stringify([...s])); }catch(e){} }
-function myResolvedUnseen(){ const s=tradeAck(); return myResolvedOut.filter(o=>!s.has(o.id)); }
+// ⚠️ v8.459 (mode nuit) — vivait dans `localStorage["pl_tradeack_<ligue>"]` (un Set d'id acquittés,
+// PAR APPAREIL) : vider le stockage ou changer d'appareil faisait réapparaître jusqu'à 20 réponses
+// déjà vues (pastille + toasts). Même correctif que `treve_seen_at`/`prep_seen_at` : un repère en
+// base (`players.trade_ack_at`), comparé par INSTANT à `resolved_at` (pas d'égalité de texte).
+function myResolvedUnseen(){ const ack=(pById(S.myId)||{}).trade_ack_at||null; return myResolvedOut.filter(o=>instantApres(o.resolved_at,ack)); }
+async function tradeAckAll(){ const pl=pById(S.myId); if(!pl || !myResolvedOut.length) return;
+  const dernier=myResolvedOut.reduce((m,o)=> instantApres(o.resolved_at,m) ? o.resolved_at : m, null);
+  if(!instantApres(dernier, pl.trade_ack_at)) return;   // déjà tout vu jusque-là → rien à réécrire
+  pl.trade_ack_at=dernier;
+  try{ await q(db.from("players").update({trade_ack_at:dernier}).eq("id",S.myId)); }catch(e){} }
 function notifyTrades(){ const nm=p=>((p&&p.name)||'?');
   myResolvedUnseen().forEach(o=>{ if(tradeToasted.has(o.id)) return; tradeToasted.add(o.id);
     const cn=CARDS[o.card_id]?t(CARDS[o.card_id].n):o.card_id; const other=pById(o.to_player); let body;
