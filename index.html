@@ -2598,7 +2598,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.450";
+const APP_VERSION = "v8.451";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5833,6 +5833,9 @@ const EN={
   "Identité":"Identity", "Compte":"Account", "Adresse e-mail":"Email address", "Tactizo":"Tactizo",
   "Points Tactizo":"Tactizo Points", "0 point":"0 points",
   "{a} pts disponibles":"{a} pts available", "{a} pts disponibles · {b} en validation":"{a} pts available · {b} pending",
+  "{a} pts en validation":"{a} pts pending", "Tes points":"Your points", "Parrainages":"Referrals",
+  "En validation":"Pending", "Validé":"Confirmed", "Gelé":"Frozen", "Annulé":"Cancelled",
+  "disponible le {a}":"available on {a}",
   "Gagne des Points Tactizo en faisant découvrir Tactizo à de nouveaux joueurs actifs.":"Earn Tactizo Points by introducing new active players to Tactizo.",
   "Comment fonctionnent les Points Tactizo ?":"How do Tactizo Points work?",
   "🚧 Chantier à venir — ce que tu lis ici décrit le fonctionnement prévu. Rien n'est actif pour le moment, ton solde reste à 0.":"🚧 Coming soon — what you're reading describes how it will work. Nothing is active yet, your total stays at 0.",
@@ -19982,14 +19985,34 @@ async function confirmDeleteSheet(){
                                             : ("Suppression : "+e.message));
   }
 }
-// ⚠️ Lot B (2026-09-13, demandé par Hervé) — modale explicative pour le bloc "Points Tactizo" du
-// Profil, préparée AVANT le moteur réel (chantier dédié, cf. SPEC-POINTS-TACTIZO-PARRAINAGE-
-// 2026-09-12.md — source de vérité de ces règles, ne pas diverger). PURE UX : aucune donnée n'est
-// lue ici, exactement comme "0 point" juste au-dessus reste une valeur honnête tant que rien
-// n'est branché. Volontairement PAS de nombre de filleuls affiché (ni ici ni sur la carte Profil).
-function showPointsTactizoInfo(){
+// ⚠️ Lot B (2026-09-13) — modale explicative pour le bloc "Points Tactizo" du Profil, fidèle à
+// SPEC-POINTS-TACTIZO-PARRAINAGE-2026-09-12.md (source de vérité des règles, ne pas diverger).
+// Volontairement PAS de nombre de filleuls affiché (ni ici ni sur la carte Profil).
+// ⚠️ v8.451 (2026-09-14, demandé par Hervé juste après le 1er test réel réussi) — le solde et le
+// détail par parrainage sont désormais de VRAIES données (points_referrals_detail(), lecture
+// seule, jamais un nom/montant inventé) ; la carte Profil elle-même (le "0 point"/pointsBalanceLabel
+// visible SANS ouvrir cette modale) n'est volontairement PAS touchée par ce lot.
+async function showPointsTactizoInfo(){
+  let detail=[];
+  try{ const r=await q(db.rpc("points_referrals_detail")); if(Array.isArray(r)) detail=r; }catch(e){}
+  const statutLabel=s=>s==='disponible'?t("Validé"):s==='gele'?t("Gelé"):s==='annule'?t("Annulé"):t("En validation");
+  const soldeHTML=`<div class="mini" style="text-align:left;line-height:1.7;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--panel2);margin-bottom:10px">
+     <div class="smalllbl" style="margin-bottom:4px">${t("Tes points")}</div>
+     ${t("{a} pts disponibles",{a:(myPoints&&myPoints.disponible)||0})}<br>
+     ${t("{a} pts en validation",{a:(myPoints&&myPoints.en_validation)||0})}
+   </div>`;
+  const parrainagesHTML=detail.length?`<div class="mini" style="text-align:left;line-height:1.6;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--panel2);margin-bottom:10px">
+     <div class="smalllbl" style="margin-bottom:6px">${t("Parrainages")}</div>
+     ${detail.map(d=>{
+       const delai=(d.status==='en_validation'&&d.available_at)?` · ${t("disponible le {a}",{a:new Date(d.available_at).toLocaleDateString('fr-FR')})}`:'';
+       return `<div class="row" style="justify-content:space-between;gap:8px;padding:3px 0">
+         <span>${esc(d.referred_name)} — <b>+${(+d.amount||0)} pts</b></span>
+         <span class="muted">${statutLabel(d.status)}${delai}</span>
+       </div>`;
+     }).join('')}
+   </div>`:'';
   infoModal("🪙", t("Comment fonctionnent les Points Tactizo ?"),
-   `<div class="mini muted" style="text-align:left;line-height:1.5;margin-bottom:10px">${t("🚧 Chantier à venir — ce que tu lis ici décrit le fonctionnement prévu. Rien n'est actif pour le moment, ton solde reste à 0.")}</div>
+   `${soldeHTML}${parrainagesHTML}
    <div class="mini" style="text-align:left;line-height:1.7;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--panel2)">
      <div class="smalllbl" style="margin-bottom:6px">${t("Comment les gagner")}</div>
      ${t("Amène un <b>nouveau joueur actif</b> — quelqu'un qui rejoint sa <b>première ligue chez toi</b> et valide ses <b>premiers pronostics</b> — et tu gagnes <b>10 Points Tactizo</b>.")}<br>
