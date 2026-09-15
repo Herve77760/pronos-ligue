@@ -2605,7 +2605,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.459";
+const APP_VERSION = "v8.461";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -4157,22 +4157,36 @@ async function resolveRealIfReady(){
   // match réellement joué. Rend le traitement AUTOMATIQUE : plus aucun geste de l'organisateur, qui
   // aurait pu s'avantager en annulant un match où il perdait.
   const nowT=Date.now();
-  for(const d of realDuels){ let touched=false;
-    const nf=(d.fixtures||[]).map(f=>{ if(!f||!f.evId||f.canceled) return f;
-      /* ⚠️ v8.27 — UN MATCH DONT LE RÉSULTAT EST DÉJÀ ENREGISTRÉ N'EST PLUS ANNULABLE.
-         Ce garde-fou n'existait pas et n'était pas nécessaire : avant, `res` n'était écrit qu'à la
-         résolution, donc la journée était finie et cette boucle ne tournait plus. Maintenant qu'un
-         résultat s'écrit DÈS QU'IL TOMBE, un match joué peut rester des heures dans une journée
-         non résolue — et l'auto-annulation l'aurait marqué `canceled:true, res:null` en dépassant
-         STALE_MATCH_H, EFFAÇANT un résultat connu. La mise aurait été rendue à tort.
-         ⚠️ Et le cas n'a rien de théorique : il suffit que le dernier match de la journée soit le
-         lendemain, ce qui est courant en formule classique (48-96 h). */
-      if(f.res) return f;
-      const r=results[f.evId]; if(r&&r.completed) return f;
+  /* ⚠️ v8.461 (bug vécu par Hervé, ligue XLATD, journée bloquée >15h malgré shadow-resolve-real
+     à `would_resolve:true`) — LES DEUX BOUCLES CI-DESSOUS ÉCRIVAIENT `fixtures` EN ENTIER, À PARTIR
+     D'UN INSTANTANÉ LU EN MÉMOIRE. Deux appels qui se recouvrent (deux onglets, les deux joueurs du
+     duel, ou simplement une réouverture pendant qu'un appel précédent tournait encore) écrivaient
+     chacun un instantané périmé : le second écrasait intégralement la colonne et EFFAÇAIT le
+     résultat que le premier venait tout juste d'ajouter — sans la moindre erreur des deux côtés.
+     Vécu en vrai : deux résultats récupérés avec succès (visibles dans `api_cache`), aucun des deux
+     jamais persisté dans `duels.fixtures`.
+     ⚠️ `duel_patch_fixture()` (MIGRATION-duel-fixture-patch-atomique.sql) fait desormais la
+     lecture-modification-écriture EN UNE SEULE INSTRUCTION SQL, cote serveur : deux appels
+     concurrents se sérialisent au niveau du verrou de ligne Postgres, et le second relit toujours
+     la version la plus fraîche avant d'écrire. Elle ne touche QUE le match dont `evId` correspond,
+     et seulement s'il n'a pas déjà de résultat et n'est pas déjà annulé — donc plus besoin de
+     `touched` cote client : un appel qui ne change rien est un no-op propre (voir
+     tools/test-duel-fixture-race.sql pour la reproduction du bug et la preuve du correctif). */
+  for(const d of realDuels){
+    for(const f of (d.fixtures||[])){ if(!f||!f.evId||f.canceled||f.res) continue;
+      /* ⚠️ v8.27 — UN MATCH DONT LE RÉSULTAT EST DÉJÀ ENREGISTRÉ N'EST PLUS ANNULABLE (garde
+         reprise ci-dessus par le `||f.res` du filtre, et par le garde-fou interne de la fonction
+         atomique). Sans ça, un match joué pourrait rester des heures dans une journée non résolue,
+         et l'auto-annulation l'aurait marqué `canceled:true, res:null` en dépassant STALE_MATCH_H,
+         EFFAÇANT un résultat connu. La mise aurait été rendue à tort. Le cas n'a rien de théorique :
+         il suffit que le dernier match de la journée soit le lendemain (courant en classique,
+         48-96 h). */
+      const r=results[f.evId]; if(r&&r.completed) continue;
       const t0=f.commence?new Date(f.commence).getTime():NaN;
-      if(!isNaN(t0) && nowT > t0 + STALE_MATCH_H*3600000){ touched=true; return Object.assign({},f,{canceled:true,res:null}); }
-      return f; });
-    if(touched){ try{ await q(db.from("duels").update({fixtures:nf}).eq("id",d.id)); d.fixtures=nf; }catch(e){} } }
+      if(!isNaN(t0) && nowT > t0 + STALE_MATCH_H*3600000){
+        try{ const nf=await q(db.rpc("duel_patch_fixture",{p_duel_id:d.id,p_ev_id:f.evId,p_patch:{canceled:true,res:null}})); if(nf) d.fixtures=nf; }catch(e){}
+      } }
+  }
   /* ⚠️ v8.27 (demandé par Hervé) — CHAQUE RÉSULTAT EST ENREGISTRÉ DÈS QU'IL TOMBE.
      Avant, l'écriture attendait que TOUS les matchs de la journée soient finis : un match joué la
      veille au soir restait affiché « 🏁 terminé · score en attente » jusqu'à ce que le dernier
@@ -4182,15 +4196,14 @@ async function resolveRealIfReady(){
      sépare deux choses qui étaient confondues — CONNAÎTRE un résultat et SOLDER la journée.
      ⚠️ AUCUNE FUITE DE L'OPTION ⏱️ : vérifié avant d'écrire cette ligne, ni l'écran d'attente ni
      l'écran Pronos ne lisent `f.res` — seuls `runEngine`, `resolveDay` et `recapBody` le font, et
-     ce dernier n'est atteignable que sur une journée déjà résolue. Le direct reste payant.
-     ⚠️ On n'écrit QUE si quelque chose a changé (`touched`) : sans ça, chaque sondage réécrirait
-     les mêmes fixtures toutes les 20 minutes, pour rien. */
-  for(const d of realDuels){ let touched=false;
-    const fx=(d.fixtures||[]).map(f=>{ if(!f||!f.evId||f.canceled||f.res) return f;
+     ce dernier n'est atteignable que sur une journée déjà résolue. Le direct reste payant. */
+  for(const d of realDuels){
+    for(const f of (d.fixtures||[])){ if(!f||!f.evId||f.canceled||f.res) continue;
       const r=results[f.evId];
-      if(r&&r.completed&&r.res){ touched=true; return Object.assign({},f,{res:r.res,hs:r.hs,as:r.as}); }
-      return f; });
-    if(touched){ try{ await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); d.fixtures=fx; }catch(e){} } }
+      if(r&&r.completed&&r.res){
+        try{ const nf=await q(db.rpc("duel_patch_fixture",{p_duel_id:d.id,p_ev_id:f.evId,p_patch:{res:r.res,hs:r.hs,as:r.as}})); if(nf) d.fixtures=nf; }catch(e){}
+      } }
+  }
   let allDone=true;
   /* Un match ANNULÉ compte comme terminé : sinon une journée resterait bloquée indéfiniment.
      ⚠️ `f.res ||` AJOUTÉ EN v8.27, et ce n'est pas cosmétique. L'API ne renvoie que les 3 derniers
