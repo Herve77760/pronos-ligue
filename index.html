@@ -3612,9 +3612,6 @@ async function fetchRealPool(){
   // MLS et Libertadores apparaissaient donc dès qu'UN SEUL jour manquait un peu de foot européen.
   // Le secours est désormais un second temps, séparé et bien plus strict (cf. plus bas dans cette
   // fonction, juste après la boucle principale) : quasiment jamais, et jamais plus de 2 matchs.
-  const PLAFOND_COMPS=24;
-  const tete=[...proches.slice(0,3), ...autres.slice(0,5), ...proches.slice(3)].slice(0,PLAFOND_COMPS);
-  const keys=tete.map(s=>s.key);
   // FENÊTRE DE RÉCOLTE — volontairement large et INDÉPENDANTE de toute ligue (v6.92, Hervé).
   // Avant, elle partait de la clôture des paris de la ligue en cours : la récolte n'était donc
   // valable que pour CETTE ligue, à CET instant — impossible à mutualiser plus de quelques heures.
@@ -3634,10 +3631,29 @@ async function fetchRealPool(){
   // Choix assumé : la facture des championnats vides est divisée par deux, et on ne peut pas rater
   // une reprise de championnat de plus de ~6 jours (2 récoltes). Un oubli plus long (14 jours,
   // 30 jours) économiserait davantage mais ferait manquer la reprise de la Ligue 1 ou de la NBA.
+  // ⚠️ Lu AVANT de construire `tete` (2026-09-18) : `planVariete()`, juste en dessous, a besoin du
+  // mémo pour choisir quelles compétitions variété tenter réellement — voir VIDE_MAX_AGE_MS /
+  // videEstFrais() / planVariete(), définies plus haut dans le fichier.
   const memo=(await cacheRead("vides", Infinity))||{};
-  const sautes=[]; const out=[]; const comps=new Set(); let appels=0;
+  const PLAFOND_COMPS=24;
+  const {choisis:autresATenter, sautes:varieteSautee}=planVariete(autres, memo, Date.now(), VARIETE_TENTATIVES);
+  const tete=[...proches.slice(0,3), ...autresATenter, ...proches.slice(3)].slice(0,PLAFOND_COMPS);
+  const keys=tete.map(s=>s.key);
+  // Les compétitions variété écartées par planVariete() (mémo "vides" encore frais) suivent le
+  // même sort qu'un saut classique : basculées à `false` (retestées au prochain harvest, âge
+  // d'origine conservé) et ajoutées à `sautes` — le filet de dernier recours plus bas (si la
+  // récolte entière ne rapporte RIEN) peut donc toujours les retenter, comme avant ce chantier.
+  varieteSautee.forEach(k=>{ if(memo[k]) memo[k]={vide:false, at:memo[k].at}; });
+  const sautes=[...varieteSautee]; const out=[]; const comps=new Set(); let appels=0;
   for(const k of keys){
-    if(memo[k]===true){ memo[k]=false; sautes.push(k); continue; }   // sauté ce coup-ci, retesté au suivant
+    // ⚠️ Les compétitions variété ont déjà été départagées par planVariete() ci-dessus : celles
+    // qui restent dans `keys` sont TOUJOURS réellement tentées, jamais sautées une seconde fois
+    // ici. Seul le football (le secours excepté, traité plus bas) passe encore par ce garde-fou,
+    // avec la même fraîcheur par compétition que la variété (videEstFrais()).
+    if(grp[k]==="Soccer" && videEstFrais(memo[k], Date.now())){
+      memo[k]={vide:false, at:memo[k].at};   // sauté ce coup-ci, retesté au suivant (âge d'origine conservé)
+      sautes.push(k); continue;
+    }
     appels++;   // c'est CE compteur qui est la facture : 1 crédit par compétition interrogée, vide ou non
     try{ const r=await oddsFetch("odds",k);
     noteQuota(r.headers.get("x-requests-remaining"), r.headers.get("x-requests-used"));   // c'est le poste le plus coûteux : on en profite pour relever le solde
@@ -3647,7 +3663,7 @@ async function fetchRealPool(){
     // « Vide » = n'a rien rapporté d'UTILISABLE dans la fenêtre. Ce n'est pas la même chose qu'une
     // réponse vide de l'API : un championnat peut renvoyer des matchs tous situés au-delà des
     // 8 jours. Dans les deux cas le crédit est parti et la compétition n'a rien apporté.
-    if(out.length===avant) memo[k]=true; else delete memo[k];
+    if(out.length===avant) memo[k]={vide:true, at:new Date().toISOString()}; else delete memo[k];
   }catch(e){}
     /* ---- ARRÊT ANTICIPÉ : on compte la COUVERTURE JOUR PAR JOUR (v7.29) --------------------
        ⚠️ L'ancien critère — 6 compétitions productives et 30 matchs AU TOTAL — mesurait la
@@ -3688,14 +3704,14 @@ async function fetchRealPool(){
   if(europeProche<3 && appels<COUV_MAX_APPELS){
     for(const s of secours){
       const k=s.key;
-      if(memo[k]===true){ memo[k]=false; sautes.push(k); continue; }
+      if(videEstFrais(memo[k], Date.now())){ memo[k]={vide:false, at:memo[k].at}; sautes.push(k); continue; }
       appels++;
       try{ const r=await oddsFetch("odds",k);
         noteQuota(r.headers.get("x-requests-remaining"), r.headers.get("x-requests-used"));
         if(r.ok){ const arr=await r.json(); const avant=out.length;
           arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return;
             const f=oddsEventToFixture(ev,grp[k],k); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
-          if(out.length===avant) memo[k]=true; else delete memo[k];
+          if(out.length===avant) memo[k]={vide:true, at:new Date().toISOString()}; else delete memo[k];
         }
       }catch(e){}
       if(out.filter(e=>zoneRang(e.compKey)===2).length>=2) break;   // plafond dur : 2 matchs de secours max
@@ -3716,7 +3732,7 @@ async function fetchRealPool(){
         noteQuota(r.headers.get("x-requests-remaining"), r.headers.get("x-requests-used"));
         if(!r.ok) continue; const arr=await r.json(); const avant=out.length;
         arr.forEach(ev=>{ const _t=new Date(ev.commence_time).getTime(); if(_t<cutoffMin||_t>cutoffMax) return; const f=oddsEventToFixture(ev,grp[k],k); if(f){ f.prio=leaguePrio(k,grp[k]); f.grp=grp[k]; f.compKey=k; out.push(f); comps.add(k); } });
-        if(out.length===avant) memo[k]=true; else delete memo[k];
+        if(out.length===avant) memo[k]={vide:true, at:new Date().toISOString()}; else delete memo[k];
       }catch(e){}
       if(comps.size>=6 && out.length>=30) break;
     }
@@ -3959,6 +3975,54 @@ const POOL_SHARED_TTL   = 3*24*60*60*1000; // 3 jours — durée de vie de la r�
    en panne : sans elle, chaque client réessaie de son côté. */
 const POOL_VIDE_TTL     = 6*60*60*1000;    // 6 h — on se souvient qu'une récolte n'a rien donné
 const HARVEST_WINDOW_D  = 8;               // jours d'avance ramassés (couvre les 3 jours de validité + marge)
+
+/* ============================================================================================
+   FRAÎCHEUR PAR COMPÉTITION DU MÉMO "VIDES" (2026-09-18, demandé par Hervé, cas réel NBA/
+   Euroligue) — CAS RÉEL QUI A RÉVÉLÉ LE PROBLÈME : NBA et Euroligue trouvées vides le 13/09,
+   plus aucune récolte depuis (aucune ligue réelle n'en avait besoin, day_pool déjà figés
+   ailleurs). Un nouvel harvest aujourd'hui les aurait quand même sautées, sur la seule foi
+   d'une info vieille de 5 jours — alors que `api_cache.k='vides'` n'a qu'UN SEUL `fetched_at`
+   pour tout le blob : la mise à jour d'UNE compétition (n'importe laquelle, y compris une clé
+   foot) rafraîchit ce `fetched_at` et rendrait donc TOUTES les autres entrées artificiellement
+   fraîches, y compris celles jamais retouchées depuis des jours.
+   ⚠️ SOLUTION : chaque entrée du mémo porte désormais SA PROPRE date `at` (dernière fois que
+   CETTE compétition précise a été RÉELLEMENT interrogée), au lieu de dépendre du fetched_at du
+   blob entier — `{vide:true|false, at:<ISO>}` au lieu d'un simple booléen. Une entrée plus
+   vieille que VIDE_MAX_AGE_MS (alignée sur POOL_SHARED_TTL, 3 jours) n'autorise plus de sauter :
+   la compétition est alors interrogée normalement, comme si elle était inconnue. L'alternance
+   "sautée une récolte sur deux" reste intacte pour les entrées fraîches — voir videEstFrais().
+   ⚠️ RÉTROCOMPATIBLE SANS MIGRATION : une entrée laissée par l'ancien format (`true`/`false` nu)
+   n'a pas de propriété `.vide===true` exploitable (accès sur un booléen primitif → `undefined`)
+   → traitée comme "pas fraîche", donc testée normalement. Le mémo se corrige tout seul, clé par
+   clé, au fil des prochaines récoltes — jamais besoin de réécrire `api_cache` à la main.
+   ============================================================================================ */
+const VIDE_MAX_AGE_MS = POOL_SHARED_TTL;
+// PUR — l'info "compétition vide" mémorisée pour une clé autorise-t-elle ENCORE de la sauter à
+// CETTE récolte ? Ne dépend que de l'entrée et de l'instant courant (nowT explicite, jamais
+// Date.now() interne) — testable en isolation, comme scoresTTL()/bestActiveTTL().
+function videEstFrais(entry, nowT){
+  if(!entry || entry.vide!==true || entry.at==null) return false;
+  const age=nowT-new Date(entry.at).getTime();
+  return age>=0 && age<=VIDE_MAX_AGE_MS;
+}
+// PUR — jusqu'à `n` compétitions "variété" (basket/tennis) RÉELLEMENT à interroger cette récolte,
+// dans l'ordre de priorité déjà trié de `candidats`. ⚠️ Chantier "5 tentatives réelles" (même
+// demande qu'au-dessus) : `autres.slice(0,5)` réservait 5 POSITIONS dans la liste à interroger,
+// jamais 5 TENTATIVES — une compétition sautée par le mémo "vides" perdait sa place sans qu'une
+// 6ᵉ ne prenne le relais. Ici, une compétition encore fraîchement "vide" ne consomme PAS sa
+// place : la suivante du vivier (pas seulement les 5 premières) est essayée à la place, jusqu'à
+// épuiser `candidats` ou atteindre `n` compétitions réellement choisies. Zéro I/O, ne fait aucun
+// appel — se contente de PLANIFIER lesquelles seront interrogées par l'appelant.
+function planVariete(candidats, memo, nowT, n){
+  const choisis=[]; const sautes=[];
+  for(const c of (candidats||[])){
+    if(choisis.length>=n) break;
+    if(videEstFrais(memo[c.key], nowT)){ sautes.push(c.key); continue; }
+    choisis.push(c);
+  }
+  return {choisis, sautes};
+}
+const VARIETE_TENTATIVES=5; // nombre de compétitions non-foot RÉELLEMENT tentées, jamais plus (voir planVariete)
 
 /* ============================================================================================
    RECHECK CIBLÉ "VIDES" (chantier 4JJDF, 2026-09-17, demandé par Hervé) --------------------
