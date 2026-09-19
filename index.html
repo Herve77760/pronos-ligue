@@ -9124,6 +9124,19 @@ async function refresh(){
     if(!L){ // ligue introuvable (supprimée) : on nettoie et on retourne à l'accueil au lieu de planter
       if(S.leagueId===lid){ if(poll)clearInterval(poll); S.leagueId=null; S.myId=null; S.view="leagues"; loadMyLeagues(); }
       return; }
+    // ⚠️ Ligue reviewer Google gelée (2026-09-19, demandé par Hervé) — SEULE l'OUVERTURE RÉELLE de
+    // CETTE ligue (donc CE refresh(), jamais le QG qui ne fait que lister) par le compte exact posé
+    // dans frozen_for_user_id déclenche l'activation. Un seul appel RPC, silencieux et idempotent :
+    // activate_reviewer_league() revérifie tout côté serveur (identité, état) et ne fait rien si ce
+    // n'est ni le bon compte ni la bonne ligue — jamais une vérification d'e-mail côté client, ici on
+    // ne fait que TENTER l'appel. Ne s'exécute qu'une fois en pratique : dès le succès, day_started_at
+    // n'est plus null, donc plus jamais retenté aux refresh() suivants (poll compris).
+    if(L.frozen_for_user_id && L.frozen_for_user_id===AUTH.id && !L.day_started_at){
+      try{
+        const r=await q(db.rpc("activate_reviewer_league",{p_league:L.id}));
+        if(r && r.activated){ L=await q(db.from("leagues").select("*").eq("id",lid).maybeSingle()); if(stale()) return; if(!L) return; }
+      }catch(e){}
+    }
     /* ⚠️ v8.316 (bug vécu par Hervé) — MODIFIER UN PRONO SANS REVALIDER NE TOUCHE JAMAIS LA BASE
        (`editBet()` ne fait que précharger `bet` en local) : si l'adversaire valide entre-temps et
        que la journée se résout, la modification en cours est silencieusement abandonnée — le prono
