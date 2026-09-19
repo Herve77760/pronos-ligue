@@ -308,6 +308,19 @@
     border-radius:10px;padding:12px;width:100%;}
   input:focus,select:focus{outline:none;border-color:var(--accent);}
   input[type=number]{width:84px;text-align:right;}
+  /* ⚠️ Correctif responsive (2026-09-19, signalé par Hervé sur iPhone, Admin > Codes promo) — la
+     règle générale `input,select{width:100%;padding:12px;border-radius:10px;...}` juste au-dessus
+     visait les champs texte/menus, mais s'appliquait AUSSI aux deux seules checkbox de l'app
+     (`.promoOptCk`/`#promoOptPremium`) : chacune devenait un pavé plein écran de 100% de large,
+     ce qui faisait déborder toute la grille d'options ET le bloc Tactizo Premium hors de l'écran
+     sur iPhone. Remise à une taille de case à cocher normale — seules ces deux checkbox existent
+     dans tout le fichier à ce jour, donc aucun autre écran n'est concerné par ce correctif. */
+  input[type=checkbox]{width:18px;height:18px;min-width:18px;flex:0 0 auto;padding:0;border-radius:4px;}
+  /* Grille des options d'un code promo — 2 colonnes quand la largeur le permet (bureau/tablette),
+     1 seule colonne sous 480px (même seuil que `.lgrow` plus haut) : les libellés traduits (FR/EN)
+     restent entiers plutôt que d'être compressés ou coupés. */
+  .a2-promo-opts{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 14px;margin-bottom:8px;}
+  @media (max-width:480px){.a2-promo-opts{grid-template-columns:1fr;}}
   label{font-size:13px;color:var(--muted);display:block;margin:10px 0 4px;}
   .chip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--border);color:var(--muted);white-space:nowrap;}
   /* v8.325 (demandé par Hervé, retour testeur : « pas facile de savoir comment revenir ») — pastille
@@ -20328,8 +20341,8 @@ function viewAdmin(){
         </div>
         <div style="height:8px"></div>
         <div class="mini muted" style="margin-bottom:4px">${esc(t("Options offertes — un choix est obligatoire"))}</div>
-        <div class="row" style="flex-wrap:wrap;gap:8px 14px;margin-bottom:8px">
-          ${SHOP_ORDER.map(k=>`<label class="mini" style="display:flex;align-items:center;gap:4px;cursor:pointer">
+        <div class="a2-promo-opts">
+          ${SHOP_ORDER.map(k=>`<label class="mini" style="display:flex;align-items:center;gap:6px;cursor:pointer;min-width:0">
             <input type="checkbox" class="promoOptCk" value="${k}" style="margin:0" onchange="if(this.checked){const p=$('promoOptPremium');if(p)p.checked=false}">${esc(OPT_LABELS[k]||k)}</label>`).join('')}
         </div>
         <label class="mini" style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:7px 9px;border:1px dashed var(--border);border-radius:8px;margin-bottom:8px">
