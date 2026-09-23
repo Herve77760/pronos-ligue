@@ -2682,7 +2682,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.489";
+const APP_VERSION = "v8.491";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -4255,6 +4255,11 @@ async function completerPoolSiCreneauEloigne(all){
   if(!(ecartH>=(_f.bet||24) && avant>=1 && avant<=4)) return all;   // pas d'anomalie : rien à faire
   // ---- Anomalie confirmée : quelles compétitions sautées pourraient combler ce créneau ? ----
   const memo=(await cacheRead("vides", Infinity))||{};
+  // ⚠️ BUILD WEB v8.491 — LE CORRECTIF DU RECHECK (v8.490) EST VOLONTAIREMENT ABSENT DE CE FICHIER.
+  // Il est bien présent dans le dépôt, mais sa réactivation peut coûter jusqu'à 3 appels Odds API
+  // par récolte concernée : Hervé a décidé le 2026-09-23 de ne pas la déployer pendant la
+  // campagne. Ne pas « corriger » cette ligne ici — elle est alignée sur ce que sert la prod.
+  // Voir §17bis de PASSATION-2026-09-22.md avant tout changement.
   const sauteesActuelles=Object.keys(memo).filter(k=>memo[k]===false);
   const cibles=sauteesActuelles.filter(k=>zoneRang(k)<2)                 // proches = mondial+Europe
     .sort((a,b)=>leaguePrio(b,"Soccer")-leaguePrio(a,"Soccer"))          // Europa/Conference d'abord
@@ -7897,6 +7902,64 @@ const CHECKOUT_FN=SB_URL+"/functions/v1/checkout";
 const REVENUECAT_KEY_IOS="appl_UQmdcANDrezIQofxRxlwUnsUjBN";
 const REVENUECAT_KEY_ANDROID="goog_jRMxqHDsHVzhCUOEoLpiHmsUpGH";
 function estNatif(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+/* ============================================================================================
+   ACTIVITÉ RÉELLE — `touch_activity()`                            (2026-09-23, demandé par Hervé)
+
+   POURQUOI. `auth.users.last_sign_in_at` ne mesure pas l'usage : une session Supabase reste
+   ouverte des jours. Cas vécu (Sabine) : dernière connexion affichée alors qu'elle agissait
+   encore deux jours plus tard. Mesuré le 23/09 sur les 18 comptes hors exclusions, l'ancien
+   indicateur est saturé dans les deux sens — 1/18 aujourd'hui, 18/18 sur 7 ET sur 30 jours.
+
+   CE QUE FAIT CETTE FONCTION, ET CE QU'ELLE NE FAIT PAS.
+    · Elle n'envoie AUCUNE date : la RPC écrit `now()` côté serveur. Le client ne peut donc pas
+      antidater son activité, ni celle d'un autre compte (la cible est `auth.uid()`, il n'y a pas
+      de paramètre pour désigner quelqu'un d'autre).
+    · Elle ne dépend d'AUCUNE action métier : ni pari, ni ligue, ni écran particulier. Ouvrir
+      l'app suffit — c'est exactement ce qu'on cherche à mesurer.
+    · Elle est best-effort : un échec ne doit JAMAIS gêner l'application. D'où le `catch` muet.
+
+   ⚠️ LE THROTTLE CLIENT (15 min) EST UNE ÉCONOMIE DE REQUÊTES, PAS UNE PROTECTION. La vraie
+   garde est côté serveur (10 min, dans le `on conflict` de la RPC) : elle tient même face à un
+   client modifié ou à plusieurs appareils du même compte. Plafond dur qui en résulte :
+   6 écritures/heure/compte, quel que soit le nombre d'appareils.
+
+   ⚠️ NE JAMAIS APPELER CECI DEPUIS `startPoll()` (sondage de 4 s) ni depuis `render()`. Les deux
+   seuls points d'appel légitimes sont le démarrage (session restaurée) et le retour au premier
+   plan — voir `brancherPingActivite()` juste en dessous.
+
+   ⚠️ `localStorage` EN PLUS DE LA VARIABLE MÉMOIRE : sans lui, un rechargement de page (web) ou
+   un redémarrage d'app remettrait le compteur à zéro et rappellerait la RPC à chaque fois. La
+   garde serveur l'absorberait, mais autant ne pas faire le voyage.
+   ============================================================================================ */
+const PING_ACTIVITE_MS = 15*60*1000;      // 15 min par appareil (garde serveur : 10 min par compte)
+const PING_ACTIVITE_CLE = "tml_ping_activite";
+let pingActiviteAt = 0;
+function plateformeActivite(){
+  if(!estNatif()) return "web";
+  const p=(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform())||"";
+  return (p==="android"||p==="ios") ? p : "web";
+}
+async function pingActivite(){
+  try{
+    if(!AUTH || !AUTH.id) return;                       // jamais pour un visiteur non connecté
+    const maintenant=Date.now();
+    let dernier=pingActiviteAt;
+    if(!dernier){ try{ dernier=parseInt(localStorage.getItem(PING_ACTIVITE_CLE)||"0",10)||0; }catch(e){ dernier=0; } }
+    if(maintenant - dernier < PING_ACTIVITE_MS) return;  // throttle : rien à faire
+    pingActiviteAt=maintenant;
+    try{ localStorage.setItem(PING_ACTIVITE_CLE, String(maintenant)); }catch(e){}
+    await q(db.rpc("touch_activity",{p_platform:plateformeActivite()}));
+  }catch(e){}                                           // best-effort, muet par construction
+}
+/* Les deux seuls déclencheurs. `visibilitychange` couvre le web (onglet ramené au premier plan)
+   ET le natif (Capacitor relaie l'état de l'app au WebView) ; `appStateChange` est ajouté en plus
+   sur natif, parce que certaines reprises Android ne produisent pas d'évènement de visibilité. */
+function brancherPingActivite(){
+  document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) pingActivite(); });
+  if(estNatif() && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
+    try{ window.Capacitor.Plugins.App.addListener("appStateChange", st=>{ if(st && st.isActive) pingActivite(); }); }catch(e){}
+  }
+}
 // ⚠️ Lit IOS_POINTS_SPEND_KILLSWITCH (cf. sa définition) : `false` tant qu'il n'est pas activé, donc
 // cette fonction renvoie TOUJOURS `false` par défaut, sur toute plateforme — aucun effet tant que
 // personne n'a délibérément changé la constante. Même façon de distinguer iOS qu'ailleurs dans le
@@ -22974,6 +23037,10 @@ db.auth.onAuthStateChange((event,session)=>{
      propres résultats/pronos) — avec plusieurs ligues actives, ça ne dit ni laquelle, ni ce qui
      se passe dans les autres. L'accueil montre le statut de toutes d'un coup d'œil ; c'est
      désormais le seul écran de démarrage, quel que soit le nombre de ligues en cours. */
+  // ⚠️ Activité réelle (2026-09-23) : ICI, après que la session a été restaurée et `AUTH` posé —
+  // pas plus haut (on ne compte pas un visiteur déconnecté), pas dans `startPoll()` (le sondage de
+  // 4 s ferait des dizaines d'écritures). Best-effort : jamais attendu, jamais bloquant.
+  brancherPingActivite(); pingActivite();
   S.view="home"; maybeConsumePendingJoinCode(); startPoll(); await loadMyLeagues();
   await ensureRevenueCatLogin();
 })();
