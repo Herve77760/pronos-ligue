@@ -47,6 +47,28 @@
   /* touch-action:manipulation → supprime le zoom au DOUBLE-TAP (signalé par Hervé) sans toucher au
      pinch-zoom volontaire, qui reste autorisé pour l'accessibilité (cf. note sur le <meta viewport>). */
   html{touch-action:manipulation;}
+  /* ⚠️ v8.485 (retour testeur réel avec captures, campagne 2026-09-23 : dans « Nos idées », les
+     titres « Cagnotte d'honneur », « Le titre de Tactizo », « Servi comme un roi », « Cadeau
+     surprise » ressortaient BLEU VIF et lisibles sur iOS, mais NOIR/très sombre sur Android, donc
+     illisibles sur le bleu nuit de la fenêtre.)
+     LA CAUSE N'EST NI UNE COULEUR MAL CHOISIE NI UN BUG ANDROID : c'est que `color` n'est PAS
+     héritée par les éléments de formulaire. Un `<button>` sans `color` explicite prend celle de la
+     feuille de style du NAVIGATEUR, et les deux plateformes n'ont pas la même : WebKit/iOS rend un
+     bouton en bleu système, Chrome/Android en `ButtonText` (noir). Les idées de gage sont des
+     `<button class="box">` (openEnjeuIdeas) et `.box` — contrairement à sa variante `.a2-theme
+     .box` — ne définissait aucune couleur ; la fenêtre, elle, est créée sur `document.body`, donc
+     HORS de `.a2-theme`. Le texte tombait donc exactement dans ce trou sur les deux plateformes,
+     avec deux rendus différents.
+     LE CORRECTIF EST CETTE NORMALISATION, pas une couleur posée au cas par cas : `color:inherit`
+     rend au bouton le comportement de n'importe quel autre texte — il suit le thème (clair ou
+     sombre) de son conteneur, exactement comme prévu. Aucun `!important` : toute classe qui
+     définit sa propre couleur (.btn, .a2-cta, .ghost-btn-sm, .stat-tab, .cta-gold…) l'emporte
+     naturellement par spécificité, rien de leur rendu ne change.
+     ⚠️ CORRIGE DU MÊME COUP les deux autres classes de boutons qui n'avaient pas de `color` et
+     souffraient silencieusement du même écart Android/iOS : `.ticon` hors `.a2-theme` (sa variante
+     dans le thème, elle, définit bien une couleur) et `.qbtn`. Inventaire établi en relisant CHAQUE
+     règle de bouton du fichier — `.mesligues-edit`, elle, porte déjà `color:var(--muted)`. */
+  button{color:inherit;}
   body{margin:0;background:var(--bg);color:var(--ink);
     font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
@@ -263,6 +285,20 @@
     .lgrow .sd{margin-left:auto;}
     .lgrow>.chip{margin-left:auto;}
   }
+  /* ⚠️ v8.486 — « ce qui t'attend dans cette ligue », sur la carte de Mes ligues (cf.
+     `ligueBadgeTodo`). Posé DANS `.info`, donc sous le nom et le code, et non dans la colonne
+     de droite : celle-ci est de largeur fixe (cf. la note v8.207 juste au-dessus) et un libellé
+     comme « À toi de jouer · Choisir les matchs » y aurait rogné le nom de la ligue — exactement
+     le défaut déjà corrigé pour le titre. Il passe à la ligne au besoin, jamais d'ellipse.
+     Deux tons seulement, et ils ne veulent pas dire la même chose : `urgent` = une action est
+     réellement due (orange, le seul vrai signal d'alerte) ; `ready` = simplement quelque chose à
+     découvrir (vert discret). */
+  .lgrow-todo{display:inline-block;margin-top:6px;font-size:11.5px;font-weight:800;line-height:1.35;
+    padding:3px 9px;border-radius:999px;border:1px solid transparent;}
+  .lgrow-todo.urgent{color:var(--gold);background:color-mix(in srgb,var(--gold) 14%,transparent);
+    border-color:color-mix(in srgb,var(--gold) 40%,transparent);}
+  .lgrow-todo.ready{color:var(--green);background:color-mix(in srgb,var(--green) 13%,transparent);
+    border-color:color-mix(in srgb,var(--green) 36%,transparent);}
   .ticon{width:24px;height:24px;border-radius:50%;border:1px solid var(--border);background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:11px;cursor:pointer;flex:none;padding:0;}
   .ticon:hover{border-color:var(--green);}
   /* En-tête de liste (façon maquette : h2.sec) — distinct de .boxttl/.smalllbl : ceux-ci titrent
@@ -907,7 +943,7 @@
   .vote-table .pname span{display:flex;align-items:center;gap:5px;}
   .vote-table .gage{font-weight:700;}
   /* ⚠️ (signalé par Hervé) — L'ALIGNEMENT À DROITE DE `td:last-child` (juste au-dessus) EST FAUX
-     POUR UN GAGE/RÉCOMPENSE PERSO : ces textes libres vont jusqu'à 80 caractères (`CUSTOM_MAX`),
+     POUR UN GAGE/RÉCOMPENSE PERSO : ces textes libres vont jusqu'à 150 caractères (`CUSTOM_MAX`, v8.484 — 80 auparavant),
      contre une poignée de mots pour une option de la liste — sur mobile ils passent forcément sur
      plusieurs lignes, et du texte multi-lignes aligné à droite donne un bord GAUCHE en dents de
      scie, illisible. Les options de la liste, elles, tiennent sur une ligne : l'alignement à
@@ -1020,7 +1056,19 @@
      déformer un écran de jeu qui réutiliserait un nom court par ailleurs. */
   #t2Wrap{display:flex;flex-direction:column;min-height:calc(100vh - 40px);}
   #t2Wrap .t2-top{display:flex;align-items:center;gap:10px;padding:2px 0 6px;}
-  #t2Wrap .t2-dots{display:flex;gap:6px;flex:1;}
+  /* ⚠️ v8.488 (vidéo réelle du tutoriel sur téléphone, 2026-09-23 : « à l'étape 6, pendant que
+     les points évoluent, le classement doit être immédiatement visible sur petit écran ») —
+     `flex:1` ÉTAIT UN RESTE D'UN AUTRE CONTEXTE. Il a l'air anodin, mais `.t2-dots` n'a QU'UN
+     SEUL usage dans tout le fichier : la rangée des 4 journées de l'étape 6, posée dans
+     `.t2-stage` — qui est un flex en COLONNE. `flex:1` y vaut donc `flex-grow:1` avec une base
+     de 0 : une bande de 4 px de haut se mettait à absorber tout l'espace libre de l'étape et
+     repoussait le classement de 179 px sous le texte (mesuré, et identique à toutes les largeurs
+     — c'est bien un étirement vertical, pas un problème de place). Le classement restait dans
+     l'écran, mais séparé du texte par un grand vide, exactement ce que montre la vidéo.
+     ⚠️ `flex:0 0 auto` LUI REND SA HAUTEUR RÉELLE : les 4 `.t2-dot` enfants gardent leur propre
+     `flex:1`, qui se partage la LARGEUR de la rangée (comportement voulu, non touché), et
+     `.t2-stage` recentre naturellement l'ensemble grâce à son `justify-content:center`. */
+  #t2Wrap .t2-dots{display:flex;gap:6px;flex:0 0 auto;}
   #t2Wrap .t2-dot{height:4px;flex:1;border-radius:99px;background:var(--a2-border);overflow:hidden;}
   #t2Wrap .t2-dot>i{display:block;height:100%;width:0;background:var(--a2-brass-light);}
   #t2Wrap .t2-dot.done>i{width:100%;}
@@ -2634,7 +2682,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.482";
+const APP_VERSION = "v8.488";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -3156,7 +3204,29 @@ function drawDiverse(pool,n){
 // Options de gage/récompense proposées au vote : TOUJOURS 5 variées (+ l'option perso ajoutée à l'affichage).
 // Utilisé à la CRÉATION (vote ouvert dès le lobby) et en secours à la clôture.
 function drawItems(enjeu,mode){ return drawDiverse(itemPool(enjeu,mode), 5); }
-const CUSTOM_MAX=80; // longueur max d'un gage/récompense personnalisé
+/* ⚠️ v8.484 (retour testeur réel, campagne 2026-09-23 : « 80 caractères, c'est trop court pour
+   certains gages ») — PASSÉ DE 80 À 150. Audit complet du parcours du texte libre avant de
+   toucher ce chiffre, pour vérifier qu'aucune autre limite ne le contredirait :
+   • SAISIE — un seul champ (`voteSectionHTML`), `maxlength` et compteur « x / y » déjà calculés
+     à partir de CETTE constante, donc rien à changer ailleurs. Le compteur écrit en `textContent`
+     (jamais un re-rendu), il ne peut pas faire perdre le focus : le correctif v8.482 (skipRefresh
+     de `prepVoteCustom`) reste entier.
+   • STOCKAGE — `leagues.gage`, colonne `text` libre contenant le JSON de préparation : aucune
+     contrainte de longueur en base (vérifié dans schema.sql).
+   • VALIDATION SERVEUR — `resolve_prep` (MIGRATION-plafond-mises-securite.sql) recopie `customs`/
+     `customsR` en passthrough, sans jamais mesurer ni tronquer : aucune limite serveur à aligner,
+     donc AUCUNE migration nécessaire pour ce changement.
+   • NOTIFICATIONS — `notif-dispatch` ne lit de `gage` que les échéances (`deadline`/`bidTs`),
+     jamais le texte : aucun push/e-mail ne transporte un gage perso.
+   • BACK-OFFICE — n'affiche nulle part le texte du gage.
+   • AFFICHAGE — les quatre rendus qui le montrent (tableau des votes `.vote-table .gage.custom`,
+     liste des propositions `.pr-text`, enjeu projeté `.enjeu-main`, fiche `showEnjeuInfo`) sont
+     tous en texte qui passe à la ligne, sans `nowrap` ni ellipse, et `.enjeu-txt` porte déjà
+     `min-width:0` : 150 caractères s'y répartissent sur quelques lignes sans rien casser. Rien
+     n'est donc tronqué À L'AFFICHAGE non plus — et la donnée stockée, jamais.
+   ⚠️ SEUL ENDROIT OÙ CE NOMBRE EXISTE : les textes qui l'annoncent au joueur le lisent tous d'ici
+   ({a} dans `t(...)`), jamais en dur — ne pas réintroduire de "80"/"150" écrit à la main. */
+const CUSTOM_MAX=150; // longueur max d'un gage/récompense personnalisé
 // Règles de mise & sanction — SOURCE UNIQUE (v4.17). Avant, ces valeurs étaient des nombres magiques
 // dupliqués (le plafond était écrit 2 fois, la pénalité 3 fois) et les ~22 textes qui les annoncent
 // aux joueurs les répétaient en dur : changer une règle demandait de penser à tout, et les règles
@@ -3443,6 +3513,94 @@ function leaguePrio(key,group){ if(LEAGUE_PRIO[key]!=null) return LEAGUE_PRIO[ke
   // Chelems par MOTIF, ce qui reste valable d'une année sur l'autre.
   if(group==="Tennis") return /wimbledon|us_open|french_open|aus_open/.test(key)?92:60;
   if(group==="Soccer") return 60; if(group==="Basketball") return 50; return 45; }
+
+/* ═══ v8.487 — NOMS DES SÉLECTIONS NATIONALES EN FRANÇAIS ══════════════════════════════════════
+   Retour réel (campagne 2026-09-23) : en interface française, la Ligue des Nations affichait
+   « Turkey », « Sweden », « Romania ».
+   D'OÙ VIENNENT CES NOMS : de The Odds API (`ev.home_team`/`ev.away_team`), recopiés tels quels
+   dans la fixture par `oddsEventToFixture()`, puis FIGÉS dans `duels.fixtures` au moment de la
+   sélection des matchs. L'API ne publie ses libellés qu'en anglais — il n'y a ni cache ni couche
+   de normalisation à corriger en amont : c'est bien la source qui est anglaise.
+   ⚠️ ON NE TRADUIT JAMAIS À LA SOURCE NI EN BASE, SOUS AUCUN PRÉTEXTE. Ces chaînes ne sont pas
+   que de l'affichage : la résolution des journées réelles RAPPROCHE les scores de l'API des
+   fixtures stockées en comparant ces noms (`sc(ev.home_team)`, cf. resolve-ligues-reelles et
+   `resolveRealIfReady`), et `resolveDay()` RÉÉCRIT `d.fixtures` en base tel qu'il l'a en mémoire.
+   Écrire « Turquie » dans la fixture ferait donc silencieusement échouer l'appariement des scores
+   d'une vraie journée. La traduction est purement une COUCHE D'AFFICHAGE, appliquée au dernier
+   moment, jamais en amont.
+   ⚠️ DEUX VERROUS POUR NE JAMAIS TRADUIRE UN NOM DE CLUB (exigence explicite d'Hervé) :
+     1. la compétition doit être une compétition de SÉLECTIONS (`estSelectionNationale`, qui
+        travaille sur `sportKey`, la clé de compétition de l'API déjà stockée dans la fixture) ;
+     2. le nom doit figurer dans la table ci-dessous, qui ne contient QUE des pays.
+   Un club ne peut donc pas être traduit, même s'il portait par accident le nom d'un pays : sa
+   compétition n'est pas une compétition de sélections. `soccer_fifa_club_world_cup` est écarté
+   explicitement — c'est un tournoi de CLUBS dont la clé contient pourtant « world_cup ».
+   ⚠️ SEULS LES NOMS QUI DIFFÈRENT figurent ici : « France », « Portugal », « Ukraine »… sont
+   identiques dans les deux langues, les lister n'aurait fait qu'alourdir sans rien changer. Un
+   pays absent s'affiche donc tel que l'API le donne — jamais une erreur, juste l'anglais, comme
+   aujourd'hui. Ajouter une ligne suffit à le corriger. */
+const NATION_FR={
+  // ─── UEFA (les 55 sélections, hors noms identiques en français) ───────────────────────────
+  "Albania":"Albanie", "Andorra":"Andorre", "Armenia":"Arménie", "Austria":"Autriche",
+  "Azerbaijan":"Azerbaïdjan", "Belarus":"Biélorussie", "Belgium":"Belgique",
+  "Bosnia and Herzegovina":"Bosnie-Herzégovine", "Bosnia & Herzegovina":"Bosnie-Herzégovine",
+  "Bulgaria":"Bulgarie", "Croatia":"Croatie", "Cyprus":"Chypre",
+  "Czechia":"Tchéquie", "Czech Republic":"Tchéquie", "Denmark":"Danemark",
+  "England":"Angleterre", "Estonia":"Estonie", "Faroe Islands":"Îles Féroé", "Finland":"Finlande",
+  "Georgia":"Géorgie", "Germany":"Allemagne", "Greece":"Grèce", "Hungary":"Hongrie",
+  "Iceland":"Islande", "Israel":"Israël", "Italy":"Italie", "Latvia":"Lettonie",
+  "Lithuania":"Lituanie", "Malta":"Malte", "Moldova":"Moldavie", "Montenegro":"Monténégro",
+  "Netherlands":"Pays-Bas", "North Macedonia":"Macédoine du Nord",
+  "Northern Ireland":"Irlande du Nord", "Norway":"Norvège", "Poland":"Pologne",
+  "Republic of Ireland":"Irlande", "Ireland":"Irlande", "Romania":"Roumanie", "Russia":"Russie",
+  "San Marino":"Saint-Marin", "Scotland":"Écosse", "Serbia":"Serbie", "Slovakia":"Slovaquie",
+  "Slovenia":"Slovénie", "Spain":"Espagne", "Sweden":"Suède", "Switzerland":"Suisse",
+  "Turkey":"Turquie", "Türkiye":"Turquie", "Wales":"Pays de Galles",
+  // ─── Hors UEFA : les sélections susceptibles d'apparaître en Coupe du monde ───────────────
+  "Algeria":"Algérie", "Argentina":"Argentine", "Australia":"Australie", "Bolivia":"Bolivie",
+  "Brazil":"Brésil", "Burkina Faso":"Burkina Faso", "Cameroon":"Cameroun", "Cape Verde":"Cap-Vert",
+  "Chile":"Chili", "China":"Chine", "Colombia":"Colombie", "Congo DR":"RD Congo",
+  "DR Congo":"RD Congo", "Egypt":"Égypte", "Ecuador":"Équateur", "El Salvador":"Salvador",
+  "Equatorial Guinea":"Guinée équatoriale", "Ethiopia":"Éthiopie", "Gambia":"Gambie",
+  "Guinea":"Guinée", "Guinea-Bissau":"Guinée-Bissau", "Haiti":"Haïti", "India":"Inde",
+  "Indonesia":"Indonésie", "Iraq":"Irak", "Ivory Coast":"Côte d'Ivoire",
+  "Côte d'Ivoire":"Côte d'Ivoire", "Jamaica":"Jamaïque", "Japan":"Japon", "Jordan":"Jordanie",
+  "Kuwait":"Koweït", "Kyrgyzstan":"Kirghizistan", "Lebanon":"Liban", "Libya":"Libye",
+  "Malaysia":"Malaisie", "Mauritania":"Mauritanie", "Mexico":"Mexique", "Morocco":"Maroc",
+  "Mozambique":"Mozambique", "Namibia":"Namibie", "Nepal":"Népal", "New Zealand":"Nouvelle-Zélande",
+  "North Korea":"Corée du Nord", "Oman":"Oman", "Peru":"Pérou", "Philippines":"Philippines",
+  "Qatar":"Qatar", "Saudi Arabia":"Arabie saoudite", "Senegal":"Sénégal", "Singapore":"Singapour",
+  "Somalia":"Somalie", "South Africa":"Afrique du Sud", "South Korea":"Corée du Sud",
+  "Korea Republic":"Corée du Sud", "South Sudan":"Soudan du Sud", "Sudan":"Soudan",
+  "Syria":"Syrie", "Tajikistan":"Tadjikistan", "Tanzania":"Tanzanie", "Thailand":"Thaïlande",
+  "Togo":"Togo", "Trinidad and Tobago":"Trinité-et-Tobago", "Tunisia":"Tunisie",
+  "Turkmenistan":"Turkménistan", "USA":"États-Unis", "United States":"États-Unis",
+  "United Arab Emirates":"Émirats arabes unis", "Uganda":"Ouganda", "Uzbekistan":"Ouzbékistan",
+  "Vietnam":"Viêt Nam", "Yemen":"Yémen", "Zambia":"Zambie"
+};
+/* Compétitions de SÉLECTIONS NATIONALES. Liste explicite d'abord (les clés réellement utilisées
+   par le jeu, cf. LEAGUE_PRIO), motif ensuite pour couvrir sans maintenance les qualifications
+   d'autres zones et les tournois continentaux que l'API pourrait servir un jour — toujours avec
+   l'exclusion des tournois de CLUBS, qui est la seule chose qui rendrait la traduction fausse. */
+const SELECTION_KEYS=["soccer_uefa_nations_league","soccer_fifa_world_cup",
+  "soccer_fifa_world_cup_qualifiers_europe","soccer_uefa_euro_qualification",
+  "soccer_uefa_european_championship"];
+function estSelectionNationale(sportKey){
+  const k=String(sportKey||"");
+  if(!k) return false;
+  if(/club/.test(k)) return false;                 // soccer_fifa_club_world_cup & co : des CLUBS
+  if(SELECTION_KEYS.includes(k)) return true;
+  return /nations_league|world_cup|european_championship|euro_qualification|qualifiers|copa_america|africa_cup|asian_cup|gold_cup/.test(k);
+}
+/* Le nom d'équipe TEL QU'IL DOIT S'AFFICHER. Seul point de passage : aucun écran ne lit plus
+   `f.home`/`f.away` directement (seul `prestigeCount` les lit encore en brut : il compare des noms
+   pour noter une affiche, ce n'est pas de l'affichage).
+   ⚠️ En anglais on ne touche à rien : l'API donne déjà l'anglais, c'est la langue d'origine. */
+function tnm(f, nom){
+  if(!nom || lang!=="fr") return nom;
+  if(!estSelectionNationale(f && f.sportKey)) return nom;
+  return NATION_FR[nom] || nom;
+}
 
 /* ─── ZONE : les grands tournois, puis l'Europe, l'Amérique du Sud en SECOURS ────────────────
    v7.27, règle donnée par Hervé : « considérer toujours en premier les matchs européens et si
@@ -4552,7 +4710,7 @@ function resolutionETALine(dejaDit){
   const e=resolutionETA(); if(!e) return '';
   if(e.pending) return `<div class="mini muted" style="margin-top:6px">⏳ ${t("La journée n'a pas encore d'échéance : {a} n'a pas choisi ses matchs. Tant qu'un duel n'a pas les siens, la journée ne peut pas se terminer — pour personne.",{a:'<b>'+esc(e.pending.join(', '))+'</b>'})}</div>`;
   if(e.ts<=Date.now()) return '';
-  return `<div class="mini muted" style="margin-top:6px">⏳ ${t("Résolution attendue <b>{a}</b> — le dernier match de la ligue est {b}.",{a:fmtWhen(e.ts),b:'<b>'+esc(e.f.home)+' – '+esc(e.f.away)+'</b>'})}${dejaDit?'':' '+t("La journée se solde quand le dernier match de <b>tous les duels</b> est fini, pas seulement les tiens.")}</div>`;
+  return `<div class="mini muted" style="margin-top:6px">⏳ ${t("Résolution attendue <b>{a}</b> — le dernier match de la ligue est {b}.",{a:fmtWhen(e.ts),b:'<b>'+esc(tnm(e.f,e.f.home))+' – '+esc(tnm(e.f,e.f.away))+'</b>'})}${dejaDit?'':' '+t("La journée se solde quand le dernier match de <b>tous les duels</b> est fini, pas seulement les tiens.")}</div>`;
 }
 // Simulé : les matchs fictifs doivent être « joués » (coup d'envoi + 2h) avant de publier les résultats — même
 // déroulé qu'en réel (clôture → écran d'attente → résultats). Fixtures sans horaire (anciennes journées) = ignorées.
@@ -5891,6 +6049,12 @@ const EN={
   // v8.96 — bandeau « choisis tes matchs » sur l'accueil, quand aucun n'a encore été tiré.
   "c'est toi qui reçois : choisis les 5 matchs de la journée.":"you're at home: pick the day's 5 matches.",
   "Choisir les matchs":"Pick the matches",
+  // v8.486 — badge « ce qui t'attend » sur les cartes de Mes ligues (cf. ligueTodoStatuts/
+  // ligueBadgeTodo). Les libellés courts nomment l'ACTION dans une phrase (« À toi de jouer ·
+  // Pronostics »), là où le QG affiche la même chose en majuscules ; « Trêve »/« Coulisses »/
+  // « Résultats »/« Enchères » existent déjà plus haut dans ce dictionnaire, on ne les redéclare pas.
+  "À découvrir":"To discover", "Enchères de trêve":"Mid-season auction",
+  "Pronostics":"Predictions", "Lancer la saison":"Start the season", "Trêve":"Mid-season break",
   // v8.98 — bandeau « trêve terminée » sur l'accueil, aligné sur ce que l'app affiche réellement.
   "découvre qui a remporté quoi à la mi-saison, avant de reprendre.":"see who won what at the mid-season point, before play resumes.",
   "Voir les enchères de la trêve":"See the truce auction",
@@ -7453,7 +7617,7 @@ function showRisqueInfo(){
     const st=+b.stake||0; const m=lossMult(i,p.captain,c);
     const marque=(i===p.captain)?' 👑':((c && c.target===i && RISQUE_MULTIPLIANTS.indexOf(c.id)>=0)?' '+CARDS[c.id].e:'');
     const calc=(m===0)?`<s>${euro(st)}</s> → <b>${euro(0)}</b>`:(m===1?`<b>${euro(st)}</b>`:`${euro(st)} ×${m} = <b>${euro(st*m)}</b>`);
-    return `<tr><td>${esc(f.home)} – ${esc(f.away)}${marque}</td><td class="num">${calc}</td></tr>`; }).join('');
+    return `<tr><td>${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}${marque}</td><td class="num">${calc}</td></tr>`; }).join('');
   const RISQ={ assurance:t("la moitié de la mise du match ciblé t'est remboursée : ce match ne pèse plus que pour moitié dans le risque."),
                tout:t("perte doublée sur le match ciblé."),
                joker:t("perte doublée sur le match ciblé.") };
@@ -7531,7 +7695,7 @@ function showGainInfo(){
       // a tout futur bonus `.two`, pas seulement "dbl" en dur. AFFICHAGE SEUL : le calcul du gain
       // (`g`, `mult`) et le bloc global `supp` plus bas restent totalement inchanges.
       const dblTag = (c&&CARDS[c.id]&&CARDS[c.id].two&&cardOnMatch(c,i)) ? `<div class="mini muted" style="margin-left:2px">${t("Bonus : {n}",{n:t(CARDS[c.id].n)})}</div>` : '';
-      return `<div style="margin:5px 0"><span class="mini">${esc(f.home)}–${esc(f.away)} · <b>${esc(labelSel(f,b.sel))}</b> · ${euro(st)} @${cote(od)}${
+      return `<div style="margin:5px 0"><span class="mini">${esc(tnm(f,f.home))}–${esc(tnm(f,f.away))} · <b>${esc(labelSel(f,b.sel))}</b> · ${euro(st)} @${cote(od)}${
         tags.length?' · '+tags.join(' · '):''}</span> <b class="mini green">${euroSigned(g)}</b>${note}${dblTag}</div>`;
     }).join("");
     /* ⚠️ v8.00 — 🏷️ Deux pour le prix d'un A SA PROPRE LIGNE, et c'est indispensable : son gain
@@ -8436,7 +8600,7 @@ function showBonusImpact(pid,day){
   const targets=[];
   if(C.t){ if(c.target!=null && fx[c.target]) targets.push(fx[c.target]);
     if(C.two && c.target2!=null && fx[c.target2]) targets.push(fx[c.target2]); }
-  const matchTxt=f=>esc((f.sport||'')+' '+f.home+' – '+f.away);
+  const matchTxt=f=>esc((f.sport||'')+' '+tnm(f,f.home)+' – '+tnm(f,f.away));
   const joueurTxt=(()=>{ const x=pById(pid); return x?pname(x):null; })();
   let body=(joueurTxt?`<div class="mini" style="text-align:left">${t("Joué par {a}",{a:'<b>'+joueurTxt+'</b>'})}</div>`:'')
     +(targets.length?`<div class="mini" style="text-align:left;margin-top:4px">${t("Joué sur :")}<br>${targets.map(matchTxt).join('<br>')}</div>`:'')
@@ -8836,7 +9000,7 @@ function genPool(k,maxKo){
    (`oddOf(f,sel)`) et une propriété de pari (`picks[i].sel`). Le remplacement a donc visé la forme
    d'APPEL `sel(f,` et jamais `sel` seul — un remplacement global aurait cassé le calcul des cotes.
    ⚠️ NE PAS EN RECRÉER UNE : toute nouvelle copie ramènerait le problème. Celle-ci est la bonne. */
-function labelSel(f,s){ return s==="1"?f.home : s==="2"?f.away : t("Nul"); }
+function labelSel(f,s){ return s==="1"?tnm(f,f.home) : s==="2"?tnm(f,f.away) : t("Nul"); }
 // Score du match (v8.120) : "hs–as" si connu, sinon rien. En réel, hs/as viennent de l'API des
 // scores (voir fetchRealResults) ; en simulé, du tirage `simScore` fait à la résolution — les deux
 // écritures sont les SEULES sources, jamais recalculées ici, pour que le score reste stable.
@@ -8876,7 +9040,7 @@ function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); }
 function liveVerdict(f, sel){
   const r = (f && f.res) ? {completed:true, res:f.res} : liveRes[f.evId];
   if(!(r && r.completed && r.res)) return null;
-  const w = r.res==='1' ? f.home : (r.res==='2' ? f.away : t("Nul"));
+  const w = r.res==='1' ? tnm(f,f.home) : (r.res==='2' ? tnm(f,f.away) : t("Nul"));
   /* ⚠️ v8.201 — LE SCORE, demandé par Hervé, et RÉSERVÉ AUX PAYEURS.
      Il est ajouté ici, dans le texte du verdict, et nulle part ailleurs. C'est ce qui garantit la
      restriction sans avoir à la répéter : les TROIS affichages qui utilisent ce texte sont déjà
@@ -10242,6 +10406,23 @@ function viewChoosePseudo(){
       <button class="a2-cta off" id="cpBtn" onclick="doChoosePseudo()" aria-disabled="true">
         <span class="a2-spinner"></span><span class="a2-lbl-normal">${t("Continuer")}</span><span class="a2-lbl-loading">${t("Enregistrement…")}</span>
       </button>
+      ${/* ⚠️ v8.485 (cas réel rencontré le 2026-09-23) — LA SEULE SORTIE DE CET ÉCRAN, ET ELLE
+            MANQUAIT. Un navigateur portant une ancienne session Supabase encore valide mais dont
+            l'inscription n'a jamais été terminée arrive DIRECTEMENT ici : la session existe, donc
+            `boot()` ne renvoie pas vers l'écran d'entrée, mais `AUTH.name` est vide, donc
+            `render()` force cet écran. Or il ne proposait que « Continuer », le bouton Profil de
+            la barre du haut y est masqué exprès (cf. `render()`), et le retour Android n'en sort
+            pas non plus (à dessein : c'est une étape obligatoire). Il a fallu effacer à la main
+            les données locales de tactizo.com pour s'en dégager. Même impasse pour un joueur bloqué
+            par un `username_taken` ou un `confirm_age18` qui échoue en boucle.
+            ⚠️ ON RÉUTILISE `logout()`, LA VRAIE DÉCONNEXION, sans rien dupliquer : confirmation,
+            détachement de l'identité RevenueCat, `db.auth.signOut()` (donc purge de la session
+            locale par supabase-js), remise à zéro d'AUTH/S/L/myLeagues et retour sur l'écran
+            d'entrée. AUCUNE donnée serveur n'est touchée : le compte reste intact, avec son
+            inscription toujours à terminer — on se déconnecte, on ne se supprime pas.
+            ⚠️ Volontairement DISCRET (lien, pas un second CTA) : l'action attendue ici reste
+            « Continuer », cette sortie n'est là que pour qui s'est trompé de compte. */''}
+      <button class="a2-cta-ghost" id="cpLogout" style="margin-top:2px;background:none;border:0;color:var(--a2-muted);font-weight:600;font-size:12.5px;box-shadow:none;min-height:44px" onclick="logout()">${t("Se déconnecter")}</button>
     </div>
   </div>`;
 }
@@ -11363,6 +11544,42 @@ async function savePseudoSheet(){ if(!AUTH) return;
     render();
   }catch(e){ showErr(t("Pseudo : ")+e.message); }
 }
+/* ⚠️ v8.486 (retour UX d'Hervé, campagne 2026-09-23) — SOURCE UNIQUE DE « QU'EST-CE QUI M'ATTEND
+   DANS CETTE LIGUE ». Cette table vivait en constante LOCALE dans `viewHome()` : le QG savait
+   donc dire « À TOI DE JOUER », mais l'écran « Mes ligues » affichait seulement « Préparation »
+   pour trois ligues dont l'une réclamait une action personnelle immédiate. Plutôt que d'écrire
+   une seconde table qui aurait fini par diverger de celle-ci, les deux écrans lisent désormais
+   CELLE-CI, alimentée par le MÊME `homeTodo` (cf. `loadHomeTodo`) — un `kind` = un sens, partout.
+   ⚠️ C'EST UNE FONCTION, PAS UNE CONSTANTE DE HAUT NIVEAU : les libellés passent par `t()`, qui
+   doit être rejoué à CHAQUE rendu. Figés une seule fois au chargement du script, ils resteraient
+   en français après un passage en anglais (même piège que les noms de démo du tutoriel).
+   • `state` — 'urgent' = une action personnelle est attendue du joueur ; 'ready' = quelque chose
+     est à découvrir/à déclencher, mais rien n'est dû de sa part. Cette distinction est ce qui
+     évite de poser une fausse alerte orange sur une ligue qui n'attend rien de lui.
+   • `label` — la forme MAJUSCULES du badge du QG (inchangée, au mot près).
+   • `court` — l'action nommée telle qu'on la dit dans une phrase, pour la carte de « Mes ligues »
+     (« À toi de jouer · Enchères »). */
+function ligueTodoStatuts(){ return {
+    prep:{state:'urgent',ic:'💰',label:t("À TOI DE JOUER"),court:t("Enchères")},
+    trevebid:{state:'urgent',ic:'🔄',label:t("ENCHÈRES DE TRÊVE"),court:t("Enchères de trêve")},
+    choix:{state:'urgent',ic:'🎯',label:t("CHOIX À FAIRE"),court:t("Choisir les matchs")},
+    pronos:{state:'urgent',ic:'⚽',label:t("PRONOS À FAIRE"),court:t("Pronostics")},
+    treve:{state:'ready',ic:'🔄',label:t("TRÊVE TERMINÉE"),court:t("Trêve")},
+    coulisses:{state:'ready',ic:'🎬',label:t("SAISON DÉMARRÉE"),court:t("Coulisses")},
+    resultats:{state:'ready',ic:'🏁',label:t("RÉSULTATS DISPONIBLES"),court:t("Résultats")},
+    declencher:{state:'ready',ic:'🏁',label:t("RÉSULTATS BIENTÔT"),court:t("Résultats")},
+    trevedeclencher:{state:'ready',ic:'🔄',label:t("TRÊVE TERMINÉE"),court:t("Trêve")},
+    prepdeclencher:{state:'ready',ic:'🎬',label:t("PRÉPARATION TERMINÉE"),court:t("Lancer la saison")}
+  }; }
+/* Le badge d'une carte de « Mes ligues » pour une ligue donnée — renvoie `null` quand rien
+   n'attend le joueur, pour qu'une ligue sans action ne reçoive JAMAIS de signal. */
+function ligueBadgeTodo(lid){
+  if(!homeTodoLoaded) return null;          // tant que homeTodo n'est pas chargé : aucun badge, jamais un faux « à jour »
+  const x=(homeTodo||[]).find(y=>y.lg.id===lid); if(!x) return null;
+  const st=ligueTodoStatuts()[x.kind]; if(!st) return null;
+  return { state:st.state,
+           txt:(st.state==='urgent' ? t("À toi de jouer") : t("À découvrir"))+" · "+st.court };
+}
 // 🏠 ACCUEIL — vraie page d'accueil (≠ page « Ligues », qui n'est que la liste). Bonjour + slogan +
 // principe de jeu, puis on navigue via les onglets du bas (Ligues, Stats, …).
 function viewHome(){
@@ -11468,13 +11685,7 @@ function viewHome(){
   // ligue de la maquette ("🏆 2ᵉ sur 8") N'EST PAS repris : il n'existe aujourd'hui que dans
   // loadMyStats() (Premium) — l'ajouter ici demanderait une requête neuve pour un simple badge de
   // liste, hors périmètre de ce correctif visuel.
-  const HOME_ROW_STATUS={
-    prep:{state:'urgent',ic:'💰',label:t("À TOI DE JOUER")}, trevebid:{state:'urgent',ic:'🔄',label:t("ENCHÈRES DE TRÊVE")},
-    choix:{state:'urgent',ic:'🎯',label:t("CHOIX À FAIRE")}, pronos:{state:'urgent',ic:'⚽',label:t("PRONOS À FAIRE")},
-    treve:{state:'ready',ic:'🔄',label:t("TRÊVE TERMINÉE")}, coulisses:{state:'ready',ic:'🎬',label:t("SAISON DÉMARRÉE")},
-    resultats:{state:'ready',ic:'🏁',label:t("RÉSULTATS DISPONIBLES")}, declencher:{state:'ready',ic:'🏁',label:t("RÉSULTATS BIENTÔT")},
-    trevedeclencher:{state:'ready',ic:'🔄',label:t("TRÊVE TERMINÉE")}, prepdeclencher:{state:'ready',ic:'🎬',label:t("PRÉPARATION TERMINÉE")}
-  };
+  const HOME_ROW_STATUS=ligueTodoStatuts();
   const lignes=act.map(m=>{
     const todoX=homeTodo.find(x=>x.lg.id===m.lg.id);
     const st=todoX?HOME_ROW_STATUS[todoX.kind]:null;
@@ -11558,10 +11769,33 @@ function viewLeagues(){
       </div></div>
     ${(notifAvailable()&&Notification.permission==="default")?`<button class="btn ghost dashed" onclick="askNotif()">${t("🔔 Activer les notifications")}</button><div class="mini muted" style="text-align:center;margin-top:-4px">${t("Pour être prévenu quand c'est à toi de jouer (onglet ouvert).")}</div>`:''}
     ${(()=>{
-      const row=(m,isDone)=>`<div class="lgrow${isDone?' done':''}" onclick="openLeague('${m.lg.id}','${m.pid}')">
-        <div class="info"><div class="nm">${esc(m.lg.name)}</div><div class="mt">Code ${esc(m.lg.code)} · ${m.lg.status==='done'?(((m.lg.current_day|0)>=(m.lg.num_days|0)&&(m.lg.num_days|0)>0)?t("Terminée"):t("Fermée avant terme")):statusLabel(m.lg)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div></div>
-        <div class="sd"><button class="ticon" title="${t("Caractéristiques de la ligue")}" onclick="event.stopPropagation();showLeagueInfo('${m.lg.id}')">⚙️</button><span class="chip b">${t("Ouvrir →")}</span></div></div>`;
-      const active=myLeagues.filter(m=>m.lg.status!=='done');
+      /* ⚠️ v8.486 (retour UX d'Hervé, campagne 2026-09-23) — CET ÉCRAN NE DISAIT PAS CE QUI
+         ATTEND LE JOUEUR : trois cartes pouvaient afficher « Préparation » à l'identique alors
+         que l'une réclamait une action personnelle immédiate. L'information existait déjà — le QG
+         la construit dans `homeTodo` — elle n'était simplement jamais lue ici. `ligueBadgeTodo()`
+         est LA MÊME source de vérité que les cartes du QG (cf. `ligueTodoStatuts`), pas un second
+         calcul parallèle : impossible que les deux écrans se contredisent.
+         ⚠️ PAS DE BADGE = RIEN NE T'ATTEND, jamais « on ne sait pas » : `ligueBadgeTodo` renvoie
+         `null` tant que `homeTodo` n'est pas chargé, plutôt qu'un signal inventé.
+         ⚠️ Orange (`urgent`) UNIQUEMENT quand une action est réellement due (enchères, choix des
+         matchs, pronostics). Ce qui est seulement à DÉCOUVRIR (résultats, trêve, coulisses) prend
+         un ton neutre : sans cette distinction, une ligue qui n'attend rien du joueur porterait
+         une fausse alerte — exactement ce qu'il fallait éviter.
+         ⚠️ Les ligues TERMINÉES n'en reçoivent jamais (`isDone`) : `homeTodo` peut encore y pousser
+         « résultats à découvrir » pendant 3 jours (cf. loadHomeTodo), mais cette liste-là est un
+         historique replié, pas un endroit où réclamer une action. */
+      const row=(m,isDone)=>{ const bd=isDone?null:ligueBadgeTodo(m.lg.id);
+        return `<div class="lgrow${isDone?' done':''}" onclick="openLeague('${m.lg.id}','${m.pid}')">
+        <div class="info"><div class="nm">${esc(m.lg.name)}</div><div class="mt">Code ${esc(m.lg.code)} · ${m.lg.status==='done'?(((m.lg.current_day|0)>=(m.lg.num_days|0)&&(m.lg.num_days|0)>0)?t("Terminée"):t("Fermée avant terme")):statusLabel(m.lg)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div>${bd?`<div class="lgrow-todo ${bd.state}">${bd.state==='urgent'?'🟠':'🎁'} ${esc(bd.txt)}</div>`:''}</div>
+        <div class="sd"><button class="ticon" title="${t("Caractéristiques de la ligue")}" onclick="event.stopPropagation();showLeagueInfo('${m.lg.id}')">⚙️</button><span class="chip b">${t("Ouvrir →")}</span></div></div>`; };
+      /* ⚠️ Les ligues qui attendent une action REMONTENT EN PREMIER (urgent, puis à découvrir,
+         puis le reste). Sans risque d'incohérence : `myLeagues` n'était jusqu'ici trié par RIEN
+         ici (l'ordre venait tel quel de la requête `players`, donc non garanti d'une fois sur
+         l'autre) — ce tri rend l'écran plus stable, pas moins. `sort` est stable en JS moderne :
+         à rang égal, l'ordre d'origine est conservé, donc deux ligues sans action ne peuvent pas
+         se mettre à permuter d'un rendu à l'autre. */
+      const rangTodo=m=>{ const b=ligueBadgeTodo(m.lg.id); return b?(b.state==='urgent'?0:1):2; };
+      const active=myLeagues.filter(m=>m.lg.status!=='done').sort((a,b)=>rangTodo(a)-rangTodo(b));
       // Terminées : les DERNIÈRES finies en haut → tri par finished_at, repli sur created_at (ligues finies avant la migration).
       const finished=myLeagues.filter(m=>m.lg.status==='done').sort((a,b)=>{ const fa=a.lg.finished_at||a.lg.created_at||''; const fb=b.lg.finished_at||b.lg.created_at||''; return fa<fb?1:(fa>fb?-1:0); });
       // ⚠️ Lot Visuel Final (2026-09-13) — « Mes ligues » RETIRÉ ICI : devenu redondant avec le
@@ -14481,7 +14715,7 @@ function viewSelect(d,dayLbl,opp){
       return `<div class="a2-msel-card${on?' on':''}">
         <div class="a2-msel-top"><span class="comp">${compBadge(f)||''}</span><span class="ko">${koLabel(f)||''}</span></div>
         <div class="a2-pronos-teams">
-          <div class="a2-pronos-team"><span class="a2-pronos-team-name">${esc(f.home)}</span><span class="a2-pronos-team-accent"></span></div>
+          <div class="a2-pronos-team"><span class="a2-pronos-team-name">${esc(tnm(f,f.home))}</span><span class="a2-pronos-team-accent"></span></div>
           <!-- ⚠️ Finitions pré-freeze (2026-09-19, demandé par Hervé) — le séparateur central "vs"
                DEVIENT le pictogramme du sport (⚽/🎾/🏀, déjà porté par f.sport pour tout match réel
                ou simulé, cf. GROUP_EMOJI/SPORTS) : ça identifie le sport d'une affiche réelle sans
@@ -14489,7 +14723,7 @@ function viewSelect(d,dayLbl,opp){
                f.sport manquait (ne devrait pas arriver). Même convention aux 2 autres cartes de
                match (viewBet/viewWait) qui portent aussi un séparateur central entre adversaires. -->
           <span class="a2-pronos-vs">${f.sport||t("vs")}</span>
-          <div class="a2-pronos-team"><span class="a2-pronos-team-name">${esc(f.away)}</span><span class="a2-pronos-team-accent"></span></div>
+          <div class="a2-pronos-team"><span class="a2-pronos-team-name">${esc(tnm(f,f.away))}</span><span class="a2-pronos-team-accent"></span></div>
         </div>
         <div class="a2-pronos-odds-row">
           <div class="a2-pronos-odds-pill o1"><span class="lbl">1</span><span class="val">${cote(f.oh)}</span></div>
@@ -14717,14 +14951,14 @@ function viewBet(d,dayLbl,opp,iAmHome){
       return `<div class="a2-pronos-mcard"><div class="a2-pronos-mcard-head">
         <div class="a2-pronos-mcard-num">${i+1}</div>
         <div class="a2-pronos-mcard-teams">
-          <div class="a2-pronos-team"><span class="a2-pronos-team-name${nameSizeCls(f.home)}">${esc(f.home)}</span><span class="a2-pronos-team-accent"></span></div>
+          <div class="a2-pronos-team"><span class="a2-pronos-team-name${nameSizeCls(tnm(f,f.home))}">${esc(tnm(f,f.home))}</span><span class="a2-pronos-team-accent"></span></div>
           <span class="a2-pronos-vs">${f.sport||t("vs")}</span>
-          <div class="a2-pronos-team"><span class="a2-pronos-team-name${nameSizeCls(f.away)}">${esc(f.away)}</span><span class="a2-pronos-team-accent"></span></div>
+          <div class="a2-pronos-team"><span class="a2-pronos-team-name${nameSizeCls(tnm(f,f.away))}">${esc(tnm(f,f.away))}</span><span class="a2-pronos-team-accent"></span></div>
         </div>
         <span class="a2-pronos-cap-btn${bet.captain===i?' on':''}" title="${bet.captain===i?t("Ce n'est plus mon match favori"):t("En faire mon match favori")}" onclick="setCap(${i})">👑</span>${tgt}</div>
         ${(compBadge(f)||koLabel(f))?`<div class="a2-pronos-mcard-meta">${compBadge(f)}${compBadge(f)&&koLabel(f)?'<span class="dot">·</span>':''}${koLabel(f)}</div>`:''}
-        <div class="a2-pronos-odds-btn-row">${o("1",f.home)}${f.draw?o("N",t("Nul")):""}${o("2",f.away)}</div>
-        ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="a2-pronos-odds-btn-row" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="a2-pronos-odds-btn${myCard.sel2===v?' selected':''}" onclick="setSel2(${i},'${v}')"><span class="lbl team">${esc(v==='1'?f.home:v==='2'?f.away:t("Nul"))}</span><span class="val">${cote(oddOf(f,v))}</span></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
+        <div class="a2-pronos-odds-btn-row">${o("1",tnm(f,f.home))}${f.draw?o("N",t("Nul")):""}${o("2",tnm(f,f.away))}</div>
+        ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="a2-pronos-odds-btn-row" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="a2-pronos-odds-btn${myCard.sel2===v?' selected':''}" onclick="setSel2(${i},'${v}')"><span class="lbl team">${esc(v==='1'?tnm(f,f.home):v==='2'?tnm(f,f.away):t("Nul"))}</span><span class="val">${cote(oddOf(f,v))}</span></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
         ${/* ⚠️ v8.00 (relevé par Hervé) — LA COTE COMBINÉE A QUITTÉ LA LIGNE DU MATCH. Elle
              s'affichait sur CHACUNE des deux cartes ciblées, ce qui laissait croire que le gain de
              ce match l'incluait. Il ne l'inclut pas : 🏷️ est un bonus purement ADDITIF, versé une
@@ -15094,7 +15328,7 @@ function afterCloseDuelHTML(){
         ? (seeOpp?`<span class="mini red"><b>🚫 ${t("n'a pas parié")}</b></span>`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`)
         : (ob?(seeOpp?`${esc(labelSel(f,ob.sel))} · ${euro(ob.stake)}${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—');
       return `<div class="two-col-card">
-        <div class="match-lbl">${esc(f.home)} – ${esc(f.away)}${liveTag(f, mb?mb.sel:null)}</div>
+        <div class="match-lbl">${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}${liveTag(f, mb?mb.sel:null)}</div>
         ${compBadge(f)?`<div class="match-lbl" style="text-transform:none;letter-spacing:0;font-weight:600;padding-top:4px">${compBadge(f)}</div>`:''}
         <div class="two-col">
           <div><div class="mini muted" style="text-align:center;padding:8px 12px 0">👤 ${t("Toi")}</div><div class="pick-row" style="border-left:2px solid var(--green)">${myTxt}</div></div>
@@ -15168,7 +15402,7 @@ function viewWait(dayLbl){
       const favori=(i===mine.captain), onMatch=cardOnMatch(mine.card,i);
       const info=[compBadge(f), koLabel(f)].filter(Boolean).join(' · ');
       return `<div class="match-card-c${favori?' is-favori':''}">
-        <div class="mc-top"><span class="mc-num">${i+1}</span><span class="mc-team">${esc(f.home)}</span><span class="mc-vs">${f.sport||t("vs")}</span><span class="mc-team">${esc(f.away)}</span>${favori?`<span class="mc-fav clik" onclick="showCaptainInfo()">👑</span>`:''}</div>
+        <div class="mc-top"><span class="mc-num">${i+1}</span><span class="mc-team">${esc(tnm(f,f.home))}</span><span class="mc-vs">${f.sport||t("vs")}</span><span class="mc-team">${esc(tnm(f,f.away))}</span>${favori?`<span class="mc-fav clik" onclick="showCaptainInfo()">👑</span>`:''}</div>
         ${info?`<span class="mc-meta">${info}</span>`:''}
         <span class="mc-result"><b class="pick-name">${selD}</b> · ${t("Mise")} ${euro(b.stake)} · ${t("Cote")} ${oddD}</span>
         ${onMatch?`<div class="mc-bonus-c clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</div>`:''}
@@ -16029,9 +16263,9 @@ function recapBody(D){
     else if(c.stole){ detail=t("🥷 Bonus pris à l'adversaire : son bonus n'a pas joué et t'est revenue en main."); }
     else if(c.id==="cadeau"){
       if(c.flip && fxRecap[c.flip.match]){ const f=fxRecap[c.flip.match]; const won=(c.flip.to===f.res);
-        detail=`Pari adverse sur <b>${esc(f.home)}–${esc(f.away)}</b> inversé : <s class="red">${esc(labelSel(f,c.flip.from))}</s> → <b>${esc(labelSel(f,c.flip.to))}</b> — ${won?'devenu <span class="green">gagnant</span>':'reste <span class="red">perdant</span>'}.`; }
+        detail=`Pari adverse sur <b>${esc(tnm(f,f.home))}–${esc(tnm(f,f.away))}</b> inversé : <s class="red">${esc(labelSel(f,c.flip.from))}</s> → <b>${esc(labelSel(f,c.flip.to))}</b> — ${won?'devenu <span class="green">gagnant</span>':'reste <span class="red">perdant</span>'}.`; }
       else detail=`Le pari adverse du match ciblé n'était ni 1 ni 2 → pas d'inversion.`;
-    } else if(c.id==="face"){ const f=fxRecap[c.target]; const nm=f?`<b>${esc(f.home)}–${esc(f.away)}</b>`:'le match ciblé';
+    } else if(c.id==="face"){ const f=fxRecap[c.target]; const nm=f?`<b>${esc(tnm(f,f.home))}–${esc(tnm(f,f.away))}</b>`:'le match ciblé';
       const ob=(vb&&vb.picks&&c.target!=null)?vb.picks[c.target]:null; const owin=(ob&&f)?(ob.sel===f.res):false;
       detail=(ob&&f)?`Sur ${nm}, l'adversaire avait parié <b>${esc(labelSel(f,ob.sel))}</b> : ${owin?'pari <span class="green">gagnant</span> → son gain sur ce match <b>réduit de moitié</b>':'pari <span class="red">perdant</span> → aucun effet'}.`:`Match ciblé chez l'adversaire.`;
     } else if(c.id==="miroir"){ const sv=im.self||0;
@@ -16044,8 +16278,8 @@ function recapBody(D){
     } else if(c.id==="moitie"){ detail=(Math.abs(im.opp||0)>=1)?t("Le résultat total de l'adversaire a été divisé par 2."):t("L'adversaire a fini quasiment à zéro — diviser par 2 n'a rien changé.");
     } else if(c.id==="parachute"){ detail=((im.self||0)>=1)?`Filet de sécurité déclenché : une partie de ta perte a été amortie.`:`Filet non déclenché (journée non négative).`;
     } else if(c.id==="chance" && c.sel2 && fxRecap[c.target] && bt.picks && bt.picks[c.target]){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const w=(f.res===b.sel||f.res===c.sel2); const od=dcWinOdd(f,b.sel,c.sel2);
-      detail=`Sur <b>${esc(f.home)}–${esc(f.away)}</b> : couvre <b>${esc(labelSel(f,b.sel))}</b> ou <b>${esc(labelSel(f,c.sel2))}</b> — ${w?'<span class="green">gagné</span> à la cote du résultat sorti @'+od:'<span class="red">perdu</span>'}.`;
-    } else if(c.target!=null && fxRecap[c.target] && bt.picks){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const win=b.sel===f.res; const nm=`<b>${esc(f.home)}–${esc(f.away)}</b>`;
+      detail=`Sur <b>${esc(tnm(f,f.home))}–${esc(tnm(f,f.away))}</b> : couvre <b>${esc(labelSel(f,b.sel))}</b> ou <b>${esc(labelSel(f,c.sel2))}</b> — ${w?'<span class="green">gagné</span> à la cote du résultat sorti @'+od:'<span class="red">perdu</span>'}.`;
+    } else if(c.target!=null && fxRecap[c.target] && bt.picks){ const f=fxRecap[c.target]; const b=bt.picks[c.target]; const win=b.sel===f.res; const nm=`<b>${esc(tnm(f,f.home))}–${esc(tnm(f,f.away))}</b>`;
       // garde-fou : sur d'anciennes parties l'inversion « cadeau » n'était pas enregistrée sur le pari visible → on n'affiche pas une mécanique contradictoire
       const inconsistent = (c.id==="tout"||c.id==="double") && ((win && (im.self||0)<0) || (!win && (im.self||0)>0));
       if(!inconsistent){
@@ -16106,19 +16340,19 @@ function recapBody(D){
       const fp2=pickCalc(focusBt,f,i,focusOppCard); const outcomeCls=fp2.state==='ok'?(fp2.win?' won':' lost'):'';
       return `<div class="a2-res-match${open?' open':''}${outcomeCls}">
         <button class="a2-res-match-head" onclick="toggleRecapMatch(${i})" type="button">
-          <span class="nm">${esc(f.home)} – ${esc(f.away)}</span>
+          <span class="nm">${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}</span>
           <span class="mini muted" style="flex:0 0 auto">→ ${f.canceled?`🚫 ${t("annulé")}`:esc(labelSel(f,f.res))}${fp2.state==='ok'?(fp2.win?` <span class="a2-res-outcome-ic won">✓</span>`:` <span class="a2-res-outcome-ic lost">✕</span>`):''}</span>
           <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         ${open?`<div class="a2-res-match-body">
-          <div class="a2-res-mbe-score"><span class="teams">${esc(f.home)} <b>${(f.hs!=null&&f.as!=null)?f.hs+' – '+f.as:'–'}</b> ${esc(f.away)}</span><span class="tag">${t("Score final")}</span></div>
+          <div class="a2-res-mbe-score"><span class="teams">${esc(tnm(f,f.home))} <b>${(f.hs!=null&&f.as!=null)?f.hs+' – '+f.as:'–'}</b> ${esc(tnm(f,f.away))}</span><span class="tag">${t("Score final")}</span></div>
           ${f.canceled?`<div class="box mini" style="border-left:3px solid var(--gold);margin-bottom:10px"><b>🚫 ${t("Match annulé")}</b><div class="muted" style="margin-top:3px">${t("Ce match n'est pas pris en compte dans les résultats. La mise est remboursée.")}</div></div>`:''}
           <div class="a2-res-mbe-cols">
             ${mbeSideHTML(hB,f,i,aB&&aB.card,hP,'🏠')}
             ${mbeSideHTML(aB,f,i,hB&&hB.card,aP,'✈️')}
           </div>
           <div style="margin-top:8px">
-            <div class="mini muted">${t("Cotes")} : ${esc(f.home)} ${cote(f.oh)}${f.draw?` · ${t("Nul")} ${cote(f.od)}`:''} · ${esc(f.away)} ${cote(f.oa)}</div>
+            <div class="mini muted">${t("Cotes")} : ${esc(tnm(f,f.home))} ${cote(f.oh)}${f.draw?` · ${t("Nul")} ${cote(f.od)}`:''} · ${esc(tnm(f,f.away))} ${cote(f.oa)}</div>
             <div class="mini" style="margin-top:5px"><b>${avaName(hP)}</b> ${explain(hB,f,i,aB&&aB.card)}</div>
             <div class="mini" style="margin-top:3px"><b>${avaName(aP)}</b> ${explain(aB,f,i,hB&&hB.card)}</div>
           </div>
@@ -16228,13 +16462,13 @@ function recapBody(D){
     if(best && (netMap[best.id]||0)>0) divers.push(`🏅 ${t("Meilleur résultat du jour : {a} (<b class=\"green\">{b}</b>).",{a:nm2(best.id),b:euroSigned(netMap[best.id]||0)})}`); }
   let bc=null; bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[]; if(!Array.isArray(b.picks)) return;
     b.picks.forEach((pk,i)=>{ const f=fx[i]; if(!f||f.canceled||f.res!==pk.sel) return; const g=Math.round((+pk.stake||0)*(oddOf(f,pk.sel)-1)*100)/100; if(g>0 && (!bc||g>bc.g)) bc={g,pid:b.player_id,f,sel:pk.sel}; }); });
-  if(bc) divers.push(`💥 ${t("Plus gros coup : {a} sur {b} (<b class=\"green\">{c}</b>).",{a:nm2(bc.pid),b:esc(bc.f.home+' – '+bc.f.away),c:euroSigned(bc.g)})}`);
+  if(bc) divers.push(`💥 ${t("Plus gros coup : {a} sur {b} (<b class=\"green\">{c}</b>).",{a:nm2(bc.pid),b:esc(tnm(bc.f,bc.f.home)+' – '+tnm(bc.f,bc.f.away)),c:euroSigned(bc.g)})}`);
   // Plus grosse MISE de la journée — demandée par Hervé, distincte du plus gros gain : elle dit
   // qui a osé, gagnant ou perdant.
   let bm=null; bets.forEach(b=>{ const d=duels.find(x=>x.home_id===b.player_id||x.away_id===b.player_id); const fx=(d&&d.fixtures)||[]; if(!Array.isArray(b.picks)) return;
     b.picks.forEach((pk,i)=>{ const f=fx[i]; const st=+pk.stake||0; if(!f||f.canceled||st<=0) return;
       if(!bm||st>bm.st) bm={st,pid:b.player_id,f,gagne:(f.res===pk.sel)}; }); });
-  if(bm) divers.push(`💰 ${t("Plus grosse mise : {a} — {b} sur {c} ({d}).",{a:nm2(bm.pid),b:euro(bm.st),c:esc(bm.f.home+' – '+bm.f.away),d:bm.gagne?t("gagné"):t("perdu")})}`);
+  if(bm) divers.push(`💰 ${t("Plus grosse mise : {a} — {b} sur {c} ({d}).",{a:nm2(bm.pid),b:euro(bm.st),c:esc(tnm(bm.f,bm.f.home)+' – '+tnm(bm.f,bm.f.away)),d:bm.gagne?t("gagné"):t("perdu")})}`);
   /* SANS-FAUTE et ZÉRO POINTÉ (v7.64, demandé par Hervé : « dire si un joueur a tous ses paris
      faux ou tous bons »). C'est le fait le plus parlant d'une journée et il n'était nulle part :
      le classement montre un net, jamais la régularité qui l'a produit.
@@ -16568,12 +16802,12 @@ function recapBody(D){
     const rows2 = od.fixtures.map((f,i)=>{ const open=oduelMatchOpen===i;
       return `<div class="a2-res-match${open?' open':''}">
         <button class="a2-res-match-head" onclick="toggleOduelMatch(${i})" type="button">
-          <span class="nm">${esc(f.home)} – ${esc(f.away)}</span>
+          <span class="nm">${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}</span>
           <span class="mini muted" style="flex:0 0 auto">→ ${f.canceled?`🚫 ${t("annulé")}`:esc(labelSel(f,f.res))}</span>
           <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         ${open?`<div class="a2-res-match-body">
-          <div class="a2-res-mbe-score"><span class="teams">${esc(f.home)} <b>${(f.hs!=null&&f.as!=null)?f.hs+' – '+f.as:'–'}</b> ${esc(f.away)}</span><span class="tag">${t("Score final")}</span></div>
+          <div class="a2-res-mbe-score"><span class="teams">${esc(tnm(f,f.home))} <b>${(f.hs!=null&&f.as!=null)?f.hs+' – '+f.as:'–'}</b> ${esc(tnm(f,f.away))}</span><span class="tag">${t("Score final")}</span></div>
           ${f.canceled?`<div class="box mini" style="border-left:3px solid var(--gold);margin-bottom:10px"><b>🚫 ${t("Match annulé")}</b><div class="muted" style="margin-top:3px">${t("Ce match n'est pas pris en compte dans les résultats. La mise est remboursée.")}</div></div>`:''}
           <div class="a2-res-mbe-cols">
             ${mbeSideHTML(ohB,f,i,oaB&&oaB.card,ohP,'🏠')}
@@ -16618,7 +16852,7 @@ function showGainDetail(pid){
       // match annulé s'affichait ici comme un pari PERDU (mise entière déduite de `sumG`), faisant
       // diverger la somme affichée du `net` réel (déjà neutre pour ce pari) et absorbant l'écart
       // dans la ligne « Bonus & ajustements » sans aucune explication.
-      if(f && f.canceled) return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b> <span class="muted">(🚫 ${t("annulé")})</span><br><span class="muted">🚫 ${t("Match annulé")} — ${t("Ce match n'est pas pris en compte dans les résultats. La mise est remboursée.")}</span></div>`;
+      if(f && f.canceled) return `<div class="mini" style="margin:5px 0"><b>${esc(tnm(f,f.home))}–${esc(tnm(f,f.away))}</b> <span class="muted">(🚫 ${t("annulé")})</span><br><span class="muted">🚫 ${t("Match annulé")} — ${t("Ce match n'est pas pris en compte dans les résultats. La mise est remboursée.")}</span></div>`;
       const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2;
       const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res);
       const odd=isDC?dcWinOdd(f,b.sel,c.sel2):oddOf(f,b.sel);
@@ -16627,7 +16861,7 @@ function showGainDetail(pid){
       if(c&&c.target===i){ if(c.id==="double"&&win){g*=2;parts.push('🐗 ×2');} else if(c.id==="tout"){g*=(win?3:2);parts.push('🔥 '+(win?'×3':'×2'));} else if(c.id==="joker"){g*=2;parts.push('🃏 ×2');} else if(c.id==="assurance"&&!win){g*=(1-ASSURANCE_REMB);parts.push('🛡 '+t("moitié remboursée"));} }
       if(oppCard&&oppCard.id==="face"&&oppCard.target===i&&win&&g>0){ g=g/2; parts.push('🤛 ÷2'); }
       sumG+=g; const selD=isDC?`${labelSel(f,b.sel)}/${labelSel(f,c.sel2)}`:labelSel(f,b.sel);
-      return `<div class="mini" style="margin:5px 0"><b>${esc(f.home)}–${esc(f.away)}</b>${scoreHTML(f)} <span class="muted">(${esc(labelSel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${euroSigned(g)}</b> ${win?'✓':'✗'}</div>`;
+      return `<div class="mini" style="margin:5px 0"><b>${esc(tnm(f,f.home))}–${esc(tnm(f,f.away))}</b>${scoreHTML(f)} <span class="muted">(${esc(labelSel(f,f.res))})</span><br><span class="muted">${esc(selD)} · ${parts.join(' · ')}</span> → <b class="${g>=0?'green':'red'}">${euroSigned(g)}</b> ${win?'✓':'✗'}</div>`;
     }).join('');
     /* ⚠️ v8.217 — CETTE NOTE DISAIT LE CONTRAIRE PENDANT CINQ MOIS, ET C'ÉTAIT FAUX.
        Elle concluait de Tranmere 2-2 Rochdale (DRDJ3, 01/08, Coupe de la Ligue) que « l'API
@@ -17010,7 +17244,7 @@ function waitingResultsBody(d){
            badge garde une base flexible au lieu d'un `flex:0 0 auto` intraitable. */
         if(paris) return `<div style="padding:8px 0;border-bottom:1px solid var(--border)">
           <div class="row" style="gap:10px;align-items:flex-start;flex-wrap:wrap">
-            <div style="min-width:0;flex:1 1 150px"><div class="mini"><b>${f.sport||''} ${esc(f.home)} – ${esc(f.away)}</b></div>
+            <div style="min-width:0;flex:1 1 150px"><div class="mini"><b>${f.sport||''} ${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}</b></div>
               ${compBadge(f)?`<div style="margin-top:1px">${compBadge(f)}</div>`:''}</div>
             <span class="mini" style="flex:0 1 auto;text-align:right">${rp||koOuEtat(f)||'<span class="mini muted">⏳</span>'}</span></div>
           ${/* ⚠️ v8.21 — LES DEUX COLONNES SONT DÉSORMAIS GÉNÉRIQUES. Elles nommaient « Toi » et
@@ -17062,7 +17296,7 @@ function waitingResultsBody(d){
            Santa Fe » passait à la ligne et venait buter contre son propre résultat. Le nom du
            match et sa compétition occupent maintenant la ligne, le résultat est calé à droite. */
         return `<div class="row" style="padding:6px 0;border-bottom:1px solid var(--border);gap:10px;align-items:flex-start">
-          <div style="min-width:0"><div class="mini"><b>${esc(f.home)} – ${esc(f.away)}</b></div>
+          <div style="min-width:0"><div class="mini"><b>${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}</b></div>
             ${/* ⚠️ Les marqueurs vont sur la LIGNE DE LA COMPÉTITION, pas contre le nom du match :
                  elle est courte, alors que le nom remplit souvent toute la largeur sur téléphone. */''}
             <div style="margin-top:1px">${compBadge(f)||''}${mesMarques(i)}</div></div>
@@ -17604,9 +17838,9 @@ async function loadMyStats(){
             // `lgId`/`pid`/`code` (v7.62) : de quoi CONSULTER la journée citée, pas seulement la
             // nommer. Voir `lienJourneeHTML`.
             if(inf.gain>bestPick.g) Object.assign(bestPick,{g:inf.gain,odd:inf.odd,st:inf.st,cap:inf.cap,
-              m:(f.home||'?')+" – "+(f.away||'?'),lg:lg.name,code:lg.code,lgId:lid,pid:mp,day:b.day});
+              m:(tnm(f,f.home)||'?')+" – "+(tnm(f,f.away)||'?'),lg:lg.name,code:lg.code,lgId:lid,pid:mp,day:b.day});
             if(inf.st>bigStake.st) Object.assign(bigStake,{st:inf.st,win:inf.win,
-              m:(f.home||'?')+" – "+(f.away||'?'),lg:lg.name,code:lg.code,lgId:lid,pid:mp,day:b.day});
+              m:(tnm(f,f.home)||'?')+" – "+(tnm(f,f.away)||'?'),lg:lg.name,code:lg.code,lgId:lid,pid:mp,day:b.day});
             if(inf.cap){ capExtra+=inf.base; capCount++; if(inf.win)capWin++; }   // le doublement ajoute exactement le gain de base
             const B=inf.odd<1.8?buckets.fav:(inf.odd<=3?buckets.eq:buckets.out); B.p++; if(inf.win)B.w++;
             // ⚠️ LOT 5 — variabilité de mise (profil de risque) et tranche de cote fine (insights).
@@ -19893,7 +20127,7 @@ async function loadPalmares(){
     // monde qui a jamais joué sur l'app (demandé par Hervé : classer des inconnus n'a pas de sens).
     const mesLigues=new Set(pls.filter(p=>p.user_id===(AUTH&&AUTH.id)).map(p=>p.league_id));
     const connus=new Set(pls.filter(p=>mesLigues.has(p.league_id)&&p.user_id).map(p=>p.user_id));
-    const oddF=(f,s)=> s==="1"?f.oh:s==="2"?f.oa:f.od; const selNm=(f,s)=> s==="1"?f.home:s==="2"?f.away:t("Nul");
+    const oddF=(f,s)=> s==="1"?f.oh:s==="2"?f.oa:f.od; const selNm=(f,s)=> s==="1"?tnm(f,f.home):s==="2"?tnm(f,f.away):t("Nul");
     /* ---- v7.26 : le palmarès se lit par TYPE DE DONNÉES, comme 📊 Mes stats (demandé par Hervé).
        L'argument est même plus fort ici que sur les stats : c'est un classement PUBLIC, et deux
        joueurs y sont comparés. Or « battre les cotes » ne veut pas dire la même chose selon qu'elles
@@ -19911,8 +20145,8 @@ async function loadPalmares(){
       const d=dlMap[b.duel_id]; const fx=(d&&d.fixtures)||[];
       const picks=b.picks||[]; const staked=picks.reduce((a,x)=>a+(+x.stake||0),0);
       const lines=picks.map((x,i)=>{ const f=fx[i]; if(!f) return null; const win=x.sel===f.res; const odd=oddF(f,x.sel); let g=win?(+x.stake)*(odd-1):-(+x.stake); if(i===b.captain)g*=2;
-        if(win && +x.stake>0) oddRecs.push({odd, name:pl.name, emoji:pl.emoji, lname:lg.name, day:b.day, match:f.home+"–"+f.away, sel:selNm(f,x.sel), stake:+x.stake});
-        return {m:f.home+"–"+f.away, sel:selNm(f,x.sel), win, odd, stake:+x.stake, g:+g.toFixed(2), cap:i===b.captain}; }).filter(Boolean);
+        if(win && +x.stake>0) oddRecs.push({odd, name:pl.name, emoji:pl.emoji, lname:lg.name, day:b.day, match:tnm(f,f.home)+"–"+tnm(f,f.away), sel:selNm(f,x.sel), stake:+x.stake});
+        return {m:tnm(f,f.home)+"–"+tnm(f,f.away), sel:selNm(f,x.sel), win, odd, stake:+x.stake, g:+g.toFixed(2), cap:i===b.captain}; }).filter(Boolean);
       dayRecs.push({net:+(b.net||0).toFixed(2), staked, ret: staked>0?(b.net||0)/staked:0, name:pl.name, emoji:pl.emoji, lname:lg.name, np:lg.num_participants, day:b.day, cardId:b.card&&b.card.id, lines});
     }
     // Agrégat de PRONOSTIC PUR par personne (user_id), toutes ligues — indépendant des mises.
@@ -20770,6 +21004,23 @@ function render(){
   // arrive au milieu de l'étape suivante). Sans impact sur les rafraîchissements du polling : l'étape
   // ne bouge pas toute seule.
   if(S.view==="game" && L && L.status==="prep") gsub+="|p"+prepStep;
+  /* ⚠️ v8.488 (vidéo réelle du tutoriel sur téléphone, 2026-09-23) — LE TUTORIEL NE REMONTAIT PAS
+     EN HAUT EN CHANGEANT D'ÉTAPE, alors que `t2Go()` appelle pourtant `window.scrollTo(0,0)`.
+     LA CAUSE EST ICI, PAS DANS LE TUTORIEL : l'étape courante (`t2N`) ne faisait pas partie de la
+     signature d'écran. Passer de l'étape 3 à l'étape 4 laissait donc `sig` INCHANGÉ (« tuto2 »
+     dans les deux cas), le rendu tombait dans la branche « même écran » du correctif v8.448 et
+     RESTAURAIT la position précédente — y compris au `requestAnimationFrame` suivant, donc APRÈS
+     le `scrollTo(0,0)` que `t2Go()` venait d'exécuter. Le tutoriel se battait contre la
+     restauration, et la restauration gagnait parce qu'elle passait en dernier.
+     ⚠️ CHANGER D'ÉTAPE EST UN CHANGEMENT D'ÉCRAN, AU MÊME TITRE QUE `prepStep` juste au-dessus :
+     on le déclare ici plutôt que d'aller neutraliser la restauration dans `t2Go()` — la
+     signature est le mécanisme prévu pour ça, et un contournement local aurait fait coexister
+     deux règles de défilement concurrentes.
+     ⚠️ AUCUN RISQUE DE REMONTÉE INTEMPESTIVE : `t2N` ne bouge que sur un geste du joueur
+     (Suivant/Précédent/Passer), jamais sur le sondage — qui ne tourne d'ailleurs pas sur cet
+     écran. Les animations internes d'une étape (`t2Play*`) ne touchent pas `t2N`, donc une étape
+     qui s'anime ne se réaligne jamais toute seule sous les yeux du joueur. */
+  if(S.view==="tuto2") gsub+="|t"+t2N;
   // S.ptab inclus : changer d'onglet de PRÉPARATION (Infos/Joueurs/Gages/Enchères) ne change pas S.view
   // → sans ça, on restait au milieu de la page en changeant d'onglet (signalé par Hervé). Le polling ne
   // touche pas S.ptab, donc aucun scroll intempestif sur les rafraîchissements.
@@ -21895,13 +22146,27 @@ const T2_MATCHS=[
   {h:"Lyon",      a:"Nantes",     o1:1.85, oN:3.40, o2:4.10, pick:"1", mise:8},
   {h:"Marseille", a:"Lens",       o1:2.40, oN:3.20, o2:2.95, pick:"2", mise:10},
   {h:"Lille",     a:"Brest",      o1:1.72, oN:3.60, o2:4.60, pick:"1", mise:6},
-  {h:"PSG",       a:"Monaco",     o1:1.50, oN:4.80, o2:7.20, pick:"1", mise:10, fav:true},
+  {h:"PSG",       a:"Monaco",     o1:1.40, oN:4.80, o2:7.20, pick:"1", mise:10, fav:true},
   {h:"Nice",      a:"Strasbourg", o1:1.95, oN:3.35, o2:3.90, pick:"2", mise:4},
 ];
-// ⚠️ Lot B (2026-09-13, demandé par Hervé) — cote/mise du match Favori (PSG) fixées à 1,50/10 €
-// EXPRÈS : gain net sans Favori = 10 × (1,50 − 1) = <b>+5 €</b>, avec Favori (×2) = <b>+10 €</b> —
-// deux chiffres ronds, faciles à retenir et à comparer d'un écran à l'autre (même donnée qu'à
-// l'étape 2, jamais un nouvel exemple, cf. commentaire "ÉTAPES 2-4" plus haut).
+/* ⚠️ v8.488 (vidéo réelle du tutoriel, 2026-09-23) — LA COTE DU FAVORI PASSE DE 1,50 À 1,40.
+   Le réglage v8.500 d'origine (Lot B, 2026-09-13) visait des chiffres ronds : 10 × (1,50 − 1) =
+   +5 €, doublé par le Favori = +10 €. Mais +10 € tombait EXACTEMENT sur la mise de 10 €, et
+   c'est précisément ce qui brouille l'explication : le joueur ne sait plus s'il lit son gain ou
+   sa mise. À 1,40 : gain net = 10 × 0,40 = +4 €, doublé = +8 € — deux montants entiers, toujours
+   faciles à suivre, et qui ne peuvent plus être confondus avec la mise.
+   ⚠️ LES AUTRES COTES N'ONT PAS BESOIN D'ÊTRE AJUSTÉES, et c'est vérifiable plutôt qu'affirmé :
+   la somme des probabilités implicites (1/1,50 + 1/4,80 + 1/7,20 = 1,014) donnait une marge de
+   1,4 %, irréaliste pour un vrai bookmaker. À 1,40 elle passe à 1,061, soit ~6 % — une marge
+   normale. La grille devient donc PLUS crédible, pas moins.
+   ⚠️ CE QUE CETTE COTE TOUCHE, VÉRIFIÉ ÉCRAN PAR ÉCRAN AVANT DE LA CHANGER : l'affichage de la
+   cote (étapes 2 et 3), le « si ce prono passe » de l'étape 2 et les deux lignes du bandeau
+   Favori de l'étape 3 — tous CALCULÉS depuis `t2MatchGain()`/`m.mise`, aucune valeur en dur à
+   reprendre ailleurs. Les étapes 4, 5 et 6 n'en dépendent pas du tout : l'étape 4 travaille sur
+   un AUTRE match (`T2_ASSUR_IDX`=1, Marseille–Lens) et uniquement sur des mises, et les étapes
+   5/6 partent de nets fixés (`T2_S5_MOI`/`T2_S5_PAULO`), indépendants des cotes.
+   ⚠️ Revenir en arrière ne demande que de remettre 1.50 sur cette ligne : rien d'autre n'est à
+   toucher, par construction. */
 const T2_ASSUR_IDX=1;                                    // Marseille–Lens, mise 10 € pile
 function t2MatchGain(m){ const o=m.pick==="1"?m.o1:m.pick==="2"?m.o2:m.oN; return m.mise*(o-1); }
 const T2_CAPITAL_FIN=100-T2_MATCHS.reduce((s,m)=>s+m.mise,0);   // calculé, pas écrit en dur
@@ -21941,12 +22206,34 @@ function t2Step2Html(){ return `<div class="t2-stage">
   </div>
   <div class="t2-cap" id="t2S2cap">${t("Pronostique les 5 matchs et répartis ton capital.")}</div>`; }
 
+/* ⚠️ v8.488 (vidéo réelle du tutoriel sur téléphone, 2026-09-23) — AMENER L'ÉLÉMENT QUI S'ANIME
+   DANS LE CHAMP DE VISION, MAIS SEULEMENT S'IL N'Y EST PAS DÉJÀ. Le tutoriel se REGARDE : sur un
+   écran étroit, les dernières des 5 cartes de l'étape 2 s'animaient hors de l'écran, le joueur ne
+   voyait donc pas se poser les pronostics ni fondre le capital — la démonstration se jouait sans
+   spectateur.
+   ⚠️ LA GARDE EST LE CŒUR DE CETTE FONCTION, PAS UN DÉTAIL : si l'élément est déjà entièrement
+   visible, ON NE BOUGE RIEN. Un tutoriel qui recadre à chaque étape alors que tout tient déjà à
+   l'écran est plus désagréable que celui qui ne recadre jamais — c'est la demande explicite
+   d'Hervé (« ne jamais provoquer de scroll inutile »).
+   ⚠️ `block:"nearest"` = le défilement MINIMAL qui rend l'élément visible, jamais un recentrage
+   qui déplacerait toute la page. `behavior:"smooth"` pour que le regard suive le mouvement.
+   Repli silencieux sur les WebView qui n'acceptent pas la forme objet de `scrollIntoView`. */
+function t2Voir(el){
+  if(!el || !el.getBoundingClientRect) return;
+  const r=el.getBoundingClientRect();
+  const h=window.innerHeight||document.documentElement.clientHeight||0;
+  if(r.top>=0 && r.bottom<=h) return;   // déjà visible en entier : aucun mouvement
+  try{ el.scrollIntoView({behavior:"smooth", block:"nearest"}); }
+  catch(e){ try{ el.scrollIntoView(false); }catch(e2){} }
+}
 function t2Play2(){
   t2At(150,()=>{ t2Q("#t2S2cap").classList.add("vu"); t2Q("#t2S2capital").classList.add("vu"); });
   let capital=100;
   T2_MATCHS.forEach((m,i)=>{
     const base=550+i*820;
-    t2At(base,()=>{ const c=t2Q("#t2S2c"+i); if(c) c.classList.add("vu"); });
+    // La carte est amenée à l'écran AVANT d'être révélée — sinon on défilerait vers un bloc
+    // encore invisible, et le joueur verrait le mouvement sans voir ce qu'il accompagne.
+    t2At(base,()=>{ const c=t2Q("#t2S2c"+i); if(c){ t2Voir(c); c.classList.add("vu"); } });
     t2At(base+280,()=>{ const b=t2Q(`#t2S2${m.pick==='1'?'o1_':m.pick==='2'?'o2_':'oN_'}${i}`); if(b) b.classList.add("selected","t2-pop"); });
     t2At(base+520,()=>{
       const mv=t2Q("#t2S2m"+i); if(mv) mv.textContent=T2_EUR(m.mise);
@@ -22183,8 +22470,10 @@ function t2Play6(){
     const box=t2Q("#t2S6maestroBox"); box.style.display="block";
     const m=t2Q("#t2S6maestro"), fr=t2Q("#t2S6frame");
     requestAnimationFrame(()=>{ m.classList.add("vu"); fr.classList.add("vu"); }); });
-  t2At(6400,()=>{ const a=t2Q("#t2S6aside"); a.style.display="block"; requestAnimationFrame(()=>a.classList.add("vu")); });
-  t2At(6700,()=>{ const a=t2Q("#t2S6aside2"); a.style.display="block"; requestAnimationFrame(()=>a.classList.add("vu")); });
+  // Mêmes règles qu'à l'étape 2 (cf. `t2Voir`) : les deux encadrés apparaissent en bas de l'étape
+  // la plus haute du tutoriel — on ne défile que si le joueur ne les a pas déjà sous les yeux.
+  t2At(6400,()=>{ const a=t2Q("#t2S6aside"); a.style.display="block"; requestAnimationFrame(()=>{ a.classList.add("vu"); t2Voir(a); }); });
+  t2At(6700,()=>{ const a=t2Q("#t2S6aside2"); a.style.display="block"; requestAnimationFrame(()=>{ a.classList.add("vu"); t2Voir(a); }); });
 }
 
 /* ════════════════ ÉCRAN FINAL ════════════════════════════════════════════════════════════
@@ -22414,17 +22703,77 @@ document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkFor
    ⚠️ ON NE FERME JAMAIS L'APPLICATION : quand il n'y a plus rien à remonter, on la met en
    ARRIÈRE-PLAN. Le joueur la retrouve où il l'avait laissée, comme n'importe quelle app
    Android — alors qu'une fermeture lui ferait tout reprendre. */
+/* ⚠️ v8.483 (retour testeur réel, campagne 2026-09-23 : « le bouton Retour quitte Tactizo ») —
+   LA CAUSE N'ÉTAIT NI LE PLUGIN NI ANDROID, C'ÉTAIT LA GARDE `S.nav.length` DE L'ÉTAPE 3.
+   Vérifié dans le code natif embarqué (`@capacitor/app` 8.1.1, AppPlugin.java) : le plugin pose
+   bien un `OnBackPressedCallback` via `getOnBackPressedDispatcher()` — le mécanisme AndroidX
+   moderne, compatible avec le geste "predictive back" imposé par targetSdk 36 — et le listener
+   JS ci-dessous le reçoit correctement. Le problème était en aval : `S.nav` est VIDÉE par
+   `navRoot()`, qu'appellent `openLeague()`, `goAccueil()` ET `backToLeagues()`. Autrement dit,
+   sur la quasi-totalité des écrans réellement fréquentés (une ligue ouverte, le QG, Mes ligues,
+   Pronos/Résultats/Classement/Coulisses, Profil, Connexion/Inscription), la pile est vide et le
+   code tombait directement sur `minimizeApp()`. Or mettre en arrière-plan, VU DU JOUEUR, c'est
+   exactement la même chose que quitter : Tactizo disparaît et le launcher réapparaît. Le code
+   « ne fermait jamais l'app » au sens technique, mais le vivait comme une fermeture.
+   ⚠️ LA PILE N'EST DONC PLUS LA SEULE SOURCE DE RETOUR : quand elle est vide, on remonte la
+   HIÉRARCHIE RÉELLE des écrans (onglet de ligue → écran de ligue → QG → arrière-plan), au lieu
+   de sortir. `minimizeApp()` n'est plus atteint qu'aux VRAIES racines — c'est ce qu'Android
+   attend d'une application.
+   ⚠️ N'EXISTE QUE DANS L'APP NATIVE : sur le web `window.Capacitor` est absent, ce bloc ne
+   s'exécute pas, et rien ne change. Aucune régression possible côté navigateur.
+   ⚠️ CHAQUE BRANCHE CONSOMME L'ÉVÉNEMENT ET RÉDUIT STRICTEMENT LA PROFONDEUR (overlay fermé,
+   sous-onglet → onglet, ligue → QG) : aucune ne peut se rappeler elle-même, donc aucune boucle
+   de navigation possible. */
 function brancherRetourAndroid(){
   const P = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
   if(!P || !P.addListener) return;
   P.addListener('backButton', () => {
-    if(document.getElementById("cardModal")){ closeCardInfo(); return; }   // 1. fermer la fenêtre ouverte
-    /* 2. ⚠️ v8.400 — LE TUTORIEL V2 A SA PROPRE NAVIGATION (`t2N`, pas `S.nav`) : un appui
+    /* 1. SAISIE EN COURS — Android referme normalement le clavier lui-même sans nous prévenir
+       (l'IME consomme le geste avant le dispatcher). Quand l'événement nous parvient QUAND MÊME
+       (clavier déjà refermé mais champ encore actif, cas observé selon les WebView), on rend
+       simplement la main au champ : un appui supplémentaire navigue. Sans ça, quitter un écran
+       en pleine saisie perdrait le texte non encore enregistré (gage/récompense, code de ligue,
+       pseudo, mot de passe) sur un geste qui, pour le joueur, ne visait que le clavier. */
+    const ae=document.activeElement;
+    if(ae && (ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT"||ae.isContentEditable)){ try{ ae.blur(); }catch(e){} return; }
+    /* 2. FERMER CE QUI EST POSÉ PAR-DESSUS L'ÉCRAN, du plus récent au plus ancien. Les trois
+       seuls calques de l'app, vérifiés un par un (aucun autre `position:fixed` par-dessus) :
+       • `#cardModal` — TOUTES les fenêtres de l'app passent par lui (infoModal/confirmModal/
+         tradeModal/confirmTxt/« Nos idées »…), un seul identifiant pour la cinquantaine de fiches ;
+       • `#leagueMenuSheet` — le panneau « Options de la ligue » (v8.343), qui n'est PAS un
+         `#cardModal` : il manquait ici, et le retour sautait donc par-dessus lui ;
+       • `oduelDetail` — le détail « les 5 matchs » d'un duel adverse (écran Résultats) : pas un
+         élément détaché du DOM mais un ÉTAT re-rendu par `render()`, d'où le test sur la variable. */
+    if(document.getElementById("cardModal")){ closeCardInfo(); return; }
+    if(document.getElementById("leagueMenuSheet")){ closeLeagueMenu(); return; }
+    if(typeof oduelDetail!=="undefined" && oduelDetail){ closeOduelDetail(); return; }
+    if(!S){ if(P.minimizeApp) P.minimizeApp(); return; }
+    /* 3. ⚠️ v8.400 — LE TUTORIEL V2 A SA PROPRE NAVIGATION (`t2N`, pas `S.nav`) : un appui
        retour se comporte comme "Précédent" tant qu'on est sur une étape numérotée (1-6), et
        comme "Passer" sur l'intro/l'écran final, qui n'ont rien à remonter. */
-    if(S && S.view==="tuto2"){ if(t2N>0 && t2N<7) t2Precedent(); else passerTuto2(); return; }
-    if(S && Array.isArray(S.nav) && S.nav.length){ navBack(); return; }    // 3. remonter d'un écran
-    if(P.minimizeApp) P.minimizeApp();                                     // 4. arrière-plan, jamais quitter
+    if(S.view==="tuto2"){ if(t2N>0 && t2N<7) t2Precedent(); else passerTuto2(); return; }
+    /* 4. ÉCRANS SANS SORTIE PAR LE RETOUR. « Choisis ton pseudo » est une étape OBLIGATOIRE :
+       la session existe déjà, mais `AUTH.name` est vide — `render()` y renvoie de toute façon, et
+       la barre du bas y est masquée exprès (cf. `render()`). Un retour qui en sortirait ferait
+       donc soit une boucle, soit un compte au nom vide. Pour en partir, il y a désormais
+       « Se déconnecter » SUR l'écran (v8.483, cf. `viewChoosePseudo`) — une vraie sortie, pas un
+       contournement. Même raisonnement pour l'écran de maintenance / version minimale. */
+    if(S.view==="choosePseudo" || MIN_VERSION_GATE || REAL_MAINTENANCE){ if(P.minimizeApp) P.minimizeApp(); return; }
+    // 5. la pile de navigation d'abord — c'est l'historique le plus fidèle quand il existe.
+    if(Array.isArray(S.nav) && S.nav.length){ navBack(); return; }
+    /* 6. PILE VIDE : on remonte la hiérarchie réelle. Sous-onglet de PRÉPARATION (Gages/Enchères)
+       → l'onglet d'accueil de la préparation, comme le ferait le bouton de la barre du bas. */
+    if(S.view==="game" && L && L.status==="prep" && S.ptab && S.ptab!=="infos"){ setPtab("infos"); return; }
+    // 7. onglet secondaire d'une ligue (Classement/Résultats/Coulisses…) → l'écran d'accueil de la ligue.
+    if(S.leagueId && LEAGUE_TABVIEWS.includes(S.view) && S.view!=="game"){ goGame(); return; }
+    // 8. écran d'accueil d'une ligue → on sort de la ligue vers le QG (même chemin que le bouton 🏠).
+    if(S.leagueId){ goAccueil(); render(); return; }
+    // 9. écran de premier niveau hors QG (Mes ligues, Profil, Stats…) → le QG, la racine de l'app.
+    if(AUTH && S.view!=="home"){ goAccueil(); render(); return; }
+    // 10. parcours d'inscription/connexion → l'écran d'entrée, jamais une sortie de l'application.
+    if(!AUTH && S.view!=="auth"){ showErr(''); S.view="auth"; render(); return; }
+    // 11. VRAIE racine (QG connecté, ou écran d'entrée) : arrière-plan, jamais quitter.
+    if(P.minimizeApp) P.minimizeApp();
   });
 }
 /* ⚠️ v8.426 (Lot Mobile 1, demandé par Hervé) — RETOUR OAuth NATIF (Google/Apple, cf. `loginGoogle`/
