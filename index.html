@@ -444,6 +444,50 @@
   .foot{color:var(--faint);font-size:12px;text-align:center;margin-top:24px;}
   .err{background:color-mix(in srgb,var(--red) 12%,transparent);border:1px solid color-mix(in srgb,var(--red) 40%,transparent);
     color:var(--red);border-radius:10px;padding:10px 12px;margin:10px 0;font-size:13px;}
+  /* ============================================================================================
+     NOTIFICATION INTERNE (premier plan) — remplace le toast de 4 s pour les pushes.
+     ⚠️ POURQUOI ELLE EXISTE. Au premier plan, NI iOS NI Android n'affichent la bannière système :
+     iOS parce qu'aucun `presentationOptions` n'est configuré, Android parce que le SDK Firebase
+     remet le message à l'app au lieu de la barre système. Le toast qui compensait durait 4 s, sans
+     son, et ne laissait AUCUNE trace — d'où des testeurs certains de n'avoir rien reçu alors
+     qu'APNs/FCM avaient répondu 200 (audit du 2026-09-23).
+     ⚠️ EN HAUT, PAS EN BAS. Le toast était en bas, là où vivent la nav (#bottomnav) et le clavier.
+     Une bannière PERSISTANTE à cet endroit masquerait durablement la navigation. Ancrée sous la
+     barre du haut via `--topbar-h` (mesurée par render(), 0 quand la barre est masquée), elle ne
+     recouvre ni la nav, ni le champ en cours de saisie.
+     ⚠️ z-index 300 : AU-DESSUS des modales (100) et du toast (200). Même raison qu'en v8.11 —
+     une notification affichée derrière le voile d'une modale n'existe pas.
+     ============================================================================================ */
+  .pushban{position:fixed;top:calc(var(--topbar-h, 93px) + 8px);left:10px;right:10px;z-index:300;
+    margin:0 auto;max-width:520px;display:flex;align-items:flex-start;gap:9px;
+    background:var(--panel2);border:1.5px solid var(--gold);border-radius:14px;
+    padding:11px 11px 11px 12px;box-shadow:var(--shadow);color:var(--ink);
+    animation:pushbanIn .18s ease-out;}
+  @keyframes pushbanIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+  .pushban .pb-ic{flex:0 0 auto;font-size:17px;line-height:1.25}
+  /* ⚠️ `flex:1 1 0`, PAS `1 1 auto` : avec une base `auto`, la colonne de texte reclame sa
+     largeur de contenu et, sous 360 px ou `flex-wrap` est actif, FORCE un retour a la ligne —
+     la cloche se retrouvait seule sur la premiere ligne (vu a 320 px). Avec une base 0 elle se
+     comprime, l'icone reste a cote du texte, et seule la ligne d'actions passe dessous. */
+  .pushban .pb-txt{flex:1 1 0;min-width:0}
+  .pushban .pb-ttl{font-weight:800;font-size:13.5px;line-height:1.3;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .pushban .pb-body{font-size:12.5px;line-height:1.35;color:var(--muted);margin-top:2px;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .pushban .pb-more{display:inline-block;margin-top:5px;font-size:11px;font-weight:700;
+    color:var(--muted);background:var(--panel);border:1px solid var(--border);
+    border-radius:999px;padding:1px 7px}
+  .pushban .pb-act{flex:0 0 auto;display:flex;align-items:center;gap:6px;padding-top:1px}
+  .pushban .pb-voir{background:var(--gold);color:#1c1a15;border:none;border-radius:999px;
+    font:inherit;font-weight:800;font-size:12px;padding:6px 12px;cursor:pointer}
+  .pushban .pb-x{background:none;border:none;color:var(--faint);font-size:19px;line-height:1;
+    padding:2px 4px;cursor:pointer}
+  /* ⚠️ 320 px : la colonne d'actions passe sous le texte plutôt que de l'écraser. Sans cette
+     bascule, « Voir » et « × » laissaient moins de 90 px au titre sur un iPhone SE. */
+  @media (max-width:359px){
+    .pushban{flex-wrap:wrap}
+    .pushban .pb-act{width:100%;justify-content:flex-end;padding-top:6px}
+  }
   .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:20px;background:var(--panel2);
     border:1px solid var(--border);border-radius:10px;padding:10px 16px;font-size:13px;z-index:200;box-shadow:var(--shadow);color:var(--ink);
     max-width:min(340px,90vw);text-align:left;line-height:1.4;}
@@ -819,7 +863,11 @@
   .mc-num{width:17px;height:17px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;background:var(--panel2);color:var(--muted);font-size:9.5px;font-weight:800;}
   .mc-team{flex:1;min-width:0;font-weight:800;font-size:12.5px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .mc-vs{font-size:9px;color:var(--faint);flex:0 0 auto;}
-  .mc-fav{flex:0 0 auto;font-size:12px;}
+  /* ⚠️ MÊME LARGEUR QUE .mc-num (17px) : c'est ce qui met le pictogramme du sport sur l'axe
+     central de la carte. La rangée porte un numéro à gauche ; sans créneau équivalent à droite, le
+     picto tombe 12px trop à droite — et quand la 👑 apparaît il revient au centre, donc il SAUTE
+     d'une affiche à l'autre. Le créneau est toujours rendu, vide si le match n'est pas le favori. */
+  .mc-fav{flex:0 0 auto;font-size:12px;width:17px;display:inline-flex;align-items:center;justify-content:center;}
   .mc-meta{display:block;font-size:10.5px;color:var(--muted);margin-top:4px;}
   .mc-result{display:block;font-size:12px;color:var(--ink);margin-top:5px;}
   .mc-result .pick-name{font-weight:800;}
@@ -1896,7 +1944,13 @@
 
   .a2-pronos-mcard{position:relative;background:rgba(18,21,31,.55);border:1px solid rgba(51,61,83,.4);border-radius:16px;
     padding:12px 12px 14px;margin-bottom:12px}
-  .a2-pronos-mcard-head{display:flex;align-items:flex-start;gap:8px}
+  /* ⚠️ GRILLE, PAS FLEX, ET DES COLONNES LATÉRALES DE MÊME LARGEUR — c'est ce qui garantit que
+     la zone de confrontation (donc le pictogramme du sport) reste sur l'axe central de la carte.
+     En flex, le numéro (22px) à gauche et 👑 + 🎯 (jusqu'à 64px) à droite décalaient le picto de
+     −3px à −21px SELON L'AFFICHE : il ne formait aucun axe vertical d'une carte à l'autre.
+     64px = largeur de 👑 (28) + écart (8) + 🎯 (28), le maximum que la droite puisse occuper. */
+  .a2-pronos-mcard-head{display:grid;grid-template-columns:64px 1fr 64px;align-items:flex-start;gap:8px}
+  .a2-pronos-mcard-actions{display:flex;align-items:flex-start;gap:8px;justify-content:flex-end}
   .a2-pronos-mcard-num{width:22px;height:22px;border-radius:50%;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
     background:var(--a2-purple-deep,#180f2e);border:1px solid rgba(156,127,224,.4);color:var(--a2-purple-light);font-size:11px;font-weight:800;margin-top:2px}
   .a2-pronos-mcard-teams{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:10px}
@@ -2503,10 +2557,22 @@
   .a2-res-oduel-row .mid.tie{color:var(--gold)}
   .a2-res-oduel-row .chev{width:11px;height:11px;stroke:var(--faint);fill:none;stroke-width:2.4;flex:0 0 auto;margin-left:2px}
 
-  .a2-res-oduel-modal{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;justify-content:center}
+  /* ⚠️ 2026-09-25 (retour réel mobile : « seuls 4 matchs sur 5 sont visibles »). TROIS défauts
+     mesurés, tous les trois dans ces quelques lignes.
+     1. `z-index:60` — EXACTEMENT celui de `#bottomnav`. À égalité, c'est l'ordre du DOM qui
+        tranche, et `#bottomnav` est rendu APRÈS `#root` : la barre peignait donc par-dessus le bas
+        de la feuille. Le 5ᵉ match n'était pas « hors zone », il était DERRIÈRE la navigation.
+        L'autre bottom-sheet de l'app (`.lm-overlay`) est à 100 depuis toujours — on s'aligne.
+     2. `82vh` — sur iOS, `vh` vaut le viewport LARGE (barre d'URL masquée), pas celui réellement
+        visible. La feuille dépassait donc le bas de l'écran. `dvh` suit la hauteur réelle ;
+        la ligne `vh` est conservée juste avant, en repli pour les navigateurs sans `dvh`.
+     3. Aucune indication qu'il restait du contenu : rien ne distinguait « 5 matchs, scrollez »
+        de « 4 matchs, c'est tout ». */
+  .a2-res-oduel-modal{position:fixed;inset:0;z-index:100;display:flex;align-items:flex-end;justify-content:center}
   .a2-res-oduel-modal-bd{position:absolute;inset:0;background:rgba(0,0,0,.62)}
   .a2-res-oduel-sheet{position:relative;width:100%;max-width:460px;background:var(--panel);border-radius:18px 18px 0 0;
-    max-height:82vh;display:flex;flex-direction:column;box-shadow:0 -10px 30px rgba(0,0,0,.45);animation:a2ResSheetUp .22s ease-out}
+    max-height:82vh;max-height:min(86dvh,100dvh - 24px);display:flex;flex-direction:column;
+    box-shadow:0 -10px 30px rgba(0,0,0,.45);animation:a2ResSheetUp .22s ease-out}
   @keyframes a2ResSheetUp{from{transform:translateY(28px);opacity:.5}to{transform:translateY(0);opacity:1}}
   .a2-res-oduel-grip{width:36px;height:4px;border-radius:2px;background:var(--border2);margin:8px auto 0}
   .a2-res-oduel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px 12px;border-bottom:1px solid var(--border2)}
@@ -2515,14 +2581,26 @@
     text-transform:uppercase;letter-spacing:.04em;margin-top:1px;font-family:-apple-system,sans-serif}
   .a2-res-oduel-close{width:28px;height:28px;border-radius:50%;background:var(--panel2);border:1px solid var(--border2);
     color:var(--ink);font-size:13px;line-height:1;flex:0 0 auto;display:flex;align-items:center;justify-content:center}
-  .a2-res-oduel-body{overflow-y:auto;padding:6px 14px calc(18px + env(safe-area-inset-bottom));-webkit-overflow-scrolling:touch}
+  /* `overscroll-behavior:contain` : sans lui, arriver au bout de la liste faisait défiler la PAGE
+     derrière la feuille — on croyait la feuille bloquée alors que c'était l'écran qui bougeait.
+     Les quatre dégradés sont l'indicateur de défilement : les deux premiers (`local`) masquent
+     l'ombre quand on est en butée, les deux autres (`scroll`) la peignent. Résultat : une ombre
+     apparaît en haut/en bas UNIQUEMENT s'il reste du contenu de ce côté — aucun JS, et rien
+     d'affiché quand les 5 matchs tiennent déjà à l'écran. */
+  .a2-res-oduel-body{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    padding:6px 14px calc(22px + env(safe-area-inset-bottom));
+    background:
+      linear-gradient(var(--panel) 30%, rgba(0,0,0,0)) top    / 100% 22px no-repeat local,
+      linear-gradient(rgba(0,0,0,0), var(--panel) 70%) bottom / 100% 22px no-repeat local,
+      radial-gradient(farthest-side at 50% 0,   rgba(0,0,0,.30), rgba(0,0,0,0)) top    / 100% 9px no-repeat scroll,
+      radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.30), rgba(0,0,0,0)) bottom / 100% 9px no-repeat scroll}
   /* ================= Classement final — Maestro à 4 états (2026-09-06) =================
      Boîte mesurée par pixels sur les assets RÉELS (carrés 384×384) — voir le commentaire dans
      viewEnd(). Même famille visuelle que .a2-res-maestro (Résultats), renommée pour ce contexte. */
   .a2-classement-maestro{position:relative;overflow:hidden;border-radius:16px;margin-bottom:2px;container-type:inline-size}
   .a2-classement-maestro-img{display:block;width:100%}
   .a2-classement-box{position:absolute;left:44.8%;top:4.9%;right:2.3%;bottom:25.3%;
-    display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;padding:5px 11px}
+    display:flex;flex-direction:column;justify-content:center;gap:2px;overflow:hidden;padding:5px 7px}
   /* ⚠️ QA (2026-09-16, audit responsive Hervé, 320/375px + EN) — un texte anglais plus long que son
      équivalent français (ex. "You're dominating!" vs "Tu domines !") pouvait déborder du rectangle
      ci-dessus, lui-même en `overflow:hidden` : le débordement était donc invisible plutôt que
@@ -2531,7 +2609,18 @@
      comme sur le seul état neutre : au-delà de ~460px de large le texte garde sa taille d'origine
      (16/11.5/11px), en dessous il rétrécit avec le panneau. `overflow-wrap` évite qu'un mot anglais
      un peu long ne parte au-delà du bord plutôt que de passer à la ligne. */
-  .a2-classement-eyebrow,.a2-classement-title,.a2-classement-text{overflow-wrap:break-word}
+  /* ⚠️ 2026-09-25 — `overflow-wrap:break-word` RETIRÉ. Il était là pour empêcher un mot anglais
+     long de déborder d'un conteneur en `overflow:hidden` (débordement invisible, donc pire qu'un
+     retour à la ligne). Mais il coupe À L'INTÉRIEUR du mot dès qu'il ne tient pas : retour réel
+     mobile, « Quel retournement ! » s'affichait « retournem / ent ! ». Mesuré : 11 cas sur 4
+     largeurs × 11 narratifs × FR/EN, pire écart 18px sur « retournement ».
+     LA VRAIE CORRECTION EST DIMENSIONNELLE, pas une règle de coupure : le mot le plus long doit
+     TENIR. Deux leviers, tous deux mesurés par tools/test-maestro-classement-cesure.ps1 —
+     la gouttière intérieure (11px → 7px, +8px utiles) et le coefficient du titre (3.9cqw → 3.2cqw).
+     Au-delà de ~460px de large, rien ne change : le titre garde ses 16px d'origine.
+     ⚠️ `overflow:hidden` reste sur `.a2-classement-box`, en dernier filet pour une chaîne future
+     jamais mesurée. C'est le TEST qui doit l'empêcher de servir, pas lui qui doit rattraper. */
+  .a2-classement-eyebrow,.a2-classement-title,.a2-classement-text{overflow-wrap:normal;word-break:normal;hyphens:manual}
   /* ⚠️ QA (2026-09-07, demandé par Hervé, vidéo réelle — "Dernier" collé à son bord gauche) — les 8
      rectangles ci-dessous (mesurés le 09-06) collent EXACTEMENT au bord réel du panneau peint sur
      les 8 assets, marge 0 dans les 4 directions (revérifié aux pixels près, gauche/haut/droite/bas
@@ -2541,7 +2630,7 @@
      padding (4px 10px → 7px 15px) donne la même respiration aux 8 panneaux d'un coup, sans risque de
      ressortir sur l'illustration puisque le rectangle qui le contient, lui, ne bouge pas. */
   .a2-classement-eyebrow{font-size:clamp(7px,2.8cqw,11px);font-weight:800;letter-spacing:.04em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.7);line-height:1.1}
-  .a2-classement-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:clamp(9.5px,3.9cqw,16px);line-height:1.08;color:var(--a2-ink,#f4ecd8);
+  .a2-classement-title{font-family:'Playfair Display',Georgia,serif;font-weight:800;font-size:clamp(8.5px,3.2cqw,16px);line-height:1.12;color:var(--a2-ink,#f4ecd8);
     text-shadow:0 1px 4px rgba(0,0,0,.7)}
   .a2-classement-text{font-size:clamp(7px,2.7cqw,11.5px);color:var(--a2-ink,#f4ecd8);line-height:1.18;opacity:.92;text-shadow:0 1px 4px rgba(0,0,0,.7)}
   /* ⚠️ QA (2026-09-06, demandé par Hervé après échec réel de leader/champion sur iPhone malgré un
@@ -2682,7 +2771,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.493";
+const APP_VERSION = "v8.500";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -2741,6 +2830,16 @@ let REAL_MAINTENANCE = false;
 const STORE_URL_ANDROID = "https://play.google.com/store/apps/details?id=com.tactizo.app";
 const STORE_URL_IOS = "https://apps.apple.com/app/id0000000000"; // TODO : identifiant réel une fois l'app soumise
 let MIN_VERSION_GATE = null;   // {version, storeUrl} si le natif courant est trop ancien, sinon null
+/* ⚠️ RECHECK ODDS — DRAPEAU SERVEUR (2026-09-25, arbitré par Hervé). Le correctif v8.490 a réparé
+   un `completerPoolSiCreneauEloigne()` devenu inerte depuis le 18/09 ; le réactiver peut coûter
+   jusqu'à 3 crédits Odds API par récolte concernée (~10 récoltes/mois, plafond `RECHECK_MAX_APPELS`).
+   Plutôt que de maintenir durablement DEUX `app/index.html` — un pour le dépôt, un amputé pour la
+   production —, le mécanisme passe derrière `app_config.recheck_odds`. Même code partout, et la
+   soupape s'ouvre ou se ferme sans redéployer ni republier l'app.
+   ⚠️ FAUX PAR DÉFAUT, ET FAUX EN CAS D'ÉCHEC DE LECTURE : une panne réseau, une clé absente ou une
+   table illisible ne doivent JAMAIS ouvrir une dépense. C'est l'inverse du repli de `maintenance`
+   (qui, lui, retombe sur "ne bloque personne") — ici le repli sûr est "ne dépense rien". */
+let RECHECK_ODDS_ACTIF = false;
 const AUTH_DOMAIN = "bbb.app"; // e-mail synthétique invisible pour l'utilisateur (Supabase Auth) : pseudo@bbb.app
 // ⚠️ NE PAS normaliser les accents ici : l'email technique dérive du pseudo de CRÉATION du compte.
 // La normalisation (v6.52) cassait la connexion des comptes créés avec un accent (« Hervé » →
@@ -4218,7 +4317,7 @@ const VARIETE_TENTATIVES=5; // nombre de compétitions non-foot RÉELLEMENT tent
         vrai jour à 0 match ne peut de toute façon rien apporter à un recheck) ;
      3. ET au moins une compétition parmi `sautées ∩ proches` (mondial+Europe, `zoneRang()<2`)
         existe pour la récolte en cours.
-   ⚠️ `memo[k]===false` (mémo "vides") = sautée à la DERNIÈRE récolte réelle, JAMAIS retouché
+   ⚠️ `memo[k].vide===false` (mémo "vides") = sautée à la DERNIÈRE récolte réelle, JAMAIS retouché
    entre deux récoltes (le seul endroit qui écrit "vides" est `fetchRealPool()`, dans le MÊME
    appel que celui qui écrit "pool") — donc toujours exactement synchrone avec la version
    courante de "pool", sans avoir besoin d'un cache "sautées" séparé à faire vieillir à part.
@@ -4233,6 +4332,12 @@ const VARIETE_TENTATIVES=5; // nombre de compétitions non-foot RÉELLEMENT tent
    ============================================================================================ */
 const RECHECK_MAX_APPELS=3; // plafond dur — jamais plus de 3 crédits par récolte concernée
 async function completerPoolSiCreneauEloigne(all){
+  /* ⚠️ LA COUPURE EST ICI, AVANT TOUT LE RESTE — et c'est ce qui garantit « aucun crédit dépensé
+     quand le drapeau est faux ». Placée plus bas, elle laisserait passer `selectPool()` et les
+     lectures de cache ; placée ici, la fonction rend la réserve telle quelle, exactement comme la
+     production d'aujourd'hui. Aucun autre mécanisme Odds n'est touché : `fetchRealPool()`, le
+     mémo "vides" et le cache partagé continuent de fonctionner à l'identique dans les deux cas. */
+  if(!RECHECK_ODDS_ACTIF) return all;
   if(!Array.isArray(all) || !all.length) return all;
   const _f=leagueFormula();
   // Mêmes deux lignes que selectPool() (v8.247, dupliquées à dessein plutôt que d'aller toucher
@@ -4255,12 +4360,12 @@ async function completerPoolSiCreneauEloigne(all){
   if(!(ecartH>=(_f.bet||24) && avant>=1 && avant<=4)) return all;   // pas d'anomalie : rien à faire
   // ---- Anomalie confirmée : quelles compétitions sautées pourraient combler ce créneau ? ----
   const memo=(await cacheRead("vides", Infinity))||{};
-  // ⚠️ BUILD WEB — LE CORRECTIF DU RECHECK (v8.490) EST VOLONTAIREMENT ABSENT DE CE FICHIER.
-  // Il est bien présent dans le dépôt, mais sa réactivation peut coûter jusqu'à 3 appels Odds API
-  // par récolte concernée : Hervé a décidé le 2026-09-23 de ne pas la déployer pendant la
-  // campagne. Ne pas « corriger » cette ligne ici — elle est alignée sur ce que sert la prod.
-  // Voir §17bis de PASSATION-2026-09-22.md avant tout changement.
-  const sauteesActuelles=Object.keys(memo).filter(k=>memo[k]===false);
+  // ⚠️ v8.479 (d3ac779, 18/09) A CHANGÉ LE FORMAT DU MÉMO : `memo[k]` est passé du booléen nu à
+  // `{vide:boolean, at:ISO}` pour porter une fraîcheur PAR COMPÉTITION. Ce filtre était resté sur
+  // `memo[k]===false` — une comparaison qui ne peut plus JAMAIS être vraie contre un objet. Il
+  // rendait donc `sauteesActuelles` toujours vide, et tout le recheck ci-dessous inerte depuis
+  // cette date (attrapé par test-recheck-cible-vides, 23/09). On lit désormais le champ `vide`.
+  const sauteesActuelles=Object.keys(memo).filter(k=>memo[k] && memo[k].vide===false);
   const cibles=sauteesActuelles.filter(k=>zoneRang(k)<2)                 // proches = mondial+Europe
     .sort((a,b)=>leaguePrio(b,"Soccer")-leaguePrio(a,"Soccer"))          // Europa/Conference d'abord
     .slice(0,RECHECK_MAX_APPELS);
@@ -4316,14 +4421,18 @@ const SCORES_SHARED_TTL = 2*60*60*1000;    // 2 h — cache d'un résultat déj�
    encore à jour) — mais un match reporté ou très retardé (vécu le 2026-08-17 au tennis, où c'est
    fréquent) faisait tourner ce même rythme pendant 24h en pure perte. Le rythme ralentit donc
    progressivement : rapproché tant qu'un résultat est plausible, très espacé une fois la situation
-   clairement anormale — au-delà du dernier palier, plus aucune vérification active pour CE match tant
-   que l'échéance déterministe de LA JOURNÉE (`staleDeadlineFrom()`, chantier matchs reportés
-   2026-09-17) n'a pas elle-même neutralisé le calendrier entier.
+   clairement anormale — le dernier palier (1440 min) tombe PILE sur le mur individuel de 24 h de
+   `porteNeutralisation()` : on sonde jusqu'au moment exact où le match devient neutralisable, et
+   pas une minute au-delà. Ce couplage vient de la v4.46 ; v8.473 l'avait rompu, il est rétabli.
    ⚠️ 125 min AVANT LA 1ʳᵉ VÉRIFICATION, PAS 105 : un match de foot dure au minimum 90 + 15 (mi-
    temps) + arrêts de jeu ≈ 110 min — vérifier à 105 min revenait à payer quasi systématiquement
    pour rien, le match n'étant même pas fini. 125 min = 110 + une marge dans la fenêtre de
    publication (10-40 min ci-dessus). */
-const RETARD_PALIERS_MIN = [125, 155, 185, 360, 720, 1440]; // minutes après le coup d'envoi — calendrier de vérification API, indépendant de l'échéance d'annulation (staleDeadlineFrom)
+// ⚠️ LE DERNIER PALIER (1440 min = 24 h) RETOMBE PILE SUR LE MUR INDIVIDUEL DE LA v4.46, et c'est
+// voulu : on sonde le fournisseur jusqu'au moment exact où le match devient neutralisable, jamais
+// au-delà. Ce couplage d'origine avait été rompu par v8.473 (mur ramené à 5 h 05, paliers
+// inchangés) — d'où un verdict rendu sur un cache de 166 min le 24/09. Il est rétabli.
+const RETARD_PALIERS_MIN = [125, 155, 185, 360, 720, 1440]; // minutes après le coup d'envoi — calendrier de vérification API, calé sur le mur individuel (porteNeutralisation)
 // Largeur de cache à appliquer selon le palier en cours (temps jusqu'au palier suivant) — `null`
 // une fois le dernier palier dépassé : plus de vérification active pour ce match précis.
 function scoresTTL(depuisKOmin){
@@ -4362,11 +4471,16 @@ const CLAIM_TTL         = 2*60*1000;       // 2 min — si le client qui a pris 
 // la réserve étant mutualisée jusqu'à 3 jours, un parieur régulier verra l'écart avec les cotes du
 // jour et le lira comme un manque de sérieux. Le dire coûte une ligne et lève l'ambiguïté.
 const cacheAt={};
-async function cacheRead(key, ttl){
+/* `minAt` (facultatif) — la copie en cache n'est acceptée que si elle a été PRISE APRÈS cet
+   instant. Sert à la dernière lecture avant neutralisation : ce qui compte alors n'est pas l'âge
+   de la copie mais le fait qu'elle soit POSTÉRIEURE à l'échéance, donc qu'elle ait vu la fin de
+   tous les matchs. Deux ligues qui neutralisent la même soirée partagent ainsi le même appel. */
+async function cacheRead(key, ttl, minAt){
   try{
     const r=await q(db.from("api_cache").select("payload,fetched_at").eq("k",key));
     const row=Array.isArray(r)?r[0]:r; if(!row||row.payload==null) return null;
     const at=new Date(row.fetched_at).getTime();
+    if(minAt!=null && !(at>=minAt)) return null;
     if(ttl!==Infinity){ const age=Date.now()-at;
       if(!(age>=0) || age>ttl) return null; }
     if(!isNaN(at)) cacheAt[key]=at;
@@ -4429,23 +4543,77 @@ function cotesDatees(){ const at=cacheAt.pool; if(!at||!L||L.data_mode!=="real")
    donc été annulé vers 17/09 21h33, TROIS MINUTES après le début du dernier match de la journée :
    la journée se serait mise à neutraliser un match reporté alors que son propre calendrier venait
    à peine de finir de se dérouler.
-   NOUVELLE RÈGLE : une échéance UNIQUE PAR JOURNÉE (pas par match), déduite du calendrier PRÉVU —
-   jamais de « attendre que tous les autres aient un résultat » (Hervé : ça créerait une attente
-   indéfinie si plusieurs matchs sont reportés). Voir `staleDeadlineFrom()` juste en dessous. */
-const STALE_API_MARGIN_H=3; // h de marge fournisseur, AJOUTÉE à MATCH_DUREE_MIN, après le coup d'envoi du DERNIER match prévu de la journée
-// Échéance déterministe d'auto-annulation de LA JOURNÉE (jamais par match) : le coup d'envoi le
-// plus TARDIF parmi TOUS les matchs PRÉVUS de cette journée (résolus, en attente ou déjà annulés
-// — le calendrier initial ne change jamais, y compris pour un match reporté : cf. CAS G du chantier,
-// `f.commence` reste son horaire PROGRAMMÉ, jamais réécrit) + MATCH_DUREE_MIN (durée + fenêtre de
-// publication) + STALE_API_MARGIN_H (marge fournisseur). Un match sans résultat n'est neutralisable
-// qu'À PARTIR de cette échéance, quel que soit SON PROPRE coup d'envoi — deux matchs reportés
-// partagent donc la MÊME échéance, jamais une attente qui s'allonge en cascade.
-// ⚠️ FONCTION PURE, EXTRAITE VERBATIM par tools/test-parite-stale-reporte.ps1 pour vérifier qu'elle
-// est identique dans les 3 moteurs (client, resolve-ligues-reelles, shadow-resolve-real) — ne pas
-// la réécrire différemment d'un côté sans répercuter aux deux autres.
-function staleDeadlineFrom(times){
-  if(!times||!times.length) return null;
-  return Math.max.apply(null,times) + MATCH_DUREE_MIN*60000 + STALE_API_MARGIN_H*3600000;
+   ⚠️ CE CHANTIER A ÉTÉ REMPLACÉ LE 2026-09-25 (incident Euroligue). Son échéance unique de journée
+   réparait bien XLATD, mais elle neutralisait aussi les matchs récents trop tôt. La règle actuelle
+   garde SES 24 h à chaque match ET attend que la journée soit réellement retombée — elle répare
+   XLATD par la porte de journée, pas par l'ancrage. Voir `porteNeutralisation()` juste en dessous. */
+/* ⚠️ RÉTABLISSEMENT DU DÉLAI HISTORIQUE (2026-09-25, arbitré par Hervé après l'incident Euroligue
+   du 24/09). La règle métier d'origine (v4.46, 19/07) était `STALE_MATCH_H = 24` — 24 h après le
+   coup d'envoi —, choisie précisément pour qu'il n'y ait « AUCUN RISQUE D'ANNULER UN MATCH
+   RÉELLEMENT JOUÉ ». Le chantier XLATD (v8.473) devait seulement déplacer l'ANCRAGE (coup d'envoi
+   propre au match → dernier coup d'envoi de la journée) ; il a AUSSI, sans que ce soit décidé ni
+   justifié nulle part, ramené le délai à 5 h 05 (125 min + 3 h). Conséquence réelle : Barça–Efes,
+   joué et gagné 89–82, a été neutralisé à 01h53 le 25/09 — 18 h 40 avant ce qu'aurait donné la
+   règle annoncée. On garde l'ancrage (il répare bien XLATD) et on remet les 24 h.
+   ⚠️ SOURCE DE VÉRITÉ UNIQUE : les écrans de règles injectent CETTE constante (voir les deux
+   `{a:STALE_JOUR_H}` plus bas). Changer le nombre ici met la prose à jour toute seule — c'est
+   exactement ce qui avait évité une divergence en v4.47, et qu'il faut préserver. */
+const STALE_JOUR_H=24; // h après le coup d'envoi PROGRAMMÉ de CHAQUE match avant qu'il puisse être neutralisé
+// ============================================================================
+//  LA PORTE DE NEUTRALISATION — règle métier arrêtée par Hervé le 2026-09-25.
+//  COPIE VERBATIM entre les 3 moteurs (client, celui-ci, shadow-resolve-real),
+//  vérifiée par tools/test-parite-stale-reporte.ps1.
+//
+//  DEUX CONDITIONS INDÉPENDANTES, toutes les deux obligatoires :
+//   1. INDIVIDUELLE — chaque match dispose d'au moins STALE_JOUR_H après SON PROPRE coup d'envoi
+//      PROGRAMMÉ (`commence` n'est jamais réécrit, même pour un report : c'était déjà la
+//      formulation de la v4.46, « 24 h après son coup d'envoi PRÉVU »).
+//   2. DE JOURNÉE — aucun match n'est neutralisé tant qu'un AUTRE match de la même journée est
+//      encore sans résultat ET n'a pas atteint ses propres 24 h. Autrement dit : on attend que le
+//      dernier match soit réellement CONNU, jamais que son heure théorique soit passée.
+//
+//  POURQUOI LA CONDITION 2 NE COÛTE RIEN : la journée ne peut de toute façon pas se résoudre tant
+//  qu'un match est en suspens. Neutraliser un match plus tôt ne ferait gagner aucune minute — ça
+//  ne ferait que rembourser à tort un match qui allait finir par livrer son score.
+//
+//  ⚠️ CE QUE CETTE RÈGLE REMPLACE, ET POURQUOI. v8.473 (17/09) avait posé une échéance UNIQUE de
+//  journée = dernier coup d'envoi prévu + 5 h 05. Elle réparait bien XLATD (Levante–Athletic
+//  reporté, que l'ancienne règle annulait 3 min après le coup d'envoi du dernier match), mais elle
+//  avait AUSSI raccourci le délai de 24 h à 5 h 05 sans que ce soit décidé nulle part. Conséquence
+//  réelle : le 24/09, FC Barcelona–Anadolu Efes, joué et gagné 89–82, a été neutralisé à 01h53 —
+//  18 h 40 avant ce qu'annonçait la règle d'origine. Le fournisseur AVAIT le score (vérifié le
+//  25/09 par appel diagnostic) ; c'est Tactizo qui n'avait plus regardé depuis 2 h 46.
+//
+//  ⚠️ LA TERMINAISON EST GARANTIE. Au pire, tous les matchs atteignent leur mur individuel : la
+//  journée se résout donc au plus tard à `dernier coup d'envoi programmé + STALE_JOUR_H`. Aucune
+//  attente indéfinie possible, y compris si plusieurs matchs sont reportés — l'exigence explicite
+//  d'Hervé lors du chantier du 17/09 reste tenue.
+// ============================================================================
+function porteNeutralisation(fixtures, results, nowT){
+  // « En suspens » = ni résultat écrit, ni déjà annulé, ET aucun résultat connu du fournisseur.
+  // ⚠️ `r.completed` compte comme réglé MÊME PAS ENCORE ÉCRIT : sinon un match dont le score vient
+  // d'arriver dans CE passage retiendrait la porte fermée un tick de plus, pour rien.
+  const enSuspens=(fixtures||[]).filter(f=>{
+    if (!f || !f.evId || f.canceled || f.res) return false;
+    const r=results&&results[f.evId];
+    if (r && r.completed) return false;
+    return true;
+  });
+  if (!enSuspens.length) return { pret: false, tmin: null, enSuspens: [] };
+  let tmin=null;
+  for (const f of enSuspens) {
+    const t=f.commence?new Date(f.commence).getTime():NaN;
+    // Date illisible : on n'ose RIEN neutraliser. Une fixture sans horaire exploitable ne doit
+    // jamais ouvrir la porte par défaut — ce serait la seule façon de rembourser un match joué.
+    if (isNaN(t)) return { pret: false, tmin: null, enSuspens };
+    const mur = t + STALE_JOUR_H * 3600000;
+    if (nowT < mur) return { pret: false, tmin: null, enSuspens };   // un match encore jeune → la journée attend
+    if (tmin == null || mur > tmin) tmin = mur;
+  }
+  // `tmin` = le plus tardif des murs franchis. Horodatage DÉTERMINISTE : c'est lui qu'on exige du
+  // cache avant de neutraliser, donc deux passages successifs du cron (et deux ligues qui
+  // neutralisent la même soirée) réutilisent la MÊME lecture au lieu d'en payer une chacun.
+  return { pret: true, tmin, enSuspens };
 }
 // Ligues à l'abandon (v7.07, réglages d'Hervé). Deux seuils DIFFÉRENTS, et c'est voulu :
 // on SIGNALE d'abord, on ferme ensuite — sans le palier d'alerte, une ligue disparaîtrait sans
@@ -4487,9 +4655,28 @@ async function fetchRealResults(sportKeys){
 // manqué les championnats sud-américains, dont le coup d'envoi tombe vers 00h30 heure française —
 // or l'été, ce sont eux qui remplissent la liste. Ici on se cale sur les horaires RÉELS, donc ça
 // marche pour la NBA à 3h du matin comme pour la Ligue 1 à 21h, sans table à maintenir.
-async function fetchRealResultsCached(sportKeys, enCours){
+/* ⚠️ `verifiees` (facultatif) : la fonction y dépose les compétitions pour lesquelles une copie
+   POSTÉRIEURE à l'échéance est effectivement en main à la sortie. Ce n'est PAS « on a essayé » :
+   si le fournisseur est injoignable ou répond vide, la compétition n'y entre pas. L'appelant s'en
+   sert pour ne JAMAIS neutraliser un match qu'il n'a pas pu vérifier — une panne du fournisseur
+   pile au moment du mur des 24 h rembourserait sinon toute une journée de matchs réellement joués. */
+async function fetchRealResultsCached(sportKeys, enCours, fraisDepuis, verifiees){
   const out={}; const aChercher=[];
   for(const k of sportKeys){
+    /* ⚠️ DERNIÈRE LECTURE AVANT NEUTRALISATION (2026-09-25). `fraisDepuis[k]` = l'échéance des
+       24 h de la journée. Au-delà, le calendrier en paliers ci-dessous n'a plus voix au chapitre :
+       il peut juger « fraîche » une copie vieille de 175 min, et c'est exactement ce qui a annulé
+       Barça–Efes à tort (cache de 21h06 UTC, verdict à 23h53 UTC, jamais rappelé entre les deux).
+       On exige donc une copie POSTÉRIEURE à l'échéance, quitte à payer l'appel.
+       ⚠️ CE N'EST PAS « ignorer le cache » : une copie déjà prise après l'échéance est réutilisée
+       telle quelle. C'est ce qui BORNE la dépense — une seule lecture par championnat et par
+       échéance, partagée par toutes les ligues qui neutralisent la même soirée, et non un appel
+       par ligue, par duel ou par tick du cron. */
+    const exige = fraisDepuis && fraisDepuis[k];
+    if(exige){
+      const frais=await cacheRead("scores:"+k, Infinity, exige);
+      if(frais){ Object.assign(out,frais); if(verifiees) verifiees.add(k); continue; }
+      aChercher.push(k); continue; }
     /* ⚠️ v8.258 — LA DURÉE DU CACHE SUIT LE CALENDRIER EN PALIERS (`RETARD_PALIERS_MIN` ci-dessus),
        PAS UNE DURÉE UNIQUE. `enCours[k]` = coup d'envoi le plus ancien parmi les matchs SANS
        résultat de ce championnat. `scoresTTL()` dit combien de temps la copie en cache reste
@@ -4514,7 +4701,9 @@ async function fetchRealResultsCached(sportKeys, enCours){
   for(const k of aChercher){
     if(await cacheClaim("scores:"+k)){
       tente=true; const m=await fetchRealResults([k]); if(liveResErr) echec=true;
-      if(m && Object.keys(m).length) await cacheWrite("scores:"+k, m);
+      // ⚠️ RÉPONSE VIDE = PAS UNE VÉRIFICATION. Injoignable et « rien à dire » se ressemblent ici :
+      // on ne certifie que ce qui est réellement exploitable, et on n'écrit le cache que dans ce cas.
+      if(m && Object.keys(m).length){ await cacheWrite("scores:"+k, m); if(verifiees) verifiees.add(k); }
       Object.assign(out,m);
     } else {
       // Un autre client s'en occupe : on prend sa dernière copie même périmée plutôt que de payer.
@@ -4556,14 +4745,35 @@ async function resolveRealIfReady(){
   const enCours={};
   pendingFx.forEach(f=>{ const t=f.commence?new Date(f.commence).getTime():NaN; if(isNaN(t)) return;
     if(!enCours[f.sportKey]) enCours[f.sportKey]=[]; enCours[f.sportKey].push(t); });
+  /* ═══ DEUX PASSES, ET LA SECONDE N'EXISTE QUE SI LA PORTE EST OUVERTE (2026-09-25) ═════════
+     1. Lecture normale (calendrier en paliers) — c'est elle qui sert 99 % du temps.
+     2. Si, à la lumière de ces résultats, TOUS les matchs encore en suspens ont dépassé leurs 24 h
+        individuelles, alors et seulement alors : une DERNIÈRE lecture, qui exige une copie du cache
+        POSTÉRIEURE à `porte.tmin`. C'est la vérification imposée avant toute écriture irréversible.
+     ⚠️ COÛT BORNÉ : `porte.tmin` est un horodatage DÉTERMINISTE — la copie écrite par le premier
+     passage satisfait tous les suivants, donc UN SEUL appel par compétition et par échéance,
+     partagé par tous les clients et toutes les ligues qui neutralisent la même soirée. Et seules
+     les compétitions ENCORE EN SUSPENS sont redemandées, jamais toute la journée. */
   // Rien en attente → tout est déjà connu, aucun appel à faire (économise le quota).
-  const results=keys.length?await fetchRealResultsCached(keys, enCours):{}; liveRes=results||{};   // 📡 dispo pour l'affichage « direct » (Résultats)
-  // ⏱️ AUTO-ANNULATION (v4.46, refondue le 2026-09-17 — cf. `staleDeadlineFrom()` ci-dessus) : un
+  let results=keys.length?await fetchRealResultsCached(keys, enCours):{};
+  const verifiees=new Set();   // compétitions réellement revérifiées avant toute neutralisation
+  const toutesFx=realDuels.flatMap(d=>d.fixtures||[]);
+  const porte1=porteNeutralisation(toutesFx, results, Date.now());
+  if(porte1.pret && porte1.tmin!=null){
+    const clesSuspens=[...new Set(porte1.enSuspens.map(f=>f.sportKey).filter(Boolean))];
+    if(clesSuspens.length){
+      const fraisDepuis={}; clesSuspens.forEach(k=>{ fraisDepuis[k]=porte1.tmin; });
+      const frais=await fetchRealResultsCached(clesSuspens, enCours, fraisDepuis, verifiees);
+      results=Object.assign({}, results, frais);
+    }
+  }
+  liveRes=results||{};   // 📡 dispo pour l'affichage « direct » (Résultats)
+  const nowT=Date.now();
+  const porte=porteNeutralisation(toutesFx, results, nowT);
+  // ⏱️ AUTO-ANNULATION (v4.46, refondue le 2026-09-17 — cf. `porteNeutralisation()` ci-dessus) : un
   // match toujours pas terminé après l'échéance DE LA JOURNÉE (dernier coup d'envoi prévu + marge)
   // est réputé ANNULÉ (reporté / abandonné / jamais joué). Rend le traitement AUTOMATIQUE : plus
   // aucun geste de l'organisateur, qui aurait pu s'avantager en annulant un match où il perdait.
-  const nowT=Date.now();
-  const staleDeadline=staleDeadlineFrom(times);
   /* ⚠️ v8.461 (bug vécu par Hervé, ligue XLATD, journée bloquée >15h malgré shadow-resolve-real
      à `would_resolve:true`) — LES DEUX BOUCLES CI-DESSOUS ÉCRIVAIENT `fixtures` EN ENTIER, À PARTIR
      D'UN INSTANTANÉ LU EN MÉMOIRE. Deux appels qui se recouvrent (deux onglets, les deux joueurs du
@@ -4587,7 +4797,10 @@ async function resolveRealIfReady(){
          et l'auto-annulation l'aurait marqué `canceled:true, res:null` en dépassant l'échéance de
          la journée, EFFAÇANT un résultat connu. La mise aurait été rendue à tort. */
       const r=results[f.evId]; if(r&&r.completed) continue;
-      if(staleDeadline!=null && nowT > staleDeadline){
+      /* ⚠️ DEUX VERROUS, PAS UN. La porte dit « le délai est écoulé » ; `verifiees` dit « et on a
+         bien pu le redemander une dernière fois ». Sans le second, une panne du fournisseur au
+         moment du mur rembourserait des matchs joués — le dégât même qu'on corrige ici. */
+      if(porte.pret && f.sportKey && verifiees.has(f.sportKey)){
         try{ const nf=await q(db.rpc("duel_patch_fixture",{p_duel_id:d.id,p_ev_id:f.evId,p_patch:{canceled:true,res:null}})); if(nf) d.fixtures=nf; }catch(e){}
       } }
   }
@@ -4615,7 +4828,11 @@ async function resolveRealIfReady(){
      devient introuvable et la journée ne se serait jamais résolue. Tant que le résultat n'était
      écrit qu'à la toute fin, rien ne le rattrapait ; maintenant qu'il persiste, il fait foi. */
   realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId&&!f.canceled){ const r=results[f.evId];
-    if(!f.res && (!r||!r.completed)) allDone=false; } }));
+    // Un match que la porte vient d'ouvrir a été neutralisé juste au-dessus : il compte comme
+    // terminé. Mais uniquement s'il l'a VRAIMENT été — une compétition non vérifiée reste en
+    // attente, sinon la journée se résoudrait sur un match ni résolu ni annulé.
+    const neutralise = porte.pret && f.sportKey && verifiees.has(f.sportKey);
+    if(!f.res && (!r||!r.completed) && !neutralise) allDone=false; } }));
   if(!allDone) return; // il reste des matchs en cours
   resolveDay();
 }
@@ -4624,7 +4841,7 @@ async function resolveRealIfReady(){
    indéfiniment « en attente » en base. Inoffensif une fois `status:"done"` — `resolveRealIfReady`
    refuse tout ce qui n'est pas `running` — mais deux défauts : (1) donnée fausse, un match qui ne
    se jouera jamais reste marqué comme si un score pouvait encore tomber ; (2) coûteux PENDANT la
-   fenêtre avant la fermeture, où l'échéance de `staleDeadlineFrom()` n'a peut-être pas encore eu
+   fenêtre avant la fermeture, où l'échéance de `porteNeutralisation()` n'a peut-être pas encore eu
    l'occasion de s'appliquer (elle vit dans `resolveRealIfReady`, qui n'a besoin QUE d'un joueur qui
    rouvre la ligue — la fermeture, elle, peut arriver avant ce passage-là).
    MÊME FORME que l'auto-annulation ci-dessus (`canceled:true, res:null`), mais SANS attendre cette
@@ -4783,7 +5000,7 @@ function koLabel(f){ let ts=fixtureKickoff(f); if(!ts) return ""; ts=Math.round(
 // À défaut, on estime par le temps écoulé, avec la même durée de match que le déclencheur de
 // récupération des résultats (MATCH_DUREE_MIN) — une seule constante, pas deux règles.
 // ⚠️ Un match reporté sera annoncé « terminé » à tort pendant un moment, jusqu'à ce que l'échéance
-// d'auto-annulation de la journée (`staleDeadlineFrom()`) prenne le relais et affiche « 🚫 annulé ».
+// d'auto-annulation de la journée (`porteNeutralisation()`) prenne le relais et affiche « 🚫 annulé ».
 // C'est assumé : afficher une heure de coup d'envoi dépassée trompait bien davantage.
 function matchEtat(f){
   const r=liveRes[f && f.evId];
@@ -5324,6 +5541,10 @@ const EN={
   "Rejoindre →":"Join →", "🏆 Palmarès général":"🏆 Overall hall of fame", "🛠 Admin":"🛠 Admin",
   "🔔 Activer les notifications":"🔔 Enable notifications",
   "🔔 Nouvelle notification":"🔔 New notification",
+  // ⚠️ Bannière de notification interne (2026-09-23) — « Voir » ouvre le QG, « +N autre(s) »
+  // compte les notifications encore en file derrière celle affichée.
+  "Voir":"View",
+  "autre(s)":"more",
   "🔔 Centre de notifications à venir.":"🔔 Notification center coming soon.",
   "Pour être prévenu quand c'est à toi de jouer (onglet ouvert).":"To be notified when it's your turn (tab open).",
   // Écran de permission notifications push natif (v8.431, Lot Mobile 2)
@@ -6604,6 +6825,7 @@ const EN={
 
   // Info mise max + ROI (v6.13)
   "La mise max":"The max stake",
+  "Le total de tes mises dépasse le plafond autorisé : <b>{m}</b> maximum ({p} % de ton capital actuel de {c}).":"Your total stakes exceed the allowed cap: <b>{m}</b> maximum ({p}% of your current capital of {c}).",
   "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor bonus) — that's what fills the gauge. Each bet must be <b>at least €1</b>.",
   // v8.114 — plus de plafond de mise a la derniere journee.
   "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>. Ce plafond saute pour la <b>dernière journée</b> de la saison.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor bonus) — that's what fills the gauge. Each bet must be <b>at least €1</b>. This cap is lifted on the season's <b>last matchday</b>.",
@@ -6697,11 +6919,12 @@ const EN={
   // détail du match concerné (pas seulement une aide générique) : ci-dessus la chaîne existait
   // déjà mais n'était jamais utilisée nulle part dans le rendu — cf. mbeSideHTML()/showGainDetail().
   "🚫 Match annulé":"🚫 Match cancelled",
+  "Match annulé":"Match cancelled",
   "Ce match n'est pas pris en compte dans les résultats. La mise est remboursée.":"This match is not included in the results. Your stake is refunded.",
   "Remboursé":"Refunded",
   "🚫 mise remboursée (match annulé).":"🚫 stake refunded (match cancelled).",
-  "🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé bien après la fin prévue de la journée — <b>{a} min + {b} h de marge</b> après le coup d'envoi du <b>dernier match programmé de la journée</b> — il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.":"🚫 <b>Cancelled, postponed or abandoned match</b>: if a match still isn't finished well after the day's scheduled end — <b>{a} min + {b} h margin</b> after the kick-off of the <b>last match scheduled for that day</b> — it is <b>automatically</b> treated as cancelled. The <b>stake is refunded</b> (no gain, no loss — as if the bet never happened) and the <b>bonus that targeted it is given back</b>. It's automatic: nobody decides, so nobody can take advantage of it.",
-  "🚫 Si un match n'est toujours pas terminé bien après la fin prévue de la journée (dernier match programmé + {a} min + {b} h de marge), il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.":"🚫 If a match still isn't finished well after the day's scheduled end (last scheduled match + {a} min + {b} h margin), it is <b>automatically treated as cancelled</b>: stakes are refunded, and so is the bonus that targeted it. No action needed.",
+  "🚫 <b>Match annulé, reporté ou abandonné</b> : chaque match dispose d'au moins <b>{a} h</b> après <b>son propre coup d'envoi</b> pour livrer son résultat. Tant qu'un autre match de la journée est encore sans résultat et n'a pas épuisé ses {a} h, <b>on attend</b> : la journée ne neutralise jamais un match parce que les autres sont finis. Quand tous les matchs encore en attente ont dépassé leurs {a} h, Tactizo interroge <b>une dernière fois</b> le fournisseur — et ce n'est que si le résultat reste introuvable que le match est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.":"🚫 <b>Cancelled, postponed or abandoned match</b>: every match gets at least <b>{a} h</b> from <b>its own kick-off</b> to produce a result. As long as another match that day still has no result and hasn't used up its {a} h, <b>we wait</b>: a match is never cancelled just because the others have finished. Once every outstanding match is past its {a} h, Tactizo checks with the provider <b>one final time</b> — and only if the result is still nowhere to be found is the match <b>automatically</b> treated as cancelled. The <b>stake is refunded</b> (no gain, no loss — as if the bet never happened) and the <b>bonus that targeted it is given back</b>. It's automatic: nobody decides, so nobody can take advantage of it.",
+  "🚫 Chaque match a au moins {a} h après son propre coup d'envoi pour livrer son résultat, et la journée attend tant qu'un match n'a pas épuisé les siennes. Ensuite, Tactizo interroge une dernière fois le fournisseur ; si le résultat reste introuvable, le match est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.":"🚫 Every match gets at least {a} h from its own kick-off to produce a result, and the day waits as long as one match hasn't used up its own. After that, Tactizo checks with the provider one final time; if the result is still nowhere to be found, the match is <b>automatically treated as cancelled</b>: stakes are refunded, and so is the bonus that targeted it. No action needed.",
   "⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.":"⚠️ <b>A deliberate trade-off</b>: a match that is <b>postponed and replayed later</b> (weather, unplayable pitch, federation decision…) is also treated as cancelled. It <b>will not count</b> for that day, even if it eventually gets played — the championship doesn't wait.",
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre, et la préparation (gage/récompense + enchères sur les bonus) commencera.":"Close registrations? Nobody else will be able to join, and the preparation (vote + bonus auction) will begin.",
   "Clôturer les inscriptions ? Plus personne ne pourra rejoindre. Vous êtes en nombre impair : un 🤖 joueur IA sera ajouté pour équilibrer, puis la préparation commencera.":"Close registrations? Nobody else will be able to join. You're an odd number: a 🤖 AI player will be added to balance things out, then the preparation will begin.",
@@ -7122,7 +7345,6 @@ const EN={
   "Tu retrouveras un salon où tu pourras <b>retirer / ajouter</b> des joueurs avant de relancer.":"You'll get a lobby where you can <b>remove / add</b> players before relaunching.",
   "📊 Classement détaillé (points & bonus)":"📊 Detailed standings (points & bonuses)",
   "📅 Revoir les résultats journée par journée":"📅 Review results day by day",
-  "🏁 Fermer la ligue":"🏁 Close the league",
   "Elle sera rangée dans le dossier <b>« Ligues terminées »</b> de l'accueil.":"It will be filed under <b>“Finished leagues”</b> on the home screen.",
   // — Phase 4d : palmarès —
   "Chargement du palmarès…":"Loading the hall of fame…", "4ᵉ":"4th", "5ᵉ":"5th", "Nul":"Draw",
@@ -7446,6 +7668,67 @@ function fieldErr(id,m){ const el=$(id); if(!el) return; el.textContent=m||""; e
 // affiche `m` en gras puis `sub` en dessous (titre + corps d'une notification push, cf.
 // setupPushNotifications()) — HTML échappé (`esc()`) : `m`/`sub` peuvent contenir un nom de ligue
 // ou de joueur choisi par un joueur, jamais une simple chaîne de confiance.
+/* ============================================================================================
+   NOTIFICATION INTERNE — file d'attente et rendu.
+
+   ⚠️ RÈGLE ABSOLUE : CE CODE N'APPELLE JAMAIS `render()`, ET NE PREND JAMAIS LE FOCUS.
+   Un push peut arriver pendant que le joueur saisit son gage, mise ses enchères ou remplit ses
+   pronostics. `render()` réécrit `#root` : le champ en cours serait détruit, le focus perdu et le
+   clavier refermé. On ne fait donc que du DOM direct sur `document.body` — qui, lui, n'est jamais
+   réécrit par `render()` (elle ne touche que #root, #topBar, #bottomnav, #foot). La bannière
+   SURVIT donc aux rerenders, au lieu d'en déclencher.
+   Aucun `.focus()`, aucun `preventDefault()` sur le document : rien ne peut voler le curseur.
+   Seul « Voir » appelle `render()` — c'est un geste explicite du joueur, qui accepte de quitter
+   son écran.
+
+   PLUSIEURS PUSHES : file, jamais d'empilement.
+   `pushQueue` garde TOUT ce qui est arrivé (rien n'est perdu), la plus récente en tête. Une SEULE
+   bannière est visible — la plus récente — avec un compteur « +N » pour les autres.
+     · « × »    → retire celle-ci, la suivante apparaît aussitôt ;
+     · « Voir » → ouvre le QG et vide la file (le joueur va tout voir de toute façon).
+   ⚠️ DÉDOUBLONNAGE : un même couple titre+corps déjà en tête n'est pas réempilé. APNs/FCM peuvent
+   relivrer, et le cron rejoue toutes les 5 min — sans cette garde, deux livraisons du même
+   évènement afficheraient « +1 » sans que rien de neuf ne soit arrivé.
+   ⚠️ MISE À JOUR EN PLACE : si la bannière existe déjà, on réécrit son contenu au lieu de la
+   recréer. Recréer ferait clignoter, rejouerait l'animation, et sur un clic malchanceux
+   retirerait le bouton sous le doigt.
+   ============================================================================================ */
+let pushQueue = [];
+function pushBannerPaint(){
+  const n = pushQueue[0];
+  let el = document.getElementById("pushban");
+  if(!n){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement("div");
+    el.id = "pushban"; el.className = "pushban";
+    el.setAttribute("role","status"); el.setAttribute("aria-live","polite");
+    document.body.appendChild(el);
+  }
+  const reste = pushQueue.length - 1;
+  el.innerHTML =
+    '<span class="pb-ic" aria-hidden="true">🔔</span>'
+    + '<div class="pb-txt"><div class="pb-ttl">' + esc(n.title) + '</div>'
+    + (n.body ? '<div class="pb-body">' + esc(n.body) + '</div>' : '')
+    + (reste > 0 ? '<span class="pb-more">+' + reste + ' ' + esc(t("autre(s)")) + '</span>' : '')
+    + '</div>'
+    + '<div class="pb-act">'
+    + '<button type="button" class="pb-voir" onclick="pushBannerVoir()">' + esc(t("Voir")) + '</button>'
+    + '<button type="button" class="pb-x" aria-label="' + esc(t("Fermer")) + '" onclick="pushBannerNext()">×</button>'
+    + '</div>';
+}
+function pushBannerShow(title, body){
+  const ttl = String(title || t("🔔 Nouvelle notification"));
+  const bdy = body == null ? "" : String(body);
+  const tete = pushQueue[0];
+  if(tete && tete.title === ttl && tete.body === bdy) return;   // relivraison du même évènement
+  pushQueue.unshift({title:ttl, body:bdy});
+  pushBannerPaint();
+}
+// « × » — on ne perd rien : la suivante de la file prend la place immédiatement.
+function pushBannerNext(){ pushQueue.shift(); pushBannerPaint(); }
+// « Voir » — le joueur part au QG, donc la file entière a été prise en compte.
+// ⚠️ SEUL ENDROIT DE CE BLOC QUI APPELLE `render()`, et seulement sur un geste explicite.
+function pushBannerVoir(){ pushQueue = []; pushBannerPaint(); S.view = "home"; render(); }
 function toast(m,sub,ms){ const t=document.createElement("div"); t.className="toast";
   if(sub) t.innerHTML=`<b>${esc(m)}</b><br>${esc(sub)}`; else t.textContent=m;
   document.body.appendChild(t); setTimeout(()=>t.remove(),ms||2200); }
@@ -7945,6 +8228,25 @@ function plateformeActivite(){
   const p=(window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform())||"";
   return (p==="android"||p==="ios") ? p : "web";
 }
+/* Version et build annoncés au serveur, pour savoir qui tourne encore sur une vieille application
+   (chantier « remplacer les 8.481 », 2026-09-25).
+   ⚠️ NATIF : `App.getInfo()` donne la version et le build DU BINAIRE INSTALLÉ — c'est la seule
+   source qui dise la vérité après une mise à jour. `APP_VERSION`, lui, décrit le paquet web
+   embarqué : les deux coïncident au moment du build, mais seul `getInfo()` reste juste si un
+   jour le web est servi à distance.
+   ⚠️ WEB : pas de build, la colonne reste nulle — c'est la valeur juste, pas une donnée manquante.
+   ⚠️ TOUT ÉCHEC EST MUET et retombe sur `APP_VERSION` : ce ping ne doit jamais faire échouer quoi
+   que ce soit, et une version approximative vaut mieux que pas de ping du tout. */
+async function infoAppli(){
+  const repli={ version:APP_VERSION, build:null };
+  if(!estNatif()) return repli;
+  try{
+    const A=(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.App)||null;
+    if(!A||!A.getInfo) return repli;
+    const i=await A.getInfo();
+    return { version:(i&&i.version)||APP_VERSION, build:(i&&i.build!=null)?String(i.build):null };
+  }catch(e){ return repli; }
+}
 async function pingActivite(){
   try{
     if(!AUTH || !AUTH.id) return;                       // jamais pour un visiteur non connecté
@@ -7954,7 +8256,8 @@ async function pingActivite(){
     if(maintenant - dernier < PING_ACTIVITE_MS) return;  // throttle : rien à faire
     pingActiviteAt=maintenant;
     try{ localStorage.setItem(PING_ACTIVITE_CLE, String(maintenant)); }catch(e){}
-    await q(db.rpc("touch_activity",{p_platform:plateformeActivite()}));
+    const id=await infoAppli();
+    await q(db.rpc("touch_activity",{p_platform:plateformeActivite(), p_app_version:id.version, p_build:id.build}));
   }catch(e){}                                           // best-effort, muet par construction
 }
 /* Les deux seuls déclencheurs. `visibilitychange` couvre le web (onglet ramené au premier plan)
@@ -10024,7 +10327,12 @@ async function setupPushNotifications(){
     // déjà utilisé ailleurs) couvre les deux plateformes à l'identique, sans nouveau composant.
     // Repli générique traduit si le push n'a pas de titre exploitable (ne devrait pas arriver côté
     // notif-dispatch, mais un push d'une source tierce future ne doit jamais planter ce listener).
-    P.addListener("pushNotificationReceived", (n)=>{ try{ toast((n&&n.title)||t("🔔 Nouvelle notification"), n&&n.body, 4000); }catch(e){} });
+    // ⚠️ (2026-09-23) — LE TOAST DE 4 s EST REMPLACÉ PAR UNE BANNIÈRE PERSISTANTE. Le toast
+    // disparaissait seul, sans son et sans laisser de trace : trois testeurs ont signalé n'avoir
+    // rien vu alors qu'APNs/FCM avaient répondu 200. La bannière reste jusqu'à ce que le joueur
+    // la ferme ou l'ouvre. Même composant sur les deux plateformes, aucun doublon possible avec
+    // la bannière système (qui, au premier plan, n'est affichée NI par iOS NI par Android).
+    P.addListener("pushNotificationReceived", (n)=>{ try{ pushBannerShow(n&&n.title, n&&n.body); }catch(e){} });
     P.addListener("pushNotificationActionPerformed", ()=>{ S.view="home"; render(); });
   }catch(e){}
 }
@@ -15066,7 +15374,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
           <span class="a2-pronos-vs">${f.sport||t("vs")}</span>
           <div class="a2-pronos-team"><span class="a2-pronos-team-name${nameSizeCls(tnm(f,f.away))}">${esc(tnm(f,f.away))}</span><span class="a2-pronos-team-accent"></span></div>
         </div>
-        <span class="a2-pronos-cap-btn${bet.captain===i?' on':''}" title="${bet.captain===i?t("Ce n'est plus mon match favori"):t("En faire mon match favori")}" onclick="setCap(${i})">👑</span>${tgt}</div>
+        <span class="a2-pronos-mcard-actions"><span class="a2-pronos-cap-btn${bet.captain===i?' on':''}" title="${bet.captain===i?t("Ce n'est plus mon match favori"):t("En faire mon match favori")}" onclick="setCap(${i})">👑</span>${tgt}</span></div>
         ${(compBadge(f)||koLabel(f))?`<div class="a2-pronos-mcard-meta">${compBadge(f)}${compBadge(f)&&koLabel(f)?'<span class="dot">·</span>':''}${koLabel(f)}</div>`:''}
         <div class="a2-pronos-odds-btn-row">${o("1",tnm(f,f.home))}${f.draw?o("N",t("Nul")):""}${o("2",tnm(f,f.away))}</div>
         ${(myCard&&myCard.id==="chance"&&myCard.target===i)?`<div style="margin-top:8px"><div class="mini muted">${t("🧈 2ᵉ résultat couvert ({n})",{n:t(CARDS.chance.n)})}</div><div class="a2-pronos-odds-btn-row" style="margin-top:5px">${['1',f.draw?'N':'','2'].filter(v=>v&&v!==b.sel).map(v=>`<div class="a2-pronos-odds-btn${myCard.sel2===v?' selected':''}" onclick="setSel2(${i},'${v}')"><span class="lbl team">${esc(v==='1'?tnm(f,f.home):v==='2'?tnm(f,f.away):t("Nul"))}</span><span class="val">${cote(oddOf(f,v))}</span></div>`).join('')}</div>${myCard.sel2?`<div class="mini blue" style="margin-top:5px">${t("Tu gagnes à la cote du résultat qui sort : {a} ou {b} — pour 1 seule mise.",{a:'<b>'+cote(oddOf(f,b.sel))+'</b>',b:'<b>'+cote(oddOf(f,myCard.sel2))+'</b>'})}</div>`:''}</div>`:''}
@@ -15376,7 +15684,7 @@ const REAL_WAIT_MSGS=[
   "🍿 Sors le pop-corn : le reste se joue sur le terrain.",
   "🤞 Tes pronos sont scellés. À toi de trouver un trèfle à quatre feuilles."
 ];
-// 🚫 MATCH ANNULÉ — traitement 100 % AUTOMATIQUE (cf. staleDeadlineFrom() dans resolveRealIfReady).
+// 🚫 MATCH ANNULÉ — traitement 100 % AUTOMATIQUE (cf. porteNeutralisation() dans resolveRealIfReady).
 // ⚠️ Le bouton manuel « annuler ce match » de la v4.44 a été RETIRÉ en v4.46 : il donnait à
 // l'organisateur un pouvoir discrétionnaire dont il pouvait s'avantager (annuler un match où il
 // perdait). Ne pas le réintroduire sans mécanisme neutre.
@@ -15534,7 +15842,7 @@ function viewWait(dayLbl){
       const favori=(i===mine.captain), onMatch=cardOnMatch(mine.card,i);
       const info=[compBadge(f), koLabel(f)].filter(Boolean).join(' · ');
       return `<div class="match-card-c${favori?' is-favori':''}">
-        <div class="mc-top"><span class="mc-num">${i+1}</span><span class="mc-team">${esc(tnm(f,f.home))}</span><span class="mc-vs">${f.sport||t("vs")}</span><span class="mc-team">${esc(tnm(f,f.away))}</span>${favori?`<span class="mc-fav clik" onclick="showCaptainInfo()">👑</span>`:''}</div>
+        <div class="mc-top"><span class="mc-num">${i+1}</span><span class="mc-team">${esc(tnm(f,f.home))}</span><span class="mc-vs">${f.sport||t("vs")}</span><span class="mc-team">${esc(tnm(f,f.away))}</span>${favori?`<span class="mc-fav clik" onclick="showCaptainInfo()">👑</span>`:`<span class="mc-fav" aria-hidden="true"></span>`}</div>
         ${info?`<span class="mc-meta">${info}</span>`:''}
         <span class="mc-result"><b class="pick-name">${selD}</b> · ${t("Mise")} ${euro(b.stake)} · ${t("Cote")} ${oddD}</span>
         ${onMatch?`<div class="mc-bonus-c clik" onclick="showCardInfo('${mine.card.id}')">${CARDS[mine.card.id].e} ${esc(t(CARDS[mine.card.id].n))}</div>`:''}
@@ -17497,7 +17805,7 @@ function waitingResultsBody(d){
   }
   if(closed){
     h+=`<div class="box mini muted" style="text-align:center">${(L.data_mode==="real")?t("✅ Pronos clôturés — on attend les vrais résultats.")+'<br><b style="color:var(--ink)">'+realWaitPhrase()+'</b>':t("✅ Pronos clôturés — résolution automatique en cours…")}</div>`;
-    if(L.data_mode==="real") h+=`<div class="box mini muted">${t("🚫 Si un match n'est toujours pas terminé bien après la fin prévue de la journée (dernier match programmé + {a} min + {b} h de marge), il est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:MATCH_DUREE_MIN,b:STALE_API_MARGIN_H})}</div>`;
+    if(L.data_mode==="real") h+=`<div class="box mini muted">${t("🚫 Chaque match a au moins {a} h après son propre coup d'envoi pour livrer son résultat, et la journée attend tant qu'un match n'a pas épuisé les siennes. Ensuite, Tactizo interroge une dernière fois le fournisseur ; si le résultat reste introuvable, le match est <b>automatiquement considéré comme annulé</b> : les mises sont rendues et le bonus qui le visait aussi. Aucune intervention nécessaire.",{a:STALE_JOUR_H})}</div>`;
     // (v6.73) Bouton « Publier les résultats » retiré en simulé : la journée se résout automatiquement dès que
     // tous ont validé (ou à la clôture des pronos par l'organisateur) — plus d'attente de « coup d'envoi » fictif.
   }
@@ -22738,7 +23046,7 @@ function viewRulesFull(){
    ${sec(t("💰 Gains et pertes"), `${t("<b>Pari gagné</b> : tu empoches <b>mise × (cote − 1)</b>. <b>Pari perdu</b> : tu perds ta <b>mise</b>.")}<br>
      ${t("<b>🛟 Le filet de sécurité :</b> la <b>perte maximale possible</b> de la journée ne peut jamais dépasser ton capital. L'application refuse un pari qui pourrait te faire finir dans le négatif — si le bouton bloque, baisse n'importe quelle mise (celle de ton match favori ou, si tu as joué 🔥 Ça passe ou ça casse / 🃏 Joker, celle du match ciblé par ce bonus, sont les plus efficaces : les deux comptent double). <b>Ton capital ne descend jamais sous 0.</b>")}<br>
      ${t("<b>💸 Recapitalisation :</b> si un joueur finit une journée sous <b>{a} €</b>, il n'a plus de quoi miser vraiment : son capital est <b>remonté à {b} €</b> pour rester dans la course, en échange de <b>−1 point</b> de championnat (lui seul est concerné).",{a:RECAP_THRESHOLD,b:RECAP_TARGET})} ${t("On <b>remonte à</b> {b} €, on n'ajoute pas {b} € : que tu finisses à {c} € ou à 2 €, tu repars avec {b} €. Perdre davantage ne rapporte donc rien.",{b:RECAP_TARGET,c:RECAP_THRESHOLD-1})} ${t("Cela n'arrive <b>pas sur la dernière journée</b> : il n'y a plus rien à miser ensuite.")}<br>
-     ${t("🚫 <b>Match annulé, reporté ou abandonné</b> : si un match n'est toujours pas terminé bien après la fin prévue de la journée — <b>{a} min + {b} h de marge</b> après le coup d'envoi du <b>dernier match programmé de la journée</b> — il est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.",{a:MATCH_DUREE_MIN,b:STALE_API_MARGIN_H})}<br>
+     ${t("🚫 <b>Match annulé, reporté ou abandonné</b> : chaque match dispose d'au moins <b>{a} h</b> après <b>son propre coup d'envoi</b> pour livrer son résultat. Tant qu'un autre match de la journée est encore sans résultat et n'a pas épuisé ses {a} h, <b>on attend</b> : la journée ne neutralise jamais un match parce que les autres sont finis. Quand tous les matchs encore en attente ont dépassé leurs {a} h, Tactizo interroge <b>une dernière fois</b> le fournisseur — et ce n'est que si le résultat reste introuvable que le match est <b>automatiquement</b> considéré comme annulé. La <b>mise est rendue</b> (ni gain ni perte, comme si le pari n'avait pas eu lieu) et le <b>bonus qui visait ce match t'est rendu</b>. C'est automatique : personne ne décide, donc personne ne peut en profiter.",{a:STALE_JOUR_H})}<br>
      ${t("⚠️ <b>Conséquence assumée</b> : un match <b>reporté puis rejoué plus tard</b> (météo, terrain impraticable, décision de la fédération…) est lui aussi traité comme annulé. Il <b>ne comptera pas</b> dans la journée, même s'il finit par se jouer — le championnat n'attend pas.")}`)}
 
    ${sec(t("🏆 Points et classement"), `${t("Le <b>vainqueur du duel</b> est celui au <b>meilleur résultat net</b> (gains − mises). À <b>net égal</b>, c'est un <b>match nul</b> — ni le gain ni la mise ne départagent.")}<br>
@@ -23015,6 +23323,9 @@ db.auth.onAuthStateChange((event,session)=>{
     // cette section). Repli MUET sur `false` en cas d'échec (réseau, table absente...) : une
     // panne de LECTURE de ce flag ne doit jamais, par accident, bloquer tout le monde.
     try{ const rows=await q(db.from("app_config").select("actif").eq("k","maintenance")); REAL_MAINTENANCE=!!(rows&&rows[0]&&rows[0].actif); }catch(e){}
+    // Recheck Odds : même lecture, même endroit, même repli MUET — mais vers `false` (cf. la
+    // déclaration de RECHECK_ODDS_ACTIF). Une clé absente laisse donc le mécanisme fermé.
+    try{ const rows=await q(db.from("app_config").select("actif").eq("k","recheck_odds")); RECHECK_ODDS_ACTIF=!!(rows&&rows[0]&&rows[0].actif); }catch(e){ RECHECK_ODDS_ACTIF=false; }
     // ⚠️ Lot A (2026-09-13) — version minimale native : NATIF UNIQUEMENT (le web a déjà son propre
     // mécanisme, checkForUpdate() plus bas). Repli MUET (aucun blocage) en cas d'échec de lecture.
     if(estNatif()){
