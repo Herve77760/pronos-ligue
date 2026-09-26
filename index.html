@@ -265,6 +265,14 @@
        sur une ligne y reste sur une ligne. */
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
   .lgrow .mt{font-size:11px;color:var(--muted);margin-top:3px;}
+  /* ⚠️ L'ÉTAT UTILE PASSE DEVANT (2026-09-26). Il décide si on ouvre la ligue ; le code et la
+     journée ne sont que des repères. On le distingue par la couleur et la graisse, pas par une
+     taille beaucoup plus grande : la carte doit rester compacte, trois ligues doivent tenir
+     sans faire défiler. `margin-top:4px` au lieu de 3 : il colle au nom, la ligne du code
+     respire en dessous. Aucun `nowrap` : un état long doit se replier, jamais déborder. */
+  .lgrow .mt.etat{font-size:12px;font-weight:700;color:var(--ink);margin-top:4px}
+  .lgrow .mt.etat+.mt{margin-top:2px}
+  .lgrow.done .mt.etat{font-weight:600;color:var(--muted)}
   .lgrow .sd{display:flex;align-items:center;gap:6px;flex:none;}
   .lgrow .sd .chip{font-size:10px;padding:3px 8px;}
   /* ⚠️ v8.207 (demandé par Hervé, captures à l'appui) — SUR TÉLÉPHONE, LE TITRE PREND TOUTE
@@ -1692,28 +1700,35 @@
      Position/hauteur de la bulle DIFFÈRENT par palier (le personnage n'est pas au même endroit
      d'une pose à l'autre) — palier 3 a en plus une pose différente donc son propre X. Valeurs
      copiées à l'identique des variables --qb-* de la maquette, ne pas les "arrondir". */
-  .a2-maestro-mood{--mm-qb-l:4.3%;--mm-qb-w:27.7%;
-    --mm-qb-t1:52.0%;--mm-qb-h1:23.5%; --mm-qb-t2:48.3%;--mm-qb-h2:22.6%;
-    /* ⚠️ v8.418 (demandé par Hervé, cas réel) — w3 élargi (26.7%→29.5%) + police du palier 3 réduite
-       (7.4px→7px, cf. règle .tier-3 plus bas) : avec un message long (4 lignes, ex. "noleague"), le
-       texte débordait du rectangle sombre peint sur CETTE pose précise (mesuré/vérifié pixel par
-       pixel sur qg-tactizo-maestro-t3.png — la 3ᵉ ligne touchait le bord droit du cadre). Les 5
-       autres paliers n'ont pas ce problème (rectangles peints plus larges) : ne pas toucher --mm-qb-w
-       (partagé) ni leurs propres variables. */
-    --mm-qb-l3:4.0%;--mm-qb-w3:29.5%;--mm-qb-t3:46.5%;--mm-qb-h3:16.7%;
-    /* ⚠️ v8.421 (demandé par Hervé, 2ᵉ test visuel palier 4 "mains jointes") — asset remplacé À NOUVEAU
-       (native 1588×991, ratio 1,602 > cible 853/564=1,512 : cette fois le crop object-fit:cover
-       rogne les côtés gauche/droite, PAS le haut/bas comme sur la version précédente — recalculé en
-       conséquence). Mesuré pixel par pixel : le texte démarre sous le guillemet peint (comme la
-       v1 du palier 4). l4/w4 propres à ce palier (comme l3/w3) ; les 5 autres paliers inchangés. */
-    --mm-qb-l4:4.0%;--mm-qb-w4:29.5%;--mm-qb-t4:45.0%;--mm-qb-h4:14.5%; --mm-qb-t5:43.5%;--mm-qb-h5:19.3%; --mm-qb-t6:43.6%;--mm-qb-h6:19.5%;
+  .a2-maestro-mood{/* ⚠️ GÉOMÉTRIE REMESURÉE LE 2026-09-26, PNG PAR PNG, À LA GRILLE (retour d'Hervé sur la page QA :
+       « le texte dépasse de la bulle, particulièrement en 320 px FR »). Les valeurs précédentes
+       décrivaient une boîte NETTEMENT PLUS PETITE que la bulle peinte, et le `min-height` la laissait
+       grandir vers le BAS : le texte sortait donc par le bas du dessin. Mesuré : jusqu'à 7,2 points
+       hors bulle au palier 4, et 3 à 5 points aux paliers 3, 5 et 6 — quatre paliers sur six.
+       CE QUI CHANGE, ET POURQUOI ÇA NE RÉTRÉCIT AUCUN TEXTE :
+        • chaque boîte épouse désormais sa bulle peinte, marge interne d'un point comprise ;
+        • le palier 4 gagne 5,8 points de LARGEUR (sa bulle va jusqu'à 39,3 %, la boîte s'arrêtait
+          à 33,5 %) — c'est lui le cas le plus spectaculaire ;
+        • les paliers 3 et 5 sont au contraire RÉTRÉCIS à droite : leur lisere peint passe DERRIÈRE le
+          bras du Maestro, et la boîte débordait sur la manche ;
+        • tous gagnent en HAUTEUR, parce que la boîte remonte jusqu'au haut de la bulle. La place du
+          guillemet peint n'est plus perdue : `--mm-qb-g*` réserve exactement sa largeur sur la
+          PREMIÈRE LIGNE (cf. le flottant sur `span::before`), le texte reprend toute la largeur
+          dès la deuxième. C'est ce gain-là qui rend les quatre paliers conformes sans toucher à la
+          police — règle posée par Hervé : la lisibilité prime sur le fait de faire rentrer le texte. */
+    --mm-qb-l1:4.5%;--mm-qb-w1:27.0%;--mm-qb-t1:43.0%;--mm-qb-h1:31.5%;--mm-qb-g1:6.3cqw;
+    --mm-qb-l2:5.0%;--mm-qb-w2:26.5%;--mm-qb-t2:40.5%;--mm-qb-h2:29.0%;--mm-qb-g2:5.8cqw;
+    --mm-qb-l3:5.2%;--mm-qb-w3:22.6%;--mm-qb-t3:36.5%;--mm-qb-h3:26.5%;--mm-qb-g3:5.6cqw;
+    --mm-qb-l4:5.3%;--mm-qb-w4:33.0%;--mm-qb-t4:37.5%;--mm-qb-h4:21.7%;--mm-qb-g4:8.0cqw;
+    --mm-qb-l5:5.3%;--mm-qb-w5:24.0%;--mm-qb-t5:36.0%;--mm-qb-h5:26.5%;--mm-qb-g5:4.5cqw;
+    --mm-qb-l6:4.8%;--mm-qb-w6:26.2%;--mm-qb-t6:35.5%;--mm-qb-h6:25.0%;--mm-qb-g6:5.5cqw;
     --mm-tier-1:#ff5a4d;--mm-tier-1-dim:#3a140f;--mm-tier-1-ink:#ffd9d2;
     --mm-tier-2:#ff8a3d;--mm-tier-2-dim:#3a2211;--mm-tier-2-ink:#ffdec2;
     --mm-tier-3:#ffc233;--mm-tier-3-dim:#3a2e0d;--mm-tier-3-ink:#ffe9b8;
     --mm-tier-4:#c7d94a;--mm-tier-4-dim:#2e3310;--mm-tier-4-ink:#eaf2ba;
     --mm-tier-5:#7bd88f;--mm-tier-5-dim:#193322;--mm-tier-5-ink:#cdf3d8;
     --mm-tier-6:#3fca85;--mm-tier-6-dim:#123322;--mm-tier-6-ink:#bdf3d6;
-    position:relative;overflow:hidden;border-radius:16px;margin-bottom:16px;
+    position:relative;overflow:hidden;border-radius:16px;margin-bottom:16px;container-type:inline-size;
     background:radial-gradient(120% 90% at 80% 0%, rgba(156,127,224,.20), transparent 55%),
       radial-gradient(100% 80% at 10% 100%, rgba(205,164,58,.10), transparent 60%),
       linear-gradient(160deg,#241d3d,#1a2035 65%);}
@@ -1726,22 +1741,45 @@
      conteneur dépend du décodage de l'image (retardé sur réseau lent) — la bulle, positionnée en
      `absolute` par rapport à ce conteneur, se retrouverait mal placée pendant ce court instant. */
   .a2-maestro-mood-img{display:block;width:100%;aspect-ratio:853/564;object-fit:cover}
-  .a2-maestro-mood-bubble{position:absolute;left:var(--mm-qb-l);width:var(--mm-qb-w);
-    background:transparent;border:0;z-index:2;padding:4px 6px 5px;display:flex;flex-direction:column;gap:2px;
-    font-size:8px;line-height:1.15;color:#dfe6f5}
+  .a2-maestro-mood-bubble{position:absolute;
+    background:transparent;border:0;z-index:2;padding:1.5px 5px 2px;display:flex;flex-direction:column;gap:2px;
+    /* ⚠️ ALIGNÉ EN HAUT, PAS CENTRÉ (arbitrage du 2026-09-26). Centrer verticalement désalignait
+       le retrait du flottant : il ne longeait plus le guillemet peint et devenait une indentation
+       orpheline au milieu de la bulle. Aligné en haut, le guillemet introduit la première ligne —
+       c'est la logique du dessin lui-même. */
+    justify-content:flex-start;
+    font-size:clamp(8px,2.45cqw,10.5px);line-height:1.16;color:#dfe6f5;
+    /* ⚠️ 2026-09-26 — DEUX DÉFAUTS MESURÉS, retour réel d'Hervé sur 8.501 (« presque illisible »).
+       1. CONTRASTE. Cette bulle est la SEULE de l'app posée à même une illustration peinte, sans
+          fond ni ombre — les encarts Classement/Pronos/Validation ont tous leur `text-shadow`
+          depuis longtemps, celle-ci n'en a jamais eu. Mesure par échantillonnage 12×6 sur les six
+          PNG réels : paliers 3 et 6 tombent à 3,02 et 4,36 (seuil WCAG AA : 4,5), sur des pixels
+          orangés de la scène. ⚠️ UNE MOYENNE DE ZONE NE VOIT RIEN : elle donnait 13 à 16 partout.
+          C'est le pire pixel qui décide de la lisibilité, jamais la moyenne.
+       2. TAILLE. 8px FIXES quelle que soit la largeur d'écran — donc 8px sur un 430px comme sur un
+          320px. `cqw` fait suivre la largeur réelle de la carte, avec un plancher à 8px : jamais
+          plus petit qu'aujourd'hui, nettement plus lisible dès 375px.
+       ⚠️ Le halo est volontairement serré (3px) et très opaque : il détache le texte sans créer de
+       tache visible sur les paliers déjà sombres, où le contraste était déjà de 12 à 15. */
+    text-shadow:0 1px 3px rgba(0,0,0,.92), 0 0 2px rgba(0,0,0,.8)}
+  /* ⚠️ LE GUILLEMET EST PEINT DANS L'IMAGE, pas dans le HTML — la boîte de texte ne pouvait donc
+     commencer qu'EN DESSOUS de lui, et toute la bande du haut de la bulle était perdue. Ce flottant
+     vide réserve exactement sa largeur sur la PREMIÈRE LIGNE : le texte démarre à sa droite puis
+     reprend toute la largeur dès la ligne suivante. C'est ce qui rend une ligne entière de hauteur
+     à chaque palier, et donc ce qui permet de tout contenir SANS réduire la police. Sa largeur est
+     en `cqw` comme la police : elle suit la largeur réelle de la carte, jamais une valeur fixe. */
+  .a2-maestro-mood-bubble>span::before{content:"";float:left;width:var(--mm-qb-g);height:1.2em}
   /* ⚠️ Correctif QA (2026-09-06) — les hauteurs --mm-qb-h* de la maquette étaient mesurées sur ses
      5 messages de démo (courts) ; certains messages réels (FR ET EN) débordent de quelques px sur
      les paliers à bulle basse (2 à 6). `height`→`min-height` + PAS d'overflow:hidden : le texte
      garde sa taille lisible et déborde proprement dans le dégradé sombre du bas de l'image plutôt
      que d'être invisiblement tronqué (le vrai bug, pire qu'un léger débord visuel). */
-  .a2-maestro-mood.tier-1 .a2-maestro-mood-bubble{top:var(--mm-qb-t1);min-height:var(--mm-qb-h1)}
-  .a2-maestro-mood.tier-2 .a2-maestro-mood-bubble{top:var(--mm-qb-t2);min-height:var(--mm-qb-h2)}
-  .a2-maestro-mood.tier-3 .a2-maestro-mood-bubble{left:var(--mm-qb-l3);width:var(--mm-qb-w3);
-    top:var(--mm-qb-t3);min-height:var(--mm-qb-h3);padding-top:4px;padding-bottom:3px;gap:1px;font-size:7px}
-  .a2-maestro-mood.tier-4 .a2-maestro-mood-bubble{left:var(--mm-qb-l4);width:var(--mm-qb-w4);
-    top:var(--mm-qb-t4);min-height:var(--mm-qb-h4)}
-  .a2-maestro-mood.tier-5 .a2-maestro-mood-bubble{top:var(--mm-qb-t5);min-height:var(--mm-qb-h5)}
-  .a2-maestro-mood.tier-6 .a2-maestro-mood-bubble{top:var(--mm-qb-t6);min-height:var(--mm-qb-h6)}
+  .a2-maestro-mood.tier-1 .a2-maestro-mood-bubble{left:var(--mm-qb-l1);width:var(--mm-qb-w1);top:var(--mm-qb-t1);min-height:var(--mm-qb-h1);--mm-qb-g:var(--mm-qb-g1)}
+  .a2-maestro-mood.tier-2 .a2-maestro-mood-bubble{left:var(--mm-qb-l2);width:var(--mm-qb-w2);top:var(--mm-qb-t2);min-height:var(--mm-qb-h2);--mm-qb-g:var(--mm-qb-g2)}
+  .a2-maestro-mood.tier-3 .a2-maestro-mood-bubble{left:var(--mm-qb-l3);width:var(--mm-qb-w3);top:var(--mm-qb-t3);min-height:var(--mm-qb-h3);--mm-qb-g:var(--mm-qb-g3)}
+  .a2-maestro-mood.tier-4 .a2-maestro-mood-bubble{left:var(--mm-qb-l4);width:var(--mm-qb-w4);top:var(--mm-qb-t4);min-height:var(--mm-qb-h4);--mm-qb-g:var(--mm-qb-g4)}
+  .a2-maestro-mood.tier-5 .a2-maestro-mood-bubble{left:var(--mm-qb-l5);width:var(--mm-qb-w5);top:var(--mm-qb-t5);min-height:var(--mm-qb-h5);--mm-qb-g:var(--mm-qb-g5)}
+  .a2-maestro-mood.tier-6 .a2-maestro-mood-bubble{left:var(--mm-qb-l6);width:var(--mm-qb-w6);top:var(--mm-qb-t6);min-height:var(--mm-qb-h6);--mm-qb-g:var(--mm-qb-g6)}
   .a2-maestro-mood-bubble b{color:var(--a2-brass-light,#ecd382)}
   /* v8.397 — voyants dynamiques du QG, REFONTE. Les 4 cercles gris peints ont été retirés des 6 PNG
      (nettoyage chirurgical par inpainting, ~0,85% de pixels changés par fichier, reste de l'image
@@ -1864,17 +1902,39 @@
      "Xh Ymin" (fmtLeft(), déjà établi ailleurs dans l'app) plutôt qu'un tick live seconde par
      seconde de la maquette : même donnée réelle, pas de nouveau timer à gérer/nettoyer. */
   .a2-pronos-info-strip{display:flex;align-items:stretch;gap:0;padding:2px 0 14px}
-  .a2-pronos-info-cell{flex:1;display:flex;flex-direction:column;gap:3px;padding:0 10px;text-align:center;min-width:0}
+  .a2-pronos-info-cell{flex:1;display:flex;flex-direction:column;gap:3px;padding:0 10px;text-align:center;min-width:0;overflow:hidden}
+  /* ⚠️ LES TROIS COLONNES N'ONT PAS LES MÊMES BESOINS (2026-09-26). En `flex:1` partout, chacune
+     prenait exactement un tiers — soit 86px utiles à 320px pour celle du milieu, dont 49 déjà pris
+     par l'avatar, la pastille et les espaces. Il ne restait que 37px pour le pseudo : « Nicoboubou »
+     s'affichait « Nico… », alors que la place existait juste à côté. Or la consigne d'Hervé est
+     explicite : ne pas rogner le pseudo si le retrait du libellé suffit.
+     « Journée » et « Cagnotte » ont une largeur naturelle courte et FIXE (un ratio, un montant) :
+     on la leur laisse, sans jamais les comprimer — la cagnotte ne doit jamais être tronquée. Tout
+     le reste va au milieu, la seule colonne dont le contenu varie. À 320px le pseudo dispose alors
+     de ~94px : « Nicoboubou » passe en entier, et l'ellipse redevient ce qu'elle doit être, un
+     filet pour les pseudos les plus longs. */
+  .a2-pronos-info-strip>.a2-pronos-info-cell:first-child,
+  .a2-pronos-info-strip>.a2-pronos-info-cell:last-child{flex:0 0 auto}
+  .a2-pronos-info-strip>.a2-pronos-info-cell:nth-child(2){flex:1 1 auto}
   .a2-pronos-info-cell:first-child{padding-left:0}
   .a2-pronos-info-cell:last-child{padding-right:0}
   .a2-pronos-info-cell+.a2-pronos-info-cell{border-left:1px solid var(--a2-border)}
   .a2-pronos-info-cell .lbl{font-size:8.5px;color:var(--a2-purple-light);text-transform:uppercase;letter-spacing:.04em;font-weight:700;white-space:nowrap}
   .a2-pronos-info-cell .val{font-weight:700;font-size:13px;white-space:nowrap;color:var(--a2-ink)}
   .a2-pronos-info-cell .val.money{color:var(--a2-ready)}
-  .a2-pronos-info-opp{display:flex;align-items:center;justify-content:center;gap:5px}
+  .a2-pronos-info-opp{display:flex;align-items:center;justify-content:center;gap:5px;min-width:0}
   .a2-pronos-info-opp .av{width:20px;height:20px;border-radius:50%;background:var(--a2-panel-2);border:1px solid var(--a2-border);
     display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--a2-brass-light);flex:0 0 auto}
-  .a2-pronos-loc{font-size:7.5px;font-weight:700;padding:1px 5px;border-radius:999px;background:var(--a2-purple-deep,#180f2e);color:var(--a2-purple-light)}
+  .a2-pronos-loc{font-size:11px;line-height:1;padding:2px 4px;border-radius:999px;background:var(--a2-purple-deep,#180f2e);flex:0 0 auto}
+  /* ⚠️ CE QUI EMPÊCHE VRAIMENT LE CHEVAUCHEMENT (2026-09-26). Retirer le mot « Extérieur »
+     rend la colonne du milieu bien plus courte, mais ne garantit RIEN : les trois cellules
+     sont en `flex:1` avec `.val{white-space:nowrap}`, donc un pseudo assez long déborderait
+     de nouveau sur la cagnotte. Le seul élément autorisé à céder est le PSEUDO, et seulement
+     quand il n'y a plus le choix : `min-width:0` le rend compressible, l'ellipse dit que
+     c'est tronqué. L'avatar et la pastille gardent `flex:0 0 auto` : ils ne rétrécissent
+     jamais. Un pseudo fait au plus 20 caractères (maxlength du champ), et à 320 px il passe
+     en entier — l'ellipse est un filet, pas le fonctionnement normal. */
+  .a2-pronos-info-nom{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 
   .a2-pronos-wait{position:relative;overflow:hidden;text-align:center;padding:26px 4px 20px;margin-bottom:16px}
   .a2-pronos-wait-glow{position:absolute;inset:0;background:radial-gradient(60% 50% at 50% 30%,rgba(156,127,224,.22),transparent 70%);pointer-events:none}
@@ -2537,7 +2597,10 @@
   .a2-lr-main{flex:1;min-width:0}
   .a2-lr-name{font-weight:700;font-size:14px;line-height:1.25;color:var(--a2-ink);
     display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
-  .a2-lr-meta{font-size:11px;color:var(--a2-muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .a2-lr-meta{font-size:11px;color:var(--a2-muted);margin-top:2px;
+    display:flex;flex-wrap:wrap;column-gap:8px;row-gap:1px;align-items:baseline}
+  .a2-lr-etat{color:var(--a2-ink);font-weight:600}
+  .a2-lr-jour{opacity:.8;flex:0 0 auto}
   .a2-lr-right{flex:0 0 auto;display:flex;align-items:center;gap:6px;max-width:44%}
   .a2-lr-status-wrap{text-align:right;min-width:0}
   .a2-lr-status{font-size:10px;font-weight:800;letter-spacing:.01em;color:var(--row-color,var(--a2-ink));line-height:1.3}
@@ -2771,7 +2834,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.501";
+const APP_VERSION = "v8.502";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5559,6 +5622,13 @@ const EN={
   "Résultats à découvrir":"Results to discover",
   "la journée {a} est jouée, tu n'as pas encore vu le verdict.":"matchday {a} has been played — you haven't seen the verdict yet.",
   "Résultats bientôt disponibles":"Results coming soon",
+  // v8.502 — même famille, mais ligue DÉJÀ en `resolving` : la résolution est lancée, le joueur
+  // n'a rien à déclencher. Texte distinct de « bientôt disponibles », qui lui invite à aller voir.
+  "Résultats en cours de confirmation":"Results being confirmed",
+  "les matchs de la journée {a} sont terminés : la journée se résout automatiquement dès que tous les scores sont remontés.":"matchday {a} is over: it resolves automatically as soon as every score comes in.",
+  "Suivre":"Follow",
+  "Matchs terminés — résultats en cours de confirmation":"Matches finished — results being confirmed",
+  "La journée se résout automatiquement dès que tous les scores sont remontés. Rien à faire de ton côté.":"The matchday resolves automatically as soon as every score comes in. Nothing to do on your side.",
   "tous les matchs de la journée {a} semblent terminés : ouvre la ligue pour vérifier si la résolution peut être déclenchée.":"every match of matchday {a} looks finished: open the league to check whether the resolution can be triggered.",
   "Découvrir":"Reveal",
   "Voir les résultats":"See the results",
@@ -5571,6 +5641,10 @@ const EN={
   "🏆 Tes ligues en cours":"🏆 Your leagues in progress",
   // v8.74 — phase de chaque ligue sur l'accueil (remplace le « En cours » indifférencié).
   "choix des matchs":"picking the matches",
+  // v8.502 — états plus precis de `phaseLigue`, partages par le QG et la page Ligues.
+  "à toi de choisir les matchs":"your turn to pick",
+  "l'adversaire choisit":"opponent is picking",
+  "en attente de ses pronos":"waiting for their picks",
   // v8.76 — phase de PREPARATION sur l'accueil.
   "Démarrage…":"Starting…",
   "inscriptions ouvertes":"registration open",
@@ -5665,6 +5739,10 @@ const EN={
   "En attente que {a} (à domicile) choisisse les 5 matchs…":"Waiting for {a} (home) to choose the 5 matches…",
   "Choix des matchs avant {a}":"Pick the matches before {a}", "Clôture des paris {a}":"Bets close {a}",
   "🏠 Domicile":"🏠 Home", "✈️ Extérieur":"✈️ Away",
+  // v8.502 — versions SANS l'icône : dans le bandeau compact des Pronos la pastille ne porte
+  // plus que 🏠 ou ✈️, et le mot complet passe dans title/aria-label. L'info n'est donc pas
+  // perdue pour un lecteur d'écran, elle change seulement de support.
+  "Domicile":"Home", "Extérieur":"Away",
   "Choisis 5 rencontres":"Pick 5 matches",
   "<b>{a}</b>/5 sélectionnées — imposées à <b>{b}</b>.":"<b>{a}</b>/5 selected — imposed on <b>{b}</b>.",
   "cotes {a}":"odds {a}",
@@ -8192,6 +8270,51 @@ const REVENUECAT_KEY_IOS="appl_UQmdcANDrezIQofxRxlwUnsUjBN";
 const REVENUECAT_KEY_ANDROID="goog_jRMxqHDsHVzhCUOEoLpiHmsUpGH";
 function estNatif(){ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
 /* ============================================================================================
+   OUVRIR UN LIEN QUI SORT DE L'ÉCRAN — UNE SEULE PORTE      (2026-09-26, bug réel signalé par Hervé)
+
+   LE DÉFAUT. Sur iOS, les liens « Confidentialité » et « Conditions d'utilisation » ne
+   répondaient pas. Sur Android ils fonctionnaient. Ce n'était pas un défaut de ces deux boutons :
+   TOUS les liens de l'app en `target="_blank"` étaient concernés, y compris le bouton
+   « Mettre à jour » du gate de version — c'est-à-dire la seule sortie d'un écran bloquant.
+
+   LA CAUSE, COMMUNE AUX QUATRE. `target="_blank"` demande au navigateur d'ouvrir une NOUVELLE
+   vue. WKWebView (iOS) ne le fait pas tout seul : il délègue à l'application, via
+   `webView(_:createWebViewWith:)`, que Capacitor n'implémente pas. Résultat : le clic est bien
+   reçu, et il ne se passe rien. Le WebView d'Android, lui, ouvre le navigateur système — d'où
+   l'asymétrie. Ce n'est donc pas « deux boutons cassés », c'est un geste que l'une des deux
+   plateformes ignore en silence.
+
+   LE CORRECTIF, DANS L'ARCHITECTURE EXISTANTE. En natif on passe par `@capacitor/browser`
+   (déjà installé, déjà utilisé pour OAuth) : il ouvre un navigateur SÉPARÉ, par-dessus l'app.
+   ⚠️ LA SESSION TACTIZO N'EST JAMAIS QUITTÉE — c'est le point qui compte : une navigation dans
+   la webview de l'app, elle, ferait sortir le joueur de Tactizo, et le retour n'est pas garanti.
+
+   ⚠️ POURQUOI ON VISE L'URL PUBLIQUE EN NATIF. `cgu.html` est bien embarqué dans l'app, mais son
+   origine y est `capacitor://localhost` (iOS) ou `https://localhost` (Android) : un navigateur
+   système ne sait pas la charger. On ouvre donc la page PUBLIÉE sur tactizo.com. Sur le web, on
+   garde le lien relatif — c'est la même page, servie par le même site.
+
+   ⚠️ `mailto:` NE PASSE PAS PAR LE NAVIGATEUR. On le confie à la plateforme, qui l'oriente vers
+   le client mail ; l'ouvrir dans un navigateur ne donnerait rien. C'est déjà ce que fait le lien
+   « Nous contacter », qui n'a jamais été en défaut — on ne change pas ce qui marche, on le fait
+   simplement passer par la même porte pour qu'il soit couvert par les mêmes tests. */
+const SITE_PUBLIC = "https://tactizo.com/";
+async function ouvrirLien(url, ev){
+  if(ev){ try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){} }
+  url=(url||"").trim(); if(!url) return false;
+  if(/^mailto:/i.test(url)){ try{ window.location.href=url; }catch(e){} return true; }
+  // relatif → absolu, mais SEULEMENT en natif : sur le web le relatif est déjà bon.
+  const abs = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url
+            : (estNatif() ? SITE_PUBLIC + url.replace(/^\.?\//,"") : url);
+  if(estNatif()){
+    const B = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser;
+    if(B && B.open){ try{ await B.open({url:abs}); return true; }catch(e){} }
+  }
+  // Web, ou repli si le plugin manque : nouvel onglet, jamais la page courante.
+  try{ window.open(abs,"_blank","noopener"); }catch(e){ try{ window.location.href=abs; }catch(e2){} }
+  return true;
+}
+/* ============================================================================================
    ACTIVITÉ RÉELLE — `touch_activity()`                            (2026-09-23, demandé par Hervé)
 
    POURQUOI. `auth.users.last_sign_in_at` ne mesure pas l'usage : une session Supabase reste
@@ -8534,7 +8657,7 @@ function consentementAchat(key){
     infoModal("📜", t("Avant de payer"),
       `<div class="mini muted" style="text-align:left;line-height:1.6;margin-bottom:10px">${t("Achat de « {a} » — {b}",{a:t(p.t||key),b:PRICES[key]!=null?euro(PRICES[key]):""})}</div>
        <div class="box clik" id="consCgv" onclick="consentToggleCgv()" style="text-align:left;margin:0 0 8px;border-color:var(--border)">
-         <span class="mini"><span id="consCgvMark">☐</span> ${t("J'accepte les")} <a href="cgv.html" target="_blank" rel="noopener" onclick="event.stopPropagation()">${t("Conditions Générales de Vente")}</a></span>
+         <span class="mini"><span id="consCgvMark">☐</span> ${t("J'accepte les")} <a href="cgv.html" onclick="ouvrirLien('cgv.html',event)">${t("Conditions Générales de Vente")}</a></span>
        </div>
        <div class="box clik" id="consRetract" onclick="consentToggleRetract()" style="text-align:left;margin:0 0 14px;border-color:var(--border)">
          <span class="mini"><span id="consRetractMark">☐</span> ${t("Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'une fois pleinement exécutée à ma demande, je perdrai mon droit de rétractation.")}</span>
@@ -11498,13 +11621,31 @@ function phasePrep(lg, pid, shopDone){
   }
   return {e:"💰", t:t("enchères à faire")};
 }
-function phaseLigue(lg, duel, monPari){
+/* ⚠️ `ctx` AJOUTÉ LE 2026-09-26 (retour d'Hervé : « En cours » ne m'apprend rien sur la page
+   Ligues). On n'a PAS créé un calcul d'état pour cette page-là : on a affiné CELUI-CI, la seule
+   source de vérité, pour que les deux écrans gagnent la précision ensemble et ne puissent pas se
+   contredire. `ctx` est optionnel — sans lui la fonction se comporte exactement comme avant.
+     ctx.pid          : mon `players.id` dans cette ligue → qui doit choisir les matchs.
+                        Même règle que le todo `choix` : c'est le joueur À DOMICILE (duel.home_id).
+     ctx.pariAdverse  : l'adversaire a-t-il validé ? `null` = on ne sait pas (on reste discret).
+                        ⚠️ ON NE LIT JAMAIS SES PRONOSTICS, seulement l'EXISTENCE de sa ligne de
+                        pari : la règle anti-spoiler de l'app interdit de voir les choix d'autrui
+                        avant la clôture, et ce n'est pas une petite ligne d'état qui va l'enfreindre. */
+function phaseLigue(lg, duel, monPari, ctx){
   if(lg.status!=="running") return null;
-  if(!duel || !Array.isArray(duel.fixtures) || !duel.fixtures.length) return {e:"⏳", t:t("choix des matchs")};
+  if(!duel || !Array.isArray(duel.fixtures) || !duel.fixtures.length){
+    if(duel && ctx && ctx.pid!=null){
+      return duel.home_id===ctx.pid ? {e:"🎯", t:t("à toi de choisir les matchs")}
+                                    : {e:"⏳", t:t("l'adversaire choisit")};
+    }
+    return {e:"⏳", t:t("choix des matchs")};
+  }
   const t0=duelDeadline(duel,lg);
   if(t0 && Date.now()<t0){
     const parie=!!(monPari && Array.isArray(monPari.picks) && monPari.picks.length);
-    return parie ? {e:"✅", t:t("pronos validés")} : {e:"⚠️", t:t("pronos à faire")};
+    if(!parie) return {e:"⚠️", t:t("pronos à faire")};
+    return (ctx && ctx.pariAdverse===false) ? {e:"⏳", t:t("en attente de ses pronos")}
+                                            : {e:"✅", t:t("pronos validés")};
   }
   /* ⚠️ v8.262 (bug vécu par Hervé sur XXZQ3 : la clôture des pronos passée depuis un moment, le
      bandeau restait muet) — EN SIMULÉ, LA CLÔTURE SUFFIT. `shouldAutoResolve()` (le vrai
@@ -11638,15 +11779,27 @@ async function loadHomeTodo(){
   if(!act.length){ homeTodo=newHomeTodo; homePhase=newHomePhase; homeTodoLoaded=true; render(); return; }
   try{
     const lids=[...new Set(act.map(m=>m.lg.id))], pids=act.map(m=>m.pid);
-    const [bts,dls]=await Promise.all([
+    /* ⚠️ TROISIÈME REQUÊTE, VOLONTAIREMENT MAIGRE (2026-09-26). Pour dire « en attente de ses
+       pronos » il faut savoir si l'adversaire a validé — mais SURTOUT PAS ce qu'il a joué. On ne
+       demande donc que les CLÉS (`player_id`/`day`), jamais `picks` : la règle anti-spoiler de
+       l'app interdit de voir les choix d'autrui avant la clôture, et une ligne d'état ne justifie
+       pas d'affaiblir ça. Ma propre requête, elle, garde `picks` — c'est elle qui dit si MOI j'ai
+       validé, et ce sont mes pronostics. */
+    const [bts,dls,btsTous]=await Promise.all([
       q(db.from("bets").select("league_id,day,player_id,picks").in("player_id",pids)),
-      q(db.from("duels").select("league_id,day,home_id,away_id,fixtures").in("league_id",lids))
+      q(db.from("duels").select("league_id,day,home_id,away_id,fixtures").in("league_id",lids)),
+      q(db.from("bets").select("league_id,day,player_id").in("league_id",lids))
     ]);
     act.forEach(m=>{
       const d=m.lg.current_day||0;
       const duel=(dls||[]).find(x=>x.league_id===m.lg.id && x.day===d && (x.home_id===m.pid||x.away_id===m.pid));
       const monPari=(bts||[]).find(x=>x.league_id===m.lg.id && x.day===d && x.player_id===m.pid);
-      const ph=phaseLigue(m.lg, duel, monPari); if(ph) newHomePhase[m.lg.id]=ph;
+      const advId=duel ? (duel.home_id===m.pid?duel.away_id:duel.home_id) : null;
+      // `null` (et non `false`) quand il n'y a pas d'adversaire identifiable : on ne sait pas,
+      // donc on ne dit rien — phaseLigue retombe alors sur « pronos validés ».
+      const pariAdverse = advId==null ? null
+        : (btsTous||[]).some(x=>x.league_id===m.lg.id && x.day===d && x.player_id===advId);
+      const ph=phaseLigue(m.lg, duel, monPari, {pid:m.pid, pariAdverse}); if(ph) newHomePhase[m.lg.id]=ph;
       /* ⚠️ v8.98 (bug vécu par Hervé : le bandeau promettait « résultats de la journée 2 », mais
          c'est l'écran des enchères de la trêve qui s'ouvrait) — MÊME PRINCIPE QUE v8.78 CI-DESSOUS,
          appliqué à la trêve : `viewGame()` affiche `viewTreveSummary()` en TOUT PREMIER dès que la
@@ -11953,6 +12106,20 @@ function ligueTodoStatuts(){ return {
   }; }
 /* Le badge d'une carte de « Mes ligues » pour une ligue donnée — renvoie `null` quand rien
    n'attend le joueur, pour qu'une ligue sans action ne reçoive JAMAIS de signal. */
+/* ⚠️ UNE SEULE FONCTION POUR LE QG *ET* LA PAGE LIGUES (2026-09-26, demande d'Hervé : « QG et page
+   Ligues ne doivent jamais afficher deux états contradictoires »). Avant, la ligne du QG lisait
+   `homePhase`/`phasePrep` tandis que la carte de « Mes ligues » se contentait de `statusLabel()` —
+   d'où trois ligues marquées « En cours » alors qu'elles étaient dans trois situations différentes.
+   Ce n'est pas un nouveau calcul d'état : c'est EXACTEMENT l'expression qui vivait dans la ligne du
+   QG, extraite ici pour que les deux écrans la partagent au lieu de la recopier. Tant qu'ils
+   appellent tous deux cette fonction, une divergence est structurellement impossible.
+   Ce qu'elle renvoie : {e: emoji, t: texte, jours: "J3/14"} — libre à chaque écran de composer. */
+function etatUtileLigue(m){
+  const p = (m.lg.status==='running') ? homePhase[m.lg.id] : phasePrep(m.lg, m.pid, m.shopDone);
+  const jours = (m.lg.status==='running')
+    ? t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1, m.lg.num_days), b:m.lg.num_days}) : '';
+  return p ? {e:p.e, t:p.t, jours} : {e:'', t:statusLabel(m.lg), jours};
+}
 function ligueBadgeTodo(lid){
   if(!homeTodoLoaded) return null;          // tant que homeTodo n'est pas chargé : aucun badge, jamais un faux « à jour »
   const x=(homeTodo||[]).find(y=>y.lg.id===lid); if(!x) return null;
@@ -12008,9 +12175,21 @@ function viewHome(){
     // depuis le coup d'envoi. Le bandeau annonçait "sont terminés... déclencher la résolution"
     // comme une certitude, alors que le score d'un match pouvait encore manquer une fois la ligue
     // ouverte (affiché "score en attente"). On reformule en hypothèse, pas en promesse.
-    ? `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats bientôt disponibles")}</div>
+    /* ⚠️ v8.502 — DEUX SITUATIONS TRÈS DIFFÉRENTES PORTAIENT LE MÊME TEXTE. `phaseLigue` ne regarde
+       que les fixtures, jamais `status` : une ligue DÉJÀ EN RÉSOLUTION (`resolving`) tombait donc dans
+       ce même bandeau, qui invite à « vérifier si la résolution peut être déclenchée » — une action
+       que le joueur ne peut pas faire, puisqu'elle est en cours. C'est la boucle vécue par Hervé sur
+       DLGLL le 25/09 à 22h50 : bandeau → ouverture de la ligue → écran d'attente → retour au QG,
+       toujours le même message. On ne fusionne pas les deux textes : celui du haut dit « va voir »,
+       celui du bas dit « c'est parti, patiente ». Le CTA reste le même parce que la destination, elle,
+       est bien la bonne — l'écran d'arrivée renvoie désormais vers 📋 Résultats (cf. viewGame). */
+    ? (x.lg.status==="resolving"
+      ? `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats en cours de confirmation")}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("les matchs de la journée {a} sont terminés : la journée se résout automatiquement dès que tous les scores sont remontés.",{a:(x.jour|0)+1})}</div>
+      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Suivre")}</button></div>`
+      : `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats bientôt disponibles")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tous les matchs de la journée {a} semblent terminés : ouvre la ligue pour vérifier si la résolution peut être déclenchée.",{a:(x.jour|0)+1})}</div>
-      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Découvrir")}</button></div>`
+      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Découvrir")}</button></div>`)
     : x.kind==="prep"
     ? `<div class="alert-card warn">${qgCountdownHTML(x.deadline)}<div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("la préparation de la saison t'attend :")} ${x.label.e} ${esc(x.label.t)}.</div>
@@ -12097,8 +12276,18 @@ function viewHome(){
     const stKey='calm';
     const ic=st?st.ic:'✅';
     const statusLbl=(!todoX && homeTodoLoaded)?t("À JOUR"):'';
-    const metaTxt=(()=>{ const p=(m.lg.status==='running')?homePhase[m.lg.id]:phasePrep(m.lg,m.pid,m.shopDone); return p?(p.e+' '+p.t):statusLabel(m.lg); })()
-      +(m.lg.status==='running'?' · '+t("J{a}/{b}",{a:Math.min((m.lg.current_day||0)+1,m.lg.num_days),b:m.lg.num_days}):'');
+    /* ⚠️ 2026-09-26 — L'ÉTAT ÉTAIT TRONQUÉ À 320 px (« à toi de choisir l… »). `.a2-lr-meta` était
+       en `nowrap` + ellipse : l'état et la journée se disputaient une seule ligne, et c'est l'état
+       — la seule information qui décide d'ouvrir la ligue — qui sautait. On ne réduit pas la
+       police : on laisse les deux jetons SE REPLIER. Tant qu'ils tiennent, rien ne change ; quand
+       ils ne tiennent plus, la journée passe à la ligne suivante, entière.
+       ⚠️ LE SÉPARATEUR « · » A DISPARU au profit d'un simple espacement : un point médian resté en
+       bout de première ligne, ou ouvrant la seconde, se lit comme une coquille. L'espacement, lui,
+       fonctionne dans les deux cas.
+       Même donnée que la page Ligues (`etatUtileLigue`), présentation adaptée au format de la ligne. */
+    const _etat=etatUtileLigue(m);
+    const metaTxt=`<span class="a2-lr-etat">${esc((_etat.e?_etat.e+' ':'')+_etat.t)}</span>`
+      +(_etat.jours?`<span class="a2-lr-jour">${esc(_etat.jours)}</span>`:'');
     const openFn=(todoX&&(todoX.kind==='coulisses'||todoX.kind==='prepdeclencher'))?'openLeagueCoulisses':'openLeague';
     return `<div class="a2-league-row state-${stKey}" onclick="${openFn}('${m.lg.id}','${m.pid}')">
       <div class="a2-lr-icon">${ic}</div>
@@ -12182,7 +12371,21 @@ function viewLeagues(){
          historique replié, pas un endroit où réclamer une action. */
       const row=(m,isDone)=>{ const bd=isDone?null:ligueBadgeTodo(m.lg.id);
         return `<div class="lgrow${isDone?' done':''}" onclick="openLeague('${m.lg.id}','${m.pid}')">
-        <div class="info"><div class="nm">${esc(m.lg.name)}</div><div class="mt">Code ${esc(m.lg.code)} · ${m.lg.status==='done'?(((m.lg.current_day|0)>=(m.lg.num_days|0)&&(m.lg.num_days|0)>0)?t("Terminée"):(m.lg.closed_reason==="organizer"?t("Ligue abandonnée"):t("Fermée avant terme"))):statusLabel(m.lg)}${(m.lg.status==='running'||m.lg.status==='done')?' · '+t("J{a}/{b}",{a:Math.min(m.lg.current_day+(m.lg.status==='done'?0:1),m.lg.num_days),b:m.lg.num_days}):''}</div>${bd?`<div class="lgrow-todo ${bd.state}">${bd.state==='urgent'?'🟠':'🎁'} ${esc(bd.txt)}</div>`:''}</div>
+        <div class="info"><div class="nm">${esc(m.lg.name)}</div>${/* ⚠️ 2026-09-26 (retour d'Hervé, capture réelle) — CETTE LIGNE DISAIT « En cours » POUR TOUT.
+             Trois ligues dans trois situations différentes — pronos à faire, pronos validés,
+             l'adversaire choisit — portaient rigoureusement le même mot. L'information existait
+             déjà : le QG la calcule dans `phaseLigue`, cette page ne la lisait simplement pas.
+             `etatUtileLigue()` est LA MÊME fonction que celle de la ligne du QG, pas une seconde
+             lecture parallèle : les deux écrans ne peuvent plus se contredire.
+             ⚠️ Deux lignes, et dans cet ordre : l'ÉTAT UTILE d'abord (ce qui décide d'ouvrir ou
+             non), le code et la journée ensuite (des repères, pas une invitation à agir). Le mot
+             générique « En cours » disparaît quand un état plus précis existe, et ne reste que
+             pour les ligues terminées ou fermées, où il porte une vraie information.
+             ⚠️ Le code de ligue, Jx/xx, ⚙️ et « Ouvrir → » sont conservés : demande explicite. */''}
+        ${m.lg.status==='done'
+          ? `<div class="mt">Code ${esc(m.lg.code)} · ${((m.lg.current_day|0)>=(m.lg.num_days|0)&&(m.lg.num_days|0)>0)?t("Terminée"):(m.lg.closed_reason==="organizer"?t("Ligue abandonnée"):t("Fermée avant terme"))} · ${t("J{a}/{b}",{a:Math.min(m.lg.current_day,m.lg.num_days),b:m.lg.num_days})}</div>`
+          : `<div class="mt etat">${esc(etatUtileLigue(m).e)} ${esc(etatUtileLigue(m).t)}</div>
+             <div class="mt">Code ${esc(m.lg.code)}${etatUtileLigue(m).jours?' · '+etatUtileLigue(m).jours:''}</div>`}${bd?`<div class="lgrow-todo ${bd.state}">${bd.state==='urgent'?'🟠':'🎁'} ${esc(bd.txt)}</div>`:''}</div>
         <div class="sd"><button class="ticon" title="${t("Caractéristiques de la ligue")}" onclick="event.stopPropagation();showLeagueInfo('${m.lg.id}')">⚙️</button><span class="chip b">${t("Ouvrir →")}</span></div></div>`; };
       /* ⚠️ Les ligues qui attendent une action REMONTENT EN PREMIER (urgent, puis à découvrir,
          puis le reste). Sans risque d'incohérence : `myLeagues` n'était jusqu'ici trié par RIEN
@@ -12881,7 +13084,24 @@ function viewGame(){
   if(L.status==="starting") return treveEnResolution(L)
     ? `<div class="box" style="text-align:center"><div class="tr-spinner"></div><b>${t("Attribution des bonus en cours…")}</b><div class="mini muted" style="margin-top:6px">${t("Les mises des joueurs sont comparées.")}</div></div>`
     : `<div class="box" style="text-align:center"><div style="font-size:30px">🚀</div><b>Démarrage du championnat…</b><div class="mini muted" style="margin-top:6px">Attribution des bonus et lancement.</div></div>`;
-  if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">⚙️</div><b>Résolution de la journée…</b><div class="mini muted" style="margin-top:6px">Calcul des gains en cours.</div></div>`;
+  /* ⚠️ v8.502 (bug vécu par Hervé, ligue DLGLL le 25/09 à 22h50) — CET ÉCRAN ÉTAIT UN CUL-DE-SAC.
+     « Résolution de la journée… / Calcul des gains en cours. » promet une attente de quelques
+     secondes, et n'offre aucune sortie : pas un bouton. Pire, le bandeau du QG (« 🏁 Résultats
+     bientôt disponibles — ouvre la ligue pour vérifier si la résolution peut être déclenchée »,
+     kind="declencher") y ramène en boucle, en promettant une action que le joueur ne peut pas faire.
+     Or depuis la règle des 24 h (v8.493) cette attente est LÉGITIMEMENT longue : un seul match sans
+     score retient la journée jusqu'à SON coup d'envoi + 24 h. Pendant tout ce temps le joueur n'a
+     rien à regarder — alors que l'onglet 📋 Résultats, lui, reste parfaitement consultable.
+     ⚠️ SÛRETÉ VÉRIFIÉE AVANT D'AJOUTER CE BOUTON : `openResults()` ne fait AUCUNE écriture, et le
+     seul appelant de `resolveRealIfReady()` vit dans la boucle de rafraîchissement de la ligue,
+     derrière `L.status==="running"` — donc déjà inatteignable en `resolving`. Ouvrir les Résultats
+     ne peut ni déclencher ni rejouer une résolution.
+     ⚠️ ON NE TOUCHE PAS au détail match par match (✓/✕, scores connus) : il est derrière l'option
+     payante `duel_live` (`liveShow` dans `waitingResultsBody`), et l'ouvrir ici la donnerait
+     gratuitement. Ce qu'on corrige ici, c'est l'impasse — pas le périmètre de l'option. */
+  if(L.status==="resolving") return `<div class="box" style="text-align:center"><div style="font-size:30px">🏁</div><b>${t("Matchs terminés — résultats en cours de confirmation")}</b><div class="mini muted" style="margin-top:6px">${t("La journée se résout automatiquement dès que tous les scores sont remontés. Rien à faire de ton côté.")}</div>
+    <div style="height:12px"></div>
+    <button class="btn ghost" onclick="${resultsTabOnclick()}">📋 ${t("Voir les résultats")}</button></div>`;
   // Ligue terminée → l'onglet Pronos annonce la fin de saison et RENVOIE au bilan (v7.23, demandé par
   // Hervé). Avant, il affichait le bilan lui-même : la barre du bas disait « ⚽ Pronos » alors que le
   // contenu était le classement final — c'est ce qui l'a fait chercher au mauvais endroit. Le bilan
@@ -14907,8 +15127,17 @@ function pronosInfoStripHTML(dayLbl,opp,iAmHome){
   return `<div class="a2-pronos-info-strip">
     <div class="a2-pronos-info-cell"><div class="lbl">${t("Journée")}</div><div class="val">${(L.current_day||0)+1} / ${L.num_days}</div></div>
     <div class="a2-pronos-info-cell"><div class="lbl">${t("Tu rencontres")}</div>
-      <div class="val a2-pronos-info-opp">${avatarHTML(opp&&opp.emoji,20)} ${esc(opp&&opp.name||'?')}
-      <span class="a2-pronos-loc">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div></div>
+      ${/* ⚠️ 2026-09-26 (constaté par Hervé sur iPhone, Ligue A) — ICI, ET ICI SEULEMENT, la
+             pastille ne porte plus que l'icône. « ✈️ Extérieur » écrit en toutes lettres poussait
+             la colonne du milieu par-dessus la cagnotte : les trois cellules sont en `flex:1` avec
+             `white-space:nowrap`, donc un contenu trop long ne se replie pas, il DÉBORDE sur la
+             voisine. 🏠 et ✈️ se lisent seuls, et le libellé complet reste dans `title`/`aria-label`
+             pour qui le survole ou l'écoute. ⚠️ Ailleurs dans l'app (bandeau « Duel vs … », chip de
+             la liste des matchs), « Domicile »/« Extérieur » restent écrits : la place y est.
+             Le pseudo a son propre span parce que c'est LUI qui doit céder en dernier recours —
+             jamais la cagnotte, jamais la journée. */''}
+      <div class="val a2-pronos-info-opp">${avatarHTML(opp&&opp.emoji,20)}<span class="a2-pronos-info-nom">${esc(opp&&opp.name||'?')}</span>
+      <span class="a2-pronos-loc" title="${iAmHome?t("Domicile"):t("Extérieur")}" aria-label="${iAmHome?t("Domicile"):t("Extérieur")}">${iAmHome?"🏠":"✈️"}</span></div></div>
     <div class="a2-pronos-info-cell"><div class="lbl">${t("Cagnotte")}</div><div class="val money">${euro(cap)}</div></div>
   </div>`;
 }
@@ -21231,7 +21460,7 @@ function updateRequiredHTML(){
     +'<div class="a2-title" style="margin:0 0 16px;color:#f4ecd8">TACTIZO</div>'
     +'<h2 style="margin:0 0 14px;font-size:20px;color:#f4ecd8">'+esc(t("Mise à jour nécessaire"))+'</h2>'
     +'<p style="margin:0 0 18px;line-height:1.5;color:#f4ecd8">'+esc(t("Cette version de Tactizo n'est plus prise en charge. Mets à jour l'application pour continuer à jouer."))+'</p>'
-    +'<a class="btn" style="display:inline-block;text-decoration:none" href="'+esc(g.storeUrl||"")+'" target="_blank" rel="noopener">'+esc(t("Mettre à jour"))+'</a>'
+    +'<a class="btn" style="display:inline-block;text-decoration:none" href="'+esc(g.storeUrl||"")+'" onclick="ouvrirLien(this.getAttribute(&quot;href&quot;),event)">'+esc(t("Mettre à jour"))+'</a>'
     +'</div>';
 }
 
@@ -21323,8 +21552,8 @@ function render(){
   // suffit pour passer de "Tactizo · prototype de test · vX" à "Tactizo · vX" — aucune autre ligne
   // à toucher. Toujours `true` pour l'instant, tant que le test reste en cours.
   if(fo) fo.innerHTML = inLeague ? "" : "Tactizo"+(SHOW_TEST_TAG?" · "+esc(t("prototype de test")):"")+" · "+esc(APP_VERSION)
-    +'<br><a href="confidentialite.html" target="_blank" rel="noopener">'+esc(t("Confidentialité"))+'</a>'
-    +' · <a href="cgu.html" target="_blank" rel="noopener">'+esc(t("Conditions d'utilisation"))+'</a>';
+    +'<br><a href="confidentialite.html" onclick="ouvrirLien(&quot;confidentialite.html&quot;,event)">'+esc(t("Confidentialité"))+'</a>'
+    +' · <a href="cgu.html" onclick="ouvrirLien(&quot;cgu.html&quot;,event)">'+esc(t("Conditions d'utilisation"))+'</a>';
   /* ⚠️ v8.213 — LE 📖 RESTE MASQUÉ SUR LA CONNEXION (arbitrage d'Hervé : « pas besoin de voir
      les règles totales depuis cette page, juste le tuto suffit »). Ce choix produit reste vrai
      aujourd'hui, mais 📖 a quitté le header : `viewProfil()` porte déjà "Comment marche le jeu"
