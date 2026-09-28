@@ -2834,7 +2834,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.502";
+const APP_VERSION = "v8.504";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -4683,6 +4683,31 @@ function porteNeutralisation(fixtures, results, nowT){
 // que personne n'ait eu l'occasion de la relancer.
 const LIGUE_ALERTE_J=7;    // signalée « à l'arrêt » sur l'écran admin
 const LIGUE_FERME_J=14;    // fermée automatiquement, comme une fermeture AVANT TERME
+/* ⚠️ EXEMPTION DE FERMETURE POUR INACTIVITÉ — RÉSERVÉE À LA REVIEW STORE (2026-09-28).
+   LE BESOIN. Les ligues préparées pour la review Apple/Google restent volontairement inertes
+   jusqu'à ce que le reviewer les ouvre — parfois plusieurs jours après la soumission. Le balayage
+   des 14 jours les fermerait comme n'importe quelle ligue morte, et le reviewer trouverait un jeu
+   cassé. Le délai des vraies ligues n'est pas touché : c'est une LISTE D'EXCEPTIONS, pas un
+   allongement du délai.
+   POURQUOI DEUX MARQUEURS, ET PAS UN NOM.
+     • `frozen_for_user_id` : déjà en base, déjà utilisé pour le gel du chrono (cf.
+       MIGRATION-ligue-reviewer-gel-activation.sql). Une ligue qui le porte EST une ligue de review,
+       par construction — c'est le marqueur le plus fiable dont on dispose.
+       ⚠️ MAIS IL NE COUVRE PAS TOUT : l'activation (`activate_reviewer_league`) exige
+       `data_mode='sim'`. Le poser sur une ligue RÉELLE la gèlerait donc DÉFINITIVEMENT, sans
+       aucun moyen de la réveiller. Il est inutilisable pour les ligues réelles de review.
+     • `review_exempt_until` : d'où la seconde colonne, dédiée et sans autre effet. Datée
+       exprès — une exemption sans fin est une exemption qu'on oublie. Passée la date, la ligue
+       redevient une ligue ordinaire, sans intervention.
+   ⚠️ JAMAIS SUR LE NOM. « Ligue de Reviewer » est un nom libre : n'importe quel joueur peut
+   appeler sa ligue ainsi et échapperait alors à la fermeture. Les deux marqueurs sont posés en
+   base, à la main, jamais déduits d'une chaîne saisie par un utilisateur. */
+function ligueExempteeFermeture(l){
+  if(!l) return false;
+  if(l.frozen_for_user_id) return true;                       // ligue de review gelée
+  const d=l.review_exempt_until ? new Date(l.review_exempt_until).getTime() : NaN;
+  return !isNaN(d) && Date.now() < d;                          // exemption datée, encore valable
+}
 // ⚠️ `ETALEMENT_MAX_H=72` a été SUPPRIMÉE en v7.29. Ce seuil unique s'appliquait aux deux formules
 // et laissait passer, en mode fast, des matchs à trois jours — ce qui vide le mode fast de son sens.
 // La fenêtre est désormais DÉDUITE de la formule dans `selectPool` (`limiteMax`) : fast 24-48 h,
@@ -7692,6 +7717,14 @@ function euroAmt(n, signed){
 }
 const euro=n=>euroAmt(n,false);         // montant non signé : "25 €", "44,50 €"
 const euroSigned=n=>euroAmt(n,true);    // gain/perte signé : "+25 €", "-10 €", "+44,50 €"
+/* ⚠️ LA COULEUR SUIT LE SIGNE, JAMAIS LE LIBELLÉ — v8.503 (défaut réel signalé par Hervé, Ligue C).
+   « Meilleure journée : +20,25 € » s'affichait en vert et « Pire journée : +17,32 € » en ROUGE :
+   la couleur était écrite en dur d'après le mot « pire », alors que les deux journées étaient
+   gagnantes. Un joueur qui n'a fait que des journées positives voyait donc du rouge.
+   Ce helper existait déjà, mais recopié en local (`mnt`) dans deux écrans de duel seulement. Le
+   centraliser est le vrai correctif : tant que tous les montants passent par lui, la couleur ne
+   peut plus dépendre de l'endroit où on l'écrit. */
+function clsMontant(v){ return v>0?'green':(v<0?'red':'muted'); }
 // Cote AFFICHÉE : toujours 2 décimales. Les cotes sont stockées arrondies au centième, mais
 // JavaScript supprime les zéros de fin — « 2.10 » sortait « 2.1 » et « 3.00 » sortait « 3 ».
 // À n'utiliser que pour l'affichage : les comparaisons doivent rester sur le nombre.
@@ -11081,6 +11114,27 @@ function maestroTierCap(){
   if(nGreen<3) cap=Math.min(cap,5);
   return cap;
 }
+/* ⚠️ PLANCHER DE COHÉRENCE VISUELLE — v8.503 (2026-09-27, décidé par Hervé après un cas réel).
+   CE QUI S'EST PASSÉ. Forme 80 · Classement 69 · Stratégie 65 · Gestion 66 : les QUATRE voyants au
+   vert, et pourtant le Maestro T5. Rien de cassé — le score pondéré valait 73,4 et T6 commence à 76
+   (cf. MAESTRO_TIER_EDGES). Mais un voyant passe au vert dès 65 : il existait donc une fenêtre de
+   onze points (score 65 à 75,9) où le joueur voit le MAXIMUM que l'interface sait afficher, et
+   n'obtient pas le meilleur Maestro. Sans rien à l'écran pour l'expliquer.
+   LA RÈGLE PRODUIT, telle que posée par Hervé : les quatre voyants sont les indicateurs VISIBLES
+   donnés au joueur pour comprendre son état ; s'ils sont tous au maximum visible, l'interface doit
+   lui donner le meilleur Maestro. Il ne doit pas exister un objectif supplémentaire invisible entre
+   T5 et T6.
+   ⚠️ CE PLANCHER NE PEUT PAS CONTREDIRE UN PLAFOND, et ce n'est pas une précaution mais une
+   propriété : quatre verts implique zéro rouge et nGreen=4, donc `maestroTierCap()` vaut déjà 6
+   dans ce cas précis. Les deux ne se croisent jamais.
+   ⚠️ CE QUI N'EST PAS TOUCHÉ, volontairement : le seuil du vert (65), les poids (50/20/20/10), les
+   bandes de MAESTRO_TIER_EDGES, et le calcul pondéré pour TOUS les autres cas. Trois voyants verts
+   et un orange ne donnent aucune promotion : le plancher exige les quatre. */
+function maestroTierFloor(){
+  if(!qgStatus) return 1;   // voyants pas encore chargés : aucun plancher, comme le plafond n'en pose aucun
+  const tousVerts=QG_IND_KEYS.every(k=>qgStatus[k] && qgStatus[k].color==="green");
+  return tousVerts ? 6 : 1;
+}
 function computeMaestroMood(){
   const ACTION_KINDS=["prep","trevebid","choix","pronos"], GOOD_KINDS=["prepdeclencher","resultats","trevedeclencher","treve","coulisses","declencher"];
   const actionItems=(homeTodo||[]).filter(x=>ACTION_KINDS.includes(x.kind));
@@ -11111,7 +11165,9 @@ function computeMaestroMood(){
   // optimiste : l'absence d'information n'est pas un signal positif. Le garde-fou reste appliqué
   // même ici (un compte neuf n'a normalement aucun voyant rouge, mais par cohérence de principe).
   const raw=maestroScoreFrom(qgStatus);
-  const tier = raw==null ? Math.min(4,maestroTierCap()) : Math.min(maestroTierFromScore(raw),maestroTierCap());
+  const tierBrut = raw==null ? Math.min(4,maestroTierCap()) : Math.min(maestroTierFromScore(raw),maestroTierCap());
+  // `Math.max` avec le plancher : symétrique exact des `Math.min` du plafond, appliqué en dernier.
+  const tier = Math.max(tierBrut, maestroTierFloor());
   return {tier, msgKey, msgN};
 }
 // ⚠️ v8.414 — plus de requête players/bets dédiée : le Maestro lit désormais qgStatus (déjà chargé
@@ -14274,7 +14330,7 @@ function viewPrep(){
      <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${euro(tot)}</b> / ${euro(SHOP_CAP)}</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
      <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px">${bonusIconHTML(id)}<div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
-      <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
+      <div style="text-align:right;flex:0 0 auto"><input type="number" data-mise inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
    <button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):t("Valider ma préparation →")))}</button>
    <div style="height:6px"></div>${prec}
    <h2>${t("👥 Joueurs de la ligue · {a}",{a:players.filter(p=>!p.is_ai).length})}</h2>
@@ -14488,7 +14544,7 @@ function prepEncheresTab(){
      <div class="row mini" style="margin-top:8px"><span class="muted">${t("Misé")} <b id="bt" class="${over?'red':''}">${euro(tot)}</b> / ${euro(SHOP_CAP)}</span><span class="muted"><b id="bc" class="${tooMany?'red':''}">${cnt}</b>/${maxCards} ${t("bonus")}</span></div>
      <div class="gauge ${over?'over':''}" id="bidGauge" style="margin-top:6px"><i style="width:${Math.min(100,tot/SHOP_CAP*100)}%"></i></div></div>
    ${ids.map(id=>`<div class="box row"><div class="row" style="gap:10px">${bonusIconHTML(id)}<div><div class="row" style="gap:6px;justify-content:flex-start;flex-wrap:wrap"><b>${esc(t(CARDS[id].n))}</b>${forceHTML(id)}${riskHTML(id)}</div><div class="mini muted" style="margin-top:2px">${esc(t(CARDS[id].d))}</div></div></div>
-      <div style="text-align:right;flex:0 0 auto"><input type="number" inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
+      <div style="text-align:right;flex:0 0 auto"><input type="number" data-mise inputmode="numeric" min="0" step="1" value="${bidL[id]||''}" placeholder="0 €" style="width:72px" oninput="setBid('${id}',this.value)"></div></div>`).join("")}
    ${(meP.shop_done && bidsSame(bidL, prepState().bids[S.myId]||{}))
      ? `<button class="btn ghost" id="prepValidate" disabled>${t("✅ Préparation validée")}</button><div class="mini muted" style="text-align:center;margin-top:5px">${t("Modifie une enchère (ou ton choix) pour la re-valider.")}</div>`
      : `<button class="btn" id="prepValidate" ${(over||tooMany||noVote)?'disabled':''} onclick="savePrep()">${noVote?(miss[0]==="reward"?t("🏆 Choisis d'abord une récompense"):t("🎭 Choisis d'abord un gage")):(over?t("Dépasse {a} €",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):t("Valider ma préparation →")))}</button>`}`; }
@@ -14823,7 +14879,7 @@ function encRowHTML(id, bidVal){
       <div class="a2-enc-tags"><span class="a2-enc-force">💪 ${c.f||3}/5</span>
         <span class="a2-enc-risk ${risky?'risky':'safe'}"><span class="dot"></span>${risky?t("Double tranchant"):t("Sans risque")}</span></div>
     </div>
-    <input class="a2-enc-input" type="number" inputmode="numeric" min="0" step="1" value="${bidVal||''}" placeholder="0 €" oninput="setBid('${id}',this.value)">
+    <input class="a2-enc-input" type="number" data-mise inputmode="numeric" min="0" step="1" value="${bidVal||''}" placeholder="0 €" oninput="setBid('${id}',this.value)">
   </div>`;
 }
 function viewEncheresA2(){
@@ -14868,6 +14924,88 @@ function viewPrepTabs(){
   if(tab==="encheres") return prepEncheresTab();
   return prepInfosTab();
 }
+/* ═════════════ REMPLACEMENT DIRECT D'UNE MISE DÉJÀ SAISIE ═════════════
+   ⚠️ Retour réel d'un joueur (2026-09-28) : corriger une mise déjà renseignée était PÉNIBLE au
+   doigt. Pour passer de « 8 » à « 12 », il fallait viser le pixel à droite du 8, ou réussir un
+   appui long. Sur un champ de 72px, c'est un travail d'orfèvre.
+
+   CE QU'ON OBTIENT : on touche le champ, on tape « 12 », la mise vaut 12. Un SECOND toucher rend
+   la main au curseur natif, pour qui veut ne corriger qu'un chiffre.
+
+   ⚠️ POURQUOI PAS UN `select()` AU FOCUS — C'ÉTAIT MA PREMIÈRE VERSION, MESURÉE PUIS ABANDONNÉE.
+   Sélectionner la valeur au focus marche… et rend le second toucher inopérant sur téléphone : la
+   sélection SURVIT à l'appui suivant, donc la frappe efface encore tout. Mesuré au protocole CDP
+   avec de vrais événements tactiles (390px) : champ témoin non marqué → « 1509 » (le curseur s'est
+   replacé), champ sélectionné → « 9 » (tout remplacé une seconde fois).
+   Et on ne peut pas replier la sélection à la main : sur un `type="number"`,
+   `setSelectionRange()` lève `InvalidStateError` — ce type n'expose aucune API de sélection.
+   Tenir une sélection et « le second toucher replace le curseur » sont donc INCOMPATIBLES ici.
+   On garde la consigne qui compte (la frappe remplace) sans confisquer le curseur.
+   ⚠️ CONSÉQUENCE ASSUMÉE : la valeur n'est pas SURLIGNÉE. Pour l'avoir en plus, il faudrait passer
+   ces champs en `type="text" inputmode="decimal"` et refaire en JS le filtrage des caractères que
+   `type="number"` assure aujourd'hui gratuitement — décision produit, pas un détail d'implémentation.
+
+   COMMENT : au focus d'un champ de mise non vide, on l'ARME. La première frappe qui INSÈRE vide le
+   champ juste avant, puis se laisse écrire normalement. Tout le reste désarme.
+
+   ⚠️ CE QUI DÉSARME, ET POURQUOI CHAQUE CAS COMPTE :
+   · un second appui dans le champ → le joueur place son curseur, on ne lui efface plus rien ;
+   · une flèche, Début/Fin → même intention, exprimée au clavier ;
+   · une suppression (Backspace) → il retire un chiffre, il ne repart pas de zéro ;
+   · la sortie du champ → l'armement ne doit jamais survivre au passage sur un autre match.
+   ⚠️ LE CLIC QUI DONNE LE FOCUS NE DOIT PAS DÉSARMER. La séquence d'un toucher est
+   `touchend`→`mousedown`→`focus`→`mouseup`→`click` : un `click` arrive TOUJOURS juste après le
+   `focusin`, dans le même geste. `_miseClicDuFocus` le laisse passer une fois — sans ce drapeau,
+   le mécanisme se désarmerait tout seul avant la première frappe et ne servirait à rien.
+
+   ⚠️ DÉLÉGATION SUR document, PAS D'ATTRIBUT PAR CHAMP : ces champs sont réécrits par `render()`,
+   et le même champ existe dans QUATRE rendus (viewPrep, prepEncheresTab, encRowHTML, viewBet). Un
+   écouteur délégué survit aux rendus et ne peut pas être oublié dans un cinquième. Si `render()`
+   recrée le champ en cours de route, `_misePrete` pointe un nœud détaché : plus rien ne correspond,
+   l'armement s'éteint de lui-même. Le marqueur est `data-mise`.
+
+   ⚠️ RIEN DE NATIF N'EST EMPÊCHÉ : aucun `preventDefault`, aucun `readonly`, aucune reprise du
+   clavier, `inputmode` intact. Un collage REMPLACE la mise armée — c'est exactement ce qu'aurait
+   fait un coller sur une valeur sélectionnée. Les plafonds et les correctifs de perte de focus
+   (`setStake`/`setBid` patchent le DOM sans `render()`) ne sont pas touchés.
+
+   ⚠️ CHAMPS VOLONTAIREMENT HORS PÉRIMÈTRE (audités le 28/09) : `tradePrice` (offre de rachat) et
+   `ptsAdjMontant` (admin) ne sont JAMAIS rendus avec une valeur — il n'y a rien à remplacer.
+   `promoNewDuree` (admin, pré-rempli à 30) est un réglage, pas une mise. */
+function estChampMise(el){
+  return !!(el && el.tagName==="INPUT" && el.hasAttribute("data-mise"));
+}
+let _misePrete=null;        // le champ dont la PROCHAINE insertion remplacera la valeur
+let _miseClicDuFocus=false; // le clic qui accompagne le focus ne doit pas désarmer
+function desarmerMise(){ _misePrete=null; _miseClicDuFocus=false; }
+
+document.addEventListener("focusin", function(ev){
+  const el=ev.target;
+  if(!estChampMise(el)){ desarmerMise(); return; }
+  // Champ vide : rien à remplacer.
+  _misePrete = (el.value==="" || el.value==null) ? null : el;
+  _miseClicDuFocus = true;
+});
+document.addEventListener("focusout", function(ev){
+  if(ev.target===_misePrete) desarmerMise();
+});
+document.addEventListener("click", function(ev){
+  if(!_misePrete) return;
+  if(ev.target===_misePrete && _miseClicDuFocus){ _miseClicDuFocus=false; return; }
+  desarmerMise();
+});
+document.addEventListener("keydown", function(ev){
+  if(!_misePrete || ev.target!==_misePrete) return;
+  if(/^(Arrow|Home|End|Page)/.test(ev.key||"")) desarmerMise();
+});
+document.addEventListener("beforeinput", function(ev){
+  const el=ev.target;
+  if(el!==_misePrete) return;
+  desarmerMise();                                    // une seule fois, quoi qu'il arrive
+  if(!/^insert/.test(ev.inputType||"")) return;      // suppression, annulation… : natif
+  el.value="";                                       // la frappe s'écrit dans un champ vide
+});
+
 function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else delete bidL[id];
   /* ⚠️ v8.34 — COMMENTAIRE DÉPLACÉ AU-DESSUS, PAS EN BOUT DE LIGNE. En v8.33 j'ai remplacé le
      calcul du plafond en y accolant un `//` : sur CETTE ligne, du code suivait encore, et
@@ -15617,7 +15755,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
              c'est en la touchant qu'on désigne la seconde cible. */''}
         ${(twoCard&&isTgt)?`<div class="mini blue" style="margin-top:6px">🏷️ ${t(CARDS.dbl.n)}${(myCard.target!=null&&myCard.target2!=null)?' : '+t("2 matchs ciblés — le gain supplémentaire est dans le <b>total</b>."):' : '+t("touche un 2ᵉ match 💥")}</div>`:''}
         <div class="a2-pronos-stake-row">
-          <div class="a2-pronos-stake-field"><input type="number" inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="${t("min 1")}" oninput="setStake(${i},this.value)"><span class="cur">€</span></div>
+          <div class="a2-pronos-stake-field"><input type="number" data-mise inputmode="decimal" min="1" step="0.01" value="${b.stake||''}" placeholder="${t("min 1")}" oninput="setStake(${i},this.value)"><span class="cur">€</span></div>
           <div class="a2-pronos-gain-field">${t("si ce prono passe")} <b id="gain${i}">${euroSigned((+b.stake||0)*(oddOf(f,b.sel)-1)*gainMult(i,bet.captain,myCard))}</b></div>
         </div></div>`;}).join("")}
     <div class="box"><div class="row"><div class="boxttl" style="margin-bottom:0">${t("🃏 Bonus (1 max/jour)")}</div>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">${t("✕ retirer")}</span>`:`<span class="mini muted">${t("optionnel")}</span>`}</div>
@@ -18315,8 +18453,8 @@ function viewLeagueStats(){
     ${line(t("Pronos gagnés"), s.won+"/"+s.picks+" ("+s.hit+" %)")}
     ${line(t("Rentabilité (ROI)")+' <span class="clik" onclick="showRoiInfo()">ⓘ</span>', `<span class="${s.roi>=0?'green':'red'}">${s.roi} %</span>`)}
     ${line(t("Résultat net"), `<span class="${s.net>=0?'green':'red'}">${euroSigned(s.net)}</span>`)}
-    ${line(t("Meilleure journée"), s.best.day>=0?`<span class="green">${euroSigned(s.best.net)}</span> (J${s.best.day+1})`:'–')}
-    ${line(t("Pire journée"), s.worst.day>=0?`<span class="red">${euroSigned(s.worst.net)}</span> (J${s.worst.day+1})`:'–')}
+    ${line(t("Meilleure journée"), s.best.day>=0?`<span class="${clsMontant(s.best.net)}">${euroSigned(s.best.net)}</span> (J${s.best.day+1})`:'–')}
+    ${line(t("Pire journée"), s.worst.day>=0?`<span class="${clsMontant(s.worst.net)}">${euroSigned(s.worst.net)}</span> (J${s.worst.day+1})`:'–')}
     ${line(t("Plus grosse cote gagnée"), s.bestOdd?s.bestOdd.toFixed(2):'–')}
     ${line(t("Bonus fétiche"), s.favCard&&CARDS[s.favCard]?CARDS[s.favCard].e+' '+esc(t(CARDS[s.favCard].n)):'–')}
   </div>`;
@@ -18917,7 +19055,7 @@ function viewStats(){
     ${lineI("roi", t("Rentabilité (ROI)"), roiVal)}
     ${lineI("net", t("Résultat net cumulé"), `<span class="${a.net>=0?'green':'red'}">${euroSigned(a.net)}</span>`)}
     ${lineI("ptsday", t("Points par journée"), a.ptsPerDay)}
-    ${line(t("Meilleure journée"), (a.best&&a.best.net>-1e8)?`<span class="green">${euroSigned(a.best.net)}</span>`:'–', !!(a.best&&a.best.net>-1e8&&lienJourneeHTML(a.best)))}
+    ${line(t("Meilleure journée"), (a.best&&a.best.net>-1e8)?`<span class="${clsMontant(a.best.net)}">${euroSigned(a.best.net)}</span>`:'–', !!(a.best&&a.best.net>-1e8&&lienJourneeHTML(a.best)))}
     ${(a.best&&a.best.net>-1e8&&lienJourneeHTML(a.best))?`<div class="mini" style="margin:-3px 0 6px;text-align:right">${lienJourneeHTML(a.best)}</div>`:''}
   </div>
   <div class="box"><div class="boxttl clik" onclick="showStatInfo('curve')">📈 ${t("Évolution du ROI")} <span style="opacity:.55">ⓘ</span></div>
@@ -19031,8 +19169,8 @@ function showLeagueStat(lid){
     +line(t("Pronos gagnés"), l.won+"/"+l.picks+" ("+l.hit+" %)")
     +line(t("Rentabilité (ROI)"), `<span class="${l.roi>=0?'green':'red'}">${l.roi} %</span>`)
     +line(t("Résultat net"), `<span class="${l.net>=0?'green':'red'}">${euroSigned(l.net)}</span>`)
-    +line(t("Meilleure journée"), l.best.day>=0?`<span class="green">${euroSigned(l.best.net)}</span> (J${l.best.day+1})`:'–')
-    +line(t("Pire journée"), l.worst.day>=0?`<span class="red">${euroSigned(l.worst.net)}</span> (J${l.worst.day+1})`:'–')
+    +line(t("Meilleure journée"), l.best.day>=0?`<span class="${clsMontant(l.best.net)}">${euroSigned(l.best.net)}</span> (J${l.best.day+1})`:'–')
+    +line(t("Pire journée"), l.worst.day>=0?`<span class="${clsMontant(l.worst.net)}">${euroSigned(l.worst.net)}</span> (J${l.worst.day+1})`:'–')
     +line(t("Plus grosse cote gagnée"), l.bestOdd?l.bestOdd.toFixed(2):'–')
     +line(t("Bonus fétiche"), l.favCard&&CARDS[l.favCard]?CARDS[l.favCard].e+' '+esc(t(CARDS[l.favCard].n)):'–');
   infoModal("📋", l.name, body);
@@ -20985,7 +21123,7 @@ async function loadAdmin(){
     try{ quotaHisto=await q(db.from("api_quota_histo").select("d,debut,fin").order("d",{ascending:false}).limit(31)); }catch(e){ quotaHisto=[]; }
     // v7.06 : `code,name,num_days,current_day,data_mode` et `league_id` sur les paris servent à la
     // liste « Toutes les ligues » — l'admin ne voyait QUE ses propres ligues, donc rien du terrain.
-    const lgs=await q(db.from("leagues").select("id,code,name,status,num_days,current_day,data_mode,gage,prep_summary,created_at"));
+    const lgs=await q(db.from("leagues").select("id,code,name,status,num_days,current_day,data_mode,gage,prep_summary,created_at,frozen_for_user_id,review_exempt_until"));
     const pls=await q(db.from("players").select("id,name,is_ai,user_id,league_id,created_at"));
     const allBts=await q(db.from("bets").select("card,net,created_at,player_id,submitted,league_id"));
     // Rachats de bonus : 2 actions humaines datées par ligne (proposition, puis réponse).
@@ -21088,7 +21226,8 @@ async function loadAdmin(){
       const maj=derniere[l.id]||cree;
       return { id:l.id, code:l.code||'?', name:l.name||'?', status:l.status, data:l.data_mode||'sim',
                day:l.current_day|0, days:l.num_days|0, joueurs:(humParLg[l.id]||new Set()).size,
-               cree, maj, dormante:Math.floor((Date.now()-maj)/86400000) };
+               cree, maj, dormante:Math.floor((Date.now()-maj)/86400000),
+               exemptee:ligueExempteeFermeture(l) };
     }).sort((a,b)=>b.maj-a.maj);
     /* ---- FERMETURE AUTOMATIQUE des ligues à l'abandon (v7.07, réglage d'Hervé : 14 jours) -----
        Traitée comme une fermeture AVANT TERME : `current_day` reste inférieur à `num_days`, donc
@@ -21101,7 +21240,11 @@ async function loadAdmin(){
        ⚠️ `.neq("status","done")` : garde-fou contre une double fermeture si deux onglets balaient
        en même temps — on n'écrase pas la date de fin d'une ligue déjà close. */
     let fermeesAuto=0;
-    for(const l of allLeagues.filter(x=>x.status!=="done" && x.dormante>=LIGUE_FERME_J)){
+    /* ⚠️ EXEMPTION REVIEW STORE (2026-09-28, demandée par Hervé) — voir `ligueExempteeFermeture()`.
+       Une ligue destinée à la review Apple/Google ne doit pas disparaître pendant que le reviewer
+       fait ses contrôles : il ouvre l'app plusieurs jours après la soumission, et une ligue fermée
+       entre-temps lui montre un jeu cassé. Le délai des vraies ligues (14 j) est INCHANGÉ. */
+    for(const l of allLeagues.filter(x=>x.status!=="done" && x.dormante>=LIGUE_FERME_J && !x.exemptee)){
       try{
         const r=await q(db.from("leagues").update({status:"done",closed_reason:"inactivity"}).eq("id",l.id).neq("status","done").select("id"));
         if(r && r.length){ fermeesAuto++; l.status="done"; l.fermeeAuto=true;
@@ -21763,10 +21906,32 @@ function saisieEnCours(){ const a=document.activeElement;
 // quelqu'un qui reste posé sur l'onglet Rachat : aucun sondage n'y tournait, `myResolvedOut` n'y
 // était donc jamais rafraîchi. `saisieEnCours()` protège déjà les champs de cet écran (prix, petit
 // mot) exactement comme il protège la saisie des pronos — inutile d'ajouter `isComposing()`.
-function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(()=>{ if(saisieEnCours())return;
+/* ⚠️ AUDIT DATA EN ARRIÈRE-PLAN (2026-09-28, demandé par Hervé avant ouverture publique).
+   Ce sondage est le SEUL `setInterval` de l'app (vérifié : aucun websocket, aucun realtime
+   Supabase, aucun service worker, aucun background fetch, aucun `setTimeout` qui se replanifie,
+   aucun service natif déclaré côté Android, et `remote-notification` seul côté iOS — pour les push,
+   qui ne sondent rien). C'est donc le seul endroit qui pouvait consommer de la data sans personne
+   devant l'écran, et il le faisait : rien ne l'arrêtait quand l'app passait en arrière-plan.
+   Les trois seuls `clearInterval(poll)` existants couvrent la sortie de ligue, la déconnexion et la
+   perte de session — jamais la mise en arrière-plan.
+   Un tour fait 5 à 8 requêtes (leagues ×3, players, trades ×2, duels, bets, parfois une RPC), toutes
+   les 4 s, soit de l'ordre de 4 500 à 7 200 requêtes par heure. Sur iOS le système finit par geler
+   le process, ce qui masquait le défaut ; sur Android le WebView de Capacitor ne met PAS les
+   minuteurs JS en pause de lui-même, et sur le web un onglet caché continue (simplement bridé).
+   ⚠️ LE GARDE EST DANS LE TOUR, PAS DANS UN clearInterval : le minuteur continue de battre (coût
+   nul, aucune requête), et on ne peut donc pas laisser le sondage éteint par erreur au retour —
+   ce qui serait arrivé en le stoppant, avec 19 appels à `startPoll()` dispersés dans le fichier.
+   ⚠️ ET ON RATTRAPE AU RETOUR : sans le `visibilitychange` ci-dessous, reprendre l'app afficherait
+   un écran périmé pendant 4 s. `pingActivite()` et `checkForUpdate()` sont déjà branchés sur cet
+   événement ailleurs — c'est bien le signal que Capacitor relaie au WebView. */
+function tourDeSondage(){
+  if(document.hidden) return;        // personne ne regarde : aucune requête
+  if(saisieEnCours()) return;
   if(S.view==="game"||S.view==="standings"||S.view==="results"||S.view==="trade"){ if(!isComposing()) refresh(); }
   else if(S.view==="home") loadMyLeagues();
-},4000); }
+}
+function startPoll(){ if(poll) clearInterval(poll); poll=setInterval(tourDeSondage,4000); }
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden && poll) tourDeSondage(); });
 // === NAVIGATION — une pile, PAS une case unique =======================================
 // v4.19. Avant : S.prevView, UNE seule case partagée par rules/rulesfull/settings/coulisses.
 // accueil → règles → paramètres écrasait "leagues" par "rules" → le retour des paramètres
