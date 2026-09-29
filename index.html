@@ -2834,7 +2834,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.505";
+const APP_VERSION = "v8.506";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -3828,8 +3828,28 @@ function prestigeCount(f){ const est=n=>{ const x=_normNom(n); return PRESTIGE.s
 // ⚠️ PRÉFÉRENCE, PAS FILTRE : un match de nuit reste proposé s'il n'y a que ça (juillet !), et un
 // choc de prestige nocturne passe toujours devant un match anonyme de l'après-midi — le bonus (6)
 // pèse moins qu'une équipe de prestige (10). C'est le réglage voulu : départager à qualité égale.
+/* ⚠️ HEURE DE RÉFÉRENCE FIXE, PAS CELLE DE L'APPAREIL (2026-09-29, demandé par Hervé).
+   Cette fonction alimente `afficheScore`, qui trie à l'intérieur de `tourDeRole` : elle décide donc
+   QUELS matchs entrent dans le lot. Avec `getHours()` elle lisait l'heure LOCALE du téléphone, et
+   comme `day_pool` est figé par le premier joueur qui ouvre l'écran de choix, deux joueurs de la
+   même ligue pouvaient obtenir deux lots différents selon leur fuseau. On ancre donc le jugement
+   sur un fuseau FIXE — celui du public de l'app — pour que le lot soit identique partout.
+   ⚠️ CE N'EST PAS UNE PRÉFÉRENCE PERSONNELLE MAIS UNE PROPRIÉTÉ DE LA LIGUE : « heure confortable »
+   veut dire « créneau où l'on regarde du sport », pas « heure commode pour CE joueur-ci ». Un
+   réglage par joueur casserait le tirage commun, qui est la règle depuis la v8.247.
+   ⚠️ Repli sur l'heure locale si `Intl` refuse le fuseau (moteur exotique) : mieux vaut un tri
+   imparfait qu'une exception en pleine construction du lot. */
+const _HEURE_REF_TZ="Europe/Paris";
+let _fmtHeureRef=null;
+function heureRef(ts){
+  try{
+    if(!_fmtHeureRef) _fmtHeureRef=new Intl.DateTimeFormat("en-GB",
+      {timeZone:_HEURE_REF_TZ, hour:"2-digit", hour12:false});
+    return parseInt(_fmtHeureRef.format(new Date(ts)),10);
+  }catch(e){ return new Date(ts).getHours(); }
+}
 function heureConfortable(f){ const ts=fixtureKickoff(f); if(!ts) return false;
-  const h=new Date(ts).getHours(); return h>=12 && h<23; }
+  const h=heureRef(ts); return h>=12 && h<23; }
 /* ─── RALLONGE DU DERNIER SOIR (v7.30, demandé par Hervé) ───────────────────────────────────
    Constat : une ligue classique lancée un vendredi 18h voit sa fenêtre s'arrêter mardi 18h —
    et coupe donc exactement le créneau où l'Europe joue, les coups d'envoi de 18h30 à 21h.
@@ -3849,11 +3869,18 @@ function heureConfortable(f){ const ts=fixtureKickoff(f); if(!ts) return false;
    DENSE de `batir` : si une seule journée contient de quoi remplir la liste, c'est elle qui est
    servie, et la fenêtre large ne sert que de réservoir. Les deux changements vont ensemble —
    remettre un plafond ici sans toucher au créneau dense reproduirait le défaut. */
-const FIN_SOIREE_H=22;
-function finDeSoiree(ts){
-  const soir=new Date(ts); soir.setHours(FIN_SOIREE_H,0,0,0);
-  return (soir.getTime()<=ts) ? ts : soir.getTime();   // déjà après 22 h → on ne rallonge pas
-}
+/* ⚠️ RALLONGE DU DERNIER SOIR — RETIRÉE DE L'ÉLIGIBILITÉ LE 2026-09-29 (décision d'Hervé).
+   `finDeSoiree()` repoussait la fin de fenêtre à 22 h via `setHours(22,0,0,0)`, donc à 22 h CHEZ
+   CELUI QUI CALCULE. Comme `day_pool` est figé par le premier joueur qui ouvre l'écran de choix,
+   la fenêtre d'une ligue dépendait du fuseau de ce téléphone-là. Les bornes sont désormais des
+   instants absolus comptés depuis `day_started_at` (voir `selectPool`), identiques partout.
+   ⚠️ CE QU'ON PERD, ET IL FAUT LE SAVOIR : la rallonge existait pour ne pas couper les coups
+   d'envoi européens de 18h30-21h quand la fenêtre se terminait juste avant (règle v7.30). Une
+   fenêtre qui finit à 18 h ne rattrapera plus le match de 18h45 de ce soir-là. Si ce cas se
+   révèle gênant, la rallonge peut revenir SANS le défaut de fuseau, en la calculant sur le
+   fuseau de référence fixe (cf. `heureRef`) plutôt que sur celui de l'appareil.
+   ⚠️ `FIN_SOIREE_H` est retirée en même temps : plus rien ne s'en sert, et les règles affichées
+   au joueur ne promettent plus cette marge (elles annoncent désormais l'extension d'une journée). */
 // Note d'une affiche. Le PRESTIGE domine — un choc entre deux grands noms passe devant tout — puis
 // l'ÉQUILIBRE, mesuré par la cote du favori : plus elle est haute, moins le match est joué d'avance.
 // Un 1,05 contre 15,00 n'a aucun intérêt à pronostiquer, tout le monde coche le favori.
@@ -4129,7 +4156,16 @@ function selectPool(all){
     const primary=(tight.length>=5)?tight:cand;
     // Football et variété remplis SÉPARÉMENT (pour tenir le quota 75/25), chacun par tour de rôle
     // entre ses compétitions → panachage des championnats un samedi, concentration un soir de C1.
-    const pool=[...tourDeRole(primary.filter(e=>e.grp==="Soccer"), socTarget),
+    /* ⚠️ LE FOOTBALL SE SERT SUR `cand` (TOUTE LA FENÊTRE), LE RESTE SUR `primary` (LE CRÉNEAU).
+       C'était la vraie cause du 0/9 football de la Ligue B le 29/09, et élargir la fenêtre n'y
+       changeait rien : le créneau glissant se verrouillait sur la nuit 22h40→02h00 (2 basket +
+       24 tennis, largement plus de 5), le football du surlendemain entrait bien dans la fenêtre
+       mais JAMAIS dans le créneau, et le quota se calculait sur le créneau. Vérifié en rejouant
+       `batir` sur la vraie réserve : fenêtre élargie seule → toujours 0 football ; quota servi sur
+       `cand` → 7 football. Les deux changements vont ensemble, l'un sans l'autre ne sert à rien.
+       ⚠️ LE COMPLÉMENT RESTE SUR LE CRÉNEAU : c'est lui qui porte le regroupement des matchs (les
+       résultats tombent ensemble). On concède la proximité sur le football, pas sur le reste. */
+    const pool=[...tourDeRole(cand.filter(e=>e.grp==="Soccer"), socTarget),
                 ...tourDeRole(primary.filter(e=>e.grp!=="Soccer"), N-socTarget)];
     const completer=src=>{ const reste=src.filter(e=>pool.indexOf(e)<0);
       tourDeRole(reste, N-pool.length).forEach(e=>{ if(pool.length<N) pool.push(e); }); };
@@ -4190,7 +4226,17 @@ function selectPool(all){
      qui eux jouent presque tous les soirs. Mieux vaut une journée à dominante NBA qu'une journée
      dont les matchs tombent quatre jours plus tard. Le seul vrai remède est en amont : que la
      RÉCOLTE couvre chaque jour (voir le critère d'arrêt de `fetchRealPool`). */
-  const limiteMax=finDeSoiree(cutoffMin+24*3600000);
+  /* ⚠️ BORNE ABSOLUE, PLUS DE `finDeSoiree` ICI (2026-09-29, demandé par Hervé).
+     `finDeSoiree` appelait `setHours(22,0,0,0)` — donc « 22 h » CHEZ CELUI QUI CALCULE. Et comme
+     `day_pool` est figé par le PREMIER joueur qui ouvre l'écran de choix, la fin de fenêtre d'une
+     ligue dépendait du fuseau de ce téléphone-là : Paris et Singapour ne produisaient pas le même
+     lot pour la même ligue, la même journée. La borne est désormais un instant absolu compté
+     depuis `day_started_at`, comparé en epoch — identique partout sur Terre.
+     Fast : début T0+24 h, fin normale T0+48 h, fin étendue T0+72 h.
+     Classique : début T0+48 h, fin normale T0+72 h, fin étendue T0+96 h.
+     ⚠️ LA RALLONGE DU DERNIER SOIR DISPARAÎT AVEC ELLE : une fenêtre qui se termine à 18 h ne
+     rattrapera plus le coup d'envoi de 18h45 de ce soir-là (cf. la note sur `FIN_SOIREE_H`). */
+  const limiteMax=cutoffMin+24*3600000;
   let pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=limiteMax));
   /* ---- ÉLARGISSEMENT PAR QUALITÉ (v7.31, arbitrage d'Hervé) --------------------------------
      « Je préfère parier sur un match de Ligue des Champions dans 3 jours plutôt que sur un Boca
@@ -4212,12 +4258,29 @@ function selectPool(all){
        de laisser une ligue réelle sans journée. Aller chercher un match à cinq jours reste
        infiniment préférable à inventer des cotes. */
   const MIN_AFFICHES=5;
-  for(let j=1; pool.length<N && j<=ELARGIR_MAX_J; j++){
-    const large=finDeSoiree(limiteMax+j*24*3600000);
-    pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=large));
+  const nbFoot=p=>p.filter(e=>e&&e.grp==="Soccer").length;
+  /* ⚠️ L'EXTENSION DE CONFORT EST DÉSORMAIS PILOTÉE PAR LE FOOTBALL (2026-09-29, règle d'Hervé).
+     Avant, elle ne se déclenchait que sur `pool.length < 9`. Le 29/09 en Ligue B, le tennis avait
+     rempli les 9 places : la condition était fausse, l'extension n'a jamais tourné, et la journée
+     est partie à 0 football alors que 8 matchs de Ligue des Nations attendaient 24 h plus loin.
+     ⚠️ ON GARDE AUSSI `pool.length < N` : sans lui, un lot à 8 affiches dont 7 de football ne
+     tenterait plus rien et perdrait la 9ᵉ place — une régression silencieuse du comportement
+     actuel. Les deux motifs déclenchent la MÊME extension unique.
+     ⚠️ UNE SEULE FOIS, ET SEULEMENT SI ÇA SERT. On ne garde la fenêtre élargie que si elle
+     apporte réellement du football (ou des affiches manquantes) : sinon on repousserait la
+     journée de 24 h pour rien, ce qui est exactement ce que la règle Fast interdit. */
+  if(nbFoot(pool)<socTarget || pool.length<N){
+    const large=limiteMax+24*3600000;
+    const elargi=batir(dispo.filter(e=>new Date(e.commence).getTime()<=large));
+    if(nbFoot(elargi)>nbFoot(pool) || elargi.length>pool.length) pool=elargi;
   }
-  for(let j=ELARGIR_MAX_J+1; pool.length<MIN_AFFICHES && j<=HARVEST_WINDOW_D; j++){
-    const large=finDeSoiree(limiteMax+j*24*3600000);
+  /* ⚠️ MÉCANISME DE SURVIE — INCHANGÉ, ET IL NE DOIT PAS L'ÊTRE. Il ne parle pas de football mais
+     d'EXISTENCE : un duel a besoin de 5 rencontres, en dessous il n'y a pas de journée. Depuis que
+     le repli sur des matchs fictifs est supprimé (règle d'Hervé, v7.36), on va donc chercher aussi
+     loin qu'il faut plutôt que de laisser une ligue réelle sans journée. Il démarre au-delà de
+     l'extension de confort et ne peut donc pas l'annuler. */
+  for(let j=2; pool.length<MIN_AFFICHES && j<=HARVEST_WINDOW_D; j++){
+    const large=limiteMax+j*24*3600000;
     pool=batir(dispo.filter(e=>new Date(e.commence).getTime()<=large));
   }
   // Ordre d'AFFICHAGE : les plus belles affiches en tête. N'affecte pas la composition du lot,
@@ -5647,6 +5710,14 @@ const EN={
   "Résultats à découvrir":"Results to discover",
   "la journée {a} est jouée, tu n'as pas encore vu le verdict.":"matchday {a} has been played — you haven't seen the verdict yet.",
   "Résultats bientôt disponibles":"Results coming soon",
+  /* ⚠️ v8.506 — LES CINQ ÉTATS DE L'ATTENTE (retour réel d'Hervé). Un seul texte les couvrait tous
+     et laissait croire à un blocage. Le mot « autre duel » n'apparaît que lorsque c'en est
+     vraiment un : l'annoncer à tort enverrait le joueur chercher au mauvais endroit. */
+  "Paris clôturés — <b>un de tes matchs n'est pas encore terminé</b>. Les résultats arrivent dès que toute la ligue a fini.":"Betting closed — <b>one of your matches hasn't finished yet</b>. Results arrive once the whole league is done.",
+  "Paris clôturés — tes matchs sont joués, mais <b>le score de l'un d'eux n'est pas encore remonté</b>. Rien n'est bloqué : la journée se résout dès qu'il arrive.":"Betting closed — your matches have been played, but <b>one score hasn't come through yet</b>. Nothing is stuck: the matchday settles as soon as it arrives.",
+  "<b>Ton duel est terminé.</b> La journée, elle, ne l'est pas : <b>un match d'un autre duel</b> est encore en cours ou à venir. Les résultats seront disponibles quand tous les matchs de la ligue auront été joués.":"<b>Your duel is over.</b> The matchday isn't: <b>a match from another duel</b> is still under way or yet to start. Results become available once every match in the league has been played.",
+  "<b>Ton duel est terminé.</b> Il manque encore <b>le score d'un match d'un autre duel</b> — la journée se résout automatiquement dès qu'il est remonté.":"<b>Your duel is over.</b> <b>One score from another duel</b> is still missing — the matchday settles automatically as soon as it comes through.",
+  "Tous les matchs sont terminés — <b>la journée se résout</b>. Les résultats s'affichent dans un instant.":"All matches are over — <b>the matchday is settling</b>. Results appear in a moment.",
   // v8.502 — même famille, mais ligue DÉJÀ en `resolving` : la résolution est lancée, le joueur
   // n'a rien à déclencher. Texte distinct de « bientôt disponibles », qui lui invite à aller voir.
   "Résultats en cours de confirmation":"Results being confirmed",
@@ -6342,7 +6413,7 @@ const EN={
   "Liste à rafraîchir":"List needs refreshing",
   "Depuis que cet écran est ouvert, {a} des matchs choisis se joue(nt) trop tôt : ton adversaire n'aurait plus ses <b>{b} h</b> pour pronostiquer. Voici une liste à jour — <b>tes 5 choix sont à refaire</b>.":"Since this screen was opened, {a} of the matches you picked now kick off too soon: your opponent would no longer have their <b>{b}h</b> to make their picks. Here's an up-to-date list — <b>you'll need to pick your 5 again</b>.",
   // « Choisis vite » sur l'écran de sélection (v7.33) + fenêtre des matchs recalculée (v7.32).
-  "Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b>, ou s'ouvre d'un jour ou deux pour aller chercher une <b>plus belle affiche</b> plutôt qu'un match anonyme tout proche.":"These fixtures kick off <b>shortly after betting closes</b>, never days later: at most <b>{f}h</b> in ⚡ Fast, <b>{c}h</b> in 🗓️ Classique — with a little slack on the final evening, until <b>{h}:00</b>, so European evening kick-offs aren't cut off. In a quiet period the matchday has <b>fewer than {a} fixtures</b>, or opens up by a day or two to reach a <b>better fixture</b> rather than an anonymous one close by.",
+  "Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique. Si la période est creuse — trop peu de rencontres, ou trop peu de football — la fenêtre s'ouvre <b>d'une seule journée de plus</b> (<b>{f2}h</b> en Fast, <b>{c2}h</b> en Classique) pour aller chercher de vraies affiches plutôt qu'un match anonyme tout proche. Au-delà, la journée compte simplement <b>moins de {a} rencontres</b>.":"These fixtures kick off <b>shortly after betting closes</b>, never days later: at most <b>{f}h</b> in ⚡ Fast, <b>{c}h</b> in 🗓️ Classique. In a quiet period — too few fixtures, or too little football — the window opens up by <b>one extra day only</b> (<b>{f2}h</b> in Fast, <b>{c2}h</b> in Classique) to reach real fixtures rather than an anonymous one close by. Beyond that, the matchday simply has <b>fewer than {a} fixtures</b>.",
   // Clôture des paris au premier coup d'envoi, en données réelles (v7.32).
   "En <b>📡 données réelles</b>, tu peux <b>modifier tes pronos jusqu'au coup d'envoi du premier de tes 5 matchs</b>. Un pari n'est montré aux autres que lorsqu'il ne peut <b>plus</b> changer — sinon voir le pari d'un adversaire encore modifiable donnerait un avantage, et pas une simple information. En 🎮 simulé, la clôture reste l'échéance de la formule.":"With <b>📡 real data</b>, you can <b>edit your picks until the first of your 5 matches kicks off</b>. A bet is only shown to others once it can <b>no longer</b> change — otherwise seeing an opponent's still-editable bet would be an advantage, not just information. In 🎮 simulated leagues, the deadline stays the format's timer.",
   // Onglets du palmarès (v7.26) — mêmes trois vues, formulées pour un classement public.
@@ -12330,10 +12401,10 @@ function viewHome(){
     ? (x.lg.status==="resolving"
       ? `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats en cours de confirmation")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("les matchs de la journée {a} sont terminés : la journée se résout automatiquement dès que tous les scores sont remontés.",{a:(x.jour|0)+1})}</div>
-      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Suivre")}</button></div>`
+      <button class="cta" onclick="openLeagueResultats('${x.lg.id}','${x.pid}')">🏁 ${t("Suivre")}</button></div>`
       : `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats bientôt disponibles")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tous les matchs de la journée {a} semblent terminés : ouvre la ligue pour vérifier si la résolution peut être déclenchée.",{a:(x.jour|0)+1})}</div>
-      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Découvrir")}</button></div>`)
+      <button class="cta" onclick="openLeagueResultats('${x.lg.id}','${x.pid}')">🏁 ${t("Découvrir")}</button></div>`)
     : x.kind==="prep"
     ? `<div class="alert-card warn">${qgCountdownHTML(x.deadline)}<div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("la préparation de la saison t'attend :")} ${x.label.e} ${esc(x.label.t)}.</div>
@@ -12635,6 +12706,12 @@ function openLeague(lid,pid,fresh,consultation){
 // premier `await` — on peut donc écraser `S.view` juste après, en toute sécurité, avant que ce
 // renvoi n'ait la moindre chance de s'exécuter.
 function openLeagueCoulisses(lid,pid){ openLeague(lid,pid); S.view="coulisses"; }
+/* ⚠️ MÊME MOTIF, POUR LES RÉSULTATS (2026-09-29, demandé par Hervé). Le bandeau « 🏁 Résultats
+   bientôt disponibles » du QG ouvrait la ligue sur ⚽ Pronos — l'onglet par défaut — alors qu'il
+   promettait des résultats. On y arrivait donc sur un écran d'attente sans rapport avec le clic.
+   `S.resDay=null` : on laisse `viewResults` choisir la journée par défaut plutôt que d'en figer
+   une, sinon un retour plus tard rouvrirait sur une journée périmée. */
+function openLeagueResultats(lid,pid){ openLeague(lid,pid); S.resDay=null; S.view="results"; }
 /* ---- Consultation d'une ligue depuis l'écran Admin (v7.11) --------------------------------
    On regarde la ligue avec les yeux d'un de SES joueurs — l'organisateur de préférence, sinon
    le premier humain. Sans quoi `me()` renverrait undefined et la moitié des écrans planterait.
@@ -17964,6 +18041,47 @@ function verrouAvantCloture(){
   const dl=duelDeadline(myDuel()); if(!dl || Date.now()>=dl) return '';
   return `<div class="mini muted" style="margin-top:6px;line-height:1.6">🔒 ${t("Rien n'est visible pour l'instant — ni les résultats, ni les pronos des autres. Tout dépend du <b>coup d'envoi de ton premier match</b>, {a} : avant lui, ton pari peut encore changer, et voir le pari de quelqu'un qui peut encore le modifier serait un avantage, pas une information.",{a:'<b>'+fmtWhen(dl)+'</b>'})}</div>`;
 }
+/* ═══════════ POURQUOI ON ATTEND, EXACTEMENT ═══════════
+   ⚠️ Retour réel d'Hervé : ses 5 matchs étaient terminés, un match d'un AUTRE duel ne l'était pas,
+   et l'écran disait seulement « on attend la fin de tous les matchs de la ligue ». Compréhensible
+   à la lecture, mais pas quand on est devant : on croit que l'app est bloquée, ou que ce sont SES
+   matchs qui manquent. La phrase doit nommer la vraie cause.
+   ⚠️ ON NE DIT « UN AUTRE DUEL » QUE SI C'EN EST VRAIMENT UN. Le piège serait d'annoncer « un autre
+   duel » alors qu'il manque en réalité le score d'un de SES propres matchs : le joueur chercherait
+   au mauvais endroit et l'app perdrait sa crédibilité. On teste donc SES matchs d'abord, et on ne
+   parle des autres duels que lorsque les siens sont tous joués ET tous pourvus d'un score.
+   ⚠️ CETTE FONCTION NE RÉVÈLE AUCUN RÉSULTAT. Elle ne répond qu'à « ce match a-t-il un score
+   connu ? », jamais « lequel a gagné ». `liveVerdict(f,null)` est ici un simple détecteur — c'est
+   l'usage documenté à sa définition, et le seul des quatre appels qui n'affiche rien. L'option
+   ⏱️ Duel Live garde donc toute sa valeur : elle seule montre le détail match par match. */
+function attenteEtat(){
+  const dz=duels||[]; if(!dz.length) return null;
+  const mien=myDuel();
+  const pasFini = f=>f && f.evId && !f.canceled && matchEtat(f)!=="fini";
+  const sansScore = f=>f && f.evId && !f.canceled && matchEtat(f)==="fini" && !liveVerdict(f,null);
+  const fxMien=(mien&&mien.fixtures)||[];
+  const fxAutres=dz.filter(x=>!mien||x.id!==mien.id).reduce((a,x)=>a.concat(x.fixtures||[]),[]);
+  if(fxMien.some(pasFini))    return "mien_encours";
+  if(fxMien.some(sansScore))  return "mien_sans_score";
+  if(fxAutres.some(pasFini))  return "autre_encours";
+  if(fxAutres.some(sansScore))return "autre_sans_score";
+  return "tout_fini";
+}
+/* Le texte d'attente, un par état. `plusieurs` : à deux joueurs il n'y a qu'un duel, « un autre
+   duel » n'existe pas — la phrase générique reste alors la bonne. */
+function attenteTexte(plusieurs){
+  const e=attenteEtat();
+  if(!plusieurs || !e) return t("Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.");
+  if(e==="mien_encours")
+    return t("Paris clôturés — <b>un de tes matchs n'est pas encore terminé</b>. Les résultats arrivent dès que toute la ligue a fini.");
+  if(e==="mien_sans_score")
+    return t("Paris clôturés — tes matchs sont joués, mais <b>le score de l'un d'eux n'est pas encore remonté</b>. Rien n'est bloqué : la journée se résout dès qu'il arrive.");
+  if(e==="autre_encours")
+    return t("<b>Ton duel est terminé.</b> La journée, elle, ne l'est pas : <b>un match d'un autre duel</b> est encore en cours ou à venir. Les résultats seront disponibles quand tous les matchs de la ligue auront été joués.");
+  if(e==="autre_sans_score")
+    return t("<b>Ton duel est terminé.</b> Il manque encore <b>le score d'un match d'un autre duel</b> — la journée se résout automatiquement dès qu'il est remonté.");
+  return t("Tous les matchs sont terminés — <b>la journée se résout</b>. Les résultats s'affichent dans un instant.");
+}
 function waitingResultsBody(d){
   const org=me()&&me().is_organizer;
   const isCurrent=(L.status==="running" && d===(L.current_day||0));
@@ -17987,7 +18105,7 @@ function waitingResultsBody(d){
   const attenteScore = liveShow && (duels||[]).some(dz=>(dz.fixtures||[]).some(
     f=>f && f.evId && !f.canceled && !liveVerdict(f,null) && matchEtat(f)==="fini"));
   let h=`${recapNav(d)}<div class="box"><div class="boxttl">${t("📋 Résultats · J{a}",{a:d+1})}</div>
-    <div class="mini" style="color:var(--accent)">⏳ ${closed?(plusieursDuels?t("Paris clôturés — on attend la fin de <b>tous les matchs de la ligue</b> : les tiens, mais aussi ceux des autres duels."):t("Paris clôturés — on attend la fin de <b>tous les matchs</b> de la journée.")):t("Journée en cours.")}</div>${closed?'':betLineHTML()}${closed?'':verrouAvantCloture()}${isCurrent?resolutionETALine(closed):''}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?attenteTexte(plusieursDuels):t("Journée en cours.")}</div>${closed?'':betLineHTML()}${closed?'':verrouAvantCloture()}${isCurrent?resolutionETALine(closed):''}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
     ${/* ⚠️ v7.78 — L'ALERTE « PRONOS NON VALIDÉS » (demandée par Hervé). Tant que les paris sont
          ouverts, cet écran montrait exactement la même chose à qui a validé et à qui n'a rien fait :
          l'affiche des matchs et l'heure de clôture. Or l'oubli est la faute la PLUS CHÈRE du jeu —
@@ -23495,8 +23613,9 @@ function viewRulesFull(){
 
    ${sec(t("⚽ Une journée, étape par étape"), `<ol style="margin:4px 0;padding-left:18px">
      ${li(t("La liste proposée contient <b>{a} rencontres</b> de <b>football, basket et tennis</b> — les seuls sports du jeu —, dont environ <b>{b} % de football</b>. S'il n'y a pas assez de football disponible, le complément vient du basket et du tennis. Le football ⚽ étant le seul sport à <b>3 issues</b> (victoire, nul, défaite), c'est lui qui rend le bonus 🧈 {c} jouable — une journée sans football est donc une journée où ce bonus ne peut pas être joué.",{a:POOL_N,b:75,c:t(CARDS.chance.n)}))}
-     ${li(t("Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique — avec un peu de marge le dernier soir, jusqu'à <b>{h}h</b>, pour ne pas couper les matchs européens de soirée. Si la période est creuse, la journée compte <b>moins de {a} rencontres</b>, ou s'ouvre d'un jour ou deux pour aller chercher une <b>plus belle affiche</b> plutôt qu'un match anonyme tout proche.",
-       {a:POOL_N, h:FIN_SOIREE_H, f:FORMULAS.fast.sel+FORMULAS.fast.bet+24, c:FORMULAS.classique.sel+FORMULAS.classique.bet+24}))}
+     ${li(t("Ces rencontres se jouent <b>peu après la clôture des paris</b>, jamais des jours plus tard : au plus <b>{f}h</b> en ⚡ Fast, <b>{c}h</b> en 🗓️ Classique. Si la période est creuse — trop peu de rencontres, ou trop peu de football — la fenêtre s'ouvre <b>d'une seule journée de plus</b> (<b>{f2}h</b> en Fast, <b>{c2}h</b> en Classique) pour aller chercher de vraies affiches plutôt qu'un match anonyme tout proche. Au-delà, la journée compte simplement <b>moins de {a} rencontres</b>.",
+       {a:POOL_N, f:FORMULAS.fast.sel+FORMULAS.fast.bet+24, c:FORMULAS.classique.sel+FORMULAS.classique.bet+24,
+        f2:FORMULAS.fast.sel+FORMULAS.fast.bet+48, c2:FORMULAS.classique.sel+FORMULAS.classique.bet+48}))}
      ${li(t("Le joueur <b>à domicile</b> choisit les <b>5 rencontres</b> du duel. Elles s'imposent aux deux joueurs. S'il ne choisit pas avant l'échéance, elles sont tirées automatiquement — <b>son adversaire n'est jamais pénalisé</b> pour ça."))}
      ${li(t("Chacun pose ses <b>pronostics et ses mises</b>, en secret. Le total des mises ne peut pas dépasser <b>{a} % de ton capital</b> ({b} % avec le bonus Investisseur) — sauf à la <b>dernière journée</b>, où ce plafond saute : tu peux tout miser. Ton <b>match favori</b> reste compté double en cas de perte, donc le maximum réellement atteignable tourne autour de 99 % plutôt que 100 % pile.",{a:pct(STAKE_CAP),b:pct(STAKE_CAP_INVEST)}))}
      ${li(t("En <b>📡 données réelles</b>, tu peux <b>modifier tes pronos jusqu'au coup d'envoi du premier de tes 5 matchs</b>. Un pari n'est montré aux autres que lorsqu'il ne peut <b>plus</b> changer — sinon voir le pari d'un adversaire encore modifiable donnerait un avantage, et pas une simple information. En 🎮 simulé, la clôture reste l'échéance de la formule."))}
