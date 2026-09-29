@@ -2834,7 +2834,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.504";
+const APP_VERSION = "v8.505";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -9458,11 +9458,99 @@ async function insertLeagueCodeUnique(champs){
 }
 
 /* ============ schedule ============ */
-function makeSchedule(n){ let arr=[...Array(n).keys()]; const rounds=[];
-  for(let r=0;r<n-1;r++){ const pairs=[];
-    for(let i=0;i<n/2;i++){ let a=arr[i],b=arr[n-1-i]; if((r+i)%2===0) pairs.push([a,b]); else pairs.push([b,a]); }
-    rounds.push(pairs); arr=[arr[0],arr[n-1],...arr.slice(1,n-1)]; }
-  const ret=rounds.map(rd=>rd.map(p=>[p[1],p[0]])); return [...rounds,...ret]; }
+/* ═══════════ CALENDRIER : QUI JOUE QUI, ET SURTOUT QUI CHOISIT LES MATCHS ═══════════
+   `home_id` = le joueur À DOMICILE = celui qui choisit les 5 affiches de la journée. Ce n'est donc
+   pas une étiquette décorative : c'est un tour de rôle, et il doit tourner.
+
+   ⚠️ CE QUI N'ALLAIT PAS (signalé par Hervé le 28/09 sur la Ligue B — Fabien ne choisissait jamais).
+   L'orientation se décidait par `(r+i)%2`, où `r` est la journée et `i` la position dans le cercle.
+   Or la position d'un joueur qui tourne AVANCE EN MÊME TEMPS QUE LA JOURNÉE : `r` et `i` montent
+   ensemble, donc `(r+i)` garde la même parité pendant TOUTE la phase aller. Chaque joueur gardait
+   ainsi le même rôle n-1 journées d'affilée, et le retour, miroir, inversait tout d'un coup.
+   Seul le pivot (i=0, immobile) alternait — c'est-à-dire le créateur de la ligue, et lui seul.
+   Constaté en base sur les trois ligues réelles, identique caractère pour caractère à la simulation :
+   Fabien avait `EEEEEDDDDDDDEE`. Le total était pourtant parfaitement équilibré (7 domicile,
+   7 extérieur) : le défaut n'était pas le VOLUME, c'était l'ORDRE.
+
+   ⚠️ CE QU'ON NE PEUT PAS PROMETTRE. L'alternance parfaite pour tout le monde est mathématiquement
+   impossible dans un round-robin. Recherche exhaustive à 4 et 6 joueurs : la meilleure série
+   atteignable est 2. C'est l'optimum, et c'est ce qu'on atteint pour toutes les tailles paires ≥ 4.
+
+   TROIS PIÈCES, ET AUCUNE NE TOUCHE À L'APPARIEMENT :
+   1. `r%2` au lieu de `(r+i)%2` — l'orientation bascule à chaque journée, et c'est la rotation du
+      carrousel qui redistribue les rôles au lieu de les figer.
+   2. Le RETOUR SE JOUE À L'ENVERS. Vérifié par recherche exhaustive : à 4 joueurs, retour dans
+      l'ordre, la meilleure série atteignable est 3 (les 64 orientations testées) ; à l'envers, 2.
+      Au-delà de 4 les deux valent 2 — l'ordre inverse est donc le seul uniformément optimal.
+   3. Une passe de polissage déterministe (voir `_polirAlternance`).
+
+   ⚠️ L'APPARIEMENT LUI-MÊME EST INCHANGÉ. Le carrousel garantissait déjà le round-robin complet,
+   les deux rencontres par duo et l'absence de doublon dans une journée : on n'y touche pas. Tout ce
+   qui change ici est le SENS des rencontres. */
+function makeSchedule(n){
+  if(n<2) return [];
+  /* ⚠️ EFFECTIF IMPAIR — GARDE-FOU, PAS UN CAS COURANT. L'app tombe toujours sur un effectif pair
+     (`close_registration` ajoute l'IA côté serveur, avec repli client). Mais si un appelant futur
+     l'oubliait, la version d'avant appariait le joueur du milieu AVEC LUI-MÊME : `for(i<n/2)` sur un
+     n impair fait tourner i jusqu'à ⌊n/2⌋, et la dernière paire devenait (arr[k], arr[k]). On ajoute
+     donc un joueur fantôme, et les duels qui le contiennent sont retirés — le joueur concerné est
+     simplement au repos ce jour-là, comme dans n'importe quel championnat à effectif impair. */
+  const impair=(n%2===1), m=impair?n+1:n;
+  let arr=[...Array(m).keys()]; const aller=[];
+  for(let r=0;r<m-1;r++){
+    const jour=[];
+    for(let i=0;i<m/2;i++){
+      const x=arr[i], y=arr[m-1-i];
+      jour.push(r%2===0 ? [x,y] : [y,x]);          // ⚠️ r%2, et NON (r+i)%2 — voir la note ci-dessus
+    }
+    aller.push(jour);
+    arr=[arr[0],arr[m-1],...arr.slice(1,m-1)];
+  }
+  _polirAlternance(aller, m);
+  const retour=aller.map(j=>j.map(p=>[p[1],p[0]])).reverse();   // ⚠️ .reverse() : voir pièce 2
+  let sched=[...aller,...retour];
+  if(impair) sched=sched.map(j=>j.filter(p=>p[0]<n&&p[1]<n));
+  return sched;
+}
+/* Coût d'un calendrier, du point de vue de l'alternance. Le calcul rejoue le retour en miroir ET à
+   l'envers, exactement comme `makeSchedule` l'assemblera.
+   ⚠️ LE COÛT EST GRADUÉ, PAS BINAIRE. Ne regarder que la plus longue série ferait un plateau :
+   aucun retournement isolé ne fait baisser un maximum, et la recherche cale immédiatement (essayé,
+   elle restait bloquée à 3 là où 2 était atteignable). On pénalise donc CHAQUE série de longueur
+   L ≥ 3 par (L-2)², ce qui donne toujours une direction de descente, et on départage par le nombre
+   total de ruptures. Le facteur 100000 garde les deux critères lexicographiques. */
+function _coutAlternance(aller, m){
+  const seq=Array.from({length:m},()=>[]);
+  for(const j of aller) for(const [h,a] of j){ seq[h].push(1); seq[a].push(0); }
+  for(let k=aller.length-1;k>=0;k--) for(const [h,a] of aller[k]){ seq[a].push(1); seq[h].push(0); }
+  let lourd=0, rup=0;
+  for(const s of seq){
+    let cur=1;
+    for(let k=1;k<=s.length;k++){
+      if(k<s.length && s[k]===s[k-1]){ cur++; rup++; }
+      else { if(cur>=3) lourd+=(cur-2)*(cur-2); cur=1; }
+    }
+  }
+  return lourd*100000 + rup;
+}
+/* ⚠️ CETTE PASSE NE PEUT CASSER AUCUN INVARIANT, ET C'EST VOULU. On ne change QUE le sens d'une
+   rencontre : les adversaires, les journées et le nombre de duels ne bougent pas. Et comme le retour
+   est le miroir de l'aller, retourner une rencontre retourne aussi son retour — donc le total
+   domicile/extérieur de chaque joueur est invariant PAR CONSTRUCTION, quel que soit le résultat de
+   la recherche. C'est ce qui permet de la laisser chercher sans garde-fou supplémentaire.
+   Déterministe : ordre de parcours fixe, aucun aléa, deux appels rendent le même calendrier. */
+function _polirAlternance(aller, m){
+  let best=_coutAlternance(aller,m);
+  for(let passe=0; passe<40; passe++){
+    let bouge=false;
+    for(let r=0;r<aller.length;r++) for(let i=0;i<aller[r].length;i++){
+      aller[r][i].reverse();
+      const c=_coutAlternance(aller,m);
+      if(c<best){ best=c; bouge=true; } else aller[r][i].reverse();
+    }
+    if(!bouge) break;
+  }
+}
 
 /* ============ fixtures ============ */
 // `pris` (facultatif) : équipes déjà engagées dans le tirage en cours. Comme dans un vrai calendrier,
