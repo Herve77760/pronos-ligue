@@ -2962,7 +2962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.511";
+const APP_VERSION = "v8.512";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -4845,12 +4845,14 @@ const STALE_JOUR_H=24; // h après le coup d'envoi PROGRAMMÉ de CHAQUE match av
 // ============================================================================
 function porteNeutralisation(fixtures, results, nowT){
   // « En suspens » = ni résultat écrit, ni déjà annulé, ET aucun résultat connu du fournisseur.
-  // ⚠️ `r.completed` compte comme réglé MÊME PAS ENCORE ÉCRIT : sinon un match dont le score vient
+  // ⚠️ `r.completed` AVEC score compte comme réglé MÊME PAS ENCORE ÉCRIT : sinon un match dont le score vient
   // d'arriver dans CE passage retiendrait la porte fermée un tick de plus, pour rien.
   const enSuspens=(fixtures||[]).filter(f=>{
     if (!f || !f.evId || f.canceled || f.res) return false;
     const r=results&&results[f.evId];
-    if (r && r.completed) return false;
+    // ⚠️ LOT 1 R01 (30/09/2026) : « terminé » SANS score exploitable (abandon, walkover, score
+    // illisible) n'est PAS réglé — il reste EN SUSPENS, donc soumis au mur des 24 h puis annulé.
+    if (r && r.completed && r.res) return false;
     return true;
   });
   if (!enSuspens.length) return { pret: false, tmin: null, enSuspens: [] };
@@ -5075,7 +5077,7 @@ async function resolveRealIfReady(){
          atomique). Sans ça, un match joué pourrait rester des heures dans une journée non résolue,
          et l'auto-annulation l'aurait marqué `canceled:true, res:null` en dépassant l'échéance de
          la journée, EFFAÇANT un résultat connu. La mise aurait été rendue à tort. */
-      const r=results[f.evId]; if(r&&r.completed) continue;
+      const r=results[f.evId]; if(r&&r.completed&&r.res) continue;   // LOT 1 R01 : jamais « réglé » sans score
       /* ⚠️ DEUX VERROUS, PAS UN. La porte dit « le délai est écoulé » ; `verifiees` dit « et on a
          bien pu le redemander une dernière fois ». Sans le second, une panne du fournisseur au
          moment du mur rembourserait des matchs joués — le dégât même qu'on corrige ici. */
@@ -5111,7 +5113,8 @@ async function resolveRealIfReady(){
     // terminé. Mais uniquement s'il l'a VRAIMENT été — une compétition non vérifiée reste en
     // attente, sinon la journée se résoudrait sur un match ni résolu ni annulé.
     const neutralise = porte.pret && f.sportKey && verifiees.has(f.sportKey);
-    if(!f.res && (!r||!r.completed) && !neutralise) allDone=false; } }));
+    // LOT 1 R01 : « terminé sans score » ne rend PAS la journée finie (sinon résolue avec ce match perdu pour tous).
+    if(!f.res && (!r||!r.completed||!r.res) && !neutralise) allDone=false; } }));
   if(!allDone) return; // il reste des matchs en cours
   resolveDay();
 }
@@ -6040,6 +6043,8 @@ const EN={
   "Aucune journée terminée pour l'instant — les résultats arriveront après la clôture.":"No matchday finished yet — results will come after the close.",
   "Perte de capital ce jour-là : <b>{a}</b>.":"Capital lost that day: <b>{a}</b>.",
   "⏰ Trop tard — les pronos sont clôturés.":"⏰ Too late — picks are closed.",
+  "Ce bonus n'est plus dans ta main (cédé ou échangé entre-temps). Choisis-en un autre ou joue sans bonus.":"This bonus is no longer in your hand (given away or traded in the meantime). Pick another one or play without a bonus.",
+  "La journée a changé pendant ta saisie : tes pronos n'ont pas été enregistrés.":"The matchday changed while you were entering your picks: they were not saved.",
   "Résultat à découvrir":"Result ready to discover",
   "La journée est résolue.":"The matchday is resolved.",
   "Découvrir les résultats":"Discover the results",
@@ -16200,6 +16205,10 @@ const BET_CODES={
   ligue_non_active:"Cette ligue n'est pas (ou plus) en phase de pronostics pour le moment.",
   mise_min:"Chaque mise doit être d'au moins 1 €.",
   duel_introuvable:"Ton duel du jour est introuvable — essaie d'actualiser la page.",
+  // LOT 1 R03 (30/09/2026) — la base vérifie désormais l'échéance, la main et la journée.
+  trop_tard:"⏰ Trop tard — les pronos sont clôturés.",
+  bonus_absent:"Ce bonus n'est plus dans ta main (cédé ou échangé entre-temps). Choisis-en un autre ou joue sans bonus.",
+  journee_changee:"La journée a changé pendant ta saisie : tes pronos n'ont pas été enregistrés.",
 };
 function betRefus(code){
   if(code==="plafond_depasse"){
@@ -16261,7 +16270,15 @@ async function submitBet(){
     // déployée sur cette base, on retombe sur l'ancienne écriture directe, identique à avant.
     let vieuxChemin=false;
     try{
-      const code=await q(db.rpc("submit_bet",{p_league:L.id, p_picks:bet.picks, p_captain:bet.captain, p_card:myCard}));
+      /* LOT 1 R03 (30/09/2026) — `p_day` : la journée AFFICHÉE au moment de valider. Si la ligue a avancé
+         entre-temps, la base refuse ('journee_changee') au lieu d'écrire le pari sur la journée suivante.
+         ⚠️ Si la base n'a pas (ou plus, après un rollback) la version à 5 paramètres, on RÉESSAIE sans
+         `p_day` avant tout repli : sinon « fonction introuvable » ferait basculer sur l'écriture directe,
+         qui ne contrôle ni le plafond, ni l'échéance, ni la main. */
+      let code;
+      try{ code=await q(db.rpc("submit_bet",{p_league:L.id, p_picks:bet.picks, p_captain:bet.captain, p_card:myCard, p_day:playedDay})); }
+      catch(e1){ if(!tradeServeurAbsent(e1)) throw e1;
+        code=await q(db.rpc("submit_bet",{p_league:L.id, p_picks:bet.picks, p_captain:bet.captain, p_card:myCard})); }
       if(code!=="ok"){
         await refresh(); betRefus(code); busy=false;
         { const b=$("betSubmit"); if(b){ b.classList.remove("off"); b.removeAttribute("aria-disabled"); } }
