@@ -2962,7 +2962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.510";
+const APP_VERSION = "v8.511";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5184,13 +5184,12 @@ function allDuelsClosed(){ const dz=duels||[]; if(!dz.length) return deadlinePas
    cette échéance s'adresse, et c'est pour ça qu'elle nomme le match qui fait attendre.
    ⚠️ AUCUNE FUITE : les affiches des autres duels sont déjà publiques sur cet écran (seuls les
    PRONOS sont sous l'option 🕵️). On ne dit que l'heure et le nom d'un match déjà affiché.
-   ⚠️ Un duel SANS matchs choisis n'a pas d'heure de fin — la journée n'a alors pas d'échéance du
-   tout, et c'est une information plus utile qu'une heure inventée : on nomme qui l'on attend. */
+   ⚠️ Un duel SANS matchs choisis n'a pas d'heure de fin : pas d'échéance de résolution à annoncer.
+   C'est `choixMatchsEtat()` (juste en dessous) qui prend alors la parole. */
 function resolutionETA(){
   const dz=duels||[];
   if(!L || L.data_mode!=="real" || !dz.length) return null;
-  const sansMatchs=dz.filter(d=>!Array.isArray(d.fixtures)||!d.fixtures.length);
-  if(sansMatchs.length) return {pending:[...new Set(sansMatchs.map(d=>(pById(d.home_id)||{}).name||'?'))]};
+  if(dz.some(d=>!Array.isArray(d.fixtures)||!d.fixtures.length)) return null;
   let ts=0, last=null;
   dz.forEach(d=>(d.fixtures||[]).forEach(f=>{ if(!f||f.canceled) return;
     const ko=fixtureKickoff(f); if(!ko) return;
@@ -5209,10 +5208,51 @@ function resolutionETA(){
    cours ») et l'échéance arriverait sans explication. */
 function resolutionETALine(dejaDit){
   const e=resolutionETA(); if(!e) return '';
-  if(e.pending) return `<div class="mini muted" style="margin-top:6px">⏳ ${t("La journée n'a pas encore d'échéance : {a} n'a pas choisi ses matchs. Tant qu'un duel n'a pas les siens, la journée ne peut pas se terminer — pour personne.",{a:'<b>'+esc(e.pending.join(', '))+'</b>'})}</div>`;
   if(e.ts<=Date.now()) return '';
   return `<div class="mini muted" style="margin-top:6px">⏳ ${t("Résolution attendue <b>{a}</b> — le dernier match de la ligue est {b}.",{a:fmtWhen(e.ts),b:'<b>'+esc(tnm(e.f,e.f.home))+' – '+esc(tnm(e.f,e.f.away))+'</b>'})}${dejaDit?'':' '+t("La journée se solde quand le dernier match de <b>tous les duels</b> est fini, pas seulement les tiens.")}</div>`;
 }
+/* ─── CHOIX DES MATCHS EN COURS (v8.511, audit Ligue A J3 validé par Hervé le 30/09) ──────────
+   L'écran disait « Tant qu'un duel n'a pas les siens, la journée ne peut pas se terminer — pour
+   personne » : il laissait croire à un blocage sans fin, alors que depuis le 19/09 le cron
+   `ensure-fixtures-reelles` (toutes les 5 min) tire les matchs d'un duel dès l'échéance de choix
+   passée — `ensureFixtures()` fait de même à l'ouverture de l'app. On dit donc QUI doit choisir,
+   JUSQU'À QUAND, et CE QUI SE PASSE s'il ne fait rien.
+   ⚠️ L'HEURE = `dayTimes().sel`, la MÊME échéance que celle qui déclenche `ensureFixtures()`, et le
+   même calcul que `selDeadlineMs()` côté serveur (day_started_at + 24 h / 12 h Fast). Jamais une
+   heure recopiée ; `fmtWhen` l'affiche dans le fuseau de l'appareil du joueur.
+   ⚠️ ÉCHÉANCE PASSÉE : on n'accuse plus personne. Entre l'échéance et le prochain passage du cron
+   (5 min au plus), le tirage est imminent — c'est tout ce que le joueur a besoin de savoir.
+   ⚠️ Réservé aux ligues réelles, comme l'ancien message : c'est le seul mode où le cron existe. */
+function choixMatchsEtat(){
+  const dz=duels||[];
+  if(!L || L.data_mode!=="real" || !dz.length) return null;
+  const sansMatchs=dz.filter(d=>!Array.isArray(d.fixtures)||!d.fixtures.length);
+  if(!sansMatchs.length) return null;
+  const dt=dayTimes(); const sel=dt.ok?dt.sel:0; const md=myDuel();
+  return { noms:[...new Set(sansMatchs.map(d=>(pById(d.home_id)||{}).name||'?'))], sel,
+    depasse:!!(sel && Date.now()>=sel), monDuelSansMatchs:!!(md && sansMatchs.includes(md)) };
+}
+function choixMatchsTitre(c){ return c.depasse?t("Sélection automatique en cours"):t("Choix des matchs en cours"); }
+function choixMatchsHTML(c){
+  if(c.depasse) return `<div class="mini" style="margin-top:4px;line-height:1.5">${t("Tactizo sélectionne automatiquement les matchs manquants. La journée démarrera dans quelques minutes.")}</div>`;
+  const n=c.noms.map(x=>'<b>'+esc(x)+'</b>');
+  const noms=n.length===1?n[0]:(n.slice(0,-1).join(', ')+t(" et ")+n[n.length-1]);
+  const un=n.length===1, quand='<b style="white-space:nowrap">'+fmtWhen(c.sel)+'</b>';
+  const qui=un?t("{a} n'a pas encore choisi ses matchs.",{a:noms}):t("{a} n'ont pas encore choisi leurs matchs.",{a:noms});
+  const sinon=!c.sel?'':' '+(un?t("S'il ne le fait pas d'ici {a}, Tactizo sélectionnera automatiquement ses 5 matchs.",{a:quand})
+                               :t("S'ils ne le font pas d'ici {a}, Tactizo sélectionnera automatiquement leurs 5 matchs.",{a:quand}));
+  return `<div class="mini" style="margin-top:4px;line-height:1.5">${qui}${sinon}</div>`
+    +(c.sel?`<div class="mini muted" style="margin-top:6px">🎯 ${t("Choix des matchs jusqu'à : {a}",{a:quand})}</div>`:'');
+}
+/* Clôture des pronostics, formulée pour être distinguée du choix des matchs (Hervé, 30/09 : « ce
+   sont deux événements différents »). Même source que `betLineHTML()` : `duelDeadline(myDuel())`.
+   ⚠️ Si MON duel n'a pas encore ses matchs, `duelDeadline` retombe sur l'échéance de la formule,
+   qui n'est pas la vraie clôture (= coup d'envoi du 1er match, pas encore connu) : on n'affiche
+   alors aucune heure plutôt qu'une heure fausse. */
+function pronosLineResultats(c){ const dt=dayTimes(); if(!dt.ok) return '';
+  const quand=(c&&c.monDuelSansMatchs)?t("au coup d'envoi du premier match de ton duel")
+    :'<b style="white-space:nowrap">'+fmtWhen(duelDeadline(myDuel())||dt.bet)+'</b>';
+  return `<div class="mini muted" style="margin-top:4px">✍️ ${t("Clôture de tes pronostics : {a}",{a:quand})} · ${leagueFormula().n}</div>`; }
 // Simulé : les matchs fictifs doivent être « joués » (coup d'envoi + 2h) avant de publier les résultats — même
 // déroulé qu'en réel (clôture → écran d'attente → résultats). Fixtures sans horaire (anciennes journées) = ignorées.
 function simMatchesDone(){ const dz=duels||[]; if(!dz.length) return false; const now=Date.now();
@@ -6105,7 +6145,15 @@ const EN={
   // — v8.60 : l'échéance de la journée, dite à ceux qui ATTENDENT (cf. `resolutionETALine`) —
   "Résolution attendue <b>{a}</b> — le dernier match de la ligue est {b}.":"Resolution expected <b>{a}</b> — the league's last match is {b}.",
   "La journée se solde quand le dernier match de <b>tous les duels</b> est fini, pas seulement les tiens.":"The matchday is settled once the last match of <b>every duel</b> is over, not just yours.",
-  "La journée n'a pas encore d'échéance : {a} n'a pas choisi ses matchs. Tant qu'un duel n'a pas les siens, la journée ne peut pas se terminer — pour personne.":"The matchday has no deadline yet: {a} hasn't picked their matches. Until every duel has its own, the matchday can't end — for anyone.",
+  "Choix des matchs en cours":"Match selection in progress", "Sélection automatique en cours":"Automatic selection in progress",
+  "Tactizo sélectionne automatiquement les matchs manquants. La journée démarrera dans quelques minutes.":"Tactizo is automatically picking the missing matches. The matchday will start in a few minutes.",
+  "{a} n'a pas encore choisi ses matchs.":"{a} hasn't picked their matches yet.",
+  "{a} n'ont pas encore choisi leurs matchs.":"{a} haven't picked their matches yet.",
+  "S'il ne le fait pas d'ici {a}, Tactizo sélectionnera automatiquement ses 5 matchs.":"If they don't by {a}, Tactizo will automatically pick their 5 matches.",
+  "S'ils ne le font pas d'ici {a}, Tactizo sélectionnera automatiquement leurs 5 matchs.":"If they don't by {a}, Tactizo will automatically pick their 5 matches.",
+  "Choix des matchs jusqu'à : {a}":"Match selection until: {a}",
+  "Clôture de tes pronostics : {a}":"Your picks close: {a}",
+  "au coup d'envoi du premier match de ton duel":"at kick-off of your duel's first match",
   // — v7.65 : « terminé » ne veut pas dire « résultat connu » —
   "score en attente":"score pending",
   "<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.":"<b>finished · score pending</b>: the match has been played, but its score hasn't come through yet — until it does, there's no way to tell who won. The matchday resolves automatically as soon as every score is in.",
@@ -18235,6 +18283,7 @@ function waitingResultsBody(d){
   const org=me()&&me().is_organizer;
   const isCurrent=(L.status==="running" && d===(L.current_day||0));
   const closed=isCurrent && deadlinePassed();   // paris de la journée en cours clôturés (attente des résultats)
+  const choix=isCurrent?choixMatchsEtat():null; // v8.511 : un duel attend encore ses matchs (qui, jusqu'à quand, et après)
   // ⚠️ LOT 4 (2026-09-10) — `voiradv`+`live` fusionnées en `duel_live` (même gate partout dans cette
   // fonction : `liveShow` ci-dessous et `voirAdv` plus bas, cf. commentaire dans afterCloseDuelHTML()).
   const dl=hasOpt('duel_live');
@@ -18254,7 +18303,7 @@ function waitingResultsBody(d){
   const attenteScore = liveShow && (duels||[]).some(dz=>(dz.fixtures||[]).some(
     f=>f && f.evId && !f.canceled && !liveVerdict(f,null) && matchEtat(f)==="fini"));
   let h=`${recapNav(d)}<div class="box"><div class="boxttl">${t("📋 Résultats · J{a}",{a:d+1})}</div>
-    <div class="mini" style="color:var(--accent)">⏳ ${closed?attenteTexte(plusieursDuels):t("Journée en cours.")}</div>${closed?'':betLineHTML()}${closed?'':verrouAvantCloture()}${isCurrent?resolutionETALine(closed):''}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
+    <div class="mini" style="color:var(--accent)">⏳ ${closed?attenteTexte(plusieursDuels):(choix?choixMatchsTitre(choix):t("Journée en cours."))}</div>${choix?choixMatchsHTML(choix):''}${closed?'':pronosLineResultats(choix)}${(closed||(choix&&choix.monDuelSansMatchs))?'':verrouAvantCloture()}${isCurrent?resolutionETALine(closed):''}${attenteScore?`<div class="mini muted" style="margin-top:6px">🏁 ${t("<b>terminé · score en attente</b> : le match est joué, mais son score n'est pas encore remonté — impossible de dire qui a gagné tant qu'il manque. La journée sera résolue automatiquement dès que tous les scores seront là.")}</div>`:''}</div>
     ${/* ⚠️ v7.78 — L'ALERTE « PRONOS NON VALIDÉS » (demandée par Hervé). Tant que les paris sont
          ouverts, cet écran montrait exactement la même chose à qui a validé et à qui n'a rien fait :
          l'affiche des matchs et l'heure de clôture. Or l'oubli est la faute la PLUS CHÈRE du jeu —
