@@ -1371,6 +1371,11 @@
   #t2Wrap .t2-bid.win .ok{visibility:visible;}
   #t2Wrap .t2-auc-row .adj{font-size:11px;font-weight:800;color:var(--a2-brass-light);opacity:0;transition:opacity .3s;}
   #t2Wrap .t2-auc-row .adj.vu{opacity:1;}
+  /* v8.510 — enchère perdue : la ligne reste lisible (≠ .off, éteinte), l'issue est dite en clair. */
+  #t2Wrap .t2-auc-row.lost{border-color:color-mix(in srgb,var(--a2-red) 55%,var(--a2-border));}
+  #t2Wrap .t2-auc-row.lost .adj{color:var(--a2-muted);}
+  #t2Wrap .t2-rb{font-size:10.5px;color:var(--a2-muted);opacity:0;transition:opacity .3s;margin-top:-2px;}
+  #t2Wrap .t2-rb.vu{opacity:1;}
   #t2Wrap .t2-arsenal{max-width:320px;width:100%;margin:10px auto 0;padding:9px 10px;border-radius:14px;
     border:1.5px solid var(--a2-brass);background:color-mix(in srgb,var(--a2-brass) 10%,var(--a2-panel));
     opacity:0;transform:translateY(6px);transition:opacity .35s,transform .35s;}
@@ -2957,7 +2962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.509";
+const APP_VERSION = "v8.510";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -7816,6 +7821,9 @@ const EN={
   "Mot de passe : ":"Password: ", "Création : ":"Creation: ",
   // Chantier confirmation 18+ (2026-09-17, demandé par Hervé) — viewChoosePseudo()/doChoosePseudo().
   "Je certifie avoir 18 ans ou plus.":"I confirm that I am 18 years old or older.",
+  // ── v8.510 — tutoriel : une enchère perdue ──
+  "Remporté par {a}":"Won by {a}",
+  "↩︎ remboursée":"↩︎ refunded",
   // ── v8.509 — tutoriel : le capital de départ suit les enchères gagnées ──
   "−{a} € d'enchères gagnées, retirés de ton capital.":"−€{a} in winning bids, taken from your capital.",
   "{s} € − {a} € d'enchères":"€{s} − €{a} in bids",
@@ -23383,12 +23391,16 @@ function t2Play1(){
    (5 €), puis le résultat « Adjugé ! ». Les 4 autres enchères se règlent ensuite de la même façon,
    plus vite. Chaque bonus porte une micro-description de son VRAI effet (`d`, reformulation courte
    de `CARDS[id].d` — les chiffres et le mécanisme doivent y figurer, contrôlé par le test).
+   v8.510 (demandé par Hervé) — une enchère PERDUE est aussi montrée en entier, sur 🔥 Ça passe ou ça
+   casse : ma mise 5 € → Margaux 9 € ✓ → « Remporté par Margaux » → ma mise « ↩︎ remboursée » (mot du
+   vrai récapitulatif d'enchères), et le bonus n'entre pas dans l'arsenal. Seules les mises GAGNANTES
+   sont débitées (`T2_ENCHERES_PAYE` ne somme que `gagne===T2_MOI`) : toujours 8 + 6 + 7 = 21 €.
    ⚠️ Les montants ne sont QUE des mises sur un bonus : ni budget global de 40 €, ni 100 €, ni
    remboursement ici (règles de la vraie phase d'enchères). Plus haute mise = bonus remporté. */
 const T2_ENCHERES=[
   {id:"assurance",d:"Un pari perdu : la moitié de la mise remboursée.",moi:8,riv:T2_PAULO,rivMise:5,gagne:T2_MOI},
   {id:"cadeau",d:"Inverse le pari adverse sur un match (domicile ↔ extérieur).",moi:6,riv:T2_MARGAUX,rivMise:4,gagne:T2_MOI},
-  {id:"tout",d:"Un pari : gain ×3, perte ×2.",moi:0,riv:T2_MARGAUX,rivMise:9,gagne:T2_MARGAUX},
+  {id:"tout",d:"Un pari : gain ×3, perte ×2.",moi:5,riv:T2_MARGAUX,rivMise:9,gagne:T2_MARGAUX},   // v8.510 : enchère PERDUE, montrée
   {id:"sangsue",d:"S'il finit bénéficiaire, tu siphonnes 15 % du bénéfice adverse.",moi:7,riv:T2_BAPTISTE,rivMise:3,gagne:T2_MOI},
   {id:"parachute",d:"Journée négative : 30 % de ta perte amortie.",moi:0,riv:T2_PAULO,rivMise:6,gagne:T2_PAULO}];
 const T2_ARSENAL=T2_ENCHERES.filter(e=>e.gagne===T2_MOI).map(e=>e.id);   // assurance, cadeau, sangsue
@@ -23401,8 +23413,9 @@ const T2_CAPITAL_INITIAL=100;                           // capital de départ de
 const T2_ENCHERES_PAYE=T2_ENCHERES.filter(e=>e.gagne===T2_MOI).reduce((s,e)=>s+e.moi,0);
 const T2_CAPITAL_DEPART=Math.max(0,T2_CAPITAL_INITIAL-T2_ENCHERES_PAYE);
 function t2ArsenalHtml(pfx){ return `<div class="t2-arsenal-row">${T2_ARSENAL.map((id,k)=>`<div class="t2-arsenal-item" id="t2S${pfx}a${k}"><span class="em">${CARDS[id].e}</span><span class="nm">${esc(t(CARDS[id].n))}</span></div>`).join("")}</div>`; }
+const t2NomDe=av=>({[T2_PAULO]:"Paulo",[T2_MARGAUX]:"Margaux",[T2_BAPTISTE]:"Baptiste"})[av]||"";
 // Une ligne de mise : avatar + montant (✓ si c'est la plus haute). Rien si le joueur n'a pas misé.
-const t2BidHtml=(av,mise,k,qui)=>mise>0?`<div class="t2-bid" id="t2S2b${qui}${k}">${avatarHTML(av,18)}<b>${mise} €</b><span class="ok">✓</span></div>`:"";
+const t2BidHtml=(av,mise,k,qui,perdue)=>mise>0?`<div class="t2-bid" id="t2S2b${qui}${k}">${avatarHTML(av,18)}<b>${mise} €</b><span class="ok">✓</span></div>${perdue?`<div class="t2-rb" id="t2S2rb${k}">${t("↩︎ remboursée")}</div>`:""}`:"";
 function t2Step2Html(){ return `<div class="t2-stage">
   <img class="t2-icon" src="img/icone-encheres.png" alt="">
   ${t2Head("⚔️",t("Prépare ton arsenal"))}
@@ -23410,7 +23423,7 @@ function t2Step2Html(){ return `<div class="t2-stage">
   <div class="t2-auc" id="t2S2auc">${T2_ENCHERES.map((e,k)=>`<div class="t2-auc-row" id="t2S2r${k}">
     <span class="em">${CARDS[e.id].e}</span>
     <span class="nm"><b>${esc(t(CARDS[e.id].n))}</b><span class="d">${t(e.d)}</span></span>
-    <span class="bids">${t2BidHtml(T2_MOI,e.moi,k,"m")}${t2BidHtml(e.riv,e.rivMise,k,"r")}<span class="adj" id="t2S2w${k}">${e.gagne===T2_MOI?t("Adjugé !"):""}</span></span>
+    <span class="bids">${t2BidHtml(T2_MOI,e.moi,k,"m",e.gagne!==T2_MOI)}${t2BidHtml(e.riv,e.rivMise,k,"r")}<span class="adj" id="t2S2w${k}">${e.gagne===T2_MOI?t("Adjugé !"):(e.moi>0?t("Remporté par {a}",{a:t2NomDe(e.gagne)}):"")}</span></span>
   </div>`).join("")}</div>
   <div class="t2-txt" id="t2S2l2">${t("Tente de remporter les bonus qui constitueront ton arsenal pour tout le championnat.")}</div>
   <div class="t2-arsenal" id="t2S2ars"><div class="t2-arsenal-title">🎒 ${t("Ton arsenal")}</div>${t2ArsenalHtml(2)}
@@ -23421,7 +23434,10 @@ function t2Step2Html(){ return `<div class="t2-stage">
 // Règle l'enchère k : la plus haute mise est cochée, la ligne passe « remportée » (or) ou « perdue ».
 function t2Adjuge(k){ const e=T2_ENCHERES[k], r=t2Q("#t2S2r"+k); if(!r) return;
   const gagnant=e.gagne===T2_MOI?"m":"r", b=t2Q("#t2S2b"+gagnant+k); if(b) b.classList.add("win");
-  const w=t2Q("#t2S2w"+k); if(w && e.gagne===T2_MOI) w.classList.add("vu","t2-pop");
+  const w=t2Q("#t2S2w"+k); if(w && (e.gagne===T2_MOI || e.moi>0)) w.classList.add("vu","t2-pop");
+  // v8.510 : enchère où J'AI misé mais PERDU — la ligne reste lisible (« perdue », pas éteinte) et ma
+  // mise est marquée « ↩︎ remboursée » : elle ne compte pas dans ce que je paie.
+  if(e.gagne!==T2_MOI && e.moi>0){ r.classList.add("lost"); const rb=t2Q("#t2S2rb"+k); if(rb) rb.classList.add("vu"); return; }
   r.classList.add(e.gagne===T2_MOI?"on":"off"); }
 function t2Play2(){
   T2_ENCHERES.forEach((e,k)=>t2At(300+k*160,()=>{ const r=t2Q("#t2S2r"+k); if(r){ r.classList.add("vu"); t2Voir(r); } }));
@@ -23429,14 +23445,23 @@ function t2Play2(){
   t2At(2400,()=>{ const r=t2Q("#t2S2r0"); if(r) r.classList.add("focus"); t2Montre("#t2S2bm0"); t2Montre("#t2S2l2"); });
   t2At(3500,()=>{ t2Montre("#t2S2br0"); });
   t2At(4500,()=>{ t2Adjuge(0); });
-  // Les 4 autres enchères : mêmes étapes, plus vite (le geste est compris).
-  T2_ENCHERES.forEach((e,k)=>{ if(!k) return;
-    t2At(5600+(k-1)*160,()=>{ ["m","r"].forEach(q=>{ const b=t2Q("#t2S2b"+q+k); if(b){ b.classList.add("vu"); } }); });
-    t2At(6500+(k-1)*160,()=>{ t2Adjuge(k); }); });
-  t2At(7500,()=>{ t2Montre("#t2S2ars");
+  // v8.510 — puis le cas PERDU, montré lui aussi en entier : ma mise → une mise adverse PLUS HAUTE →
+  // « Remporté par Margaux » et ma mise « ↩︎ remboursée ».
+  const kP=T2_ENCHERES.findIndex(e=>e.gagne!==T2_MOI && e.moi>0);
+  t2At(5700,()=>{ const r0=t2Q("#t2S2r0"); if(r0) r0.classList.remove("focus");
+    const r=t2Q("#t2S2r"+kP); if(r) r.classList.add("focus"); t2Montre("#t2S2bm"+kP); });
+  t2At(6800,()=>{ t2Montre("#t2S2br"+kP); });
+  t2At(7800,()=>{ t2Adjuge(kP); });
+  // Les autres enchères : mêmes étapes, plus vite (les deux cas sont compris).
+  const reste=T2_ENCHERES.map((e,k)=>k).filter(k=>k!==0 && k!==kP);
+  t2At(9000,()=>{ const r=t2Q("#t2S2r"+kP); if(r) r.classList.remove("focus"); });
+  reste.forEach((k,j)=>{
+    t2At(9000+j*160,()=>{ ["m","r"].forEach(q=>{ const b=t2Q("#t2S2b"+q+k); if(b){ b.classList.add("vu"); } }); });
+    t2At(9900+j*160,()=>{ t2Adjuge(k); }); });
+  t2At(10900,()=>{ t2Montre("#t2S2ars");
     T2_ARSENAL.forEach((id,k)=>t2At(150+k*200,()=>{ const a=t2Q("#t2S2a"+k); if(a) a.classList.add("vu","t2-pop"); })); });
-  t2At(8700,()=>{ t2Montre("#t2S2l3"); t2Montre("#t2S2sub"); });
-  t2Fin(9200);
+  t2At(12100,()=>{ t2Montre("#t2S2l3"); t2Montre("#t2S2sub"); });
+  t2Fin(12600);
 }
 
 /* ════════════════ ÉTAPES 3 À 6 — LES MÊMES 5 MATCHS, DU DÉBUT À LA FIN ══════════════════════
