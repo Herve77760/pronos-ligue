@@ -2962,7 +2962,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.514";
+const APP_VERSION = "v8.515";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5026,97 +5026,20 @@ async function resolveRealIfReady(){
   const enCours={};
   pendingFx.forEach(f=>{ const t=f.commence?new Date(f.commence).getTime():NaN; if(isNaN(t)) return;
     if(!enCours[f.sportKey]) enCours[f.sportKey]=[]; enCours[f.sportKey].push(t); });
-  /* ═══ DEUX PASSES, ET LA SECONDE N'EXISTE QUE SI LA PORTE EST OUVERTE (2026-09-25) ═════════
-     1. Lecture normale (calendrier en paliers) — c'est elle qui sert 99 % du temps.
-     2. Si, à la lumière de ces résultats, TOUS les matchs encore en suspens ont dépassé leurs 24 h
-        individuelles, alors et seulement alors : une DERNIÈRE lecture, qui exige une copie du cache
-        POSTÉRIEURE à `porte.tmin`. C'est la vérification imposée avant toute écriture irréversible.
-     ⚠️ COÛT BORNÉ : `porte.tmin` est un horodatage DÉTERMINISTE — la copie écrite par le premier
-     passage satisfait tous les suivants, donc UN SEUL appel par compétition et par échéance,
-     partagé par tous les clients et toutes les ligues qui neutralisent la même soirée. Et seules
-     les compétitions ENCORE EN SUSPENS sont redemandées, jamais toute la journée. */
-  // Rien en attente → tout est déjà connu, aucun appel à faire (économise le quota).
-  let results=keys.length?await fetchRealResultsCached(keys, enCours):{};
-  const verifiees=new Set();   // compétitions réellement revérifiées avant toute neutralisation
-  const toutesFx=realDuels.flatMap(d=>d.fixtures||[]);
-  const porte1=porteNeutralisation(toutesFx, results, Date.now());
-  if(porte1.pret && porte1.tmin!=null){
-    const clesSuspens=[...new Set(porte1.enSuspens.map(f=>f.sportKey).filter(Boolean))];
-    if(clesSuspens.length){
-      const fraisDepuis={}; clesSuspens.forEach(k=>{ fraisDepuis[k]=porte1.tmin; });
-      const frais=await fetchRealResultsCached(clesSuspens, enCours, fraisDepuis, verifiees);
-      results=Object.assign({}, results, frais);
-    }
-  }
+  // Rien en attente → tout est déjà connu, aucun appel à faire. (v8.515 : la seconde lecture, « porte
+  // ouverte », servait à sécuriser les annulations faites par le téléphone — elles sont désormais
+  // faites par le serveur seul, avec la même porte : cf. resolve-ligues-reelles.)
+  const results=keys.length?await fetchRealResultsCached(keys, enCours):{};
   liveRes=results||{};   // 📡 dispo pour l'affichage « direct » (Résultats)
-  const nowT=Date.now();
-  const porte=porteNeutralisation(toutesFx, results, nowT);
-  // ⏱️ AUTO-ANNULATION (v4.46, refondue le 2026-09-17 — cf. `porteNeutralisation()` ci-dessus) : un
-  // match toujours pas terminé après l'échéance DE LA JOURNÉE (dernier coup d'envoi prévu + marge)
-  // est réputé ANNULÉ (reporté / abandonné / jamais joué). Rend le traitement AUTOMATIQUE : plus
-  // aucun geste de l'organisateur, qui aurait pu s'avantager en annulant un match où il perdait.
-  /* ⚠️ v8.461 (bug vécu par Hervé, ligue XLATD, journée bloquée >15h malgré shadow-resolve-real
-     à `would_resolve:true`) — LES DEUX BOUCLES CI-DESSOUS ÉCRIVAIENT `fixtures` EN ENTIER, À PARTIR
-     D'UN INSTANTANÉ LU EN MÉMOIRE. Deux appels qui se recouvrent (deux onglets, les deux joueurs du
-     duel, ou simplement une réouverture pendant qu'un appel précédent tournait encore) écrivaient
-     chacun un instantané périmé : le second écrasait intégralement la colonne et EFFAÇAIT le
-     résultat que le premier venait tout juste d'ajouter — sans la moindre erreur des deux côtés.
-     Vécu en vrai : deux résultats récupérés avec succès (visibles dans `api_cache`), aucun des deux
-     jamais persisté dans `duels.fixtures`.
-     ⚠️ `duel_patch_fixture()` (MIGRATION-duel-fixture-patch-atomique.sql) fait desormais la
-     lecture-modification-écriture EN UNE SEULE INSTRUCTION SQL, cote serveur : deux appels
-     concurrents se sérialisent au niveau du verrou de ligne Postgres, et le second relit toujours
-     la version la plus fraîche avant d'écrire. Elle ne touche QUE le match dont `evId` correspond,
-     et seulement s'il n'a pas déjà de résultat et n'est pas déjà annulé — donc plus besoin de
-     `touched` cote client : un appel qui ne change rien est un no-op propre (voir
-     tools/test-duel-fixture-race.sql pour la reproduction du bug et la preuve du correctif). */
-  for(const d of realDuels){
-    for(const f of (d.fixtures||[])){ if(!f||!f.evId||f.canceled||f.res) continue;
-      /* ⚠️ v8.27 — UN MATCH DONT LE RÉSULTAT EST DÉJÀ ENREGISTRÉ N'EST PLUS ANNULABLE (garde
-         reprise ci-dessus par le `||f.res` du filtre, et par le garde-fou interne de la fonction
-         atomique). Sans ça, un match joué pourrait rester des heures dans une journée non résolue,
-         et l'auto-annulation l'aurait marqué `canceled:true, res:null` en dépassant l'échéance de
-         la journée, EFFAÇANT un résultat connu. La mise aurait été rendue à tort. */
-      const r=results[f.evId]; if(r&&r.completed&&r.res) continue;   // LOT 1 R01 : jamais « réglé » sans score
-      /* ⚠️ DEUX VERROUS, PAS UN. La porte dit « le délai est écoulé » ; `verifiees` dit « et on a
-         bien pu le redemander une dernière fois ». Sans le second, une panne du fournisseur au
-         moment du mur rembourserait des matchs joués — le dégât même qu'on corrige ici. */
-      if(porte.pret && f.sportKey && verifiees.has(f.sportKey)){
-        try{ const nf=await q(db.rpc("duel_patch_fixture",{p_duel_id:d.id,p_ev_id:f.evId,p_patch:{canceled:true,res:null}})); if(nf) d.fixtures=nf; }catch(e){}
-      } }
-  }
-  /* ⚠️ v8.27 (demandé par Hervé) — CHAQUE RÉSULTAT EST ENREGISTRÉ DÈS QU'IL TOMBE.
-     Avant, l'écriture attendait que TOUS les matchs de la journée soient finis : un match joué la
-     veille au soir restait affiché « 🏁 terminé · score en attente » jusqu'à ce que le dernier
-     match de la journée se termine, parfois le lendemain. Le résultat existait chez le
-     fournisseur, l'app le recevait à chaque sondage — et le jetait.
-     ⚠️ CE N'EST PAS UNE AVANCE SUR LA RÉSOLUTION : `resolveDay()` attend toujours `allDone`. On
-     sépare deux choses qui étaient confondues — CONNAÎTRE un résultat et SOLDER la journée.
-     ⚠️ AUCUNE FUITE DE L'OPTION ⏱️ : vérifié avant d'écrire cette ligne, ni l'écran d'attente ni
-     l'écran Pronos ne lisent `f.res` — seuls `runEngine`, `resolveDay` et `recapBody` le font, et
-     ce dernier n'est atteignable que sur une journée déjà résolue. Le direct reste payant. */
-  for(const d of realDuels){
-    for(const f of (d.fixtures||[])){ if(!f||!f.evId||f.canceled||f.res) continue;
-      const r=results[f.evId];
-      if(r&&r.completed&&r.res){
-        try{ const nf=await q(db.rpc("duel_patch_fixture",{p_duel_id:d.id,p_ev_id:f.evId,p_patch:{res:r.res,hs:r.hs,as:r.as}})); if(nf) d.fixtures=nf; }catch(e){}
-      } }
-  }
-  let allDone=true;
-  /* Un match ANNULÉ compte comme terminé : sinon une journée resterait bloquée indéfiniment.
-     ⚠️ `f.res ||` AJOUTÉ EN v8.27, et ce n'est pas cosmétique. L'API ne renvoie que les 3 derniers
-     jours (`daysFrom=3`) : passé ce délai un match DISPARAÎT de la réponse, `results[f.evId]`
-     devient introuvable et la journée ne se serait jamais résolue. Tant que le résultat n'était
-     écrit qu'à la toute fin, rien ne le rattrapait ; maintenant qu'il persiste, il fait foi. */
-  realDuels.forEach(d=>d.fixtures.forEach(f=>{ if(f&&f.evId&&!f.canceled){ const r=results[f.evId];
-    // Un match que la porte vient d'ouvrir a été neutralisé juste au-dessus : il compte comme
-    // terminé. Mais uniquement s'il l'a VRAIMENT été — une compétition non vérifiée reste en
-    // attente, sinon la journée se résoudrait sur un match ni résolu ni annulé.
-    const neutralise = porte.pret && f.sportKey && verifiees.has(f.sportKey);
-    // LOT 1 R01 : « terminé sans score » ne rend PAS la journée finie (sinon résolue avec ce match perdu pour tous).
-    if(!f.res && (!r||!r.completed||!r.res) && !neutralise) allDone=false; } }));
-  if(!allDone) return; // il reste des matchs en cours
-  resolveDay();
+  /* ═══ v8.515 — BUILD DE TRANSITION : LE SERVEUR RÉSOUT LES LIGUES RÉELLES (Hervé, 02/10/2026) ═══
+     L'app ne fait plus que LIRE les résultats (pour l'affichage « direct » ci-dessus). Elle n'écrit
+     plus aucun score, n'annule plus aucun match et ne déclenche plus la résolution de la journée :
+     tout cela est fait par le cron `resolve-ligues-reelles` (toutes les 5 min : scores, neutralisation
+     après 24 h avec la même porte, résolution, passage de journée — qui déclenche à son tour la
+     chaîne des matchs). Avant, chaque téléphone écrivait les scores (`duel_patch_fixture`) puis
+     résolvait lui-même la journée (passage `running → resolving` et trois écritures avec l'horloge
+     du téléphone) en concurrence avec le serveur. Le joueur voit les résultats au sondage suivant la
+     résolution serveur (≤ 5 min après le dernier score). Les ligues SIMULÉES ne changent pas. */
 }
 /* ⚠️ (demandé par Hervé, ligues 7SMXN/U4ELV) — QUAND UNE LIGUE SE FERME (avant terme, manuelle
    ou par abandon après LIGUE_FERME_J jours), ses matchs réels encore sans résultat restaient
@@ -5870,7 +5793,7 @@ const EN={
   "Suivre":"Follow",
   "Matchs terminés — résultats en cours de confirmation":"Matches finished — results being confirmed",
   "La journée se résout automatiquement dès que tous les scores sont remontés. Rien à faire de ton côté.":"The matchday resolves automatically as soon as every score comes in. Nothing to do on your side.",
-  "tous les matchs de la journée {a} semblent terminés : ouvre la ligue pour vérifier si la résolution peut être déclenchée.":"every match of matchday {a} looks finished: open the league to check whether the resolution can be triggered.",
+  "tous les matchs de la journée {a} semblent terminés : la journée se résout automatiquement dès que tous les scores sont remontés.":"every match of matchday {a} looks finished: it resolves automatically as soon as every score comes in.",
   "Découvrir":"Reveal",
   "Voir les résultats":"See the results",
   "tes pronos ne sont pas validés.":"your picks aren't locked in.",
@@ -6322,7 +6245,7 @@ const EN={
   "Abandonner la ligue":"Abandon the league",
   "🛑 Abandonner la ligue":"🛑 Abandon the league",
   "Abandonner cette ligue ?":"Abandon this league?",
-  "Cette action est définitive. La compétition sera arrêtée et considérée comme abandonnée. Aucun vainqueur, classement final, gage ou récompense ne sera attribué. Les résultats de cette ligue ne compteront pas dans le Palmarès ni dans les statistiques des joueurs.":"This cannot be undone. The competition will be stopped and treated as abandoned. No winner, final standings, forfeit or reward will be awarded. This league's results will not count towards the Hall of fame or players' statistics.",
+  "Cette action est définitive. La compétition sera arrêtée et considérée comme abandonnée. Aucun vainqueur, classement final, gage ou récompense ne sera attribué. La ligue passera dans les ligues fermées : toutes ses données sont conservées, et les pronostics déjà joués restent dans les statistiques, le Palmarès et les records des joueurs.":"This cannot be undone. The competition will be stopped and treated as abandoned. No winner, final standings, forfeit or reward will be awarded. The league will move to closed leagues: all its data is kept, and the picks already played stay in the players' statistics, Hall of fame and records.",
   "Arrête la compétition sans vainqueur — action irréversible.":"Ends the competition with no winner — this cannot be undone.",
   "Ligue abandonnée":"League abandoned",
   "La ligue {a} a été fermée par son organisateur.":"The league {a} was closed by its organizer.",
@@ -7054,6 +6977,8 @@ const EN={
   "Chargement de la journée…":"Loading the matchday…",
   "Résultat disponible — découverte en attente…":"Result ready — waiting to be revealed…",
   "annulé":"cancelled",
+  // v8.515 — statistiques (décisions d'Hervé du 02/10)
+  "mise remboursée":"stake refunded", "Journées non jouées (forfait)":"Days not played (forfeit)", "Pénalités d'oubli":"Missed-pick penalties",
   "Voir les matchs terminés en direct":"See finished matches live",
   // Bonus joué, rappelé sur l'écran Pronos après clôture (v6.93)
   "🃏 Ton bonus de la journée":"🃏 Your bonus this matchday",
@@ -7166,7 +7091,7 @@ const EN={
   // v8.114 — plus de plafond de mise a la derniere journee.
   "Le total de tes mises sur les 5 matchs ne peut pas dépasser <b>{a} %</b> de ton capital ({b} % avec le bonus 📈 Investisseur) — c'est ce que remplit la jauge. Chaque pari doit avoir <b>au moins 1 €</b>. Ce plafond saute pour la <b>dernière journée</b> de la saison.":"Your total stakes across the 5 matches can't exceed <b>{a}%</b> of your capital ({b}% with the 📈 Investor bonus) — that's what fills the gauge. Each bet must be <b>at least €1</b>. This cap is lifted on the season's <b>last matchday</b>.",
   "Dernière journée : <b>plus de plafond</b>, tu peux miser jusqu'à la totalité de ton capital — c'est ce que remplit la jauge. Ton match favori (👑, mise doublée en cas de perte) reste comptabilisé, donc le maximum réellement atteignable tourne autour de 99 % plutôt que 100 % pile. Chaque pari doit avoir <b>au moins 1 €</b>.":"Last matchday: <b>no cap anymore</b> — you can stake up to your entire capital, which is what fills the gauge. Your favourite match (👑, stake doubled on a loss) still counts, so the real ceiling you can reach lands around 99% rather than exactly 100%. Each bet must be <b>at least €1</b>.",
-  "Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé. <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.":"<b>ROI</b> (return on investment) relates your net result to the total you staked. <b>+20%</b> = you won €20 for every €100 staked; a <b>negative</b> ROI = you lost money on your bets.",
+  "Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé, sur tes mises réellement jouées seulement : une pénalité d'oubli ou une recapitalisation n'y entre pas (elle reste visible dans ton capital). <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.":"<b>ROI</b> (return on investment) relates your net result to the total you staked, on the stakes you actually played only: a missed-pick penalty or a top-up is left out (it stays visible in your capital). <b>+20%</b> = you won €20 for every €100 staked; a <b>negative</b> ROI = you lost money on your bets.",
   "Gage & récompense sur mesure":"Custom forfeit & reward",
   "Impose TON défi (ou ta récompense) au lieu de piocher dans la liste.":"Set YOUR own challenge (or reward) instead of picking from the list.",
   "Écris ton propre gage pour le dernier — ou ta propre récompense pour le champion.":"Write your own forfeit for the last-placed player — or your own reward for the champion.",
@@ -7274,8 +7199,8 @@ const EN={
   // --- Dossier détaillé de l'option 📊 (v7.00) ---
   "Ton dossier complet, toutes tes ligues. Touche une ligne pour savoir ce que le chiffre veut dire.":"Your complete file, across all your leagues. Tap any line to find out what the number means.",
   "Ligues comptées":"Leagues counted", "Fermée avant terme":"Closed before the end", "solo vs IA":"solo vs AI",
-  "{a} fermée(s) avant terme — hors totaux":"{a} closed before the end — excluded from totals",
-  "{a} en solo face à l'IA — paris comptés, sans titre":"{a} solo vs the AI — bets counted, no title",
+  "{a} fermée(s) avant terme — comptée(s), sans titre":"{a} closed before the end — counted, no title",
+  "{a} en solo face à l'IA — titre si tu bats l'IA":"{a} solo vs the AI — title if you beat the AI",
   "Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>.<br><br>Enfin, <b>tout cet écran suit l'onglet choisi en haut</b> : 📡 ne retient que les ligues jouées sur de vrais matchs, 🎮 celles en matchs simulés, 🔀 les deux. Comparer les deux a du sens : en simulé les cotes sont tirées au sort, en réel elles viennent du marché.":"A league <b>closed before its end</b> counts towards nothing: its final standings are meaningless, and including them would skew everything. It stays viewable below. A league <b>in progress</b> does count normally.<br><br>In a <b>solo league against the AI</b>, your bets count (ROI, hit rate, records) — they were real picks — but finishing 1st against a bot adds <b>no title and no podium</b>.<br><br>Finally, <b>this whole screen follows the tab you pick at the top</b>: 📡 keeps only leagues played on real matches, 🎮 those on simulated matches, 🔀 both. Comparing the two is meaningful: in simulated leagues the odds are drawn at random, in real ones they come from the market.",
   "Tes coups":"Your standout bets", "Cote moyenne gagnée":"Average winning odds",
   "Plus gros prono gagné":"Biggest single win", "Plus grosse mise":"Biggest stake",
@@ -7295,14 +7220,14 @@ const EN={
   "Plus longue série de duels gagnés":"Longest run of duels won", "Par sport":"By sport",
   // Fiches d'explication (STAT_INFO) — passent par t(variable), INVISIBLES pour check-i18n :
   // toute nouvelle fiche doit voir sa clé EN ajoutée ici À LA MAIN, sinon aucune alerte.
-  "La part de tes pronos qui sont tombés justes. Utile, mais insuffisant seul : on peut gagner souvent en jouant des favoris et perdre de l'argent quand même.":"The share of your picks that came in. Useful, but not enough on its own: you can win often on favourites and still lose money.",
-  "Ce que rapporte chaque euro misé : résultat net ÷ total misé. <b>+20 %</b> = 20 centimes gagnés par euro joué. Au-dessus de 0 tu gagnes de l'argent, en dessous tu en perds — c'est la mesure la plus honnête de ton niveau.":"What each euro staked returns: net result ÷ total staked. <b>+20%</b> = 20 cents earned per euro played. Above 0 you're making money, below you're losing it — the most honest measure of your level.",
-  "Tes gains moins tes mises, sur toutes tes ligues. Il dépend de combien tu joues : un joueur prudent peut être meilleur avec un net plus petit — regarde le ROI pour comparer.":"Your winnings minus your stakes, across all leagues. It depends on how much you play: a cautious player can be better with a smaller net — use ROI to compare.",
+  "La part de tes pronos réglés qui sont tombés justes — les matchs annulés et les pronos non joués ne comptent ni pour ni contre toi. Utile, mais insuffisant seul : on peut gagner souvent en jouant des favoris et perdre de l'argent quand même.":"The share of your settled picks that came true — cancelled matches and picks you didn't make count neither for nor against you. Useful, but not enough on its own: you can win often by backing favourites and still lose money.",
+  "Ce que rapporte chaque euro misé : résultat net ÷ total misé, sur tes mises réellement jouées seulement (pénalités d'oubli et recapitalisations n'y entrent pas). <b>+20 %</b> = 20 centimes gagnés par euro joué. Au-dessus de 0 tu gagnes de l'argent, en dessous tu en perds — c'est la mesure la plus honnête de ton niveau.":"What each euro staked brings back: net result ÷ total staked, on the stakes you actually played only (missed-pick penalties and top-ups are left out). <b>+20%</b> = 20 cents won per euro played. Above 0 you make money, below you lose some — it's the most honest measure of your level.",
+  "Tes gains moins tes mises sur tes pronos réellement joués, dans toutes tes ligues ; les pénalités d'oubli sont affichées à part. Il dépend de combien tu joues : un joueur prudent peut être meilleur avec un net plus petit — regarde le ROI pour comparer.":"Your winnings minus your stakes on the picks you actually played, across all your leagues; missed-pick penalties are shown separately. It depends on how much you play: a cautious player can be better with a smaller net — look at ROI to compare.",
   "La cote moyenne de tes pronos <b>gagnants</b>. Proche de 1,50 : tu gagnes sur du solide. Au-dessus de 2,50 : tu gagnes sur du risqué, plus rare mais plus payant.":"The average odds of your <b>winning</b> picks. Near 1.50: you win on safe bets. Above 2.50: you win on risky ones — rarer, but it pays more.",
-  "Le plus gros coup de ta carrière, en cote. C'est le trophée de la table — celui qu'on ressort à chaque repas.":"The biggest hit of your career, in odds. The table's trophy — the one you bring up at every dinner.",
+  "Le plus gros coup de ta carrière, en cote : la cote réelle d'un prono joué et gagné — un bonus ne la gonfle jamais. C'est le trophée de la table — celui qu'on ressort à chaque repas.":"The biggest hit of your career, in odds: the real odds of a pick you played and won — a bonus never inflates it. It's the table's trophy — the one you bring up at every dinner.",
   "Le gain d'un <b>seul</b> prono : mise × (cote − 1), doublé s'il était ton match favori. À ne pas confondre avec ta meilleure journée, qui additionne tous tes paris du jour.":"The gain from a <b>single</b> pick: stake × (odds − 1), doubled if it was your favourite match. Not to be confused with your best matchday, which adds up every bet that day.",
   "Le montant le plus élevé que tu aies posé sur un seul match. Le pari se joue au <b>résultat net</b> : miser gros n'est pas gagner, ça amplifie juste les deux sens.":"The largest amount you've put on a single match. Duels are settled on <b>net result</b>: betting big isn't winning, it just amplifies both directions.",
-  "Ta moyenne de points de championnat par journée jouée. Repère : <b>1,5</b> c'est correct, <b>2</b> ou plus c'est le rythme d'un vainqueur.":"Your average championship points per matchday played. Benchmark: <b>1.5</b> is decent, <b>2</b> or more is winner's pace.",
+  "Ta moyenne de points de championnat par journée réellement jouée (ni les journées oubliées, ni le point retiré par une recapitalisation n'y entrent), arrêtée à ta dernière journée consultée. Repère : <b>1,5</b> c'est correct, <b>2</b> ou plus c'est le rythme d'un vainqueur.":"Your average championship points per day actually played (neither missed days nor the point deducted for a top-up count), up to the last matchday you checked. Benchmark: <b>1.5</b> is decent, <b>2</b> or more is a winner's pace.",
   "Ta rentabilité cumulée, journée après journée, toutes ligues confondues. Une courbe qui monte = tu progresses ; en dents de scie = tu joues gros et irrégulier. Les paris n'ayant pas de date en base, l'axe suit <b>l'ordre des journées jouées</b>, pas le calendrier.":"Your cumulative return, matchday after matchday, across all leagues. A rising curve = you're improving; a jagged one = you play big and erratically. Bets carry no date in the database, so the axis follows <b>the order matchdays were played</b>, not the calendar.",
   "Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise.":"Your success rate by match type: <b>favourites</b> (odds under 1.80), <b>even</b>, <b>underdogs</b> (above 3.00). It necessarily drops towards underdogs — what matters is knowing where YOU are strongest.",
   "Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu.":"The same figures for the other players in your leagues (AI player excluded). The only real benchmark: a ROI is judged against your table, not in the abstract.",
@@ -7453,7 +7378,7 @@ const EN={
   // ligue en mode simulé") promettait une action IMPOSSIBLE pour tout le monde, organisateur compris :
   // setDataMode() n'est plus appelable depuis aucun écran vivant (son seul bouton vivait dans
   // viewLobby(), remplacée par viewLobbyA2() qui n'a pas de section "Données"). Raccourcie.
-  "Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard.":"Not enough upcoming real matches right now (off-season?). Try again later.",
+  "La liste des matchs du jour est en préparation. Elle s'affichera ici toute seule dans quelques instants.":"Today's match list is being prepared. It will appear here by itself in a few moments.",
   "Tous les bonus et un large choix de gages — le jeu dans toute sa richesse.":"All bonus bonuses and a wide choice of forfeits — the full-featured game.",
   "Moins de bonus et de gages — parfait pour débuter ou jouer vite.":"Fewer bonus bonuses and forfeits — perfect to start or play fast.",
   "Tous les bonus disponibles pour la partie — le jeu dans toute sa richesse.":"All bonuses available for the game — the full-featured game.",
@@ -7862,6 +7787,14 @@ const EN={
   "Vote : ":"Vote: ", "Gage perso : ":"Custom forfeit: ", "Préparation : ":"Preparation: ",
   "Clôture préparation : ":"Closing preparation: ", "Clôture trêve : ":"Closing truce: ",
   "Démarrage : ":"Starting: ", "Sauvegarde matchs : ":"Saving matches: ", "Validation : ":"Validation: ",
+  // v8.515 — refus du serveur au choix des matchs (messageRefusChoix)
+  "La liste des matchs a changé : voici la liste à jour.":"The match list has changed: here is the updated list.",
+  "La journée a changé : voici la liste à jour.":"The matchday has changed: here is the updated list.",
+  "Un des matchs choisis a déjà commencé : voici la liste à jour.":"One of the chosen matches has already started: here is the updated list.",
+  "La liste des matchs du jour est en préparation : réessaie dans quelques instants.":"Today's match list is being prepared: try again in a few moments.",
+  "Il faut exactement 5 matchs différents.":"You need exactly 5 different matches.",
+  "Les matchs de ce duel ont déjà été choisis.":"The matches for this duel have already been chosen.",
+  "Seul le joueur à domicile peut choisir les matchs de ce duel.":"Only the home player can choose the matches for this duel.",
   "Clôture : ":"Closing: ", "Sélection : ":"Selection: ", "Publication : ":"Publishing: ",
   "Ouverture de la trêve : ":"Opening the truce: ", "Trêve : ":"Truce: ", "Résolution : ":"Resolution: ",
   "Résultats : ":"Results: ", "Nouveau départ : ":"Fresh start: ", "Configuration : ":"Configuration: ",
@@ -8421,7 +8354,7 @@ function showGainInfo(){
      : `<div style="margin-top:9px;border-top:1px solid var(--border);padding-top:7px" class="green">${
           t("✅ {a} n'a plus aucun bonus capable de réduire ce gain.",{a:oppNom})}</div>`}
    <div style="margin-top:8px">${t("En face, la jauge et l'alerte de capital te disent ce que tu <b>risques</b>. Les deux se lisent ensemble.")}</div></div>`); }
-function showRoiInfo(){ infoModal("📈",t("Rentabilité (ROI)"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé. <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.")}</div>`); }
+function showRoiInfo(){ infoModal("📈",t("Rentabilité (ROI)"),`<div class="mini muted" style="text-align:left;line-height:1.6">${t("Le <b>ROI</b> (retour sur investissement) rapporte ton résultat net au total que tu as misé, sur tes mises réellement jouées seulement : une pénalité d'oubli ou une recapitalisation n'y entre pas (elle reste visible dans ton capital). <b>+20 %</b> = tu as gagné 20 € pour 100 € misés ; un ROI <b>négatif</b> = tu as perdu de l'argent sur tes mises.")}</div>`); }
 function showStarInfo(){ infoModal("⭐",t("Meilleur pronostiqueur"),`<div class="mini muted">${scoringShown()
     ? t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain.")
     : t("Chaque journée, le joueur au <b>meilleur gain net de toute la ligue</b> gagne <b>+1 point bonus</b> (en plus des points de duel). En cas d'égalité : on départage par le plus gros gain, puis la plus grosse mise.")}</div>`); }
@@ -8703,7 +8636,9 @@ async function pingActivite(){
 function brancherPingActivite(){
   document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) pingActivite(); });
   if(estNatif() && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
-    try{ window.Capacitor.Plugins.App.addListener("appStateChange", st=>{ if(st && st.isActive) pingActivite(); }); }catch(e){}
+    // v8.515 (C7, audit pré-build) — la reprise native relance AUSSI le sondage : certaines reprises
+    // Android ne produisent pas de `visibilitychange`, et le rattrapage du sondage n'écoutait que lui.
+    try{ window.Capacitor.Plugins.App.addListener("appStateChange", st=>{ if(st && st.isActive){ pingActivite(); if(poll) tourDeSondage(); } }); }catch(e){}
   }
 }
 // ⚠️ Lit IOS_POINTS_SPEND_KILLSWITCH (cf. sa définition) : `false` tant qu'il n'est pas activé, donc
@@ -9672,7 +9607,10 @@ async function setSeen(v){
 let LECTURE_SEULE=false;
 async function q(p){
   if(LECTURE_SEULE && p && p.method && p.method!=="GET") throw new Error("lecture_seule");
-  const {data,error}=await p; if(error) throw new Error(error.message); return data; }
+  // v8.515 — le `code` et le `hint` de l'erreur serveur voyagent avec elle (avant : seul le message,
+  // donc un refus de la base — `fixtures_hors_pool`, `pool_serveur_attendu`… — était illisible pour
+  // l'app, qui ne pouvait ni le traduire ni réagir). Le message, lui, ne change pas.
+  const {data,error}=await p; if(error){ const er=new Error(error.message); er.code=error.code; er.hint=error.hint; throw er; } return data; }
 /* LONGUEUR DU CODE DE LIGUE — un seul chiffre à changer (v7.63, question d'Hervé : « est-ce
    qu'on pourra facilement passer à 6 caractères un jour ? »).
    Alphabet de 32 signes (ni I, ni O, ni 0, ni 1 : indistinguables à l'oral et à la lecture).
@@ -10075,6 +10013,28 @@ function dcWinOdd(f,sel,sel2){ return (f.res===sel||f.res===sel2) ? oddOf(f,f.re
 function gainMise(picks,fx){ let gain=0,mise=0; (picks||[]).forEach((b,i)=>{ const f=(fx||[])[i]; if(f&&f.canceled) return; const st=+b.stake||0; mise+=st; if(f&&b.sel===f.res) gain+=st*oddOf(f,b.sel); }); return {gain,mise}; }
 // Nombre de paris gagnants d'un joueur (gère la Double Chance)
 function winCount(bt,fx){ if(!bt||!bt.picks||!fx) return 0; const c=bt.card; let w=0; bt.picks.forEach((b,i)=>{ const f=fx[i]; if(!f||f.canceled)return; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===b.sel||f.res===c.sel2):(b.sel===f.res); if(win)w++; }); return w; }
+/* ═══ v8.515 — RÈGLES DES STATISTIQUES (décisions d'Hervé du 02/10/2026) — UNE SEULE SOURCE ═════
+   Toutes les statistiques de PERFORMANCE (Mes stats, stats et records de ligue, Palmarès Moi et
+   Records, Forme du Maestro) passent par ces fonctions — jamais par une recopie locale :
+   • journée oubliée (aucun prono) = FORFAIT : pas une journée jouée, hors moyennes, hors meilleure/
+     pire journée, hors ROI ; elle reste visible à part (« journées non jouées ») ;
+   • prono RÉGLÉ = match avec résultat et non annulé : annulé ≠ bon ≠ mauvais, absent ≠ mauvais ;
+   • meilleure cote = cote RÉELLE du prono joué (mise > 0) et gagné — Double Chance gagnée : la cote
+     réellement payée (`dcWinOdd`) ; jamais une cote combinée ou transformée par un bonus ;
+   • double forfait = nul ADMINISTRATIF : affiché comme tel dans le duel, mais exclu de toute
+     statistique de performance (face-à-face, séries, Forme, V/N/D). */
+function statOubli(b){ return !!(b && Array.isArray(b.picks) && b.picks.length===0); }
+function statRegle(f){ return !!(f && !f.canceled && f.res!=null); }
+function statBilan(bt,fx){ let n=0,w=0; if(!bt||!Array.isArray(bt.picks)||!fx) return {n,w}; const c=bt.card;
+  bt.picks.forEach((p,i)=>{ const f=fx[i]; if(!p||!statRegle(f)) return; n++;
+    const isDC=!!(c&&c.id==="chance"&&c.target===i&&c.sel2);
+    if(isDC?(f.res===p.sel||f.res===c.sel2):(p.sel===f.res)) w++; });
+  return {n,w}; }
+function statCoteGagnee(bt,i,f){ if(!statRegle(f)) return null; const p=(bt&&Array.isArray(bt.picks))?bt.picks[i]:null;
+  if(!p||!(+p.stake>0)) return null; const c=bt.card; const isDC=!!(c&&c.id==="chance"&&c.target===i&&c.sel2);
+  const win=isDC?(f.res===p.sel||f.res===c.sel2):(p.sel===f.res); if(!win) return null;
+  const o=+(isDC?dcWinOdd(f,p.sel,c.sel2):oddOf(f,p.sel)); return o>0?o:null; }
+function statDoubleForfait(b,ob){ return statOubli(b) && statOubli(ob); }
 // Compare deux joueurs {net,gain,mise} : vainqueur = meilleur net, puis gain, puis mise, sinon nul.
 // v2 : RÉSULTAT (V=2, N=1, D=0) + 1 pt si net > 0.  ANCIEN : vainqueur 3 (net>0) ou 1 ; perdant
 // 1 (net>0) ou 0 ; nul 1/1.  ⚠️ « net > 0 » strictement : un net de 0 (p. ex. tous les matchs du
@@ -10501,7 +10461,15 @@ async function refresh(){
     // rester neutre pendant l'attente : `unseenDayGate()` neutralise désormais SANS CONDITION tant
     // que le jour n'est pas acquitté (cf. sa note — l'ancien `revealGateOpen` ne couvrait pas le cas
     // A, où `resolveDay()` peut rendre `viewGame()` avant même que ce bloc-ci ne s'exécute).
-    else if(jourNonVu!=null && S.view==="game" && treveResultSeen() && !awaitingReveal){
+    /* ⚠️ v8.515 (03/10, bug relevé par Hervé) — L'ONGLET RÉSULTATS « SANS JOURNÉE CHOISIE » COMPTE
+       AUSSI. `openLeagueResultats()` (bandeau « bientôt disponibles » du QG) pose `S.view="results"`
+       avec `S.resDay=null`, SANS passer par `openResults()` — seul endroit qui marque la journée vue.
+       Si la journée était déjà résolue au moment du clic, ou si le serveur la résout pendant qu'on
+       regarde l'écran d'attente, ce renvoi (qui n'acceptait que "game") ne se déclenchait pas :
+       les résultats s'affichaient, `last_seen_day` restait en arrière, et le QG remontrait aussitôt
+       « Résultats à découvrir » pour une journée déjà lue. `S.resDay==null` distingue cette arrivée
+       d'une navigation voulue (onglet, flèches, lien des stats), qui fixe toujours une journée. */
+    else if(jourNonVu!=null && (S.view==="game" || (S.view==="results" && S.resDay==null)) && treveResultSeen() && !awaitingReveal){
       const _jnv=jourNonVu;
       awaitingReveal=true; render();
       try{
@@ -10607,13 +10575,30 @@ function maybeFormulaModal(){
 // (v6.66) Pop-up « dernière journée = points doubles » RETIRÉ : il s'affichait au moment de découvrir
 // les résultats de la journée passée (mauvais timing). L'info reste bien visible via le bandeau
 // lastDayBanner sur les écrans Pronos + Résultats. Demandé par Hervé.
+/* ⚠️ v8.515 (03/10, secours Classique T0+36, décision d'Hervé) — TIRAGE AUTOMATIQUE (IA à domicile, absent à
+   l'échéance) : la FENÊTRE NORMALE D'ABORD — matchs déjà suivis par d'autres duels en premier (v8.327), puis le hasard ;
+   les matchs marqués `secours` (créneau T0+36 → T0+48, moins de temps pour pronostiquer) seulement s'il en manque pour
+   faire 5, dans l'ordre du pool (le serveur les y a rangés : qualité d'abord, horaire le plus tardif ensuite).
+   ⚠️ COPIE CONFORME de `pickFixturesForDuel()` (supabase/functions/ensure-fixtures-reelles) — vérifiée par le test F4.
+   Le joueur qui choisit lui-même reste libre de prendre un match de secours. */
+function ordreTirageReel(pool, dejaUtilises, rand){
+  const r=rand||Math.random;
+  const normaux=pool.filter(f=>!(f&&f.secours)), secours=pool.filter(f=>f&&f.secours);
+  const prioritaires=normaux.filter(f=>f&&f.evId&&dejaUtilises.has(f.evId));
+  const reste=normaux.filter(f=>!(f&&f.evId&&dejaUtilises.has(f.evId)));
+  for(let i=reste.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[reste[i],reste[j]]=[reste[j],reste[i]];}
+  return [...prioritaires,...reste,...secours].slice(0,5);
+}
 async function ensureFixtures(){
   let filled=false; const dt=dayTimes(); const selPassed=dt.ok && Date.now()>=dt.sel;
   // Duels à remplir : IA à domicile (tout de suite) ou humain à domicile ayant dépassé l'échéance de sélection.
   const todo=duels.filter(d=>!d.fixtures && ((pById(d.home_id)&&pById(d.home_id).is_ai) || selPassed));
   if(!todo.length) return false;
   if(L&&L.data_mode==="real"){
-    if(Date.now()-lastRealFill < 300000) return false; lastRealFill=Date.now(); // throttle quota (5 min)
+    // v8.515 — tant que le pool serveur n'est pas posé (`L.day_pool`, relu à chaque sondage), on attend
+    // sans rien demander ; dès qu'il l'est, on tire sans attendre la fin d'un délai de 5 min.
+    if(!(Array.isArray(L.day_pool) && L.day_pool.length>=5)) return false;
+    if(Date.now()-lastRealFill < 300000) return false; lastRealFill=Date.now(); // un essai par 5 min
     let pool=[]; try{ pool=await getOrCreateDayPool(); }catch(e){}
     if(pool.length<5) return false; // pas assez de vrais matchs → on attend (jamais de simulé en réel)
     /* ⚠️ v8.327 (demandé par Hervé) — TIRAGE PRIORISÉ, PAS UNIFORME. Les résultats sont facturés PAR
@@ -10628,12 +10613,11 @@ async function ensureFixtures(){
     for(const d of todo){
       const dejaUtilises=new Set(duels.filter(x=>x.id!==d.id && Array.isArray(x.fixtures) && x.fixtures.length)
         .flatMap(x=>x.fixtures.map(f=>f&&f.evId).filter(Boolean)));
-      const prioritaires=pool.filter(f=>dejaUtilises.has(f.evId));
-      const reste=pool.filter(f=>!dejaUtilises.has(f.evId));
-      for(let i=reste.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[reste[i],reste[j]]=[reste[j],reste[i]];}
-      const fx=[...prioritaires,...reste].slice(0,5);
-      try{ const r=await q(db.from("duels").update({fixtures:fx}).eq("id",d.id).is("fixtures",null).select());
-        if(r&&r.length){ filled=true; d.fixtures=fx; } }catch(e){} }
+      const fx=ordreTirageReel(pool, dejaUtilises);
+      // v8.515 — enregistré PAR LE SERVEUR (`select_fixtures` recopie les matchs depuis le pool officiel).
+      try{ const r=await choisirMatchsServeur(d.id, fx);
+        // RPC : rend les 5 matchs officiels ; repli PGRST202 : rend les lignes de duel mises à jour.
+        if(Array.isArray(r) && r.length){ filled=true; d.fixtures=(r[0]&&r[0].evId)?r:fx; } }catch(e){} }
     return filled;
   }
   // v8.238 : pioche dans le tirage COMMUN de la journée (cf. `getOrCreateDayPool`), pas un tirage
@@ -11785,6 +11769,8 @@ function qgComputeForme(ctx){
       if(!duel) return;
       const oppId=duel.home_id===pid?duel.away_id:duel.home_id;
       const oppBet=bts.find(x=>x.league_id===lg.id&&x.player_id===oppId&&x.day===b.day);
+      // v8.515 (Hervé, 02/10) — double forfait = nul ADMINISTRATIF : exclu de la Forme (ni nul, ni défaite).
+      if(statDoubleForfait(b,oppBet)) return;
       const H=Object.assign({net:b.net||0}, gainMise(b.picks,duel.fixtures));
       const A=Object.assign({net:(oppBet&&oppBet.net!=null)?oppBet.net:0}, gainMise(oppBet&&oppBet.picks,duel.fixtures));
       const r=duelPtsF(H,A,qgFg(b),qgFg(oppBet),isScoring2(lg));
@@ -12694,13 +12680,19 @@ function viewHome(){
        DLGLL le 25/09 à 22h50 : bandeau → ouverture de la ligue → écran d'attente → retour au QG,
        toujours le même message. On ne fusionne pas les deux textes : celui du haut dit « va voir »,
        celui du bas dit « c'est parti, patiente ». Le CTA reste le même parce que la destination, elle,
-       est bien la bonne — l'écran d'arrivée renvoie désormais vers 📋 Résultats (cf. viewGame). */
+       est bien la bonne — l'écran d'arrivée renvoie désormais vers 📋 Résultats (cf. viewGame).
+       ⚠️ v8.515 (03/10, Hervé) — PLUS AUCUN TEXTE NE DEMANDE AU JOUEUR DE « DÉCLENCHER » QUOI QUE CE
+       SOIT : les ligues réelles sont résolues par le serveur seul. Le bandeau dit l'état (matchs
+       apparemment finis, scores attendus) et reste tant que `current_day` n'a pas avancé — le
+       consulter n'y change rien, c'est voulu. Une fois la journée résolue, c'est le bandeau
+       « Résultats à découvrir » qui prend la main, et il s'éteint par `openResults` (cf. le renvoi
+       vers les résultats non vus dans `refresh()`, qui couvre aussi l'arrivée par ce bouton-ci). */
     ? (x.lg.status==="resolving"
       ? `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats en cours de confirmation")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("les matchs de la journée {a} sont terminés : la journée se résout automatiquement dès que tous les scores sont remontés.",{a:(x.jour|0)+1})}</div>
       <button class="cta" onclick="openLeagueResultats('${x.lg.id}','${x.pid}')">🏁 ${t("Suivre")}</button></div>`
       : `<div class="alert-card good"><div class="ttl">🏁 ${t("Résultats bientôt disponibles")}</div>
-      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tous les matchs de la journée {a} semblent terminés : ouvre la ligue pour vérifier si la résolution peut être déclenchée.",{a:(x.jour|0)+1})}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tous les matchs de la journée {a} semblent terminés : la journée se résout automatiquement dès que tous les scores sont remontés.",{a:(x.jour|0)+1})}</div>
       <button class="cta" onclick="openLeagueResultats('${x.lg.id}','${x.pid}')">🏁 ${t("Découvrir")}</button></div>`)
     : x.kind==="prep"
     ? `<div class="alert-card warn">${qgCountdownHTML(x.deadline)}<div class="ttl">⚠️ ${t("À toi de jouer")}</div>
@@ -13123,7 +13115,7 @@ function openLeagueMenu(){
 async function closeLeagueInGame(){
   if(busy||!L) return;
   if(!(me()&&me().is_organizer)) return;
-  if(!await confirmTxt("🛑",t("Abandonner cette ligue ?"),t("Cette action est définitive. La compétition sera arrêtée et considérée comme abandonnée. Aucun vainqueur, classement final, gage ou récompense ne sera attribué. Les résultats de cette ligue ne compteront pas dans le Palmarès ni dans les statistiques des joueurs."),t("Abandonner la ligue"))) return;
+  if(!await confirmTxt("🛑",t("Abandonner cette ligue ?"),t("Cette action est définitive. La compétition sera arrêtée et considérée comme abandonnée. Aucun vainqueur, classement final, gage ou récompense ne sera attribué. La ligue passera dans les ligues fermées : toutes ses données sont conservées, et les pronostics déjà joués restent dans les statistiques, le Palmarès et les records des joueurs."),t("Abandonner la ligue"))) return;
   const lid=L.id; busy=true;
   try{
     await q(db.from("leagues").update({status:"done",closed_reason:"organizer"}).eq("id",lid));
@@ -15879,9 +15871,28 @@ let selPool=null, selChosen=[], selLoading=false, selFor=null;
 // écran ET protège du cas marginal où la réserve brute (`fetchRealPoolCached`, cache 3 jours)
 // se renouvellerait en plein milieu de la journée. Même mécanisme « premier arrivé, premier
 // servi » que pour les matchs fictifs.
+/* ═══ v8.515 — BUILD DE TRANSITION SERVER-DRIVEN (Hervé, 02/10/2026) ═══════════════════════════
+   EN MATCHS RÉELS, LE POOL DU JOUR EST CELUI DU SERVEUR, ET SEULEMENT LUI. La chaîne serveur
+   (`chaine-matchs`, mode autoritaire) construit et fige `day_pool` dès le changement de journée ;
+   l'app ne fait plus que le LIRE. Elle ne tire plus rien, ne gèle plus rien, ne récolte plus de
+   cotes (`fetchRealPoolCached` n'est plus appelée en réel) : toutes les règles de composition
+   (super favoris, 7 foot + 2 basket/tennis…) vivent sur le serveur et peuvent changer sans build.
+   Tant que le serveur n'a pas posé son pool (quelques secondes ; jusqu'à ~20 min s'il attend des
+   cotes), la fonction rend [] : l'écran affiche « liste en préparation » et se remplit seul au
+   sondage suivant (`L.day_pool` est relu toutes les 4 s par `refresh`). JAMAIS de liste locale :
+   une liste non enregistrée faisait refuser le choix du joueur (B1, audit pré-build du 02/10).
+   ⚠️ Les ligues SIMULÉES ne changent pas : tirage commun « premier arrivé » ci-dessous.
+   ⚠️ `selectPool`, `fetchRealPool*` et leurs outils RESTENT dans le fichier : tools/gen-day-pool-
+   shadow.py les extrait pour le serveur (c'est la source des règles de la chaîne). Ne pas les
+   supprimer sans déplacer cette source. */
 async function getOrCreateDayPool(){
   const real=(L&&L.data_mode==="real"), need=real?5:POOL_N;
-  const tirer=real?fetchRealPoolCached:(()=>genPool(POOL_N,leagueFormula().bet));
+  if(real){
+    const fresh=await q(db.from("leagues").select("day_pool").eq("id",L.id).single());
+    if(fresh && Array.isArray(fresh.day_pool) && fresh.day_pool.length>=5){ L.day_pool=fresh.day_pool; return fresh.day_pool; }
+    return [];   // pool serveur pas encore posé : « en préparation »
+  }
+  const tirer=()=>genPool(POOL_N,leagueFormula().bet);
   try{
     const fresh=await q(db.from("leagues").select("day_pool").eq("id",L.id).single());
     if(fresh && Array.isArray(fresh.day_pool) && fresh.day_pool.length>=need){ L.day_pool=fresh.day_pool; return fresh.day_pool; }
@@ -15924,6 +15935,9 @@ function viewSelect(d,dayLbl,opp){
   // 5 matchs cochés dans la ligue précédente réapparaissaient cochés dans la suivante.
   const selKey=L.id+":"+(L.current_day||0);
   if(selFor!==selKey){ selFor=selKey; selPool=null; selChosen=[]; selLoading=false; }
+  // v8.515 — liste « en préparation » : dès que le sondage rapporte le pool du serveur, on la recharge
+  // (sans action du joueur). `L.day_pool` est relu toutes les 4 s par `refresh`.
+  if(real && selPool && selPool.length<5 && !selLoading && Array.isArray(L.day_pool) && L.day_pool.length>=5) selPool=null;
   if(!selPool && !selLoading){ if(real){ loadRealPool(); } else { loadDayPool(); } }
   /* ⚠️ v8.239 (bug vécu par Hervé : « Connexion : null is not an object (evaluating
      'selPool.map') » sur l'écran de choix) — CE GARDE-FOU NE COUVRAIT QUE `real`. `loadDayPool()`
@@ -15943,7 +15957,7 @@ function viewSelect(d,dayLbl,opp){
       <div class="a2-maestro-pronos-text">${t("Toi et {a} devrez pronostiquer dessus.",{a:'<b>'+pname(opp)+'</b>'})}</div></div></div>`;
   if(selLoading || !selPool) return `${maestroChoix}${quickBar('')}<div class="box">${t(real?"⏳ Chargement des vrais matchs à venir…":"⏳ Chargement des matchs…")}</div>`;
   if(real && selPool.length<5) return `${maestroChoix}${quickBar('')}<div class="box"><div class="row"><b>${dayLbl}</b><span class="chip b">${t("🏠 Domicile")}</span></div>
-     <div class="mini muted" style="margin-top:8px">${t("Pas assez de vrais matchs à venir en ce moment (intersaison ?). Réessaie plus tard.")}</div>
+     <div class="mini muted" style="margin-top:8px">${t("La liste des matchs du jour est en préparation. Elle s'affichera ici toute seule dans quelques instants.")}</div>
      <button class="btn ghost sm" style="margin-top:8px" onclick="selPool=null;render()">${t("🔄 Réessayer")}</button></div>`;
   // ⚠️ Port V2 Pronos (2026-09-06, pronos-choix-matchs.html) — REMPLACE .match/.select-chip par les
   // cartes msel (comp/ko en en-tête, équipes centrées, cotes en 3 pastilles 1/N/2, bouton dédié) et
@@ -16023,8 +16037,43 @@ async function saveSelection(){ if(busy)return;
       `<div class="mini muted" style="text-align:left">${t("Depuis que cet écran est ouvert, {a} des matchs choisis se joue(nt) trop tôt : ton adversaire n'aurait plus ses <b>{b} h</b> pour pronostiquer. Voici une liste à jour — <b>tes 5 choix sont à refaire</b>.",{a:tropProche,b:(leagueFormula().bet||24)})}</div>`);
     selPool=null; selChosen=[]; render(); return; }
   busy=true;
-  try{ const d=myDuel(); await q(db.from("duels").update({fixtures:fx}).eq("id",d.id)); selPool=null; selChosen=[]; await refresh(); }
-  catch(e){ showErr(t("Sauvegarde matchs : ")+e.message); } busy=false; }
+  try{ const d=myDuel();
+    if(real) await choisirMatchsServeur(d.id, fx);
+    else await q(db.from("duels").update({fixtures:fx}).eq("id",d.id));
+    selPool=null; selChosen=[]; await refresh(); }
+  catch(e){
+    /* ⚠️ v8.515 (B1, audit pré-build du 02/10) — SUR TOUT REFUS, ON OUBLIE LA LISTE AFFICHÉE. Avant,
+       `selPool` restait en mémoire tant que la ligue et la journée ne changeaient pas : quitter l'écran
+       puis y revenir réaffichait la MÊME liste périmée, et chaque nouvel essai était refusé — seul un
+       arrêt complet de l'app débloquait le joueur. Ici la liste est relue depuis le serveur aussitôt. */
+    // ⚠️ render() AVANT showErr : render relance loadRealPool, qui commence par effacer la zone d'erreur.
+    selPool=null; selChosen=[]; render(); showErr(messageRefusChoix(e)); }
+  busy=false; }
+/* v8.515 (build de transition, Hervé 02/10) — LE SERVEUR ENREGISTRE LUI-MÊME LES MATCHS CHOISIS.
+   L'app n'envoie plus que les identifiants (`evId`) : `select_fixtures` vérifie le droit (domicile,
+   IA à domicile ou échéance passée), la journée, les 5 matchs distincts, leur présence dans le pool
+   officiel et qu'aucun n'a commencé, puis RECOPIE les matchs et leurs cotes depuis `day_pool`. Les
+   cotes envoyées par un téléphone ne font plus foi. Repli sur l'écriture directe (toujours contrôlée
+   par le garde-fou de la base) SEULEMENT si la fonction n'existe pas encore côté serveur (PGRST202). */
+async function choisirMatchsServeur(duelId, fx){
+  const evIds=fx.map(f=>f&&f.evId);
+  try{ return await q(db.rpc("select_fixtures",{p_duel:duelId,p_ev_ids:evIds})); }
+  catch(e){ if(e && e.code==="PGRST202") return await q(db.from("duels").update({fixtures:fx}).eq("id",duelId).is("fixtures",null).select()); throw e; }
+}
+// Refus du serveur au choix des matchs → message clair et traduit (le texte brut de la base est en
+// français et parle à l'ancienne app, qui ne sait pas recharger sa liste).
+function messageRefusChoix(e){
+  const h=(e&&e.hint)||"";
+  const M={ fixtures_hors_pool:"La liste des matchs a changé : voici la liste à jour.",
+            fixtures_journee:"La journée a changé : voici la liste à jour.",
+            fixtures_commence:"Un des matchs choisis a déjà commencé : voici la liste à jour.",
+            fixtures_pool_absent:"La liste des matchs du jour est en préparation : réessaie dans quelques instants.",
+            pool_serveur_attendu:"La liste des matchs du jour est en préparation : réessaie dans quelques instants.",
+            fixtures_nombre:"Il faut exactement 5 matchs différents.",
+            select_deja_choisi:"Les matchs de ce duel ont déjà été choisis.",
+            select_pas_domicile:"Seul le joueur à domicile peut choisir les matchs de ce duel." };
+  return M[h] ? t(M[h]) : t("Sauvegarde matchs : ")+((e&&e.message)||e);
+}
 
 /* --- betting --- */
 let bet={picks:null,captain:-1}, myCard=null, betFor=null;
@@ -17032,6 +17081,8 @@ async function resolveSimDayServer(leagueId){
   if(resultat && resultat.code==="ok" && resultat.result && resultat.result.resolved){ toast(t("Journée résolue ✓")); }
 }
 async function resolveDay(){
+  // v8.515 — jamais pour une ligue réelle : le serveur la résout (cf. resolveRealIfReady).
+  if(L && L.data_mode==="real") return;
   if(resolving)return; resolving=true; showErr("");
   // ⚠️ QA (2026-09-06) — lu ICI, avant tout `await`, donc avant qu'une invocation sans rapport de
   // cette même fonction ait pu s'intercaler (cf. la déclaration du drapeau) : capture exactement
@@ -18811,7 +18862,9 @@ function computeStandHist(){
       if(st[du.home_id]) st[du.home_id].points+=rh; if(st[du.away_id]) st[du.away_id].points+=ra;
       if(r.win==='h'){ if(st[du.home_id]){st[du.home_id].duel_wins++;st[du.home_id].streak_w++;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_l++;st[du.away_id].streak_w=0;} }
       else if(r.win==='a'){ if(st[du.away_id]){st[du.away_id].duel_wins++;st[du.away_id].streak_w++;st[du.away_id].streak_l=0;} if(st[du.home_id]){st[du.home_id].streak_l++;st[du.home_id].streak_w=0;} }
-      else { if(st[du.home_id]){st[du.home_id].streak_w=0;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_w=0;st[du.away_id].streak_l=0;} } });
+      // v8.515 — double forfait (nul administratif) : les séries ne bougent pas. Ne lit que le record
+      // « plus longue série » (leagueRecordsHTML) ; la colonne streak_w en base n'est affichée nulle part.
+      else if(!(forgot.has(du.home_id)&&forgot.has(du.away_id))){ if(st[du.home_id]){st[du.home_id].streak_w=0;st[du.home_id].streak_l=0;} if(st[du.away_id]){st[du.away_id].streak_w=0;st[du.away_id].streak_l=0;} } });
     // ⭐ meilleur pronostiqueur du jour (hors oubli) → +1 pt
     const rows=[]; players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); if(!du||forgot.has(p.id)) return; const b=betAt[d+'|'+p.id]; const gm=gainMise(b&&b.picks, du.fixtures);
       if(gm.mise<=0) return; // tous ses paris annulés → net 0 artificiel, pas éligible à l'étoile (idem resolveDay)
@@ -18822,7 +18875,7 @@ function computeStandHist(){
     // points réellement écrits en base par resolveDay.)
     // capital (+ net), meilleure journée, meilleure cote gagnée
     players.forEach(p=>{ const du=dz.find(x=>x.home_id===p.id||x.away_id===p.id); const b=betAt[d+'|'+p.id]; const net=(b&&b.net)||0; if(st[p.id]){ st[p.id].best_day=Math.max(st[p.id].best_day,net); st[p.id].capital=Math.max(0,Math.round((st[p.id].capital+net)*100)/100); }
-      if(b&&b.picks&&du&&du.fixtures){ b.picks.forEach((pk,i)=>{ const f=du.fixtures[i]; if(!f) return; const c=b.card; const isDC=c&&c.id==="chance"&&c.target===i&&c.sel2; const win=isDC?(f.res===pk.sel||f.res===c.sel2):(pk.sel===f.res); const odd=isDC?dcWinOdd(f,pk.sel,c.sel2):oddOf(f,pk.sel); if(win&&odd>st[p.id].best_odd) st[p.id].best_odd=odd; }); } });
+      if(b&&b.picks&&du&&du.fixtures){ b.picks.forEach((pk,i)=>{ const o=statCoteGagnee(b,i,du.fixtures[i]); if(o&&o>st[p.id].best_odd) st[p.id].best_odd=o; }); } });   // v8.515 : meilleure cote = statCoteGagnee
     // pénalité oubli : −2 pts. Le −25 % de capital est inclus dans `net` depuis la v4.03 (déjà appliqué
     // par `capital += net` juste au-dessus) → on ne le réapplique QUE pour les anciennes journées (net=0),
     // sinon ce serait une double peine à chaque rejeu de l'historique.
@@ -18869,24 +18922,28 @@ function myStats(){
   const my=(chartBets||[]).filter(b=>b.player_id===S.myId && Array.isArray(b.picks) && b.day<seen);
   const duelOf=day=>(standDuels||[]).find(d=>d.day===day && (d.home_id===S.myId||d.away_id===S.myId));
   const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0);
-  let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0;
+  // v8.515 (décisions d'Hervé du 02/10) : une journée oubliée est un FORFAIT, comptée à part — jamais
+  // jouée, hors réussite/ROI/meilleure-pire journée ; sa pénalité reste visible à part (`penalites`).
+  let days=0,forfaits=0,penalites=0,picks=0,won=0,staked=0,net=0,bestOdd=0;
   let best={net:-1e9,day:-1}, worst={net:1e9,day:-1};
   const cardCount={}, h2h={};
-  my.forEach(b=>{ const d=duelOf(b.day); const fx=d&&d.fixtures; days++;
-    if(fx){ picks+=b.picks.length; won+=winCount(b,fx);
-      b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; } }); }
-    staked+=gainMise(b.picks,fx).mise;
-    const n=(b.net!=null)?b.net:0; net+=n;
-    if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
-    if(b.card&&b.card.id) cardCount[b.card.id]=(cardCount[b.card.id]||0)+1;
+  my.forEach(b=>{ const d=duelOf(b.day); const fx=d&&d.fixtures; const n=(b.net!=null)?b.net:0;
+    if(statOubli(b)){ forfaits++; penalites+=n; }
+    else { days++;
+      if(fx){ const bl=statBilan(b,fx); picks+=bl.n; won+=bl.w;
+        b.picks.forEach((p,i)=>{ const o=statCoteGagnee(b,i,fx[i]); if(o&&o>bestOdd)bestOdd=o; }); }
+      staked+=gainMise(b.picks,fx).mise; net+=n;
+      if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
+      if(b.card&&b.card.id) cardCount[b.card.id]=(cardCount[b.card.id]||0)+1; }
     if(d){ const oppId=d.home_id===S.myId?d.away_id:d.home_id;
       const ob=(chartBets||[]).find(x=>x.player_id===oppId && x.day===b.day);
-      const H=Object.assign({net:n},gainMise(b.picks,fx));
-      const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
-      const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2()); h2h[oppId]=h2h[oppId]||{w:0,l:0,d:0};
-      if(r.win==='h') h2h[oppId].w++; else if(r.win==='a') h2h[oppId].l++; else h2h[oppId].d++; } });
+      if(!statDoubleForfait(b,ob)){   // double forfait : nul administratif, hors face-à-face
+        const H=Object.assign({net:n},gainMise(b.picks,fx));
+        const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
+        const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2()); h2h[oppId]=h2h[oppId]||{w:0,l:0,d:0};
+        if(r.win==='h') h2h[oppId].w++; else if(r.win==='a') h2h[oppId].l++; else h2h[oppId].d++; } } });
   const favCard=Object.keys(cardCount).sort((a,b)=>cardCount[b]-cardCount[a])[0]||null;
-  return {days,picks,won,staked:Math.round(staked),net,bestOdd,best,worst,favCard,h2h,
+  return {days,forfaits,penalites:Math.round(penalites*100)/100,picks,won,staked:Math.round(staked),net,bestOdd,best,worst,favCard,h2h,
           hit:picks?Math.round(won/picks*100):0, roi:staked?Math.round(net/staked*100):0}; }
 // 📊 Stats de la LIGUE COURANTE (gratuit) — depuis le classement. Le dossier cross-ligue (viewStats)
 // reste une option premium, accessible depuis « Mes ligues » (déplacé là — signalé par Hervé : le
@@ -18920,8 +18977,10 @@ function leagueRecordsHTML(){
   rows.forEach(b=>{ const a=acc[b.player_id]; if(!a) return;
     const d=(standDuels||[]).find(x=>x.day===b.day && (x.home_id===b.player_id||x.away_id===b.player_id));
     const fx=d&&d.fixtures;
-    if(fx && Array.isArray(b.picks)){ a.picks+=b.picks.length; a.won+=winCount(b,fx);
-      b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(!bestOdd||o>bestOdd.odd) bestOdd={pid:b.player_id,day:b.day,odd:o}; } }); }
+    // v8.515 : forfait (journée oubliée) hors records ; pronos réglés seulement ; meilleure cote unique.
+    if(statOubli(b)) return;
+    if(fx && Array.isArray(b.picks)){ const bl=statBilan(b,fx); a.picks+=bl.n; a.won+=bl.w;
+      b.picks.forEach((p,i)=>{ const o=statCoteGagnee(b,i,fx[i]); if(o&&(!bestOdd||o>bestOdd.odd)) bestOdd={pid:b.player_id,day:b.day,odd:o}; }); }
     const n=(b.net!=null)?b.net:0; a.net+=n;
     if(!bestDay||n>bestDay.net) bestDay={pid:b.player_id,day:b.day,net:n}; });
   let mostAccurate=null; Object.keys(acc).forEach(pid=>{ const a=acc[pid]; if(a.picks<5) return; const rate=a.won/a.picks;
@@ -18961,14 +19020,16 @@ function viewLeagueStats(){
    <div class="a2-stats-box"><div class="a2-stats-text">${t("Voici ce que les chiffres racontent sur votre saison.")}</div></div></div>
    <h1 style="margin:10px 0 4px;font-size:20px">📊 ${t("Mes stats — {a}",{a:esc(L.name)})}</h1><p class="mini muted" style="margin:0 0 10px">${t("Uniquement cette ligue.")}</p>`;
   let h=hero;
-  if(!s.days) return h+`<div class="box mini muted">${t("Aucune journée jouée pour l'instant.")}</div>`;
+  if(!s.days && !s.forfaits) return h+`<div class="box mini muted">${t("Aucune journée jouée pour l'instant.")}</div>`;
   h+=`<div class="box"><div class="boxttl">🏅 ${t("Dans cette ligue")}</div>
     ${solo?line(t("Classement"), t("Solo · Terminé")):(rank>0?line(t("Classement"), t("{a}ᵉ / {b}",{a:rank,b:tot})):'')}
     ${meP?line(t("Points / capital"), meP.points+" pts · "+euro(meP.capital)):''}
     ${line(t("Journées jouées"), s.days)}
+    ${s.forfaits?line(t("Journées non jouées (forfait)"), s.forfaits):''}
     ${line(t("Pronos gagnés"), s.won+"/"+s.picks+" ("+s.hit+" %)")}
     ${line(t("Rentabilité (ROI)")+' <span class="clik" onclick="showRoiInfo()">ⓘ</span>', `<span class="${s.roi>=0?'green':'red'}">${s.roi} %</span>`)}
     ${line(t("Résultat net"), `<span class="${s.net>=0?'green':'red'}">${euroSigned(s.net)}</span>`)}
+    ${s.penalites?line(t("Pénalités d'oubli"), `<span class="red">${euroSigned(s.penalites)}</span>`):''}
     ${line(t("Meilleure journée"), s.best.day>=0?`<span class="${clsMontant(s.best.net)}">${euroSigned(s.best.net)}</span> (J${s.best.day+1})`:'–')}
     ${line(t("Pire journée"), s.worst.day>=0?`<span class="${clsMontant(s.worst.net)}">${euroSigned(s.worst.net)}</span> (J${s.worst.day+1})`:'–')}
     ${line(t("Plus grosse cote gagnée"), s.bestOdd?s.bestOdd.toFixed(2):'–')}
@@ -19069,7 +19130,8 @@ async function loadMyStats(){
     // `code` ajouté en v7.62 : les records citaient la ligue par son NOM seul, ce qui ne permettait
     // ni de la retrouver ni d'en parler (demande d'Hervé). Le code l'identifie, et sert de repère
     // au lien direct vers la journée concernée.
-    const lgs=await q(db.from("leagues").select("id,name,code,status,num_days,current_day,created_at,finished_at,data_mode,closed_reason").in("id",ids));
+    // `recap_log` (v8.515) : journées où le joueur a été recapitalisé (−1 pt), retirées des points par journée.
+    const lgs=await q(db.from("leagues").select("id,name,code,status,num_days,current_day,created_at,finished_at,data_mode,closed_reason,recap_log").in("id",ids));
     const pls=await q(db.from("players").select("id,name,emoji,is_ai,user_id,league_id,points,capital,duel_wins,best_day,best_odd").in("league_id",ids));
     const bts=await q(db.from("bets").select("league_id,day,player_id,net,picks,card,captain,duel_id").in("league_id",ids).not("net","is",null));
     // ⚠️ Lot Nuit (2026-09-13) — `resolved_at` AJOUTÉ (base du filtre "Nouveau départ" ci-dessous) :
@@ -19077,6 +19139,12 @@ async function loadMyStats(){
     // ligue en cours peut donc avoir des journées avant et après un Nouveau départ). Aucun coût
     // supplémentaire : même requête, une colonne de plus.
     const dls=await q(db.from("duels").select("id,league_id,day,home_id,away_id,fixtures,resolved_at").in("league_id",ids));
+    // v8.515 (anti-spoiler des stats, Hervé 02/10) — points de championnat tels qu'ils étaient à la
+    // dernière journée CONSULTÉE : `player_day_stats` (même source que les voyants Maestro figés) n'est
+    // lisible que pour les journées déjà consultées. Absente ou vide : la ligue sort simplement du
+    // calcul des points par journée tant que tout n'a pas été consulté (jamais une valeur en avance).
+    let pdsRows=[]; try{ pdsRows=await q(db.from("player_day_stats").select("league_id,player_id,day,points_after").in("player_id",mine.map(m=>m.id)))||[]; }catch(e){ pdsRows=[]; }
+    const pdsAt={}; pdsRows.forEach(r=>{ pdsAt[r.league_id+"|"+r.player_id+"|"+r.day]=r; });
     const lgMap={}; lgs.forEach(l=>lgMap[l.id]=l);
     const plMap={}; pls.forEach(p=>plMap[p.id]=p);
     const myPid={}; mine.forEach(m=>myPid[m.league_id]=m.id);
@@ -19087,7 +19155,7 @@ async function loadMyStats(){
     // 👑 Capitaine (doublé) compris. ⚠️ N'intègre PAS l'effet des AUTRES bonus (assurance…) :
     // ceux-ci se lisent dans `card.impact`, et le `net` de la journée reste la référence.
     const pickInfo=(bt,i,f)=>{
-      if(!f||f.canceled) return null;
+      if(!statRegle(f)) return null;   // v8.515 : seuls les pronos RÉGLÉS (ni annulés, ni sans résultat)
       const p=(bt.picks||[])[i]||{}; const st=+p.stake||0; const c=bt.card;
       const isDC=!!(c&&c.id==="chance"&&c.target===i&&c.sel2);
       const win=isDC?(f.res===p.sel||f.res===c.sel2):(p.sel===f.res);
@@ -19121,7 +19189,7 @@ async function loadMyStats(){
        crédits d'API — c'est ce qui rend l'option confortable à étoffer autant qu'on veut. */
     let sumWinOdd=0, nWinOdd=0;                 // cote moyenne des pronos GAGNÉS
     let capExtra=0, capCount=0, capWin=0;        // ce que le 👑 Capitaine a rapporté EN PLUS, et son taux de réussite
-    let posDays=0, allDays=0, tPoints=0;        // régularité et points par journée
+    let posDays=0, allDays=0, tPoints=0, ptsDays=0, tForfaits=0, tPenalites=0;   // régularité, points par journée (v8.515 : figés à la dernière journée consultée), forfaits à part
     let bestRun=0, run=0;                       // meilleure série de duels gagnés
     const bestPick={g:-1e9}, bigStake={st:-1};  // plus gros prono gagné / plus grosse mise
     const buckets={fav:{p:0,w:0},eq:{p:0,w:0},out:{p:0,w:0}};   // profil par tranche de cote
@@ -19136,7 +19204,10 @@ async function loadMyStats(){
     const oddBands=[{lo:1.01,hi:1.4},{lo:1.4,hi:1.8},{lo:1.8,hi:2.5},{lo:2.5,hi:4},{lo:4,hi:1e9}].map(b=>({lo:b.lo,hi:b.hi,p:0,w:0,net:0,staked:0}));
     ids.forEach(lid=>{ const mp=myPid[lid]; if(!mp) return; const lg=lgMap[lid]||{};
       if(!garde(lg)) return;   // onglet : ligue d'un autre type de données
-      const compte=alleeAuTerme(lg);   // false = ligue abandonnée : visible dans la liste, hors totaux
+      /* v8.515 (Hervé, 02/10) — UNE LIGUE ABANDONNÉE COMPTE : ses pronos étaient de vrais pronos, ses
+         performances restent dans Mes stats, le Palmarès et les Records. Seuls les HONNEURS (titre,
+         podium) lui sont refusés — l'abandon n'attribue ni vainqueur ni classement final. */
+      const compte=true, auTerme=alleeAuTerme(lg);
       // ⚠️ Anti-spoiler (2026-09-06, audit vidéo Hervé) — même correctif que myStats() : sans ce
       // filtre, une journée résolue côté serveur mais pas encore acquittée par CE joueur dans CETTE
       // ligue pouvait déjà apparaître dans « Mes stats » (accueil, hors ligue ouverte), avec son
@@ -19151,11 +19222,16 @@ async function loadMyStats(){
         && (!depuis || (()=>{ const d=dlById[b.duel_id]; const ts=d&&d.resolved_at?new Date(d.resolved_at).getTime():NaN;
               return !isNaN(ts) && ts>=depuisMs; })())
       ).sort((x,y)=>(x.day|0)-(y.day|0));
-      let days=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
+      let days=0,forfaits=0,penalites=0,picks=0,won=0,staked=0,net=0,bestOdd=0; let best={net:-1e9,day:-1},worst={net:1e9,day:-1}; const cc={};
       run=0;   // une série de duels ne traverse pas deux championnats différents : elle repart à zéro
-      myBets.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures; days++;
-        if(fx){ picks+=b.picks.length; won+=winCount(b,fx);
-          b.picks.forEach((p,i)=>{ const f=fx[i]; if(f&&p.sel===f.res){ const o=oddOf(f,p.sel); if(o>bestOdd)bestOdd=o; if(compte&&o>gBestOdd)gBestOdd=o; } });
+      myBets.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures;
+        // v8.515 — journée OUBLIÉE = forfait : jamais jouée, hors réussite/ROI/records/régularité ; sa
+        // pénalité reste visible à part. Le duel, lui, reste compté plus bas (sauf double forfait).
+        const oubli=statOubli(b), n0=(b.net!=null)?b.net:0;
+        if(oubli){ forfaits++; penalites+=n0; }
+        if(!oubli){ days++;
+        if(fx){ const bl=statBilan(b,fx); picks+=bl.n; won+=bl.w;
+          b.picks.forEach((p,i)=>{ const o=statCoteGagnee(b,i,fx[i]); if(o){ if(o>bestOdd)bestOdd=o; if(compte&&o>gBestOdd)gBestOdd=o; } });
           if(compte) b.picks.forEach((p,i)=>{ const inf=pickInfo(b,i,fx[i]); if(!inf) return; const f=fx[i];
             if(inf.win){ sumWinOdd+=inf.odd; nWinOdd++; }
             // `lgId`/`pid`/`code` (v7.62) : de quoi CONSULTER la journée citée, pas seulement la
@@ -19179,7 +19255,7 @@ async function loadMyStats(){
             if(SPORT_EMOJIS.indexOf(sp)>=0){ bySport[sp]=bySport[sp]||{p:0,w:0,net:0,staked:0};
               bySport[sp].p++; if(inf.win)bySport[sp].w++; bySport[sp].net+=inf.gain; bySport[sp].staked+=inf.st; }   // net/staked (Lot 5) : ROI par sport, en plus de la réussite déjà là
           }); }
-        const mise=gainMise(b.picks,fx).mise; staked+=mise; const n=(b.net!=null)?b.net:0; net+=n;
+        const mise=gainMise(b.picks,fx).mise; staked+=mise; const n=n0; net+=n;
         if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
         if(b.card&&b.card.id) cc[b.card.id]=(cc[b.card.id]||0)+1;   // bonus fétiche : par ligue, même abandonnée
         if(compte){
@@ -19193,8 +19269,11 @@ async function loadMyStats(){
             const K=byCard[b.card.id]=byCard[b.card.id]||{n:0,net:0};
             K.n++; K.net+=(b.card.impact&&+b.card.impact.self)||0; }
         }
+        }   // fin « journée jouée » (v8.515)
+        const n=n0;
         if(d && compte){ const oppId=d.home_id===mp?d.away_id:d.home_id; const opp=plMap[oppId];
           const ob=(betsByLg[lid]||[]).find(x=>x.player_id===oppId&&x.day===b.day);
+          if(statDoubleForfait(b,ob)) return;   // v8.515 : double forfait = nul administratif, hors séries et face-à-face
           const H=Object.assign({net:n},gainMise(b.picks,fx)); const A=Object.assign({net:(ob&&ob.net!=null)?ob.net:0},gainMise(ob&&ob.picks,fx));
           const r=duelPtsF(H,A,fg(b),fg(ob),isScoring2(lg));
           // Série : comptée sur TOUS les duels, adversaire IA compris — c'est ta série à toi.
@@ -19214,22 +19293,42 @@ async function loadMyStats(){
             h2h[key]=h2h[key]||{name:opp.name,emoji:opp.emoji,is_ai:!!opp.is_ai,w:0,l:0,d:0};
             if(r.win==='h') h2h[key].w++; else if(r.win==='a') h2h[key].l++; else h2h[key].d++; } } });
       const humans=classe((plsByLg[lid]||[]).filter(p=>!p.is_ai), lg);
-      // ⚠️ Ex æquo (2026-09-06) : rang "compétition", pas l'index brut — deux champions ex æquo
-      // comptent chacun leur titre, deux 2ᵉ/3ᵉ ex æquo comptent chacun leur podium.
-      const rank=(competitionRanks(humans)[humans.findIndex(p=>p.id===mp)])||0, total=humans.length; const me=plMap[mp]||{};
-      // ⚠️ SOLO CONTRE L'IA : aucun titre, aucun podium (v7.02, Hervé). Finir 1er quand on est le
-      // seul humain n'est pas un championnat gagné — sinon n'importe qui gonfle son palmarès en
-      // enchaînant des parties solo. En revanche les PARIS de ces ligues comptent normalement
-      // (ROI, réussite, records) : ces pronos-là étaient de vrais pronos.
       const solo=(humans.length<=1);
-      if(lg.status==="done" && compte && !solo && rank>=1){ if(rank===1) titles++; if(rank<=3) podiums++; }
-      if(compte){ tPicks+=picks; tWon+=won; tStaked+=staked; tNet+=net; tPoints+=(me.points||0); nbLigues++; }
+      /* v8.515 (Hervé, 02/10) — LES TITRES ET PODIUMS DE TOUTES LES LIGUES COMPTENT : réelles avec
+         humains, réelles avec IA, simulées (remplace la règle v7.02 « aucun titre en solo »). En SOLO, le
+         classement se joue CONTRE L'IA : 1er seulement si on la devance — jamais un titre d'office parce
+         qu'on est le seul humain. Une ligue ABANDONNÉE n'attribue ni titre ni podium (pas de vainqueur),
+         mais ses performances comptent. ⚠️ Ex æquo : rang « compétition » (deux champions = deux titres). */
+      const classes=solo?classe((plsByLg[lid]||[]), lg):humans;
+      const rank=(competitionRanks(classes)[classes.findIndex(p=>p.id===mp)])||0, total=classes.length; const me=plMap[mp]||{};
+      // En solo (2 classés : moi et l'IA), finir 2ᵉ = perdre contre l'IA : ni titre ni podium.
+      if(lg.status==="done" && auTerme && rank>=1){ if(rank===1) titles++; if(rank<=3 && !(solo && rank>1)) podiums++; }
+      /* v8.515 — POINTS PAR JOURNÉE, ANTI-SPOILER : les points de la ligue tels qu'ils étaient à la dernière
+         journée CONSULTÉE (`player_day_stats`, lisible seulement pour ces journées), jamais
+         `players.points` qui avance dès la résolution serveur. Les journées OUBLIÉES n'entrent ni au
+         numérateur (leur pénalité de points est retirée) ni au dénominateur. « Nouveau départ » : on
+         part des points d'avant la première journée retenue. Sans donnée sûre, la ligue sort du calcul. */
+      const resolus=(lg.status==="done" && auTerme)?(lg.num_days|0):(lg.current_day|0);
+      let ptsFin=null;
+      if(seenLid>=resolus) ptsFin=(me.points||0);
+      else if(seenLid>0){ const r=pdsAt[lid+"|"+mp+"|"+(seenLid-1)]; if(r) ptsFin=r.points_after; }
+      let ptsDebut=0;
+      if(depuis && myBets.length){ const dmin=Math.min(...myBets.map(x=>x.day|0)); if(dmin>0){ const r=pdsAt[lid+"|"+mp+"|"+(dmin-1)]; ptsDebut=r?r.points_after:null; } }
+      /* v8.515 (Hervé, 02/10) — la RECAPITALISATION (−1 pt) reste dans le classement mais sort des
+         statistiques de performance : on rend ce point pour chaque recapitalisation journalisée
+         (`recap_log.days[d]`, écrit par les deux moteurs à la résolution de la journée d, donc inclus
+         dans `points_after(d)`), sur les journées retenues (consultées, et depuis « Nouveau départ »). */
+      const rl=(lg.recap_log && typeof lg.recap_log==="object" && lg.recap_log.days)?lg.recap_log.days:null;
+      const dDeb=(depuis && myBets.length)?Math.min(...myBets.map(x=>x.day|0)):0;
+      const recaps=rl?Object.keys(rl).filter(d=>(+d)>=dDeb && (+d)<seenLid && Array.isArray(rl[d]) && rl[d].indexOf(mp)>=0).length:0;
+      if(compte && ptsFin!=null && ptsDebut!=null && days>0){ tPoints+=(ptsFin-ptsDebut)-forfaits*forgotPtsOf(lg)+recaps; ptsDays+=days; }
+      if(compte){ tPicks+=picks; tWon+=won; tStaked+=staked; tNet+=net; tForfaits+=forfaits; tPenalites+=penalites; nbLigues++; }
       const favCard=Object.keys(cc).sort((a,b)=>cc[b]-cc[a])[0]||null;
       leagues.push({id:lid,name:lg.name||'?',status:lg.status,created_at:lg.created_at,finished_at:lg.finished_at,
         // ⚠️ LIBELLÉ SEULEMENT (2026-09-23) — cf. la même note dans loadPalmaresMoi(). Aucun total
         // ne lit ce drapeau : tout le calcul reste piloté par `compte`, inchangé.
         abandonnee:(lg.closed_reason==="organizer"),
-        compte,solo,rank,total,points:me.points||0,capital:me.capital||0,days,picks,won,hit:picks?Math.round(won/picks*100):0,
+        compte,auTerme,solo,rank,total,points:me.points||0,capital:me.capital||0,days,forfaits,penalites:Math.round(penalites*100)/100,picks,won,hit:picks?Math.round(won/picks*100):0,
         staked:Math.round(staked),net,roi:staked?Math.round(net/staked*100):0,bestOdd,best,worst,favCard}); });
     // ---- Repère : les MÊMES calculs pour les autres joueurs humains de mes ligues. -------------
     // Sans repère, « ROI 12 % » ne veut rien dire : c'est excellent ou médiocre selon la table.
@@ -19238,12 +19337,13 @@ async function loadMyStats(){
     let oPicks=0,oWon=0,oStaked=0,oNet=0,oPlayers=0;
     ids.forEach(lid=>{ const mp=myPid[lid];
       if(!garde(lgMap[lid]||{})) return;          // même onglet que mes totaux
-      if(!alleeAuTerme(lgMap[lid]||{})) return;   // même filtre que mes totaux, sinon la comparaison serait biaisée
+      // v8.515 : les ligues abandonnées comptent désormais dans mes totaux — donc ici aussi (même filtre).
       (plsByLg[lid]||[]).forEach(p=>{ if(p.is_ai||p.id===mp) return;
         const bz=(betsByLg[lid]||[]).filter(b=>b.player_id===p.id); if(!bz.length) return;
         oPlayers++;
-        bz.forEach(b=>{ const d=dlById[b.duel_id]; const fx=d&&d.fixtures;
-          if(fx){ oPicks+=b.picks.length; oWon+=winCount(b,fx); }
+        bz.forEach(b=>{ if(statOubli(b)) return;   // v8.515 : forfait hors réussite et hors ROI
+          const d=dlById[b.duel_id]; const fx=d&&d.fixtures;
+          if(fx){ const bl=statBilan(b,fx); oPicks+=bl.n; oWon+=bl.w; }
           oStaked+=gainMise(b.picks,fx).mise; oNet+=(b.net!=null)?b.net:0; }); }); });
     // ---- Courbe du ROI, dans l'ordre où les journées ont été jouées. ---------------------------
     // ⚠️ Les paris ne portent PAS de date en base, seulement un numéro de journée : l'axe est donc
@@ -19303,13 +19403,13 @@ async function loadMyStats(){
     }
     // `leagues` = celles RETENUES dans les totaux (nbLigues), pas le nombre de lignes affichées :
     // la liste du bas montre aussi les ligues abandonnées, qui ne comptent nulle part ailleurs.
-    return { agg:{leagues:nbLigues, exclues:leagues.filter(l=>!l.compte).length, solos:leagues.filter(l=>l.solo&&l.compte).length,
+    return { agg:{leagues:nbLigues, exclues:leagues.filter(l=>l.status==="done"&&!l.auTerme).length, solos:leagues.filter(l=>l.solo).length,
       titles,podiums,picks:tPicks,won:tWon,hit:tPicks?Math.round(tWon/tPicks*100):0,
       staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest,
       avgWinOdd:nWinOdd?+(sumWinOdd/nWinOdd).toFixed(2):0, capWin, oddBands, riskProfile, seasonTrend,
       bestPick:(bestPick.g>-1e8)?bestPick:null, bigStake:(bigStake.st>=0)?bigStake:null,
-      capExtra:Math.round(capExtra*100)/100, capCount, ptsPerDay:allDays?+(tPoints/allDays).toFixed(2):0,
-      posDays, allDays, bestRun, buckets, bySport, byCard, curve,
+      capExtra:Math.round(capExtra*100)/100, capCount, ptsPerDay:ptsDays?+(tPoints/ptsDays).toFixed(2):0,
+      posDays, allDays, forfaits:tForfaits, penalites:Math.round(tPenalites*100)/100, bestRun, buckets, bySport, byCard, curve,
       others:{players:oPlayers, hit:oPicks?Math.round(oWon/oPicks*100):null, roi:oStaked?Math.round(oNet/oStaked*100):null}},
       leagues, h2h }; };
     // ⚠️ Les ligues d'avant la colonne `data_mode` (ou créées sans elle) sont du SIMULÉ : c'est le
@@ -19363,14 +19463,14 @@ function statTierNote(n){ return `<span class="mini muted"> · ${t("Échantillon
  * ⚠️ Ces textes passent par t(variable) : `check-i18n` ne les voit pas. Leurs clés EN sont
  * regroupées dans le dictionnaire et sont à tenir à jour À LA MAIN (même piège qu'en v6.98). */
 const STAT_INFO={
-  hit:{t:"Pronos gagnés",d:"La part de tes pronos qui sont tombés justes. Utile, mais insuffisant seul : on peut gagner souvent en jouant des favoris et perdre de l'argent quand même."},
-  roi:{t:"Rentabilité (ROI)",d:"Ce que rapporte chaque euro misé : résultat net ÷ total misé. <b>+20 %</b> = 20 centimes gagnés par euro joué. Au-dessus de 0 tu gagnes de l'argent, en dessous tu en perds — c'est la mesure la plus honnête de ton niveau."},
-  net:{t:"Résultat net cumulé",d:"Tes gains moins tes mises, sur toutes tes ligues. Il dépend de combien tu joues : un joueur prudent peut être meilleur avec un net plus petit — regarde le ROI pour comparer."},
+  hit:{t:"Pronos gagnés",d:"La part de tes pronos réglés qui sont tombés justes — les matchs annulés et les pronos non joués ne comptent ni pour ni contre toi. Utile, mais insuffisant seul : on peut gagner souvent en jouant des favoris et perdre de l'argent quand même."},
+  roi:{t:"Rentabilité (ROI)",d:"Ce que rapporte chaque euro misé : résultat net ÷ total misé, sur tes mises réellement jouées seulement (pénalités d'oubli et recapitalisations n'y entrent pas). <b>+20 %</b> = 20 centimes gagnés par euro joué. Au-dessus de 0 tu gagnes de l'argent, en dessous tu en perds — c'est la mesure la plus honnête de ton niveau."},
+  net:{t:"Résultat net cumulé",d:"Tes gains moins tes mises sur tes pronos réellement joués, dans toutes tes ligues ; les pénalités d'oubli sont affichées à part. Il dépend de combien tu joues : un joueur prudent peut être meilleur avec un net plus petit — regarde le ROI pour comparer."},
   avgodd:{t:"Cote moyenne gagnée",d:"La cote moyenne de tes pronos <b>gagnants</b>. Proche de 1,50 : tu gagnes sur du solide. Au-dessus de 2,50 : tu gagnes sur du risqué, plus rare mais plus payant."},
-  bestodd:{t:"Plus grosse cote gagnée",d:"Le plus gros coup de ta carrière, en cote. C'est le trophée de la table — celui qu'on ressort à chaque repas."},
+  bestodd:{t:"Plus grosse cote gagnée",d:"Le plus gros coup de ta carrière, en cote : la cote réelle d'un prono joué et gagné — un bonus ne la gonfle jamais. C'est le trophée de la table — celui qu'on ressort à chaque repas."},
   bestpick:{t:"Plus gros prono gagné",d:"Le gain d'un <b>seul</b> prono : mise × (cote − 1), doublé s'il était ton match favori. À ne pas confondre avec ta meilleure journée, qui additionne tous tes paris du jour."},
   bigstake:{t:"Plus grosse mise",d:"Le montant le plus élevé que tu aies posé sur un seul match. Le pari se joue au <b>résultat net</b> : miser gros n'est pas gagner, ça amplifie juste les deux sens."},
-  ptsday:{t:"Points par journée",d:"Ta moyenne de points de championnat par journée jouée. Repère : <b>1,5</b> c'est correct, <b>2</b> ou plus c'est le rythme d'un vainqueur."},
+  ptsday:{t:"Points par journée",d:"Ta moyenne de points de championnat par journée réellement jouée (ni les journées oubliées, ni le point retiré par une recapitalisation n'y entrent), arrêtée à ta dernière journée consultée. Repère : <b>1,5</b> c'est correct, <b>2</b> ou plus c'est le rythme d'un vainqueur."},
   curve:{t:"Évolution du ROI",d:"Ta rentabilité cumulée, journée après journée, toutes ligues confondues. Une courbe qui monte = tu progresses ; en dents de scie = tu joues gros et irrégulier. Les paris n'ayant pas de date en base, l'axe suit <b>l'ordre des journées jouées</b>, pas le calendrier."},
   profil:{t:"Ton profil de pronostiqueur",d:"Ta réussite selon le type de match : <b>favoris</b> (cote sous 1,80), <b>équilibrés</b>, <b>outsiders</b> (au-dessus de 3,00). Elle baisse forcément vers les outsiders — ce qui compte, c'est de savoir où TU es le plus à l'aise."},
   others:{t:"Face aux autres",d:"Les mêmes calculs pour les autres joueurs de tes ligues (le joueur IA exclu). C'est le seul vrai repère : un ROI se juge par rapport à sa table, pas dans l'absolu."},
@@ -19564,12 +19664,13 @@ function viewStats(){
   h+=`<div class="box"><div class="boxttl">🏅 ${t("Ma carrière")}</div>
     ${lineI("perimetre", t("Ligues comptées"), a.leagues)}
     ${(a.exclues||a.solos)?`<div class="mini muted" style="margin:-3px 0 6px">${
-        [a.exclues?t("{a} fermée(s) avant terme — hors totaux",{a:a.exclues}):'',
-         a.solos?t("{a} en solo face à l'IA — paris comptés, sans titre",{a:a.solos}):''].filter(Boolean).join(" · ")}</div>`:''}
+        [a.exclues?t("{a} fermée(s) avant terme — comptée(s), sans titre",{a:a.exclues}):'',
+         a.solos?t("{a} en solo face à l'IA — titre si tu bats l'IA",{a:a.solos}):''].filter(Boolean).join(" · ")}</div>`:''}
     ${line(t("Titres 🥇 / podiums 🏆"), a.titles+" / "+a.podiums)}
     ${lineI("hit", t("Pronos gagnés"), hitVal)}
     ${lineI("roi", t("Rentabilité (ROI)"), roiVal)}
     ${lineI("net", t("Résultat net cumulé"), `<span class="${a.net>=0?'green':'red'}">${euroSigned(a.net)}</span>`)}
+    ${a.penalites?line(t("Pénalités d'oubli"), `<span class="red">${euroSigned(a.penalites)}</span>`):''}
     ${lineI("ptsday", t("Points par journée"), a.ptsPerDay)}
     ${line(t("Meilleure journée"), (a.best&&a.best.net>-1e8)?`<span class="${clsMontant(a.best.net)}">${euroSigned(a.best.net)}</span>`:'–', !!(a.best&&a.best.net>-1e8&&lienJourneeHTML(a.best)))}
     ${(a.best&&a.best.net>-1e8&&lienJourneeHTML(a.best))?`<div class="mini" style="margin:-3px 0 6px;text-align:right">${lienJourneeHTML(a.best)}</div>`:''}
@@ -19634,6 +19735,7 @@ function viewStats(){
         return `<div class="statrow"><span class="mini">${C.e} ${esc(t(C.n))} <span class="muted">×${v.n}</span></span><b class="mini">${sgn(Math.round(v.net*100)/100)}</b></div>`; }).join("")}</div>`; })()}
   <div class="box"><div class="boxttl clik" onclick="showStatInfo('regul')">🔁 ${t("Régularité")} <span style="opacity:.55">ⓘ</span></div>
     ${line(t("Journées dans le vert"), a.allDays?`${a.posDays}/${a.allDays} (${Math.round(a.posDays/a.allDays*100)} %)`:'–')}
+    ${a.forfaits?line(t("Journées non jouées (forfait)"), a.forfaits):''}
     ${line(t("Plus longue série de duels gagnés"), a.bestRun||'–')}</div>
   ${(()=>{ const ks=Object.keys(a.bySport||{}).filter(k=>k!=="?"); if(ks.length<2) return '';
     ks.sort((x,y)=>a.bySport[y].p-a.bySport[x].p);
@@ -19664,7 +19766,7 @@ function viewStats(){
     ${d.leagues.map(l=>{
       // Une ligue hors totaux reste consultable, mais grisée et étiquetée : la faire disparaître
       // laisserait croire à une perte de données, l'afficher sans marque à un total faux.
-      const etat=!l.compte?(l.abandonnee?t("Ligue abandonnée"):t("Fermée avant terme")):(l.status==='done'?t("Terminée"):t("En cours"));
+      const etat=(l.status==='done'&&!l.auTerme)?(l.abandonnee?t("Ligue abandonnée"):t("Fermée avant terme")):(l.status==='done'?t("Terminée"):t("En cours"));   // v8.515 : comptée dans les totaux, mais étiquetée
       /* ⚠️ v8.115 (relevé par Hervé : « 1ᵉ/1 » affiché alors que le joueur avait perdu face à
          l'IA) — `rank`/`total` se calculent parmi les HUMAINS seulement (`humans.findIndex`
          un peu plus haut) : en solo, `total` vaut toujours 1 et le rang toujours 1, qu'on ait
@@ -19672,7 +19774,7 @@ function viewStats(){
          podiums globaux (`if(...&&!solo...)`) mais pas pour CET affichage-ci, resté à côté. Le
          classement `{a}ᵉ/{b}` n'a de sens qu'à plusieurs humains ; en solo seuls les points (déjà
          affichés dans la pastille) disent qui a gagné. */
-      return `<div class="lgrow"${l.compte?'':' style="opacity:.55"'} onclick="showLeagueStat('${l.id}')"><div class="info"><div class="nm">${esc(l.name)}</div><div class="mt">${etat}${l.solo?' · '+t("solo vs IA"):''}${l.rank&&l.compte&&!l.solo?' · '+t("{a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div></div><span class="chip">${l.points} pts →</span></div>`; }).join("")}
+      return `<div class="lgrow" onclick="showLeagueStat('${l.id}')"><div class="info"><div class="nm">${esc(l.name)}</div><div class="mt">${etat}${l.solo?' · '+t("solo vs IA"):''}${l.rank&&!(l.status==='done'&&!l.auTerme)?' · '+t("{a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div></div><span class="chip">${l.points} pts →</span></div>`; }).join("")}
   ${(L&&L.status==="done")?`<button class="btn" onclick="shareSeason()">📤 ${t("Partager ma saison")}</button>`:''}`;  // partage : seulement une fois la ligue terminée
   return h; }
 function showLeagueStat(lid){
@@ -19682,9 +19784,11 @@ function showLeagueStat(lid){
   const body=`<div class="mini muted" style="text-align:left;margin-bottom:8px">${l.status==='done'?t("Terminée"):t("En cours")}${l.solo?' · '+t("solo vs IA"):''}${l.rank&&!l.solo?' · '+t("Classement : {a}ᵉ/{b}",{a:l.rank,b:l.total}):''}</div>`
     +line(t("Points / capital"), l.points+" pts · "+euro(l.capital))
     +line(t("Journées jouées"), l.days)
+    +(l.forfaits?line(t("Journées non jouées (forfait)"), l.forfaits):'')
     +line(t("Pronos gagnés"), l.won+"/"+l.picks+" ("+l.hit+" %)")
     +line(t("Rentabilité (ROI)"), `<span class="${l.roi>=0?'green':'red'}">${l.roi} %</span>`)
     +line(t("Résultat net"), `<span class="${l.net>=0?'green':'red'}">${euroSigned(l.net)}</span>`)
+    +(l.penalites?line(t("Pénalités d'oubli"), `<span class="red">${euroSigned(l.penalites)}</span>`):'')
     +line(t("Meilleure journée"), l.best.day>=0?`<span class="${clsMontant(l.best.net)}">${euroSigned(l.best.net)}</span> (J${l.best.day+1})`:'–')
     +line(t("Pire journée"), l.worst.day>=0?`<span class="${clsMontant(l.worst.net)}">${euroSigned(l.worst.net)}</span> (J${l.worst.day+1})`:'–')
     +line(t("Plus grosse cote gagnée"), l.bestOdd?l.bestOdd.toFixed(2):'–')
@@ -19707,7 +19811,7 @@ const CARD_W=1080, CARD_H=1920;
 // <img src="${HERO_LOGIN_B64}" ...>).
 // Source : app/hero-login.jpg (700×460 px, ratio ≈ 1,52:1 — recadrage quasi nul depuis le master
 // ci-dessous, les deux ratios coïncidaient déjà à 0,04% près), encodée une fois en base64 ici pour
-// rester dans le fichier unique. app/hero-login-source.png est le MASTER conservé (1547×1017,
+// rester dans le fichier unique. sources/hero-login-source.png est le MASTER (hors de app/ depuis v8.515 : il n est pas embarque dans les apps) conservé (1547×1017,
 // non recadré) : c'est lui qu'il faut recadrer pour toute future version, pas le .jpg dérivé.
 // Zone d'affichage réelle (viewAuth()) : conteneur 100% de large, coins arrondis 16px, fond de
 // repli #0d0a1f ; l'image s'affiche en <img style="width:100%;height:auto"> — SANS aucun recadrage
@@ -19727,7 +19831,7 @@ const CARD_W=1080, CARD_H=1920;
 // aucun réglage à recalibrer si l'image change de composition. Hauteur résultante ≈ largeur÷1,52
 // (≈225px à 343px de large, ≈334px à 508px de large plafonné desktop) : image plus grande sur
 // desktop, mais bornée par le plafond de largeur de `.app` — jamais une hauteur de page excessive.
-// Remplacement futur : déposer le nouveau master en app/hero-login-source.png, recadrer/redimensionner
+// Remplacement futur : déposer le nouveau master en sources/hero-login-source.png, recadrer/redimensionner
 // en 700×460 (ratio 1,52:1, cf. ci-dessus) vers app/hero-login.jpg, régénérer son base64
 // (python3 -c "import base64;print(base64.b64encode(open('app/hero-login.jpg','rb').read()).decode())"),
 // puis coller le résultat après "data:image/jpeg;base64," à la place de la valeur actuelle ci-dessous.
@@ -20938,7 +21042,7 @@ async function setFormulaNextFromHome(lid){
   }catch(e){ showErr(t("Format : ")+e.message); } busy=false; }
 async function closeLeagueFromHome(lid){
   const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m||!m.org)return;
-  if(!await confirmTxt("🛑",t("Abandonner cette ligue ?"),t("Cette action est définitive. La compétition sera arrêtée et considérée comme abandonnée. Aucun vainqueur, classement final, gage ou récompense ne sera attribué. Les résultats de cette ligue ne compteront pas dans le Palmarès ni dans les statistiques des joueurs."),t("Abandonner la ligue"))) return;
+  if(!await confirmTxt("🛑",t("Abandonner cette ligue ?"),t("Cette action est définitive. La compétition sera arrêtée et considérée comme abandonnée. Aucun vainqueur, classement final, gage ou récompense ne sera attribué. La ligue passera dans les ligues fermées : toutes ses données sont conservées, et les pronostics déjà joués restent dans les statistiques, le Palmarès et les records des joueurs."),t("Abandonner la ligue"))) return;
   try{ await q(db.from("leagues").update({status:"done",closed_reason:"organizer"}).eq("id",lid)); try{ await q(db.from("leagues").update({finished_at:new Date().toISOString()}).eq("id",lid)); }catch(e){} cancelUnresolvedRealFixtures(lid); closeCardInfo(); infoWin(t("Ligue fermée.")); await loadMyLeagues(); }
   catch(e){ showErr(t("Fermeture : ")+e.message); } }
 
@@ -20959,16 +21063,23 @@ async function loadPalmaresMoi(){
     const mine=(myLeagues||[]);
     const ids=mine.map(m=>m.lg.id);
     if(!ids.length){ palmMoi={seasons:[],titles:0,podiums:0}; return; }
-    const pls=await q(db.from("players").select("id,league_id,is_ai").in("league_id",ids));
+    // ⚠️ v8.515 — `points,capital,join_order` AJOUTÉS : `classe()`/`competitionRanks()` trient et
+    // départagent sur eux. Sans eux, tous les joueurs étaient ex æquo (undefined === undefined) : chaque
+    // humain d'une ligue terminée recevait un TITRE dans Palmarès > Moi (constaté à l'audit du 02/10).
+    const pls=await q(db.from("players").select("id,league_id,is_ai,points,capital,join_order").in("league_id",ids));
     const plsByLg={}; pls.forEach(p=>{(plsByLg[p.league_id]=plsByLg[p.league_id]||[]).push(p);});
     // Même définition qu'ailleurs (v7.02) : une ligue fermée AVANT son terme ne compte dans aucun total.
     const alleeAuTerme=lg=>!(lg.status==="done" && !((lg.num_days|0)>0 && (lg.current_day|0)>=(lg.num_days|0)));
     let titles=0, podiums=0; const seasons=[];
     mine.forEach(m=>{ const lg=m.lg; if(lg.status!=="done") return; const compte=alleeAuTerme(lg);
-      const humans=classe((plsByLg[lg.id]||[]).filter(p=>!p.is_ai), lg);
-      // Ex æquo (2026-09-06) : rang "compétition" — deux champions ex æquo comptent chacun leur titre.
-      const rank=(competitionRanks(humans)[humans.findIndex(p=>p.id===m.pid)])||0, total=humans.length, solo=(humans.length<=1);
-      if(compte && !solo && rank>=1){ if(rank===1) titles++; if(rank<=3) podiums++; }
+      const humans=classe((plsByLg[lg.id]||[]).filter(p=>!p.is_ai), lg), solo=(humans.length<=1);
+      /* v8.515 (Hervé, 02/10) — Palmarès > Moi garde TOUT l'historique, et les titres/podiums de toutes
+         les ligues : réelles avec humains, réelles avec IA, simulées. En solo, on est classé CONTRE L'IA
+         (titre seulement si on la devance). Une ligue abandonnée (`compte` faux) reste listée mais
+         n'attribue ni titre ni podium. Ex æquo : rang « compétition ». Même règle que Mes stats. */
+      const classes=solo?classe((plsByLg[lg.id]||[]), lg):humans;
+      const rank=(competitionRanks(classes)[classes.findIndex(p=>p.id===m.pid)])||0, total=classes.length;
+      if(compte && rank>=1){ if(rank===1) titles++; if(rank<=3 && !(solo && rank>1)) podiums++; }   // solo : perdre contre l'IA n'est pas un podium
       seasons.push({id:lg.id, name:lg.name||'?', rank, total, solo, compte,
         // ⚠️ LIBELLÉ SEULEMENT (2026-09-23) : aucun compteur ne lit ce drapeau — titres et podiums
         // restent pilotés par `compte`. Il ne sert qu'à dire "abandonnée" plutôt que le neutre
@@ -21047,7 +21158,6 @@ function viewPalmaresMoi(){
   // manquait, alors que le même garde-fou existe déjà ailleurs (📊 Mes stats, ligne ~17359,
   // `viewEnd()`). Le classement d'une ligue interrompue est indicatif, jamais final.
   const rankPillHTML=s=>{ if(!s.compte) return `<span class="a2-rank-pill plain">${s.abandonnee?t("Ligue abandonnée"):t("Fermée avant terme")}</span>`;
-    if(s.solo) return `<span class="a2-rank-pill plain">${t("Solo")}</span>`;
     if(s.rank===1) return `<span class="a2-rank-pill champion">${t("Champion")}</span>`;
     if(s.rank===2) return `<span class="a2-rank-pill podium2">${t("{a}ᵉ",{a:2})}</span>`;
     if(s.rank===3) return `<span class="a2-rank-pill podium3">${t("{a}ᵉ",{a:3})}</span>`;
@@ -21076,7 +21186,7 @@ function viewPalmaresMoi(){
 // recompter et retomber sur le nombre affiché sur la tuile qui l'a ouverte.
 function showTitresPodiums(kind){
   const M=palmMoi; if(!M || !M.seasons) return;
-  const veut = kind==="titles" ? (s=>s.compte && !s.solo && s.rank===1) : (s=>s.compte && !s.solo && s.rank>=1 && s.rank<=3);
+  const veut = kind==="titles" ? (s=>s.compte && s.rank===1) : (s=>s.compte && s.rank>=1 && s.rank<=3 && !(s.solo && s.rank>1));   // v8.515 : solo compris (classé contre l'IA ; 2ᵉ derrière l'IA = pas un podium)
   const liste=M.seasons.filter(veut);
   if(!liste.length) return;   // recalcul entre-temps (ex. re-chargement) : rien à montrer plutôt qu'une fenêtre vide
   const rows=liste.map(s=>{ const d=new Date(s.when); const period=isNaN(d)?'':d.toLocaleDateString(lang==='en'?'en-GB':'fr-FR',{month:'short',year:'numeric'});
@@ -21471,18 +21581,25 @@ async function loadPalmares(){
        totaux de la 1ʳᵉ (le piège déjà rencontré en v7.24). */
     const calcule=garde=>{
     const dayRecs=[], oddRecs=[];
-    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||pl.name==="Joueur IA"||!connus.has(pl.user_id)) continue; const lg=lgMap[b.league_id]||{};
+    // v8.515 (Hervé, 02/10) : IA identifiée par `is_ai` SEULEMENT (jamais par le pseudo) ; une journée
+    // OUBLIÉE (forfait) n'est pas une journée jouée — hors 💥/📈/💀 ; un match ANNULÉ n'est ni gagné ni
+    // perdu (affiché « annulé », mise hors du rendement) ; meilleure cote = statCoteGagnee.
+    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||!connus.has(pl.user_id)) continue; const lg=lgMap[b.league_id]||{};
       if(!garde(lg)) continue;
+      if(statOubli(b)) continue;
       const d=dlMap[b.duel_id]; const fx=(d&&d.fixtures)||[];
-      const picks=b.picks||[]; const staked=picks.reduce((a,x)=>a+(+x.stake||0),0);
-      const lines=picks.map((x,i)=>{ const f=fx[i]; if(!f) return null; const win=x.sel===f.res; const odd=oddF(f,x.sel); let g=win?(+x.stake)*(odd-1):-(+x.stake); if(i===b.captain)g*=2;
-        if(win && +x.stake>0) oddRecs.push({odd, name:pl.name, emoji:pl.emoji, lname:lg.name, day:b.day, match:tnm(f,f.home)+"–"+tnm(f,f.away), sel:selNm(f,x.sel), stake:+x.stake});
+      const picks=b.picks||[]; const staked=gainMise(picks,fx).mise;
+      const lines=picks.map((x,i)=>{ const f=fx[i]; if(!f) return null;
+        if(f.canceled) return {m:tnm(f,f.home)+"–"+tnm(f,f.away), sel:selNm(f,x.sel), win:false, canceled:true, odd:oddF(f,x.sel), stake:+x.stake, g:0, cap:i===b.captain};
+        const win=x.sel===f.res; const odd=oddF(f,x.sel); let g=win?(+x.stake)*(odd-1):-(+x.stake); if(i===b.captain)g*=2;
+        const og=statCoteGagnee(b,i,f);
+        if(og) oddRecs.push({odd:og, name:pl.name, emoji:pl.emoji, lname:lg.name, day:b.day, match:tnm(f,f.home)+"–"+tnm(f,f.away), sel:selNm(f,x.sel), stake:+x.stake});
         return {m:tnm(f,f.home)+"–"+tnm(f,f.away), sel:selNm(f,x.sel), win, odd, stake:+x.stake, g:+g.toFixed(2), cap:i===b.captain}; }).filter(Boolean);
       dayRecs.push({net:+(b.net||0).toFixed(2), staked, ret: staked>0?(b.net||0)/staked:0, name:pl.name, emoji:pl.emoji, lname:lg.name, np:lg.num_participants, day:b.day, cardId:b.card&&b.card.id, lines});
     }
     // Agrégat de PRONOSTIC PUR par personne (user_id), toutes ligues — indépendant des mises.
     const agg={};
-    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||!pl.user_id||pl.name==="Joueur IA"||!connus.has(pl.user_id)) continue;
+    for(const b of bts){ const pl=plMap[b.player_id]; if(!pl||pl.is_ai||!pl.user_id||!connus.has(pl.user_id)) continue;
       if(!garde(lgMap[b.league_id]||{})) continue;   // même onglet que les records ci-dessus
       const d=dlMap[b.duel_id]; const fx=(d&&d.fixtures)||[]; const c=b.card;
       let a=agg[pl.user_id]; if(!a){ a=agg[pl.user_id]={uid:pl.user_id,name:pl.name,emoji:pl.emoji,picks:0,correct:0,winOddSum:0,wins:0,flat:0}; }
@@ -21575,7 +21692,9 @@ function viewPalmaresRecords(){
   const medal=i=>["🥇","🥈","🥉",t("4ᵉ"),t("5ᵉ")][i]||(i+1);
   const dayDetail=r=>{ const sumL=r.lines.reduce((a,l)=>a+l.g,0); const adj=+(r.net-sumL).toFixed(2);
     return `<div class="mini muted">${t("{lg} · J{d} · {np} joueurs · misé {st}",{lg:esc(r.lname||'?'),d:r.day+1,np:r.np||'?',st:euro(r.staked)})}${r.cardId&&CARDS[r.cardId]?t(" · bonus {c}",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):''}</div>
-     ${r.lines.map(l=>`<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(t(l.sel))}${l.cap?' 👑':''} ${euro(l.stake)} @${cote(l.odd)} → <b class="${l.g>=0?'green':'red'}">${euroSigned(l.g)}</b> ${l.win?'✓':'✗'}</div>`).join("")}
+     ${r.lines.map(l=>l.canceled
+        ? `<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(t(l.sel))}${l.cap?' 👑':''} ${euro(l.stake)} → 🚫 ${t("annulé")} <span class="muted">(${t("mise remboursée")})</span></div>`
+        : `<div class="mini" style="margin-top:3px">${esc(l.m)} — ${esc(t(l.sel))}${l.cap?' 👑':''} ${euro(l.stake)} @${cote(l.odd)} → <b class="${l.g>=0?'green':'red'}">${euroSigned(l.g)}</b> ${l.win?'✓':'✗'}</div>`).join("")}
      ${Math.abs(adj)>=1?`<div class="mini" style="margin-top:4px">🃏 ${t("Bonus &amp; ajustements")} ${r.cardId&&CARDS[r.cardId]?t("({c}…)",{c:CARDS[r.cardId].e+' '+esc(t(CARDS[r.cardId].n))}):t("(bonus…)")} : <b class="${adj>=0?'green':'red'}">${euroSigned(adj)}</b></div>`:''}
      <div class="mini" style="margin-top:4px;border-top:1px solid var(--border);padding-top:4px"><b>${t("Total journée :")} <span class="${r.net>=0?'green':'red'}">${euroSigned(r.net)}</span></b></div>`; };
   const oddDetail=r=>`<div class="mini muted">${t("{lg} · J{d}",{lg:esc(r.lname||'?'),d:r.day+1})}</div><div class="mini" style="margin-top:3px">${esc(r.match)} — <b>${esc(t(r.sel))}</b> · ${euro(r.stake)} @${cote(r.odd)} ✓ → <b class="green">+${euro(r.stake*(r.odd-1))}</b></div>`;
