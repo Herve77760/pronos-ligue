@@ -2963,7 +2963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.517";
+const APP_VERSION = "v8.518";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -3690,7 +3690,11 @@ const ODDS_FN=SB_URL+"/functions/v1/odds";
 async function oddsFetch(op, sport){
   let jeton="";
   try{ const { data:{ session } } = await db.auth.getSession(); jeton=(session&&session.access_token)||""; }catch(e){}
-  const u=ODDS_FN+"?op="+encodeURIComponent(op)+(sport?"&sport="+encodeURIComponent(sport):"");
+  // v8.518 (Hervé, 05/10) — ligue ouverte + motif transmis pour le journal détaillé des crédits
+  // (odds_appels). Purement informatif : le proxy ne s'en sert que pour la trace, jamais pour décider.
+  const ctx=(op==="sports")?"":("&motif="+encodeURIComponent(op==="scores"?"lecture des résultats (app)":"récolte des cotes (app)")
+    +((typeof L!=="undefined"&&L&&L.code)?"&ligue="+encodeURIComponent(L.code):""));
+  const u=ODDS_FN+"?op="+encodeURIComponent(op)+(sport?"&sport="+encodeURIComponent(sport):"")+ctx;
   return fetch(u,{ headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jeton } });
 }
 // SPORTS AUTORISÉS EN MODE RÉEL (v6.96, Hervé) — uniquement les sports décrits dans les règles.
@@ -7241,6 +7245,17 @@ const EN={
   "Échantillon limité ({a})":"Limited sample ({a})",
   "Pas encore assez de données":"Not enough data yet",
   "Tes points forts":"Your strengths",
+  "{a} pronos gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.":"{a} predictions won out of {b} ({c}%), against a {d}% average success rate.",
+  "Rendement {a} % sur {b} pronos, contre {c} % en moyenne.":"{a}% return over {b} predictions, against {c}% on average.",
+  "{a} favoris gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.":"{a} favourites won out of {b} ({c}%), against a {d}% average success rate.",
+  "Échantillon limité : encore 1 match favori pour consolider cette tendance.":"Limited sample: 1 more favourite match to confirm this trend.",
+  "Échantillon limité : encore {a} matchs favoris pour consolider cette tendance.":"Limited sample: {a} more favourite matches to confirm this trend.",
+  "Tendance consolidée ({a} favoris).":"Confirmed trend ({a} favourites).",
+  "encore 1 prono":"1 more prediction", "encore {a} pronos":"{a} more predictions",
+  "Tes meilleurs sports":"Your best sports", "Tes cotes les plus rentables":"Your most profitable odds",
+  "{a} et +":"{a} and up", "La solidité de ton match favori":"How solid your favourite match is",
+  "encore 1 match favori":"1 more favourite match", "encore {a} matchs favoris":"{a} more favourite matches",
+  "Tactizo analysera aussi, dès 20 pronos par catégorie :":"Tactizo will also analyse, from 20 predictions per category:",
   "Tes résultats sont encore assez homogènes. Aucun point fort ne se détache nettement pour l'instant. Continue à jouer : Tactizo fera ressortir tes spécialités dès qu'une tendance claire apparaîtra.":"Your results are still fairly even. No strength stands out clearly yet. Keep playing: Tactizo will highlight your specialities as soon as a clear trend appears.",
   "Encore un peu de patience… Continue à pronostiquer pour permettre à Tactizo d'identifier tes points forts.":"A little more patience… Keep making predictions so Tactizo can identify your strengths.",
   "Tu réussis particulièrement bien au {a}.":"You perform especially well at {a}.",
@@ -19602,7 +19617,8 @@ function buildStatInsights(a){
   if(spKs.length){
     spKs.sort((x,y)=>(a.bySport[y].w/a.bySport[y].p)-(a.bySport[x].w/a.bySport[x].p));
     const best=spKs[0], v=a.bySport[best], rate=Math.round(v.w/v.p*100);
-    if(rate>=a.hit+8) out.push(t("Tu réussis particulièrement bien au {a}.",{a:t(SPORT_NOM[best])}));
+    if(rate>=a.hit+8) out.push(t("Tu réussis particulièrement bien au {a}.",{a:t(SPORT_NOM[best])})
+      +statDetailLigne(t("{a} pronos gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.",{a:v.w,b:v.p,c:rate,d:a.hit})));
   }
   // 2) Tranche de cote la plus rentable (ROI net de la tranche nettement au-dessus du ROI général).
   const fullBands=(a.oddBands||[]).filter(b=>statTier(b.p)==='full' && b.staked>0);
@@ -19611,9 +19627,10 @@ function buildStatInsights(a){
     const best=fullBands[0], bandRoi=best.net/best.staked;
     if(bandRoi>(a.roi/100)+0.10){
       const lo=best.lo.toFixed(2).replace('.',','), hi=(best.hi>=100?'+':best.hi.toFixed(2).replace('.',','));
-      out.push(best.hi>=100
+      out.push((best.hi>=100
         ? t("Tes paris à partir de {a} de cote sont les plus rentables.",{a:lo})
-        : t("Tes paris entre {a} et {b} sont les plus rentables.",{a:lo,b:hi}));
+        : t("Tes paris entre {a} et {b} sont les plus rentables.",{a:lo,b:hi}))
+        +statDetailLigne(t("Rendement {a} % sur {b} pronos, contre {c} % en moyenne.",{a:Math.round(bandRoi*100),b:best.p,c:Math.round(a.roi)})));
     }
   }
   // 3) Rendement du Capitaine : signalé seulement si son taux de réussite s'écarte nettement du reste.
@@ -19621,12 +19638,47 @@ function buildStatInsights(a){
   // donc 20 journées pour l'atteindre. Moins de 10 favoris : rien ; de 10 à 19 : le point fort peut
   // apparaître, marqué « Échantillon limité (n) » ; 20 et plus : affichage normal. Sports et tranches
   // de cote gardent le seuil de 20 (statTier 'full').
+  // ⚠️ v8.518 (rendu validé par Hervé, 05/10) — le constat est suivi de la comparaison chiffrée, puis
+  // de la taille de l'échantillon : barre de progression vers 20 + « encore N matchs favoris pour
+  // consolider cette tendance » (10 à 19), ou « Tendance consolidée (N favoris) » (20 et plus).
   if((a.capCount||0)>=10){
-    const capRate=Math.round(a.capWin/a.capCount*100), note=a.capCount<20?statTierNote(a.capCount):'';
-    if(capRate>=a.hit+10) out.push(t("Ton match favori 👑 réussit mieux que le reste de tes pronos.")+note);
-    else if(capRate<=a.hit-10) out.push(t("Ton match favori 👑 réussit moins bien que le reste de tes pronos.")+note);
+    const n=a.capCount, capRate=Math.round(a.capWin/n*100);
+    const detail=statDetailLigne(t("{a} favoris gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.",{a:a.capWin,b:n,c:capRate,d:a.hit}))
+      +(n<20 ? statProgressionHTML(n,20)+statDetailLigne(n===19?t("Échantillon limité : encore 1 match favori pour consolider cette tendance.")
+                                                              :t("Échantillon limité : encore {a} matchs favoris pour consolider cette tendance.",{a:20-n}))
+             : statDetailLigne(t("Tendance consolidée ({a} favoris).",{a:n})));
+    if(capRate>=a.hit+10) out.push(t("Ton match favori 👑 réussit mieux que le reste de tes pronos.")+detail);
+    else if(capRate<=a.hit-10) out.push(t("Ton match favori 👑 réussit moins bien que le reste de tes pronos.")+detail);
   }
   return out.slice(0,3);   // priorité aux insights, pas un mur : 3 maximum
+}
+// v8.518 — petites briques du bloc « Tes points forts » (rendu validé par Hervé le 05/10).
+function statDetailLigne(txt){ return `<div class="mini muted" style="margin-top:2px">${txt}</div>`; }
+function statProgressionHTML(n,cible){
+  const pct=Math.max(0,Math.min(100,Math.round(n/cible*100)));
+  return `<div style="display:flex;align-items:center;gap:8px;margin-top:5px"><div style="flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden">`
+    +`<div style="width:${pct}%;height:100%;background:var(--gold)"></div></div><span class="mini muted">${n}/${cible}</span></div>`;
+}
+/* « Tactizo analysera aussi, dès 20 pronos par catégorie » — ce qui n'est PAS encore analysé, avec ce qu'il
+   manque. ⚠️ « pour être analysé », jamais « pour devenir un point fort » (décision d'Hervé) : franchir 20 ne
+   garantit rien, il faut encore un écart net. Seules les catégories déjà jouées et sous 20 apparaissent
+   (2 au plus par dimension, les plus proches du seuil) ; la ligne 👑 n'apparaît que si le favori n'a pas
+   déjà son point fort ; une dimension entièrement analysée disparaît. */
+function statAnalyseAussiHTML(a, insights){
+  if(!a) return "";
+  const lignes=[], encore=n=>n===1?t("encore 1 prono"):t("encore {a} pronos",{a:n});
+  const sp=Object.keys(a.bySport||{}).filter(k=>SPORT_NOM[k] && a.bySport[k].p>0 && a.bySport[k].p<20)
+    .sort((x,y)=>a.bySport[y].p-a.bySport[x].p).slice(0,2)
+    .map(k=>`${t(SPORT_NOM[k])} : ${encore(20-a.bySport[k].p)}`);
+  if(sp.length) lignes.push(`🏅 ${t("Tes meilleurs sports")} — ${sp.join(" · ")}`);
+  const nomBande=b=>b.hi>=100?t("{a} et +",{a:b.lo.toFixed(2).replace('.',',')}):`${b.lo.toFixed(2).replace('.',',')}–${b.hi.toFixed(2).replace('.',',')}`;
+  const bd=(a.oddBands||[]).filter(b=>b.p>0 && b.p<20).sort((x,y)=>y.p-x.p).slice(0,2).map(b=>`${nomBande(b)} : ${encore(20-b.p)}`);
+  if(bd.length) lignes.push(`📈 ${t("Tes cotes les plus rentables")} — ${bd.join(" · ")}`);
+  const favDeja=(insights||[]).some(x=>x.indexOf("👑")>=0), nc=a.capCount||0;
+  if(!favDeja && nc<20){ const r=20-nc; lignes.push(`👑 ${t("La solidité de ton match favori")} — ${r===1?t("encore 1 match favori"):t("encore {a} matchs favoris",{a:r})}`); }
+  if(!lignes.length) return "";
+  return `<div class="mini" style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--gold-dim)"><b>${t("Tactizo analysera aussi, dès 20 pronos par catégorie :")}</b>`
+    +lignes.map(l=>`<div class="mini muted" style="margin-top:3px">${l}</div>`).join("")+`</div>`;
 }
 function viewStats(){
   const d=statsVue();
@@ -19677,7 +19729,7 @@ function viewStats(){
   h+=`<div class="box" style="border-color:var(--gold-dim);background:rgba(231,184,75,.08)">
     <div class="boxttl">💡 ${t("Tes points forts")}</div>
     ${insights.length ? insights.map(x=>`<div class="mini" style="margin-top:4px">${x}</div>`).join("")
-      : `<div class="mini muted" style="margin-top:4px">${statInsightsAttente(a)}</div>`}</div>`;
+      : `<div class="mini muted" style="margin-top:4px">${statInsightsAttente(a)}</div>`}${statAnalyseAussiHTML(a, insights)}</div>`;
   // ⚠️ LOT 5 — seuils de fiabilité appliqués aux DEUX chiffres phares (réussite/ROI) : sous 5
   // pronos au total, ils ne veulent rien dire et ne s'affichent pas ; de 5 à 19, ils s'affichent
   // mais restent marqués « Échantillon limité » (cf. statTier()/statTierNote()).
@@ -21293,21 +21345,63 @@ async function adminLoadConfig(){
   catch(e){ adminConfig={error:e.message}; }
   render();
 }
+/* ⚠️ v8.518 (décision d'Hervé, 05/10) — VERSION MINIMALE SÉCURISÉE. Le test du 04/10 a montré que la
+   saisie brute était dangereuse : verNum() = majeur×100000 + mineur, donc « 8.5150 » aurait bloqué
+   TOUT le monde (8.515, 8.516… comprises) et « 8.52 » personne. Désormais :
+   • format strict « vX.YYY » (mineur à 3 chiffres ; le « v » est ajouté s'il manque) ;
+   • refus d'une version SUPÉRIEURE à la version courante (APP_VERSION — le web est toujours la plus récente) ;
+   • récapitulatif avant d'enregistrer ET avant d'activer : valeur exacte, versions bloquées / qui passent,
+     et nombre de comptes actifs (14 j) de la plateforme qui seraient bloqués (admin_bo_comptes_bloques) ;
+   • côté base, contrainte de format (MIGRATION-version-minimale-securisee-2026-10-05.sql) : même un
+     appel direct ne peut plus enregistrer ni activer une valeur mal formée. */
+function versionMinNormalisee(brut){
+  const m=String(brut||"").trim().match(/^v?(\d+)\.(\d+)$/i);
+  if(!m) return {err:"Format attendu : v8.515 (un point, puis 3 chiffres)."};
+  if(m[2].length!==3) return {err:"Le numéro après le point doit faire exactement 3 chiffres (ex. v8.515, pas 8.5150 ni 8.52)."};
+  const v="v"+(+m[1])+"."+m[2];
+  if(verNum(v)>verNum(APP_VERSION)) return {err:`${v} est supérieure à la version courante (${APP_VERSION}) : elle bloquerait toutes les apps.`};
+  if(+m[1]<1) return {err:"Version invalide."};
+  return {v};
+}
+const VERSION_MIN_PLATEFORME={min_version_ios:"ios", min_version_android:"android"};
+async function recapVersionMin(k,v){
+  const plat=VERSION_MIN_PLATEFORME[k]; const nom=plat==="ios"?"iOS":"Android";
+  let comptes=`<div class="mini muted">Nombre de comptes concernés indisponible (MIGRATION-version-minimale-securisee-2026-10-05.sql à lancer).</div>`;
+  try{
+    const r=await q(db.rpc("admin_bo_comptes_bloques",{p_platform:plat,p_version:v}));
+    const det=(r.par_version||[]).map(x=>`${esc(x.version||"?")} × ${x.comptes}`).join(" · ");
+    comptes=`<div class="mini" style="margin-top:6px"><b class="${r.bloques>0?'red':'green'}">${r.bloques} compte(s) ${nom}</b> actif(s) ces 14 derniers jours seraient bloqués sur ${r.actifs}${det?` <span class="muted">(${det})</span>`:''}.</div>`;
+  }catch(e){}
+  return `<div class="mini" style="text-align:left;line-height:1.6">Plateforme : <b>${nom}</b><br>Version minimale : <b>${esc(v)}</b><br>
+    Bloquées : toutes les versions <b>inférieures à ${esc(v.slice(1))}</b> · Passent : <b>${esc(v.slice(1))}</b> et suivantes (dont la courante ${esc(APP_VERSION)})</div>${comptes}`;
+}
 async function adminToggleConfig(k){
   const row=(adminConfig||[]).find(r=>r.k===k); if(!row) return;
+  if(VERSION_MIN_PLATEFORME[k] && !row.actif){
+    const n=versionMinNormalisee(row.note);
+    if(n.err){ showErr("Activation impossible : "+n.err+" Enregistre d'abord une version valide."); return; }
+    const ok=await confirmModal("⚠️","Activer la version minimale ?",(await recapVersionMin(k,n.v))
+      +`<div class="mini red" style="margin-top:8px;text-align:left"><b>Ces comptes verront l'écran « Mise à jour nécessaire » à leur prochain lancement de l'app.</b></div>`,"Activer");
+    if(!ok) return;
+  }
   try{ await q(db.from("app_config").update({actif:!row.actif}).eq("k",k)); await adminLoadConfig(); }
   catch(e){ showErr(t("Configuration : ")+e.message); }
 }
 async function adminSetConfigVersion(k){
   const row=(adminConfig||[]).find(r=>r.k===k)||{};
   _pwdBuf={v:row.note||""};
-  const body=`<label class="mini muted" style="display:block;text-align:left">Version minimale exigée (ex. v8.440)</label>
-    <input type="text" value="${esc(row.note||"")}" oninput="_pwdBuf['v']=this.value" placeholder="v8.440"
+  const body=`<label class="mini muted" style="display:block;text-align:left">Version minimale exigée (format v8.515 ; courante : ${esc(APP_VERSION)})</label>
+    <input type="text" value="${esc(row.note||"")}" oninput="_pwdBuf['v']=this.value" placeholder="v8.515"
        style="width:100%;box-sizing:border-box;padding:9px;margin-top:4px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:inherit">`;
-  const ok=await confirmModal("📱","Version minimale",body,"Enregistrer");
-  const v=ok?(_pwdBuf.v||"").trim():null; _pwdBuf={};
-  if(!v) return;
-  try{ await q(db.from("app_config").update({note:v}).eq("k",k)); await adminLoadConfig(); }
+  const ok=await confirmModal("📱","Version minimale",body,"Vérifier");
+  const brut=ok?(_pwdBuf.v||"").trim():null; _pwdBuf={};
+  if(!brut) return;
+  const n=versionMinNormalisee(brut);
+  if(n.err){ showErr(n.err); return; }
+  const ok2=await confirmModal("📱","Enregistrer cette version ?",(await recapVersionMin(k,n.v))
+    +`<div class="mini muted" style="margin-top:8px;text-align:left">${row.actif?'<b class="red">Le contrôle est ACTIF : la nouvelle valeur s\'applique au prochain lancement des apps.</b>':'Le contrôle est désactivé : enregistrer ne bloque personne.'}</div>`,"Enregistrer "+n.v);
+  if(!ok2) return;
+  try{ await q(db.from("app_config").update({note:n.v}).eq("k",k)); await adminLoadConfig(); }
   catch(e){ showErr(t("Configuration : ")+e.message); }
 }
 async function adminLoadPromo(){
@@ -21921,6 +22015,41 @@ async function loadAdmin(){
   }catch(e){ adminData={error:e.message}; }
 }
 // Admin : clic sur le nombre d'actifs d'un jour → la liste des noms (voir qui fait quoi).
+/* v8.518 (Hervé, 05/10) — DÉTAIL DES CRÉDITS API D'UNE JOURNÉE (UTC, même découpage que le compteur).
+   Lit `admin_bo_odds_appels_jour` (admin seulement) : chaque appel journalisé (heure de Paris, type,
+   compétition, crédits, origine, ligue, motif, matchs reçus, cache) + l'ÉCART entre la consommation
+   du fournisseur (compteur journalier) et la consommation journalisée — un écart > 0 = des appels
+   que le journal n'a pas vus. Lecture seule. Repères : ⚠️ répété (même compétition et même type dans
+   l'heure précédente), ∅ vide (aucun match reçu), ⛔ refusé par le garde-fou (aucun crédit). */
+async function showOddsJour(d){
+  infoModal("📡", "Crédits API — "+d, `<div class="mini muted">Chargement…</div>`);
+  let j;
+  try{ j=await q(db.rpc("admin_bo_odds_appels_jour",{p_jour:d})); }
+  catch(e){ const box=document.querySelector("#cardModal .mini.muted");
+    if(box) box.innerHTML=/admin_bo_odds_appels_jour|schema cache|function/i.test(e.message)?"Détail non installé — lance MIGRATION-odds-journal-detail-2026-10-05.sql.":esc("Erreur : "+e.message);
+    return; }
+  const appels=(j&&j.appels)||[];
+  const heure=iso=>new Date(iso).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Paris'});
+  const comp=k=>String(k||"?").replace(/^(soccer|basketball|tennis|americanfootball|icehockey|baseball)_/,"").replace(/_/g," ");
+  const sportIc=k=>/^soccer_/.test(k||"")?"⚽":/^basketball_/.test(k||"")?"🏀":/^tennis_/.test(k||"")?"🎾":"🏟️";
+  const origine=a=>a.source==="proxy-client"?("📱 "+(a.canal||"téléphone")):(a.source==="chaine-matchs"?"🖥️ serveur · chaîne des matchs":(/resolve/.test(a.source||"")?"🖥️ serveur · résultats":esc(a.source||"?")));
+  const lignes=appels.map((a,i)=>{
+    const t=new Date(a.at).getTime();
+    const repete=appels.slice(0,i).some(b=>b.op===a.op&&b.sport===a.sport&&!b.cache&&b.autorise&&t-new Date(b.at).getTime()<3600e3);
+    const cout=a.cache?"0 (cache)":(!a.autorise?"⛔ refusé":((a.cout!=null?a.cout:"?")+" cr."));
+    const reçu=a.nb==null?"":(a.nb===0?" · ∅ vide":` · ${a.nb} match${a.nb>1?"s":""}`);
+    return `<div class="mini" style="text-align:left;padding:6px 0;border-top:1px solid var(--border)">
+      <b>${heure(a.at)}</b> — ${a.op==="scores"?"Scores":"Cotes"} — ${sportIc(a.sport)} ${esc(comp(a.sport))} — <b>${cout}</b>${repete?' <b class="red">⚠️ répété</b>':''}
+      <div class="muted">${origine(a)}${a.ligue?" · ligue "+esc(a.ligue):""}${a.motif?" · "+esc(a.motif):""}${reçu}${a.http&&a.http!==200?" · HTTP "+a.http:""}${!a.autorise&&a.raison?" · "+esc(a.raison):""}</div></div>`; }).join("");
+  const ecart=j.ecart;
+  const resume=`<div class="mini" style="text-align:left;margin-bottom:8px">Fournisseur : <b>${j.fournisseur!=null?j.fournisseur:"—"}</b> crédit(s) · journalisé : <b>${j.journalise}</b>
+    ${ecart==null?'':(ecart>0?`<div class="red" style="margin-top:4px"><b>⚠️ Écart : ${ecart} crédit(s) non détaillé(s)</b> — appels que le journal n'a pas vus (anciennes versions, appels antérieurs au journal détaillé, ou panne du journal).</div>`
+      :(ecart<0?`<div class="muted" style="margin-top:4px">Écart négatif (${ecart}) : le compteur du jour a été relevé avant certains appels.</div>`:`<div class="green" style="margin-top:4px">✓ Aucun écart : tout est détaillé.</div>`))}
+    <div class="muted" style="margin-top:4px">${j.gratuits||0} appel(s) gratuit(s) (calendrier, liste des sports) non listés. Journée en UTC, heures de Paris.</div></div>`;
+  const body=resume+(appels.length?lignes:`<div class="mini muted">Aucun appel payant journalisé ce jour-là.</div>`);
+  const box=document.querySelector("#cardModal"); if(!box) return;
+  infoModal("📡", "Crédits API — "+d, body);
+}
 function showActiveNames(d){
   const row=((adminData&&adminData.daily)||[]).find(x=>x.d===d); if(!row) return;
   const names=row.names||[];
@@ -22018,7 +22147,8 @@ function viewAdmin(){
             const moy=jours.reduce((t,x)=>t+x.n,0)/jours.length;
             const proj=Math.round(moy*31);
             const nomJour=d=>new Date(d+"T12:00:00").toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
-            const lignes=jours.map(x=>`<div class="row mini" style="margin:2px 0"><span class="muted">${nomJour(x.d)}</span><b>${x.n}</b></div>`).join("");
+            // v8.518 (Hervé, 05/10) — chaque jour est CLIQUABLE : détail des appels (showOddsJour).
+            const lignes=jours.map(x=>`<div class="row mini clik" style="margin:2px 0" onclick="showOddsJour('${x.d}')" title="Voir le détail des appels"><span class="muted">${nomJour(x.d)} ›</span><b>${x.n}</b></div>`).join("");
             const verdict = proj>500 ? `<b class="red">${proj} crédits projetés</b> sur le mois — au-dessus des 500 du plan gratuit`
                                      : `<b class="green">${proj} crédits projetés</b> sur le mois — dans les 500 du plan gratuit`;
             return `<div class="box"><div class="mini muted" style="margin-bottom:4px">📊 Consommation mesurée <span class="mini">(${jours.length} jour(s))</span></div>${lignes}
