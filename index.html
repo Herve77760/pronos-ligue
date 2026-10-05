@@ -2054,6 +2054,7 @@
   .a2-pronos-info-opp .av{width:20px;height:20px;border-radius:50%;background:var(--a2-panel-2);border:1px solid var(--a2-border);
     display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--a2-brass-light);flex:0 0 auto}
   .a2-pronos-loc{font-size:11px;line-height:1;padding:2px 4px;border-radius:999px;background:var(--a2-purple-deep,#180f2e);flex:0 0 auto}
+  .a2-pronos-info-cell .lbl .a2-pronos-loc{font-size:10px;padding:0 2px;background:none;letter-spacing:0}   /* v8.517 : icône à côté de « Toi », dans le libellé */
   /* ⚠️ CE QUI EMPÊCHE VRAIMENT LE CHEVAUCHEMENT (2026-09-26). Retirer le mot « Extérieur »
      rend la colonne du milieu bien plus courte, mais ne garantit RIEN : les trois cellules
      sont en `flex:1` avec `.val{white-space:nowrap}`, donc un pseudo assez long déborderait
@@ -2962,7 +2963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.516";
+const APP_VERSION = "v8.517";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -7240,6 +7241,7 @@ const EN={
   "Échantillon limité ({a})":"Limited sample ({a})",
   "Pas encore assez de données":"Not enough data yet",
   "Tes points forts":"Your strengths",
+  "Tes résultats sont encore assez homogènes. Aucun point fort ne se détache nettement pour l'instant. Continue à jouer : Tactizo fera ressortir tes spécialités dès qu'une tendance claire apparaîtra.":"Your results are still fairly even. No strength stands out clearly yet. Keep playing: Tactizo will highlight your specialities as soon as a clear trend appears.",
   "Encore un peu de patience… Continue à pronostiquer pour permettre à Tactizo d'identifier tes points forts.":"A little more patience… Keep making predictions so Tactizo can identify your strengths.",
   "Tu réussis particulièrement bien au {a}.":"You perform especially well at {a}.",
   "football":"football", "tennis":"tennis", "basketball":"basketball",
@@ -15718,7 +15720,8 @@ function pronosInfoStripHTML(dayLbl,opp,iAmHome){
   const meP=me(); const cap=meP?meP.capital:0;
   return `<div class="a2-pronos-info-strip">
     <div class="a2-pronos-info-cell"><div class="lbl">${t("Journée")}</div><div class="val">${(L.current_day||0)+1} / ${L.num_days}</div></div>
-    <div class="a2-pronos-info-cell"><div class="lbl">${t("Tu rencontres")}</div>
+    <div class="a2-pronos-info-cell"><div class="lbl">${/* v8.517 (règle d'Hervé, 05/10) : « Toi » d'abord, 🏠/✈️ à côté de TOI — avant,
+             l'icône était collée au nom de l'adversaire et se lisait comme SA situation. */''}${t("Toi")} <span class="a2-pronos-loc" title="${iAmHome?t("Domicile"):t("Extérieur")}" aria-label="${iAmHome?t("Domicile"):t("Extérieur")}">${iAmHome?"🏠":"✈️"}</span> ${t("vs")}</div>
       ${/* ⚠️ 2026-09-26 (constaté par Hervé sur iPhone, Ligue A) — ICI, ET ICI SEULEMENT, la
              pastille ne porte plus que l'icône. « ✈️ Extérieur » écrit en toutes lettres poussait
              la colonne du milieu par-dessus la cagnotte : les trois cellules sont en `flex:1` avec
@@ -15728,8 +15731,7 @@ function pronosInfoStripHTML(dayLbl,opp,iAmHome){
              la liste des matchs), « Domicile »/« Extérieur » restent écrits : la place y est.
              Le pseudo a son propre span parce que c'est LUI qui doit céder en dernier recours —
              jamais la cagnotte, jamais la journée. */''}
-      <div class="val a2-pronos-info-opp">${avatarHTML(opp&&opp.emoji,20)}<span class="a2-pronos-info-nom">${esc(opp&&opp.name||'?')}</span>
-      <span class="a2-pronos-loc" title="${iAmHome?t("Domicile"):t("Extérieur")}" aria-label="${iAmHome?t("Domicile"):t("Extérieur")}">${iAmHome?"🏠":"✈️"}</span></div></div>
+      <div class="val a2-pronos-info-opp">${avatarHTML(opp&&opp.emoji,20)}<span class="a2-pronos-info-nom">${esc(opp&&opp.name||'?')}</span></div></div>
     <div class="a2-pronos-info-cell"><div class="lbl">${t("Cagnotte")}</div><div class="val money">${euro(cap)}</div></div>
   </div>`;
 }
@@ -16674,7 +16676,7 @@ function viewWait(dayLbl){
   const oppBet = md ? bets.find(b=>b.player_id===(iAmHome?md.away_id:md.home_id)) : null;
   const dt=dayTimes();
   const head = `<div class="box"><div class="submitted-head"><h3>${t("Pronos enregistrés")}</h3><span class="chip-ok">${t("✅ validés")}</span></div>
-     ${md?`<div class="deadline-line">${t("Duel vs {a}",{a:'<b>'+avaName(opp)+'</b>'})} <span class="chip ${iAmHome?'b':''}" style="flex:0 0 auto">${iAmHome?t("🏠 Domicile"):t("✈️ Extérieur")}</span></div>`:''}
+     ${md?`<div class="deadline-line">${/* v8.517 (règle d'Hervé, 05/10) : « Toi 🏠/✈️ vs FX », toi d'abord, l'icône à côté de toi */''}${t("Toi")} <span title="${iAmHome?t("Domicile"):t("Extérieur")}" aria-label="${iAmHome?t("Domicile"):t("Extérieur")}">${iAmHome?"🏠":"✈️"}</span> ${t("vs")} <b>${avaName(opp)}</b></div>`:''}
      ${betLineHTML()}${cotesDatees()}</div>`;
   // ⚠️ Audit V2 (2026-09-06) — Maestro manquant à ce stade : relu pronos-valides.html (maquette
   // consolidée), qui prévoit une scène dédiée ICI (pronostics envoyés, avant clôture), absente du
@@ -17668,6 +17670,12 @@ function recapBody(D){
     // joueur). `pickCalc()` (déjà la source de vérité du détail dépliée) est réutilisé tel quel.
     const focusIsHome = hP.id===fp;
     const focusBt = focusIsHome?hB:aB, focusOppCard = focusIsHome?(aB&&aB.card):(hB&&hB.card);
+    // ⚠️ v8.517 (règle d'Hervé, 05/10) — le joueur dont on lit le récap (`fp`, « Toi ») est TOUJOURS
+    // à gauche / en premier, l'adversaire à droite / en second ; domicile/extérieur n'inverse plus
+    // rien. Il ne reste qu'un petit 🏠/✈️ à côté de « Toi ». (Les duels des AUTRES joueurs gardent
+    // l'ordre domicile/extérieur : autre appelant de mbeSideHTML, non touché.)
+    const fP=focusIsHome?hP:aP, oP=focusIsHome?aP:hP, fB=focusIsHome?hB:aB, oB=focusIsHome?aB:hB;
+    const fIc=`<span title="${focusIsHome?t("Domicile"):t("Extérieur")}" aria-label="${focusIsHome?t("Domicile"):t("Extérieur")}">${focusIsHome?"🏠":"✈️"}</span>`;
     const rows=myD.fixtures.map((f,i)=>{ const open=recapOpen===i;
       const fp2=pickCalc(focusBt,f,i,focusOppCard); const outcomeCls=fp2.state==='ok'?(fp2.win?' won':' lost'):'';
       return `<div class="a2-res-match${open?' open':''}${outcomeCls}">
@@ -17680,13 +17688,13 @@ function recapBody(D){
           <div class="a2-res-mbe-score"><span class="teams">${esc(tnm(f,f.home))} <b>${(f.hs!=null&&f.as!=null)?f.hs+' – '+f.as:'–'}</b> ${esc(tnm(f,f.away))}</span><span class="tag">${t("Score final")}</span></div>
           ${f.canceled?`<div class="box mini" style="border-left:3px solid var(--gold);margin-bottom:10px"><b>🚫 ${t("Match annulé")}</b><div class="muted" style="margin-top:3px">${t("Ce match n'est pas pris en compte dans les résultats. La mise est remboursée.")}</div></div>`:''}
           <div class="a2-res-mbe-cols">
-            ${mbeSideHTML(hB,f,i,aB&&aB.card,hP,'🏠')}
-            ${mbeSideHTML(aB,f,i,hB&&hB.card,aP,'✈️')}
+            ${mbeSideHTML(fB,f,i,oB&&oB.card,fP,fIc)}
+            ${mbeSideHTML(oB,f,i,fB&&fB.card,oP,'')}
           </div>
           <div style="margin-top:8px">
             <div class="mini muted">${t("Cotes")} : ${esc(tnm(f,f.home))} ${cote(f.oh)}${f.draw?` · ${t("Nul")} ${cote(f.od)}`:''} · ${esc(tnm(f,f.away))} ${cote(f.oa)}</div>
-            <div class="mini" style="margin-top:5px"><b>${avaName(hP)}</b> ${explain(hB,f,i,aB&&aB.card)}</div>
-            <div class="mini" style="margin-top:3px"><b>${avaName(aP)}</b> ${explain(aB,f,i,hB&&hB.card)}</div>
+            <div class="mini" style="margin-top:5px"><b>${avaName(fP)}</b> ${explain(fB,f,i,oB&&oB.card)}</div>
+            <div class="mini" style="margin-top:3px"><b>${avaName(oP)}</b> ${explain(oB,f,i,fB&&fB.card)}</div>
           </div>
         </div>`:''}
       </div>`; }).join("");
@@ -17701,7 +17709,7 @@ function recapBody(D){
     detail=`<div class="mini muted" style="margin:0 2px 8px">${t("👉 Touche un match pour le calcul détaillé.")}</div>
       ${(forgot(homeId)!==forgot(awayId))?`<div class="office-box"><b>🏆 ${t("Duel gagné d'office")}</b> — ${t("{a} n'a pas validé ses pronos : il perd le duel <b>quel que soit le gain en €</b>.",{a:esc((forgot(homeId)?hP:aP).name||'?')})}</div>`:''}
       ${rows}
-      ${bonusMini(hB)}${bonusMini(aB)}`;
+      ${bonusMini(fB)}${bonusMini(oB)}`;
   }
   // ✨ Faits marquants de la journée (dont bonus qui se sont retournés contre leur joueur) — demandé par Hervé.
   /* ORDRE DE PRIORITÉ FIXÉ PAR HERVÉ (v7.15) — trois groupes, dans cet ordre :
@@ -18534,8 +18542,13 @@ function waitingResultsBody(d){
      choisi ses matchs). Même clé que le message déjà utilisé plus bas pour l'écran entier
      (`anyfx`) : « Les 5 matchs ne sont pas encore choisis. », réutilisée ici par duel. */
   const affiche = dz=>{ const fx=dz.fixtures||[]; const hn=pById(dz.home_id)||{}, an=pById(dz.away_id)||{}; const mine=(dz.id===myDuelId);
+    // v8.517 (règle d'Hervé, 05/10) — titre de MON duel : « Toi 🏠/✈️ vs adversaire » ; les autres duels
+    // gardent « domicile vs extérieur ».
+    const titreDuel = mine
+      ? (()=>{ const dom=dz.home_id===S.myId; return `${t("Toi")} <span title="${dom?t("Domicile"):t("Extérieur")}" aria-label="${dom?t("Domicile"):t("Extérieur")}">${dom?"🏠":"✈️"}</span> ${t("vs")} ${avaName(dom?an:hn)}`; })()
+      : `${avaName(hn)} ${t("vs")} ${avaName(an)}`;
     if(!fx.length) return `<div style="margin-top:22px;border-top:3px solid var(--border);padding-top:14px">
-      <div class="mini" style="margin-bottom:6px"><b>${mine?'⚔️ ':''}${avaName(hn)} ${t("vs")} ${avaName(an)}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
+      <div class="mini" style="margin-bottom:6px"><b>${mine?'⚔️ ':''}${titreDuel}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
       <div class="mini muted">${t("Les 5 matchs ne sont pas encore choisis.")}</div></div>`;
     /* ⚠️ v7.40 — SÉPARATION RENFORCÉE ENTRE LES DUELS (demandé par Hervé). Un simple filet de 1 px
        avec 8 px d'air ne suffisait pas : la liste de MES matchs et celle du duel voisin se lisaient
@@ -18605,7 +18618,7 @@ function waitingResultsBody(d){
       const c=myBetNow.card; const bon=(c&&c.id&&cardOnMatch(c,i))?`<span class="chip b clik" onclick="showCardInfo('${c.id}')">${CARDS[c.id].e}</span>`:'';
       return (cap||bon)?` ${cap}${bon}`:''; };
     return `<div style="margin-top:22px;border-top:3px solid var(--border);padding-top:14px">
-      <div class="mini" style="margin-bottom:6px"><b>${mine?'⚔️ ':''}${avaName(hn)} ${t("vs")} ${avaName(an)}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
+      <div class="mini" style="margin-bottom:6px"><b>${mine?'⚔️ ':''}${titreDuel}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
       ${fx.map((f,i)=>{ /* mon prono UNIQUEMENT sur mon duel : ailleurs on n'a pas à trancher */
         const sel=(mine && myBetNow && Array.isArray(myBetNow.picks) && myBetNow.picks[i]) ? myBetNow.picks[i].sel : null;
         const rp=resPart(f,sel); /* résultat live si dispo ; sinon heure du coup d'envoi puis état (v7.05) */
@@ -19573,6 +19586,14 @@ const SPORT_NOM={"⚽":"football","🎾":"tennis","🏀":"basketball"};
 // au palier 'full' (20+, cf. statTier()) ET que l'écart avec la moyenne est net — sinon on se tait
 // plutôt que d'affirmer quelque chose de fragile. Toujours dérivé de calculs déjà faits par
 // `calcule()` (bySport, oddBands, riskProfile) : aucun nouveau calcul de fond ici, juste une lecture.
+// v8.517 (Hervé, 05/10) — texte du bloc « Tes points forts » quand AUCUN point fort ne passe : « patience »
+// seulement s'il manque vraiment des données (moins de 20 pronos) ; au-delà, rien ne se détache encore —
+// le dire, sans laisser croire à un manque de pronostics.
+function statInsightsAttente(a){
+  return statTier(a&&a.picks)==='full'
+    ? t("Tes résultats sont encore assez homogènes. Aucun point fort ne se détache nettement pour l'instant. Continue à jouer : Tactizo fera ressortir tes spécialités dès qu'une tendance claire apparaîtra.")
+    : t("Encore un peu de patience… Continue à pronostiquer pour permettre à Tactizo d'identifier tes points forts.");
+}
 function buildStatInsights(a){
   const out=[];
   if(!a) return out;
@@ -19596,10 +19617,14 @@ function buildStatInsights(a){
     }
   }
   // 3) Rendement du Capitaine : signalé seulement si son taux de réussite s'écarte nettement du reste.
-  if(statTier(a.capCount)==='full'){
-    const capRate=Math.round(a.capWin/a.capCount*100);
-    if(capRate>=a.hit+10) out.push(t("Ton match favori 👑 réussit mieux que le reste de tes pronos."));
-    else if(capRate<=a.hit-10) out.push(t("Ton match favori 👑 réussit moins bien que le reste de tes pronos."));
+  // ⚠️ v8.517 (décision d'Hervé, 05/10) — SEUIL PROPRE AU FAVORI : un seul favori par journée, il fallait
+  // donc 20 journées pour l'atteindre. Moins de 10 favoris : rien ; de 10 à 19 : le point fort peut
+  // apparaître, marqué « Échantillon limité (n) » ; 20 et plus : affichage normal. Sports et tranches
+  // de cote gardent le seuil de 20 (statTier 'full').
+  if((a.capCount||0)>=10){
+    const capRate=Math.round(a.capWin/a.capCount*100), note=a.capCount<20?statTierNote(a.capCount):'';
+    if(capRate>=a.hit+10) out.push(t("Ton match favori 👑 réussit mieux que le reste de tes pronos.")+note);
+    else if(capRate<=a.hit-10) out.push(t("Ton match favori 👑 réussit moins bien que le reste de tes pronos.")+note);
   }
   return out.slice(0,3);   // priorité aux insights, pas un mur : 3 maximum
 }
@@ -19652,7 +19677,7 @@ function viewStats(){
   h+=`<div class="box" style="border-color:var(--gold-dim);background:rgba(231,184,75,.08)">
     <div class="boxttl">💡 ${t("Tes points forts")}</div>
     ${insights.length ? insights.map(x=>`<div class="mini" style="margin-top:4px">${x}</div>`).join("")
-      : `<div class="mini muted" style="margin-top:4px">${t("Encore un peu de patience… Continue à pronostiquer pour permettre à Tactizo d'identifier tes points forts.")}</div>`}</div>`;
+      : `<div class="mini muted" style="margin-top:4px">${statInsightsAttente(a)}</div>`}</div>`;
   // ⚠️ LOT 5 — seuils de fiabilité appliqués aux DEUX chiffres phares (réussite/ROI) : sous 5
   // pronos au total, ils ne veulent rien dire et ne s'affichent pas ; de 5 à 19, ils s'affichent
   // mais restent marqués « Échantillon limité » (cf. statTier()/statTierNote()).
