@@ -2963,7 +2963,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.518";
+const APP_VERSION = "v8.521";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -7245,9 +7245,23 @@ const EN={
   "Échantillon limité ({a})":"Limited sample ({a})",
   "Pas encore assez de données":"Not enough data yet",
   "Tes points forts":"Your strengths",
-  "{a} pronos gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.":"{a} predictions won out of {b} ({c}%), against a {d}% average success rate.",
-  "Rendement {a} % sur {b} pronos, contre {c} % en moyenne.":"{a}% return over {b} predictions, against {c}% on average.",
-  "{a} favoris gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.":"{a} favourites won out of {b} ({c}%), against a {d}% average success rate.",
+  // v8.521 (06/10) — « Tes points forts » refondus : comparaison aux AUTRES pronos et aux chances données par les cotes.
+  "{a} favoris gagnés sur {b} ({c} %), contre {d} % sur tes autres pronos.":"{a} favourites won out of {b} ({c}%), against {d}% on your other picks.",
+  "Les cotes leur donnaient {a} % de chances.":"The odds gave them a {a}% chance.",
+  "Rendement {a} % sur {b} pronos (sans le doublement du favori), contre {c} % sur tes autres cotes.":"{a}% return over {b} predictions (favourite doubling excluded), against {c}% at your other odds.",
+  "{a} gagnés sur {b} ({c} %), alors que les cotes en promettaient {d} %.":"{a} won out of {b} ({c}%), while the odds promised {d}%.",
+  "Sur tes autres pronos : {a} %, pour {b} % promis.":"On your other picks: {a}%, for {b}% promised.",
+  "Sur tes autres sports : {a} %, pour {b} % promis.":"In your other sports: {a}%, for {b}% promised.",
+  "Sur tes autres compétitions : {a} %, pour {b} % promis.":"In your other competitions: {a}%, for {b}% promised.",
+  "Sur {a} jours de match différents.":"Over {a} different match days.",
+  "{a} te réussit.":"{a} suits you well.",
+  "Tu lis particulièrement bien les victoires à domicile.":"You read home wins particularly well.",
+  "Tu lis particulièrement bien les victoires à l'extérieur.":"You read away wins particularly well.",
+  "Tu lis particulièrement bien les matchs nuls.":"You read draws particularly well.",
+  "à domicile":"home win", "à l'extérieur":"away win", "sur le nul":"draw",
+  "Domicile ou extérieur":"Home or away", "Tes compétitions":"Your competitions",
+  "Tactizo analysera bientôt :":"Tactizo will soon analyse:",
+  "Ce que tu réussis nettement mieux que le reste de tes pronos : ton match favori, une tranche de cotes, les victoires à domicile ou à l'extérieur, une compétition, un sport. Chaque catégorie est comparée à <b>tes autres pronos</b>, en tenant compte de la chance que te donnaient les cotes — jouer des favoris n'est pas un talent en soi. Tactizo ne parle d'un point fort que si l'écart reste net même en retirant la part de chance, sur assez de matchs et de jours différents.":"What you do clearly better than the rest of your picks: your favourite match, an odds range, home or away wins, a competition, a sport. Each category is compared with <b>your other picks</b>, taking into account the chance the odds gave you — backing favourites isn't a talent in itself. Tactizo only calls something a strength if the gap stays clear even after removing the share of luck, over enough different matches and days.",
   "Échantillon limité : encore 1 match favori pour consolider cette tendance.":"Limited sample: 1 more favourite match to confirm this trend.",
   "Échantillon limité : encore {a} matchs favoris pour consolider cette tendance.":"Limited sample: {a} more favourite matches to confirm this trend.",
   "Tendance consolidée ({a} favoris).":"Confirmed trend ({a} favourites).",
@@ -7255,7 +7269,6 @@ const EN={
   "Tes meilleurs sports":"Your best sports", "Tes cotes les plus rentables":"Your most profitable odds",
   "{a} et +":"{a} and up", "La solidité de ton match favori":"How solid your favourite match is",
   "encore 1 match favori":"1 more favourite match", "encore {a} matchs favoris":"{a} more favourite matches",
-  "Tactizo analysera aussi, dès 20 pronos par catégorie :":"Tactizo will also analyse, from 20 predictions per category:",
   "Tes résultats sont encore assez homogènes. Aucun point fort ne se détache nettement pour l'instant. Continue à jouer : Tactizo fera ressortir tes spécialités dès qu'une tendance claire apparaîtra.":"Your results are still fairly even. No strength stands out clearly yet. Keep playing: Tactizo will highlight your specialities as soon as a clear trend appears.",
   "Encore un peu de patience… Continue à pronostiquer pour permettre à Tactizo d'identifier tes points forts.":"A little more patience… Keep making predictions so Tactizo can identify your strengths.",
   "Tu réussis particulièrement bien au {a}.":"You perform especially well at {a}.",
@@ -19189,7 +19202,7 @@ async function loadMyStats(){
       const win=isDC?(f.res===p.sel||f.res===c.sel2):(p.sel===f.res);
       const odd=isDC?dcWinOdd(f,p.sel,c.sel2):oddOf(f,p.sel);
       const base=win?st*(odd-1):-st;
-      return {st,odd,win,base,cap:(bt.captain===i),gain:(bt.captain===i)?base*2:base};
+      return {st,odd,win,base,cap:(bt.captain===i),gain:(bt.captain===i)?base*2:base,sel:p.sel,sel2:isDC?c.sel2:null,dc:isDC};
     };
     // Une ligue FERMÉE AVANT SON TERME ne compte dans AUCUN total (v7.02, Hervé). L'écran de fin
     // dit lui-même que son classement est « purement indicatif » : l'intégrer aux stats lui
@@ -19230,6 +19243,10 @@ async function loadMyStats(){
     // pas une nouvelle grille affichée telle quelle, pour ne pas ajouter un mur de chiffres.
     let sumStake=0, sumStakeSq=0, nStakePicks=0;
     const oddBands=[{lo:1.01,hi:1.4},{lo:1.4,hi:1.8},{lo:1.8,hi:2.5},{lo:2.5,hi:4},{lo:4,hi:1e9}].map(b=>({lo:b.lo,hi:b.hi,p:0,w:0,net:0,staked:0}));
+    // v8.521 (Hervé, 06/10) — « Tes points forts » refondus : le détail PAR PRONO (réel ou simulé, sport,
+    // compétition, côté du vrai match, chance donnée par les cotes, match et jour) — de quoi comparer une
+    // catégorie aux AUTRES pronos et compter les matchs/jours distincts. Mêmes paris déjà chargés.
+    const prPicks=[];
     ids.forEach(lid=>{ const mp=myPid[lid]; if(!mp) return; const lg=lgMap[lid]||{};
       if(!garde(lg)) return;   // onglet : ligue d'un autre type de données
       /* v8.515 (Hervé, 02/10) — UNE LIGUE ABANDONNÉE COMPTE : ses pronos étaient de vrais pronos, ses
@@ -19282,6 +19299,11 @@ async function loadMyStats(){
             const sp=f.sport||"?";
             if(SPORT_EMOJIS.indexOf(sp)>=0){ bySport[sp]=bySport[sp]||{p:0,w:0,net:0,staked:0};
               bySport[sp].p++; if(inf.win)bySport[sp].w++; bySport[sp].net+=inf.gain; bySport[sp].staked+=inf.st; }   // net/staked (Lot 5) : ROI par sport, en plus de la réussite déjà là
+            const ko=f.commence?new Date(f.commence).getTime():NaN, rz=d&&d.resolved_at?new Date(d.resolved_at).getTime():NaN;
+            prPicks.push({reel:(lg.data_mode||"sim")==="real", sport:sp, comp:f.compKey||null, sel:inf.sel, dc:inf.dc,
+              win:inf.win, odd:inf.odd, st:inf.st, base:inf.base, cap:inf.cap, exp:pfProbImplicite(f,inf.sel,inf.sel2),
+              match:f.evId||(lid+"#"+b.day+"#"+i), jour:f.commence?String(f.commence).slice(0,10):(lid+"#"+b.day),
+              t:!isNaN(ko)?ko:(!isNaN(rz)?rz:null)});
           }); }
         const mise=gainMise(b.picks,fx).mise; staked+=mise; const n=n0; net+=n;
         if(n>best.net) best={net:n,day:b.day}; if(n<worst.net) worst={net:n,day:b.day};
@@ -19434,7 +19456,7 @@ async function loadMyStats(){
     return { agg:{leagues:nbLigues, exclues:leagues.filter(l=>l.status==="done"&&!l.auTerme).length, solos:leagues.filter(l=>l.solo).length,
       titles,podiums,picks:tPicks,won:tWon,hit:tPicks?Math.round(tWon/tPicks*100):0,
       staked:Math.round(tStaked),net:tNet,roi:tStaked?Math.round(tNet/tStaked*100):0,bestOdd:gBestOdd,best:gBest,
-      avgWinOdd:nWinOdd?+(sumWinOdd/nWinOdd).toFixed(2):0, capWin, oddBands, riskProfile, seasonTrend,
+      avgWinOdd:nWinOdd?+(sumWinOdd/nWinOdd).toFixed(2):0, capWin, oddBands, riskProfile, seasonTrend, prPicks,
       bestPick:(bestPick.g>-1e8)?bestPick:null, bigStake:(bigStake.st>=0)?bigStake:null,
       capExtra:Math.round(capExtra*100)/100, capCount, ptsPerDay:ptsDays?+(tPoints/ptsDays).toFixed(2):0,
       posDays, allDays, forfaits:tForfaits, penalites:Math.round(tPenalites*100)/100, bestRun, buckets, bySport, byCard, curve,
@@ -19516,6 +19538,8 @@ const STAT_INFO={
   perimetre:{t:"Ligues comptées",d:"Une ligue <b>fermée avant son terme</b> ne compte dans aucun total : son classement final n'a pas de sens, l'inclure fausserait tout. Elle reste consultable plus bas. Une ligue <b>en cours</b>, elle, compte normalement.<br><br>Dans une ligue <b>en solo face à l'IA</b>, tes paris comptent (ROI, réussite, records) — c'étaient de vrais pronos — mais finir 1er contre un robot n'ajoute <b>ni titre ni podium</b>.<br><br>Enfin, <b>tout cet écran suit l'onglet choisi en haut</b> : 📡 ne retient que les ligues jouées sur de vrais matchs, 🎮 celles en matchs simulés, 🔀 les deux. Comparer les deux a du sens : en simulé les cotes sont tirées au sort, en réel elles viennent du marché."},
   // ⚠️ LOT 5 (2026-09-10) — deux nouvelles fiches : profil de risque et évolution saison après saison.
   risk:{t:"Ton profil de risque",d:"Trois éléments de ton comportement de jeu, combinés : la <b>variabilité de tes mises</b> (joues-tu toujours des montants proches, ou très inégaux ?), ta <b>préférence de cote</b> (favoris sûrs ou outsiders risqués ?) et la <b>volatilité de tes résultats</b> quotidiens. <b>Prudent</b> : mises régulières, favoris, résultats stables. <b>Agressif</b> : mises irrégulières, outsiders, résultats qui varient beaucoup. <b>Équilibré</b> : entre les deux. Aucun profil n'est meilleur qu'un autre — c'est une photographie, pas une note. Calculé seulement à partir de 20 pronos, pour rester fiable."},
+  // v8.521 (Hervé, 06/10) — fiche du bloc « Tes points forts » refondu.
+  pointsforts:{t:"Tes points forts",d:"Ce que tu réussis nettement mieux que le reste de tes pronos : ton match favori, une tranche de cotes, les victoires à domicile ou à l'extérieur, une compétition, un sport. Chaque catégorie est comparée à <b>tes autres pronos</b>, en tenant compte de la chance que te donnaient les cotes — jouer des favoris n'est pas un talent en soi. Tactizo ne parle d'un point fort que si l'écart reste net même en retirant la part de chance, sur assez de matchs et de jours différents."},
   season:{t:"Évolution saison après saison",d:"Comment ton ROI évolue d'une ligue menée à son terme à l'autre (au moins 5 pronos par ligue pour compter). Avec 2 saisons seulement, c'est une simple comparaison — pas encore une tendance. À partir de 3, ta dernière saison est comparée à la moyenne de toutes les précédentes."}
 };
 function showStatInfo(k){ const s=STAT_INFO[k]; if(!s) return;
@@ -19609,48 +19633,128 @@ function statInsightsAttente(a){
     ? t("Tes résultats sont encore assez homogènes. Aucun point fort ne se détache nettement pour l'instant. Continue à jouer : Tactizo fera ressortir tes spécialités dès qu'une tendance claire apparaîtra.")
     : t("Encore un peu de patience… Continue à pronostiquer pour permettre à Tactizo d'identifier tes points forts.");
 }
-function buildStatInsights(a){
-  const out=[];
-  if(!a) return out;
-  // 1) Sport où la réussite dépasse nettement la moyenne générale.
-  const spKs=Object.keys(a.bySport||{}).filter(k=>SPORT_NOM[k] && statTier(a.bySport[k].p)==='full');
-  if(spKs.length){
-    spKs.sort((x,y)=>(a.bySport[y].w/a.bySport[y].p)-(a.bySport[x].w/a.bySport[x].p));
-    const best=spKs[0], v=a.bySport[best], rate=Math.round(v.w/v.p*100);
-    if(rate>=a.hit+8) out.push(t("Tu réussis particulièrement bien au {a}.",{a:t(SPORT_NOM[best])})
-      +statDetailLigne(t("{a} pronos gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.",{a:v.w,b:v.p,c:rate,d:a.hit})));
-  }
-  // 2) Tranche de cote la plus rentable (ROI net de la tranche nettement au-dessus du ROI général).
-  const fullBands=(a.oddBands||[]).filter(b=>statTier(b.p)==='full' && b.staked>0);
-  if(fullBands.length){
-    fullBands.sort((x,y)=>(y.net/y.staked)-(x.net/x.staked));
-    const best=fullBands[0], bandRoi=best.net/best.staked;
-    if(bandRoi>(a.roi/100)+0.10){
-      const lo=best.lo.toFixed(2).replace('.',','), hi=(best.hi>=100?'+':best.hi.toFixed(2).replace('.',','));
-      out.push((best.hi>=100
-        ? t("Tes paris à partir de {a} de cote sont les plus rentables.",{a:lo})
-        : t("Tes paris entre {a} et {b} sont les plus rentables.",{a:lo,b:hi}))
-        +statDetailLigne(t("Rendement {a} % sur {b} pronos, contre {c} % en moyenne.",{a:Math.round(bandRoi*100),b:best.p,c:Math.round(a.roi)})));
+/* ===== v8.521 — « TES POINTS FORTS » REFONDUS (décisions d'Hervé du 06/10/2026) ==============================
+   Un point fort = une catégorie où le joueur fait NETTEMENT mieux que sur ses AUTRES pronos (jamais contre une
+   moyenne qui la contient), en tenant compte des cotes (« surperformance » = réussite − chance donnée par les
+   cotes : jouer des favoris n'est pas une compétence), sur assez de pronos, de matchs DISTINCTS et de JOURS
+   différents (un même match joué dans 3 ligues ne vaut pas 3 informations). Sinon : silence.
+   Règle anti faux point fort commune : la borne basse prudente (Wilson, 90 %) de la réussite, diminuée de la
+   chance attendue, doit rester au-dessus de la surperformance de la référence. Tranches de cotes : même idée sur
+   le rendement SANS le doublement du favori (rendement − 1 erreur-type > rendement des autres tranches).
+   Au plus 3 points forts, au plus 1 par dimension. Dimensions : 👑 favori · 📈 tranches de cotes · 🏟️ domicile/
+   extérieur/nul du VRAI match (foot et basket, matchs réels, Double Chance exclue — rien à voir avec domicile/
+   extérieur dans le duel Tactizo) · 🏆 compétition (matchs réels, tennis exclu : jamais par tournoi) · 🌍 sport
+   (matchs réels). Seuils (Hervé) : favori 10 (limité) / 20, écart 10 pts ; tranches 20, écart ROI 10 pts ;
+   dom/ext 20, 6 jours, 15 matchs, +10 pts ; compétition 25, 15 matchs, 8 jours, 20 pronos hors compétition,
+   part ≤ 70 %, +12 pts ; sport 20, +8 pts. Doublons (point 6) : tranches et sport exigent aussi 6 jours et
+   15 matchs distincts, le favori 6 jours et 10 matchs distincts. */
+const PF_Z=1.645;   // borne de Wilson à 90 % (unilatérale 95 %)
+const PF_BANDES=[{lo:1.01,hi:1.4},{lo:1.4,hi:1.8},{lo:1.8,hi:2.5},{lo:2.5,hi:4},{lo:4,hi:1e9}];
+function pfWilson(w,n,haut){ if(!n) return haut?1:0; const z=PF_Z,p=w/n,z2=z*z;
+  const c=p+z2/(2*n), m=z*Math.sqrt(p*(1-p)/n+z2/(4*n*n)); return (haut?c+m:c-m)/(1+z2/n); }
+// Chance donnée par les cotes : probabilité implicite NORMALISÉE (marge du bookmaker retirée) — (1/cote du
+// choix) ÷ (somme des 1/cotes du match). Double Chance : les deux issues couvertes. Cote manquante → null.
+function pfProbImplicite(f,sel,sel2){
+  if(!f) return null;
+  const os=[f.oh,f.od,f.oa].map(Number).filter(o=>o>1); if(!os.length) return null;
+  const S=os.reduce((s,o)=>s+1/o,0), o1=Number(oddOf(f,sel)); if(!(o1>1)) return null;
+  let v=1/o1; if(sel2){ const o2=Number(oddOf(f,sel2)); if(o2>1) v+=1/o2; }
+  return Math.min(1,v/S);
+}
+function pfGroupe(ps){
+  let w=0,e=0,st=0,base=0; const m=new Set(), j=new Set();
+  ps.forEach(p=>{ if(p.win)w++; e+=p.exp; st+=p.st; base+=p.base; m.add(p.match); j.add(p.jour); });
+  const n=ps.length, hit=n?w/n:0, exp=n?e/n:0, roi=st?base/st:0;
+  let v=0; ps.forEach(p=>{ if(p.st>0){ const d=p.st*(p.base/p.st-roi); v+=d*d; } });
+  return {n,w,hit,exp,sur:hit-exp,roi,err:st?Math.sqrt(v)/st:0,matchs:m.size,jours:j.size};
+}
+// Délai (jours) avant d'atteindre `seuil` au rythme des 14 derniers jours — null si hors de portée (> 14 j).
+function pfAPortee(ps,seuil,nowMs){
+  const reste=seuil-ps.length; if(reste<=0) return null;
+  const n14=ps.filter(p=>p.t!=null && p.t<=nowMs && p.t>nowMs-14*86400000).length; if(!n14) return null;
+  const eta=Math.ceil(reste/(n14/14)); return eta<=14?eta:null;
+}
+const pfPct=x=>Math.round(x*100);
+function pfComparaison(G,R,refTxt){
+  return statDetailLigne(t("{a} gagnés sur {b} ({c} %), alors que les cotes en promettaient {d} %.",{a:G.w,b:G.n,c:pfPct(G.hit),d:pfPct(G.exp)}))
+    +statDetailLigne(t(refTxt,{a:pfPct(R.hit),b:pfPct(R.exp)}));
+}
+function pfAnalyse(picks,nowMs){
+  const P=(picks||[]).filter(p=>p && p.exp!=null), forts=[], bientot=[];
+  const fort=(dim,solid,html)=>forts.push({dim,solid,html});
+  const robuste=(G,R)=>pfWilson(G.w,G.n)-G.exp>R.sur;
+  // 👑 FAVORI — seuil 10/20 et écart 10 pts INCHANGÉS ; référence = les AUTRES pronos.
+  const capP=P.filter(p=>p.cap), autres=P.filter(p=>!p.cap), nf=capP.length;
+  if(nf>=10 && autres.length>=20){
+    const G=pfGroupe(capP), R=pfGroupe(autres), ecart=G.hit-R.hit;
+    if(G.jours>=6 && G.matchs>=10){
+      const detail=statDetailLigne(t("{a} favoris gagnés sur {b} ({c} %), contre {d} % sur tes autres pronos.",{a:G.w,b:nf,c:pfPct(G.hit),d:pfPct(R.hit)}))
+        +statDetailLigne(t("Les cotes leur donnaient {a} % de chances.",{a:pfPct(G.exp)}))
+        +(nf<20 ? statProgressionHTML(nf,20)+statDetailLigne(nf===19?t("Échantillon limité : encore 1 match favori pour consolider cette tendance.")
+                                                                  :t("Échantillon limité : encore {a} matchs favoris pour consolider cette tendance.",{a:20-nf}))
+                : statDetailLigne(t("Tendance consolidée ({a} favoris).",{a:nf})));
+      if(ecart>=0.10 && robuste(G,R)) fort("cap",(pfWilson(G.w,G.n)-G.exp)-R.sur,t("Ton match favori 👑 réussit mieux que le reste de tes pronos.")+detail);
+      else if(ecart<=-0.10 && pfWilson(G.w,G.n,true)-G.exp<R.sur) fort("cap",(R.sur-(pfWilson(G.w,G.n,true)-G.exp)),t("Ton match favori 👑 réussit moins bien que le reste de tes pronos.")+detail);
     }
   }
-  // 3) Rendement du Capitaine : signalé seulement si son taux de réussite s'écarte nettement du reste.
-  // ⚠️ v8.517 (décision d'Hervé, 05/10) — SEUIL PROPRE AU FAVORI : un seul favori par journée, il fallait
-  // donc 20 journées pour l'atteindre. Moins de 10 favoris : rien ; de 10 à 19 : le point fort peut
-  // apparaître, marqué « Échantillon limité (n) » ; 20 et plus : affichage normal. Sports et tranches
-  // de cote gardent le seuil de 20 (statTier 'full').
-  // ⚠️ v8.518 (rendu validé par Hervé, 05/10) — le constat est suivi de la comparaison chiffrée, puis
-  // de la taille de l'échantillon : barre de progression vers 20 + « encore N matchs favoris pour
-  // consolider cette tendance » (10 à 19), ou « Tendance consolidée (N favoris) » (20 et plus).
-  if((a.capCount||0)>=10){
-    const n=a.capCount, capRate=Math.round(a.capWin/n*100);
-    const detail=statDetailLigne(t("{a} favoris gagnés sur {b} ({c} %), contre {d} % de réussite en moyenne.",{a:a.capWin,b:n,c:capRate,d:a.hit}))
-      +(n<20 ? statProgressionHTML(n,20)+statDetailLigne(n===19?t("Échantillon limité : encore 1 match favori pour consolider cette tendance.")
-                                                              :t("Échantillon limité : encore {a} matchs favoris pour consolider cette tendance.",{a:20-n}))
-             : statDetailLigne(t("Tendance consolidée ({a} favoris).",{a:n})));
-    if(capRate>=a.hit+10) out.push(t("Ton match favori 👑 réussit mieux que le reste de tes pronos.")+detail);
-    else if(capRate<=a.hit-10) out.push(t("Ton match favori 👑 réussit moins bien que le reste de tes pronos.")+detail);
-  }
-  return out.slice(0,3);   // priorité aux insights, pas un mur : 3 maximum
+  // 📈 TRANCHES DE COTES — seuil 20, rendement SANS le doublement du favori, contre les autres tranches.
+  const dansBande=(p,b)=>p.odd>=b.lo && p.odd<b.hi;
+  const nomBande=b=>b.hi>=100?t("{a} et +",{a:b.lo.toFixed(2).replace('.',',')}):`${b.lo.toFixed(2).replace('.',',')}–${b.hi.toFixed(2).replace('.',',')}`;
+  let bestB=null;
+  PF_BANDES.forEach(b=>{ const inB=P.filter(p=>dansBande(p,b)), hors=P.filter(p=>!dansBande(p,b));
+    if(inB.length<20 || hors.length<20) return;
+    const G=pfGroupe(inB), R=pfGroupe(hors);
+    if(G.jours>=6 && G.matchs>=15 && G.roi>=R.roi+0.10 && G.hit>=G.exp && G.roi-G.err>R.roi){ const sol=G.roi-G.err-R.roi; if(!bestB||sol>bestB.sol) bestB={b,G,R,sol}; } });
+  if(bestB){ const {b,G,R}=bestB, lo=b.lo.toFixed(2).replace('.',','), hi=b.hi.toFixed(2).replace('.',',');
+    fort("cote",bestB.sol,(b.hi>=100?t("Tes paris à partir de {a} de cote sont les plus rentables.",{a:lo}):t("Tes paris entre {a} et {b} sont les plus rentables.",{a:lo,b:hi}))
+      +statDetailLigne(t("Rendement {a} % sur {b} pronos (sans le doublement du favori), contre {c} % sur tes autres cotes.",{a:pfPct(G.roi),b:G.n,c:pfPct(R.roi)}))); }
+  // 🏟️ DOMICILE / EXTÉRIEUR / NUL du VRAI match — foot et basket, matchs réels, Double Chance exclue.
+  const reels=P.filter(p=>p.reel);
+  const DE=reels.filter(p=>(p.sport==="⚽"||p.sport==="🏀") && !p.dc && ["1","N","2"].indexOf(p.sel)>=0);
+  const COTES={"1":"à domicile","2":"à l'extérieur","N":"sur le nul"};
+  const TXT_DE={"1":"Tu lis particulièrement bien les victoires à domicile.","2":"Tu lis particulièrement bien les victoires à l'extérieur.","N":"Tu lis particulièrement bien les matchs nuls."};
+  let bestDE=null;
+  ["1","2","N"].forEach(sel=>{ const g=DE.filter(p=>p.sel===sel), r=DE.filter(p=>p.sel!==sel);
+    if(g.length<20 || r.length<20) return; const G=pfGroupe(g), R=pfGroupe(r);
+    if(G.jours>=6 && G.matchs>=15 && G.sur-R.sur>=0.10 && robuste(G,R)){ const sol=(pfWilson(G.w,G.n)-G.exp)-R.sur; if(!bestDE||sol>bestDE.sol) bestDE={sel,G,R,sol}; } });
+  if(bestDE) fort("domext",bestDE.sol,t(TXT_DE[bestDE.sel])+pfComparaison(bestDE.G,bestDE.R,"Sur tes autres pronos : {a} %, pour {b} % promis."));
+  // 🏆 COMPÉTITION — matchs réels, tennis exclu (jamais par tournoi).
+  const CO=reels.filter(p=>p.comp && p.sport!=="🎾"), comps=[...new Set(CO.map(p=>p.comp))];
+  let bestC=null;
+  comps.forEach(k=>{ const g=CO.filter(p=>p.comp===k), r=CO.filter(p=>p.comp!==k);
+    if(g.length<25 || r.length<20 || g.length/Math.max(1,reels.length)>0.70) return; const G=pfGroupe(g), R=pfGroupe(r);
+    if(G.matchs>=15 && G.jours>=8 && G.sur-R.sur>=0.12 && robuste(G,R)){ const sol=(pfWilson(G.w,G.n)-G.exp)-R.sur; if(!bestC||sol>bestC.sol) bestC={k,G,R,sol,sp:g}; } });
+  // 🌍 SPORT — matchs réels, contre les autres sports, en surperformance.
+  const SP=reels.filter(p=>SPORT_NOM[p.sport]), sports=[...new Set(SP.map(p=>p.sport))];
+  let bestS=null;
+  sports.forEach(k=>{ const g=SP.filter(p=>p.sport===k), r=SP.filter(p=>p.sport!==k);
+    if(g.length<20 || r.length<20) return; const G=pfGroupe(g), R=pfGroupe(r);
+    if(G.jours>=6 && G.matchs>=15 && G.sur-R.sur>=0.08 && robuste(G,R)){ const sol=(pfWilson(G.w,G.n)-G.exp)-R.sur; if(!bestS||sol>bestS.sol) bestS={k,G,R,sol}; } });
+  if(bestS) fort("sport",bestS.sol,t("Tu réussis particulièrement bien au {a}.",{a:t(SPORT_NOM[bestS.k])})+pfComparaison(bestS.G,bestS.R,"Sur tes autres sports : {a} %, pour {b} % promis."));
+  // Anti-redondance : une compétition qui recouvre à 90 % un sport déjà retenu n'apporte rien de plus.
+  if(bestC && !(bestS && bestC.sp.filter(p=>p.sport===bestS.k).length/bestC.sp.length>=0.90))
+    fort("comp",bestC.sol,t("{a} te réussit.",{a:esc(compNom({compKey:bestC.k}))})+statDetailLigne(t("Sur {a} jours de match différents.",{a:bestC.G.jours}))+pfComparaison(bestC.G,bestC.R,"Sur tes autres compétitions : {a} %, pour {b} % promis."));
+  const ORDRE=["cap","cote","domext","comp","sport"];
+  forts.sort((x,y)=>(y.solid-x.solid)||(ORDRE.indexOf(x.dim)-ORDRE.indexOf(y.dim)));
+  const retenus=forts.slice(0,3);   // 3 au plus ; 1 par dimension par construction
+  // « Tactizo analysera bientôt » — seulement ce qui est À PORTÉE (seuil atteint en ~14 jours au rythme des
+  // 14 derniers) ; 2 catégories au plus par dimension ; 3 lignes au plus. Le favori garde sa progression 10/20.
+  const lignes=[], encore=n=>n===1?t("encore 1 prono"):t("encore {a} pronos",{a:n});
+  const dims=[];
+  const ajoute=(icone,titre,cats)=>{ const c=cats.filter(x=>x.eta!=null).sort((x,y)=>x.eta-y.eta).slice(0,2);
+    if(c.length) dims.push({eta:c[0].eta,txt:`${icone} ${t(titre)} — ${c.map(x=>`${x.nom} : ${encore(x.reste)}`).join(" · ")}`}); };
+  ajoute("📈","Tes cotes les plus rentables",PF_BANDES.map(b=>{ const g=P.filter(p=>dansBande(p,b)); return {nom:nomBande(b),reste:20-g.length,eta:g.length?pfAPortee(g,20,nowMs):null}; }));
+  ajoute("🏟️","Domicile ou extérieur",["1","2","N"].map(sel=>{ const g=DE.filter(p=>p.sel===sel); return {nom:t(COTES[sel]),reste:20-g.length,eta:g.length?pfAPortee(g,20,nowMs):null}; }));
+  ajoute("🏆","Tes compétitions",comps.map(k=>{ const g=CO.filter(p=>p.comp===k); return {nom:esc(compNom({compKey:k})),reste:25-g.length,eta:g.length?pfAPortee(g,25,nowMs):null}; }));
+  ajoute("🏅","Tes meilleurs sports",sports.map(k=>{ const g=SP.filter(p=>p.sport===k); return {nom:t(SPORT_NOM[k]),reste:20-g.length,eta:g.length?pfAPortee(g,20,nowMs):null}; }));
+  if(!retenus.some(x=>x.dim==="cap") && nf<20){ const r=20-nf; lignes.push(`👑 ${t("La solidité de ton match favori")} — ${r===1?t("encore 1 match favori"):t("encore {a} matchs favoris",{a:r})}`); }
+  dims.sort((x,y)=>x.eta-y.eta).forEach(d=>{ if(lignes.length<3) lignes.push(d.txt); });
+  return {forts:retenus, bientot:lignes};
+}
+function pfDe(a,nowMs){ return pfAnalyse(a&&a.prPicks, nowMs!=null?nowMs:Date.now()); }
+function buildStatInsights(a,nowMs){
+  if(!a) return [];
+  return pfDe(a,nowMs).forts.map(x=>x.html);
 }
 // v8.518 — petites briques du bloc « Tes points forts » (rendu validé par Hervé le 05/10).
 function statDetailLigne(txt){ return `<div class="mini muted" style="margin-top:2px">${txt}</div>`; }
@@ -19659,25 +19763,14 @@ function statProgressionHTML(n,cible){
   return `<div style="display:flex;align-items:center;gap:8px;margin-top:5px"><div style="flex:1;height:6px;border-radius:3px;background:var(--border);overflow:hidden">`
     +`<div style="width:${pct}%;height:100%;background:var(--gold)"></div></div><span class="mini muted">${n}/${cible}</span></div>`;
 }
-/* « Tactizo analysera aussi, dès 20 pronos par catégorie » — ce qui n'est PAS encore analysé, avec ce qu'il
-   manque. ⚠️ « pour être analysé », jamais « pour devenir un point fort » (décision d'Hervé) : franchir 20 ne
-   garantit rien, il faut encore un écart net. Seules les catégories déjà jouées et sous 20 apparaissent
-   (2 au plus par dimension, les plus proches du seuil) ; la ligne 👑 n'apparaît que si le favori n'a pas
-   déjà son point fort ; une dimension entièrement analysée disparaît. */
-function statAnalyseAussiHTML(a, insights){
+/* « Tactizo analysera bientôt : » (v8.521, décision d'Hervé du 06/10) — uniquement les catégories À PORTÉE
+   (cf. pfAnalyse) : une catégorie qui mettrait des mois à atteindre son seuil n'est plus affichée. Toujours
+   « encore N pronos » (jamais « pour devenir un point fort ») : franchir un seuil ne garantit rien. */
+function statAnalyseAussiHTML(a, insights, nowMs){
   if(!a) return "";
-  const lignes=[], encore=n=>n===1?t("encore 1 prono"):t("encore {a} pronos",{a:n});
-  const sp=Object.keys(a.bySport||{}).filter(k=>SPORT_NOM[k] && a.bySport[k].p>0 && a.bySport[k].p<20)
-    .sort((x,y)=>a.bySport[y].p-a.bySport[x].p).slice(0,2)
-    .map(k=>`${t(SPORT_NOM[k])} : ${encore(20-a.bySport[k].p)}`);
-  if(sp.length) lignes.push(`🏅 ${t("Tes meilleurs sports")} — ${sp.join(" · ")}`);
-  const nomBande=b=>b.hi>=100?t("{a} et +",{a:b.lo.toFixed(2).replace('.',',')}):`${b.lo.toFixed(2).replace('.',',')}–${b.hi.toFixed(2).replace('.',',')}`;
-  const bd=(a.oddBands||[]).filter(b=>b.p>0 && b.p<20).sort((x,y)=>y.p-x.p).slice(0,2).map(b=>`${nomBande(b)} : ${encore(20-b.p)}`);
-  if(bd.length) lignes.push(`📈 ${t("Tes cotes les plus rentables")} — ${bd.join(" · ")}`);
-  const favDeja=(insights||[]).some(x=>x.indexOf("👑")>=0), nc=a.capCount||0;
-  if(!favDeja && nc<20){ const r=20-nc; lignes.push(`👑 ${t("La solidité de ton match favori")} — ${r===1?t("encore 1 match favori"):t("encore {a} matchs favoris",{a:r})}`); }
+  const lignes=pfDe(a,nowMs).bientot;
   if(!lignes.length) return "";
-  return `<div class="mini" style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--gold-dim)"><b>${t("Tactizo analysera aussi, dès 20 pronos par catégorie :")}</b>`
+  return `<div class="mini" style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--gold-dim)"><b>${t("Tactizo analysera bientôt :")}</b>`
     +lignes.map(l=>`<div class="mini muted" style="margin-top:3px">${l}</div>`).join("")+`</div>`;
 }
 function viewStats(){
@@ -19727,7 +19820,7 @@ function viewStats(){
   // insight n'est encore assez robuste (seuils de `buildStatInsights()` INCHANGÉS) : un état d'attente
   // prend sa place, remplacé naturellement par de vrais insights dès qu'un seuil est franchi.
   h+=`<div class="box" style="border-color:var(--gold-dim);background:rgba(231,184,75,.08)">
-    <div class="boxttl">💡 ${t("Tes points forts")}</div>
+    <div class="boxttl clik" onclick="showStatInfo('pointsforts')">💡 ${t("Tes points forts")} <span style="opacity:.55">ⓘ</span></div>
     ${insights.length ? insights.map(x=>`<div class="mini" style="margin-top:4px">${x}</div>`).join("")
       : `<div class="mini muted" style="margin-top:4px">${statInsightsAttente(a)}</div>`}${statAnalyseAussiHTML(a, insights)}</div>`;
   // ⚠️ LOT 5 — seuils de fiabilité appliqués aux DEUX chiffres phares (réussite/ROI) : sous 5
