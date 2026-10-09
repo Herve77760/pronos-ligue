@@ -2982,7 +2982,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.527";
+const APP_VERSION = "v8.530";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5344,6 +5344,7 @@ let suppressResolveToast=false;
 // et un chevauchement improbable (une trêve qui se déclenche pile pendant l'attente des pronos)
 // ne doit jamais faire dire « trêve » à l'écran des pronos, ou l'inverse.
 let awaitingReveal=false, awaitingTreveReveal=false;
+let decouverteDirecte=null;   // v8.530 : id de la ligue ouverte par « Voir les résultats » du QG (usage unique)
 // ⚠️ QA (2026-09-07, demandé par Hervé, échec réel constaté du correctif du 09-06) — un drapeau
 // `revealGateOpen`, posé UNIQUEMENT par le renvoi automatique de refresh() (cas B), vivait ici :
 // `unseenDayGate()` ne neutralisait le fond que si CE drapeau précis était vrai. Ça laissait un
@@ -5830,6 +5831,7 @@ const EN={
   "dans {c}":"in {c}", "délai écoulé":"time's up", "{a}j {b}h":"{a}d {b}h",
   // v8.333 — repli tant que la clôture des paris n'est pas encore confirmée (bet_started_at pas posé).
   "Clôture des paris dès que tous les joueurs auront choisi leurs matchs":"Betting closes once every player has picked their matches",
+  "Clôture au plus tard {a} · <b>{b}</b> (plus tôt si tout le monde a choisi)":"Closes {a} at the latest · <b>{b}</b> (earlier if everyone has picked)",
   "Faire mes pronos":"Make my picks",
   "🏆 Tes ligues en cours":"🏆 Your leagues in progress",
   // v8.74 — phase de chaque ligue sur l'accueil (remplace le « En cours » indifférencié).
@@ -10553,14 +10555,20 @@ async function refresh(){
        d'une navigation voulue (onglet, flèches, lien des stats), qui fixe toujours une journée. */
     else if(jourNonVu!=null && (S.view==="game" || (S.view==="results" && S.resDay==null)) && treveResultSeen() && !awaitingReveal){
       const _jnv=jourNonVu;
-      awaitingReveal=true; render();
-      try{
-        await revealGate("🔔", t("Résultat à découvrir"),
-          `<div class="mini" style="text-align:center">${t("La journée est résolue.")}</div>`,
-          "👀 "+t("Découvrir les résultats"));
-      } finally { awaitingReveal=false; }
+      // v8.530 : arrivée par « Voir les résultats » du QG → ce clic était déjà le temps d'arrêt, pas de 2ᵉ fenêtre.
+      const _direct=(decouverteDirecte!=null && decouverteDirecte===lid); if(_direct) decouverteDirecte=null;
+      if(!_direct){
+        awaitingReveal=true; render();
+        try{
+          await revealGate("🔔", t("Résultat à découvrir"),
+            `<div class="mini" style="text-align:center">${t("La journée est résolue.")}</div>`,
+            "👀 "+t("Découvrir les résultats"));
+        } finally { awaitingReveal=false; }
+      }
       if(!stale()) openResults(_jnv);
     }
+    // v8.530 : rien à découvrir dans cette ligue (déjà vu ou pas encore résolu) → le drapeau ne survit pas.
+    else if(decouverteDirecte===lid && jourNonVu==null) decouverteDirecte=null;
     /* ⚠️ v8.281 (bug vécu par Hervé, vidéo WhatsApp) — `maybeRecapModal` DOIT s'exécuter APRÈS
        le renvoi automatique ci-dessus, pas avant : depuis le bandeau d'accueil (clic sur
        « Découvrir »), `openLeague` pose `S.view="game"`, et à ce stade du premier `refresh()`
@@ -12747,7 +12755,7 @@ function viewHome(){
     : x.kind==="resultats"
     ? `<div class="alert-card good"><div class="ttl">🎁 ${t("Résultats à découvrir")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("la journée {a} est jouée, tu n'as pas encore vu le verdict.",{a:x.jour})}</div>
-      <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🏁 ${t("Voir les résultats")}</button></div>`
+      <button class="cta" onclick="openLeagueDecouvrir('${x.lg.id}','${x.pid}')">🏁 ${t("Voir les résultats")}</button></div>`
     : x.kind==="declencher"
     // v8.334 (bug vécu par Hervé) — `matchEtat`="fini" ICI NE VEUT PAS DIRE SCORE CONFIRMÉ :
     // l'accueil ne va jamais chercher les résultats live (ça n'arrive qu'à l'ouverture de la
@@ -12817,11 +12825,19 @@ function viewHome(){
         : `<div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>`)
         : `<div class="deadline">⏳ ${t("Clôture des paris dès que tous les joueurs auront choisi leurs matchs")}</div>`}
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">${x.auto?'⚽ '+t("Faire mes pronos"):'🎯 '+t("Choisir les matchs")}</button></div>`
-    : `<div class="alert-card warn">${x.confirmed?qgCountdownHTML(x.deadline):''}<div class="ttl">⚠️ ${t("À toi de jouer")}</div>
+    /* ⚠️ v8.530 (Hervé, 08/10 — Ligue C : « Clôture des paris dès que tous les joueurs auront choisi » au lieu
+       d'un compte à rebours) — AFFICHAGE SEUL, la carte et ses conditions viennent de `loadHomeTodo`, inchangé.
+       Mes 5 matchs sont connus, donc `x.deadline` = `duelDeadline()` :
+       • matchs RÉELS : coup d'envoi du premier de MES 5 matchs — heure DÉFINITIVE, elle ne dépend pas des
+         autres joueurs (`bet_started_at` n'y joue aucun rôle) → vraie échéance, comme une ligue confirmée ;
+       • matchs SIMULÉS, ligue pas encore confirmée : `T0+sel+bet`, un PLAFOND (v8.333) qui se resserre quand
+         tout le monde a choisi → affiché comme tel (« au plus tard … plus tôt si tout le monde a choisi »).
+       Aucune règle de clôture ne change. */
+    : `<div class="alert-card warn">${(x.confirmed || x.lg.data_mode==="real")?qgCountdownHTML(x.deadline):''}<div class="ttl">⚠️ ${t("À toi de jouer")}</div>
       <div class="body"><b>${esc(x.lg.name)}</b> — ${t("tes pronos ne sont pas validés.")}</div>
-      ${x.confirmed
+      ${(x.confirmed || x.lg.data_mode==="real")
         ? `<div class="deadline">${t("Clôture {a} · <b>{b}</b>",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>`
-        : `<div class="deadline">⏳ ${t("Clôture des paris dès que tous les joueurs auront choisi leurs matchs")}</div>`}
+        : `<div class="deadline">⏳ ${t("Clôture au plus tard {a} · <b>{b}</b> (plus tôt si tout le monde a choisi)",{a:fmtWhen(x.deadline),b:t("dans {c}",{c:fmtLeft(x.deadline)})})}</div>`}
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">⚽ ${t("Faire mes pronos")}</button></div>`).join("");
 
   // ⚠️ (2026-09-16, demandé par Hervé) — bandeau "ligue fermée avant son terme", UNE FOIS,
@@ -13066,6 +13082,7 @@ function viewJoinLeague(){
 // une ligue déclare son mode, donc l'état ne peut plus « fuir » d'une ligue à l'autre.
 function openLeague(lid,pid,fresh,consultation){
   LECTURE_SEULE=!!consultation; if(!LECTURE_SEULE){ lectureSeuleVu=""; lectureSeuleCode=""; }
+  decouverteDirecte=null;   // v8.530 : toute entrée désarme ; seul `openLeagueDecouvrir` le réarme, après
   navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; S.ptab="infos"; prevLeagueStatus=null; prevDay=null; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
@@ -13083,6 +13100,16 @@ function openLeagueCoulisses(lid,pid){ openLeague(lid,pid); S.view="coulisses"; 
    `S.resDay=null` : on laisse `viewResults` choisir la journée par défaut plutôt que d'en figer
    une, sinon un retour plus tard rouvrirait sur une journée périmée. */
 function openLeagueResultats(lid,pid){ openLeague(lid,pid); S.resDay=null; S.view="results"; }
+/* ⚠️ v8.530 (Hervé, 08/10 — « pourquoi deux clics ? ») — BOUTON « 🏁 Voir les résultats » DE LA CARTE
+   « Résultats à découvrir » DU QG. Ce clic EST le temps d'arrêt voulu par v8.318 (le joueur a choisi de
+   regarder) : la fenêtre « Découvrir les résultats » de `refresh()` le redemandait une seconde fois. On ouvre
+   la ligue exactement comme avant (écran neutre `unseenDayGate`, puis renvoi automatique vers la journée non
+   vue) et on arme `decouverteDirecte` : ce renvoi-là saute la fenêtre et appelle directement `openResults()`
+   — seul endroit qui marque « vu », suspense 3-2-1 au premier affichage. Anti-spoiler, « vu », Stats,
+   notifications, voyants figés : inchangés. Toutes les autres entrées (Mes ligues, journée résolue pendant
+   que je suis sur Pronos, « bientôt disponibles ») passent par `openLeague()`, qui désarme le drapeau : elles
+   gardent la fenêtre. */
+function openLeagueDecouvrir(lid,pid){ openLeague(lid,pid); decouverteDirecte=lid; }
 /* ---- Consultation d'une ligue depuis l'écran Admin (v7.11) --------------------------------
    On regarde la ligue avec les yeux d'un de SES joueurs — l'organisateur de préférence, sinon
    le premier humain. Sans quoi `me()` renverrait undefined et la moitié des écrans planterait.
