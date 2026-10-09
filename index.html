@@ -2982,7 +2982,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.530";
+const APP_VERSION = "v8.531";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -7813,9 +7813,6 @@ const EN={
   "RÉSULTATS DISPONIBLES":"RESULTS READY", "RÉSULTATS BIENTÔT":"RESULTS SOON", "PRÉPARATION TERMINÉE":"PREP DONE",
   "À JOUR":"UP TO DATE",
   "Si {a} ne sélectionne pas ses 5 matchs avant la fin du délai, les matchs seront choisis automatiquement.":"If {a} doesn't pick their 5 matches before the deadline, the matches will be chosen automatically.",
-  "🔒 Clôturer la trêve maintenant (organisateur)":"🔒 Close the truce now (organizer)",
-  "Clôturer la trêve":"Close the truce",
-  "Clôturer la trêve maintenant ? Les joueurs qui n'ont pas validé leurs enchères démarreront sans les bonus rachetés à la trêve.":"Close the truce now? Players who haven't confirmed their bids will start without the bonuses bought back at the truce.",
   "🏠 À toi de jouer !":"🏠 Your turn!", "Choisis les 5 matchs de la journée.":"Pick the day's 5 matches.",
   "⚽ Paris ouverts":"⚽ Bets are open", "À toi de faire tes pronostics !":"Time to make your picks!",
   "📊 Résultats dispo":"📊 Results are in", "Les résultats de la journée sont là.":"Today's results are in.",
@@ -7841,7 +7838,7 @@ const EN={
   " (ajoute la colonne 'data_mode')":" (add the 'data_mode' column)",
   "Enchères : ":"Auctions: ", "Format : ":"Format: ", "Enjeu : ":"Stake: ", "Retrait : ":"Removal: ",
   "Vote : ":"Vote: ", "Gage perso : ":"Custom forfeit: ", "Préparation : ":"Preparation: ",
-  "Clôture préparation : ":"Closing preparation: ", "Clôture trêve : ":"Closing truce: ",
+  "Clôture préparation : ":"Closing preparation: ",
   "Démarrage : ":"Starting: ", "Sauvegarde matchs : ":"Saving matches: ", "Validation : ":"Validation: ",
   // v8.515 — refus du serveur au choix des matchs (messageRefusChoix)
   "La liste des matchs a changé : voici la liste à jour.":"The match list has changed: here is the updated list.",
@@ -10364,7 +10361,7 @@ async function refresh(){
       const st=treveState()||{}; const humans=players.filter(p=>!p.is_ai);
       const tous=humans.length>=1 && humans.every(p=>(st.done||{})[p.id]);
       const dl=st.deadline && new Date(st.deadline).getTime()<=Date.now();
-      if(tous||dl){ resolveTreve(); return; }
+      if((tous||dl) && Date.now()>=treveReessaiApres){ resolveTreve(); return; }
     }
     // fin de préparation AUTOMATIQUE : dès que tous ont validé (ou délai écoulé), on démarre sans clic
     if(L.status==="prep" && !resolving){
@@ -15033,14 +15030,12 @@ function viewTreve(){
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   const humans=players.filter(p=>!p.is_ai); const prets=humans.filter(p=>(st.done||{})[p.id]).length;
-  // ⚠️ (2026-09-11, demandé par Hervé, test réel) — "Clôturer la trêve maintenant" MASQUÉ EN SOLO
-  // IA (`isSolo()`, exactement 1 humain), plus bas dans ce template. Ce bouton force la clôture
-  // AVANT que tout le monde ait validé — utile en Entre amis si un joueur ne répond pas. En Solo,
-  // il n'existe aucun AUTRE participant humain à attendre : dès que l'unique joueur valide,
-  // `refresh()` clôt déjà tout seul (`humans.every(p=>st.done[p.id])`, vrai dès sa propre
-  // validation). Le bouton n'a donc jamais rien à débloquer ici — et cliquer dessus AVANT d'avoir
-  // validé couperait sa propre trêve trop tôt, sans aucun autre joueur à accuser. Comportement
-  // Entre amis inchangé (organisateur, avec confirmation).
+  // ⚠️ v8.531 (09/10/2026, Hervé) — LE BOUTON « 🔒 Clôturer la trêve maintenant (organisateur) » A ÉTÉ
+  // RETIRÉ de cet écran (ajouté en v8.366, masqué en Solo depuis le 11/09). La trêve se clôt
+  // désormais toute seule, y compris en ligue RÉELLE : dès que tous les humains ont validé, ou à
+  // l'échéance de 24 h — côté app (`refresh()`), cron des ligues simulées (`resolve`) et, nouveau,
+  // cron des ligues réelles (`resolve-ligues-reelles`). La fonction serveur `resolve_treve` refuse
+  // toute clôture hors de ces conditions (`pas_encore`). Secours : back-office admin uniquement.
   // ⚠️ QA (2026-09-07, demandé par Hervé, point 4) — LISTE ET BLOC BUDGET désormais MUTUALISÉS avec
   // l'écran de début de saison (`encRowHTML`/`encBudgetHTML`/`encSummaryTxt`, cf. leurs notes) au
   // lieu de l'ancienne liste `.box row` avec description complète pour chaque bonus (page inutilement
@@ -15064,7 +15059,6 @@ function viewTreve(){
     <div class="a2-enc-summary" id="encSummary">${encSummaryTxt(cnt,tot)}</div>
     <button class="btn" id="essaibidbtn" ${(over||tooMany)?'disabled':''} onclick="saveTreve()">${over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →")))}</button>
     ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`:''}
-    ${(meP.is_organizer && !isSolo())?`<div style="height:8px"></div><button class="btn ghost sm" onclick="forceTreveEnd()">${t("🔒 Clôturer la trêve maintenant (organisateur)")}</button>`:''}
   </div>`;
 }
 async function saveTreve(){ if(busy)return;
@@ -15737,20 +15731,8 @@ async function forcePrepEnd(){ if(!(me()&&me().is_organizer)||busy)return;
     st.deadline=new Date(Date.now()-60000).toISOString();
     await q(db.from("leagues").update({gage:JSON.stringify(st)}).eq("id",L.id)); await refresh(); }
   catch(e){ showErr(t("Clôture préparation : ")+e.message); } busy=false; }
-// ⚠️ Correctif audit V2 (2026-09-06) — même levier que forcePrepEnd() ci-dessus, manquant pour la
-// trêve : sans lui, un seul joueur absent bloquait TOUTE la ligue en "Trêve de mi-saison" jusqu'à
-// l'échéance automatique de 24h, sans aucun recours pour l'organisateur (constaté par l'audit,
-// alors que le même besoin existe et est déjà couvert côté préparation initiale). Même mécanique :
-// on recule l'échéance stockée (ici dans `prep_summary.treve_st`, pas `gage`) → refresh() déclenche
-// resolveTreve() (cf. ligne ~7105, `tous||dl`).
-async function forceTreveEnd(){ if(!(me()&&me().is_organizer)||busy)return;
-  if(!await confirmTxt("🏁",t("Clôturer la trêve"),t("Clôturer la trêve maintenant ? Les joueurs qui n'ont pas validé leurs enchères démarreront sans les bonus rachetés à la trêve.")))return; busy=true;
-  try{ const fresh=await q(db.from("leagues").select("prep_summary").eq("id",L.id).single());
-    const sum=Object.assign({}, fresh.prep_summary||{}); const st=sum.treve_st;
-    if(!st){ busy=false; return; }
-    st.deadline=new Date(Date.now()-60000).toISOString(); sum.treve_st=st;
-    await q(db.from("leagues").update({prep_summary:sum}).eq("id",L.id)); await refresh(); }
-  catch(e){ showErr(t("Clôture trêve : ")+e.message); } busy=false; }
+// v8.531 (09/10/2026) — `forceTreveEnd()` (clôture de la trêve par l'organisateur, v8.366) RETIRÉE avec
+// son bouton : la clôture est automatique (tous validés ou échéance), côté app ET côté serveur.
 async function editPrep(){ if(busy)return; busy=true;
   try{ await q(db.from("players").update({shop_done:false}).eq("id",S.myId)); S.bidLLeague=null; await refresh(); }catch(e){ showErr(e.message); } busy=false; }
 async function resolvePrep(){ if(resolving)return; resolving=true; showErr("");
@@ -17156,7 +17138,7 @@ async function ouvrirTreve(lg, jour, ps){
    simultanées attribueraient deux fois les mêmes bonus.
    ⚠️ LE PLAFOND EST APPLIQUÉ ICI AUSSI, pas seulement dans l'écran. Un client modifié pourrait
    envoyer vingt mises ; on garde les plus élevées et on ignore le reste (`maxBonusTreve`). */
-let resolvingTreve=false;
+let resolvingTreve=false, treveReessaiApres=0;   // v8.531 : pas de nouvel appel avant ce moment après un « pas_encore »
 async function resolveTreve(){ if(resolvingTreve||resolving) return; resolvingTreve=true; showErr("");
   try{
     /* ⚠️ Chantier sécurité 2026-09-16 (MIGRATION-plafond-mises-securite.sql) — hand/enchères
@@ -17167,6 +17149,9 @@ async function resolveTreve(){ if(resolvingTreve||resolving) return; resolvingTr
     try{
       const code=await q(db.rpc("resolve_treve",{p_league:L.id}));
       if(code==="deja_resolue"){ resolvingTreve=false; await refresh(); return; }
+      // v8.531 : le serveur revérifie la règle (tous validés ou échéance). Horloge du téléphone en avance
+      // ou validation pas encore enregistrée : pas d'erreur affichée, on retente dans 60 s.
+      if(code==="pas_encore"){ resolvingTreve=false; treveReessaiApres=Date.now()+60000; return; }
       if(code!=="ok"){ resolvingTreve=false; showErr(t("Trêve : ")+code); await refresh(); return; }
     }catch(e){
       if(!tradeServeurAbsent(e)) throw e;
