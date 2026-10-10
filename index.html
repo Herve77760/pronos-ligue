@@ -2982,7 +2982,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.534";
+const APP_VERSION = "v8.535";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -14708,7 +14708,7 @@ function voteSectionHTML(r){
        <textarea id="${inputId}" class="enjeu-saisie" rows="2" maxlength="${CUSTOM_MAX}" enterkeyhint="done" placeholder="${rw?t("Écris la récompense du champion…"):t("Écris le gage du dernier…")}"
          onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
          onfocus="ajusterSaisieEnjeu(this)"
-         oninput="if(/[\\r\\n]/.test(this.value))this.value=this.value.replace(/[\\r\\n]+/g,' ');ajusterSaisieEnjeu(this);document.getElementById('${inputId}Counter').textContent=this.value.length+' / ${CUSTOM_MAX}';scheduleEnjeuSave(${r?'true':'false'},'${inputId}')"
+         oninput="saisieEnjeu(this,${r?'true':'false'},'${inputId}')" oncompositionend="saisieEnjeu(this,${r?'true':'false'},'${inputId}')"
          onblur="flushEnjeuSave(${r?'true':'false'},'${inputId}')">${esc(prefill)}</textarea>
      </div>
      <div class="mini muted" id="${inputId}Counter" style="text-align:right;margin-top:4px">${prefill.length} / ${CUSTOM_MAX}</div>
@@ -14733,6 +14733,31 @@ let enjeuSaveTimers={};
 // v8.525 — hauteur du champ gage/récompense = hauteur de son texte (jamais de défilement interne).
 // Appelée à la frappe, au focus, après une idée piochée et en fin de `render()`. Pas de plafond :
 // 150 caractères font au plus ~6 lignes à 320 px, le bloc reste raisonnable.
+/* ⚠️ v8.535 (10/10/2026, bug remonté par Hervé) — LA LIMITE DE 100 CARACTÈRES EST VERROUILLÉE À LA SAISIE.
+   `maxlength` seul ne suffit pas : les claviers mobiles (texte prédictif, composition Gboard, dictée) et
+   certains collages le contournent — le compteur affichait « 112 / 100 » et l'enregistrement coupait
+   ensuite à 100. Ici, à CHAQUE saisie (et en fin de composition) : sauts de ligne remis à plat (comme
+   avant), puis ce qui dépasse est retiré AU POINT D'INSERTION — le 101e caractère tapé est refusé, un
+   collage trop long est raccourci à ce qui tient, le texte déjà présent n'est jamais rogné par la fin.
+   Jamais une demi-paire de substitution (emoji coupé). Compteur au plus « 100 / 100 ». `maxlength` reste
+   en place (première barrière sur ordinateur) ; la sauvegarde `slice(0,CUSTOM_MAX)` aussi (filet). */
+function limiterSaisieEnjeu(v, pos){
+  const plat=x=>x.replace(/[\r\n]+/g,' ');
+  if(pos==null || pos<0 || pos>v.length) pos=v.length;
+  let a=plat(v.slice(0,pos)), b=plat(v.slice(pos));
+  if(b.length>CUSTOM_MAX){ b=b.slice(0,CUSTOM_MAX); const c=b.charCodeAt(b.length-1); if(c>=0xD800&&c<=0xDBFF) b=b.slice(0,-1); }
+  if(a.length+b.length>CUSTOM_MAX){ a=a.slice(0,Math.max(0,CUSTOM_MAX-b.length)); const c=a.charCodeAt(a.length-1); if(a.length && c>=0xD800&&c<=0xDBFF) a=a.slice(0,-1); }
+  return { texte:a+b, curseur:a.length };
+}
+function saisieEnjeu(el, r, inputId){
+  if(!el) return;
+  const v=el.value, pos=(typeof el.selectionStart==="number")?el.selectionStart:v.length;
+  const lim=limiterSaisieEnjeu(v,pos);
+  if(lim.texte!==v){ el.value=lim.texte; try{ el.setSelectionRange(lim.curseur,lim.curseur); }catch(e){} }
+  ajusterSaisieEnjeu(el);
+  const c=document.getElementById(inputId+'Counter'); if(c) c.textContent=el.value.length+' / '+CUSTOM_MAX;
+  scheduleEnjeuSave(r, inputId);
+}
 function ajusterSaisieEnjeu(el){ if(!el) return; try{ el.style.height="auto"; el.style.height=(el.scrollHeight+2)+"px"; }catch(e){} }
 function scheduleEnjeuSave(r, inputId){
   clearTimeout(enjeuSaveTimers[inputId]);
