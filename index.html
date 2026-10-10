@@ -2982,7 +2982,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.535";
+const APP_VERSION = "v8.536";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5724,8 +5724,6 @@ const EN={
   "⚽ Réels":"⚽ Real", "🎮 Simulé":"🎮 Simulated",
   "Bonus":"Bonuses", "6 bonus essentiels.":"6 essential bonuses.", "14 bonus, plus de stratégie.":"14 bonuses, more strategy.",
   "Rythme":"Pace", 
-  "En simulé, la journée se résout dès que tout le monde a validé — ce délai ne sert que si quelqu'un tarde.":
-    "In simulated mode, the matchday resolves as soon as everyone has confirmed — this delay only matters if someone is late.",
   "Enjeu":"Stakes", "Gage":"Forfeit", "Récompense":"Reward", "Gage + Récompense":"Forfeit + Reward",
   "Une seule vente, avant la première journée.":"A single auction, before the first matchday.",
   "Une seconde vente à la mi-saison ; les bonus non utilisés sont perdus.":"A second auction at mid-season; unused bonuses are lost.",
@@ -6146,7 +6144,6 @@ const EN={
   "Partage-le pour inviter d'autres joueurs.":"Share it to invite more players.",
   "Joueurs inscrits · {a}/{b}":"Players signed up · {a}/{b}", "Joueurs inscrits · {a}":"Players signed up · {a}", "organisateur":"organizer", "toi":"you", "Retirer":"Remove", "Prêt":"Ready",
   "Joueur IA":"AI player", "ajouté au lancement (nombre impair)":"added at launch (odd number)", "équilibre":"balance",
-  "⏱️ Rythme":"⏱️ Pace",
   // ── v8.216 : le détail chiffré d'un bonus joué (temps forts) ──
   "Ce que le bonus a changé":"What the bonus changed",
   "Joué par {a}":"Played by {a}",
@@ -7775,7 +7772,7 @@ const EN={
   "Modifiable jusqu'au lancement de la Préparation":"Editable until Preparation starts",
   "Génère une image récapitulative":"Generate a recap image", "Relancer une compétition":"Start a new competition",
   "Crée une nouvelle ligue avec les mêmes joueurs":"Creates a new league with the same players",
-  "Rythme, mode, enjeu, données, enchères":"Rhythm, mode, stakes, data, auctions",
+  "Mode, enjeu, données, enchères":"Mode, stakes, data, auctions",
   "Les records de la ligue":"The league's records", "Plus grosse journée":"Biggest single day",
   "Plus longue série de victoires en duel":"Longest run of duels won",
   "Meilleure cote gagnée":"Best winning odds", "Le plus précis":"The most accurate",
@@ -7913,8 +7910,7 @@ const EN={
   "Journée après journée, tous les points que tu remportes alimentent le classement de ta ligue.":"Matchday after matchday, every point you win feeds your league's standings.",
   "🏆 Termine premier pour décrocher la récompense.":"🏆 Finish first to win the reward.",
   "😈 Et surtout… évite la dernière place et son gage !":"😈 And above all… avoid last place and its forfeit!",
-  // v8.532 — rythme unique Tactizo
-  "Rythme Tactizo":"Tactizo pace",
+  // v8.532 — rythme unique Tactizo (phrase des Règles)
   "Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>.":"You have <b>at least 12 hours to pick your matches</b>, a little longer if the deadline falls at night. Then <b>at least 12 hours to make your predictions</b>.",
   "Ces rencontres commencent <b>au moins {p} h</b> après la fin du choix des matchs — le temps de faire tes pronostics — et se jouent dans les 24 h qui suivent, jamais des jours plus tard. Si la période est creuse — trop peu de rencontres, ou trop peu de football — la fenêtre s'ouvre <b>d'une seule journée de plus</b> pour aller chercher de vraies affiches plutôt qu'un match anonyme tout proche. Au-delà, la journée compte simplement <b>moins de {a} rencontres</b>.":"These matches start <b>at least {p} h</b> after the match pick closes — time for your predictions — and are played within the following 24 hours, never days later. If the period is quiet — too few matches, or too little football — the window opens <b>one more day</b> to find real headline games rather than an anonymous match close by. Beyond that, the matchday simply has <b>fewer than {a} matches</b>.",
 };
@@ -13175,7 +13171,7 @@ function openLeagueMenu(){
   // statut : dès que la ligue ne peut plus concrètement accueillir de joueur, l'action disparaît.
   const canJoin = L.status==="lobby" && players.filter(p=>!p.is_ai).length<MAX_PLAYERS;
   const rows=[];
-  rows.push({ic:"settings", label:t("Paramètres de la ligue"), sub:t("Rythme, mode, enjeu, données, enchères"), onclick:"openLeagueParamsModal()"});
+  rows.push({ic:"settings", label:t("Paramètres de la ligue"), sub:t("Mode, enjeu, données, enchères"), onclick:"openLeagueParamsModal()"});
   if(canJoin) rows.push({ic:"link", label:t("Copier le code d'invitation"), sub:t("Code : ")+esc(L.code||""), onclick:"copyCode()"});
   rows.push({ic:"book", label:t("Règles du jeu"), sub:t("Revoir le fonctionnement de Tactizo"), onclick:"openRulesFull()"});
   if(canRen) rows.push({ic:"edit", label:t("Modifier le nom de la ligue"), sub:t("Modifiable jusqu'au lancement de la Préparation"), onclick:"renameLeague()"});
@@ -13319,10 +13315,7 @@ function viewCreate(){
         ${pair(g.mode==='simple',"setNew('mode','simple')",t(MODES.simple.n),t("6 bonus essentiels."))}
         ${pair(g.mode==='complet',"setNew('mode','complet')",t(MODES.complet.n),t("14 bonus, plus de stratégie."),premBadge('bonuscomplets'))}
       </div>
-      <div class="a2-sec-title">${secIc('icone-rythme.png')}${t("Rythme")}${secInfo('formula')}</div>
-      <div class="a2-note"><span>⏱️</span><span>${t("Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>.")}${g.data==='sim'
-        ? '<br>'+t("En simulé, la journée se résout dès que tout le monde a validé — ce délai ne sert que si quelqu'un tarde.")
-        : ''}</span></div>`;
+      `;   // v8.536 (10/10/2026, Hervé) — plus de section « Rythme » : rythme unique, aucun choix à faire ici (expliqué dans les Règles).
   } else if(createStep===3){
     eyebrow=t("Étape 3 sur 3"); title=t("Pimente ta ligue"); sub=t("L'enjeu qui donne envie de gagner (ou de ne pas perdre).");
     body = !solo ? `<div class="a2-sec-title">${t("Enjeu")}</div>
@@ -14275,8 +14268,6 @@ function viewLobby(){
     ${addAI?`<div class="box row" style="border-style:dashed"><div class="row" style="gap:9px"><span class="sport">🤖</span><div><b>${t("Joueur IA")}</b> ${premBadge('ia')}<div class="mini muted">${solo?t("Ton adversaire <b>si tu clôtures maintenant</b>, à toi seul"):t("ajouté au lancement (nombre impair)")}</div></div></div><span class="chip b">${solo?t("si solo"):t("équilibre")}</span></div>`:""}
     ${/* ⚠️ v8.204 — plus de condition sur le mode de données : voir la note de l'écran de
          création. Le délai sert de garde-fou anti-retardataire, y compris en simulé. */''}
-    <h2>${t("⏱️ Rythme")}</h2>
-    <div class="box mini muted">${t("Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>.")}</div>
     <h2>${t("🎛️ Mode de jeu")}</h2>
     ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     ${/* ⚠️ v8.85 — RAPPELÉ AUSSI DANS LE SALON. C'est là que les invités arrivent avec un code ;
@@ -15103,8 +15094,8 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
      résout dès que tout le monde a validé, le délai n'a aucune valeur ajoutée ») ne tient
      pas dès qu'un joueur tarde : `shouldAutoResolve()` retombe sur l'échéance de la formule.
      Cacher le réglage le rendait invisible dans le seul cas où il décide de quelque chose. */
-  return kv("⏱️ "+t("Rythme"), t("Rythme Tactizo"), 'formula')
-   + kv("🎛️ "+t("Mode"), t(MODES[getMode()].n), 'mode')
+  // v8.536 — plus de ligne « Rythme » : rythme unique, ce n'est plus un paramètre (cf. Règles).
+  return kv("🎛️ "+t("Mode"), t(MODES[getMode()].n), 'mode')
    + kv("🎲 "+t("Données"), (L.data_mode==='real')?t("⚽ Réels"):t("🎮 Simulé"), 'data')
    + kv("🃏 "+t("Enchères"), hasTreve()?t("Départ + trêve"):t("Au départ"), 'treve')
    + extra; }
@@ -15119,7 +15110,6 @@ function createOptInfo(kind){
   if(kind==='data'){ const real=(g.data==='real'); emoji="🎲"; title=real?t("⚽ Matchs réels"):t("🎮 Matchs simulés");
     body=real?t("Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : particulièrement adapté pour découvrir Tactizo, jouer immédiatement en solo, ou faire une partie entre amis sans attendre de vrais résultats sportifs."); }
   else if(kind==='mode'){ const mk=(g.mode==='simple')?'simple':'complet'; const m=MODES[mk]; emoji="🎛️"; title=t(m.n); body=modeDesc(mk,g.type==='solo'); if(mk==='complet') premKey='bonuscomplets'; }
-  else if(kind==='formula'){ emoji="⏱️"; title=t("Rythme Tactizo"); body=t("Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>."); }
   else if(kind==='treve'){ emoji="🃏";
     title = g.treve?t("Enchères au départ et à la trêve"):t("Enchères au départ seulement"); if(g.treve) premKey='treve';
     body = g.treve
@@ -15137,8 +15127,7 @@ function createOptInfo(kind){
 function paramInfo(kind){
   let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
   let emoji="ℹ️", title="", body="";
-  if(kind==='formula'){ emoji="⏱️"; title=t("Rythme Tactizo"); body=t("Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>."); }
-  else if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=modeDesc(getMode(),isSolo()); }
+  if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=modeDesc(getMode(),isSolo()); }
   else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("⚽ Matchs réels"):t("🎮 Matchs simulés"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : particulièrement adapté pour découvrir Tactizo, jouer immédiatement en solo, ou faire une partie entre amis sans attendre de vrais résultats sportifs."); }
   else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")); }
   else if(kind==='solo'){ emoji="🤖"; const one=(o.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
@@ -15211,9 +15200,7 @@ function prepInfosTab(){
 // direct via startLeagueCore(), cf. createLeague()/relaunchLeague()) — seules les ligues Entre amis
 // atteignent jamais ce modal en statut "lobby".
 function lobbyParamsEditHTML(){
-  return `<h2 style="margin-top:0">${t("⏱️ Rythme")}</h2>
-    <div class="box mini muted">${t("Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>.")}</div>
-    <h2>${t("🎛️ Mode")}</h2>
+  return `<h2 style="margin-top:0">${t("🎛️ Mode")}</h2>
     ${['complet','simple'].map(k=>{const M=MODES[k]; const cur=(getMode()===k); return `<div class="box row clik" onclick="setMode('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${t(M.n)}</b>${k==='complet'?' '+premBadge('bonuscomplets'):''}<div class="mini muted">${t(M.d)}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles (test)"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row clik" onclick="setDataMode('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
@@ -21186,7 +21173,6 @@ function showLeagueInfo(lid){
      dans l'app plutôt que d'inventer une troisième formulation pour la même règle. */
   const row=(lab,val,desc)=>`<div class="info-row clik" onclick="this.nextElementSibling.classList.toggle('hide')"><b>${lab}</b><span class="val">${val} ℹ️</span></div><div class="mini muted hide" style="margin:-2px 2px 10px">${desc}</div>`;
   let body=`<div class="mini muted" style="margin-bottom:10px">${t("Code")} ${esc(lg.code)} · ${statusLabel(lg)}${(lg.num_days?' · '+t("{a} journées",{a:lg.num_days}):'')}</div>
-    ${row(t("⏱️ Rythme"), t("Rythme Tactizo"), t("Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>."))}
     ${row(t("🎛️ Mode de jeu"), mode==="simple"?t("Simple"):t("Complet"), modeDesc(mode,solo))}
     ${/* ⚠️ Bloc 3A, correctif (2026-09-05, signalé par Hervé) — LE CAS "both" (Gage + Récompense)
          N'ÉTAIT JAMAIS TESTÉ : le ternaire `rew?...:...` ne distinguait que reward vs pas-reward,
