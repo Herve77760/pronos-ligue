@@ -2982,7 +2982,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.1";
+const APP_VERSION = "v8.538.2";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -7092,7 +7092,9 @@ const EN={
   "Tu n'as pas parié : duel perdu d'office.":"You didn't bet: duel lost by default.",
   "{a} n'a pas parié : duel gagné d'office pour toi.":"{a} didn't bet: duel won by default for you.",
   "Situations indicatives : les bonus restent secrets jusqu'aux résultats.":"Indicative states: bonuses stay secret until the results.",
-  "Situation indicative basée sur les informations actuellement révélées. Les Favoris et bonus encore secrets peuvent modifier le résultat final.":"Indicative, based on what's currently revealed. Secret Favourites and bonuses can still change the final result.",
+  "Situation indicative basée sur les matchs terminés. Un éventuel bonus de {a} reste secret jusqu'aux résultats et peut encore modifier le résultat final.":"Indicative, based on finished matches. Any bonus {a} played stays secret until the results and can still change the final result.",
+  "Situation indicative basée sur les matchs terminés, ton bonus compris. Un éventuel bonus de {a} reste secret jusqu'aux résultats et peut encore modifier le résultat final.":"Indicative, based on finished matches, your bonus included. Any bonus {a} played stays secret until the results and can still change the final result.",
+  "Situation indicative basée sur les matchs terminés. Ton bonus agit sur celui de {a}, secret jusqu'aux résultats : son effet n'y est pas encore compté.":"Indicative, based on finished matches. Your bonus acts on {a}'s, which stays secret until the results: its effect isn't counted here yet.",
   "⚡ <b>Duel Live actif</b> — Suis ton duel en direct, match par match.":"⚡ <b>Live Duel active</b> — Follow your duel live, match by match.",
   "⚡ Grâce à ton option <b>Duel Live</b>, tu vois aussi les pronos des autres duels.":"⚡ Thanks to your <b>Live Duel</b> option, you also see the picks from other duels.",
   "Les pronos des autres duels sont masqués — l'option ⚡ <b>Duel Live</b> les révèle, comme ceux de ton adversaire.":"Other duels' picks are hidden — the ⚡ <b>Live Duel</b> option reveals them, just like your opponent's.",
@@ -10072,48 +10074,46 @@ function monBonusMatchHTML(bt,i){
 }
 // ⚠️ LOT 4 (2026-09-10) — "Situation actuelle du duel" : estimation indicative réservée à
 // `hasOpt('duel_live')`, une fois les paris clôturés. Fonction PARTAGÉE entre `afterCloseDuelHTML()`
-// (onglet Pronos) et `waitingResultsBody()` (onglet Résultats) plutôt que dupliquée une 3ᵉ fois —
-// les deux écrans dupliquaient déjà la même mise en page duel/résultats (cf. leur commentaire
-// mutuel), inutile d'ajouter un 3ᵉ endroit à tenir synchronisé.
-// ⚠️ CALCUL VOLONTAIREMENT SANS AUCUN EFFET DE BONUS (ni le sien, ni celui de l'adversaire) :
-// le bonus adverse reste TOUJOURS secret jusqu'au dénouement, même avec `duel_live` (cf.
-// PITCHES.duel_live : "Favoris et bonus gardent une part de suspense jusqu'au dénouement" —
-// fiche raccourcie au Lot 6.1, même règle). Comparer un net qui inclut SON PROPRE bonus à un net qui ignore celui de
-// l'adversaire serait une comparaison non homogène — donc AUCUN bonus des deux côtés, seulement
-// `stake*(odd-1)` (ou `-stake`) et le doublement Favori (👑). Le doublement Favori N'A PAS besoin
-// d'être neutralisé : dès que ce bloc est visible (duel_live + clôture), les deux marqueurs 👑
-// sont déjà révélés ailleurs sur ce même écran (`ligne()`/`myTxt`/`opTxt`, juste au-dessus) — ce
-// n'est donc plus une information secrète à CET instant, contrairement au bonus adverse qui, lui,
-// ne l'est jamais avec cette option. Implémenté selon ce qui est effectivement visible, pas selon
-// une hypothèse générale sur le Favori.
-// Réutilise `liveVerdict()`/`oddOf()` (déjà utilisés par les deux écrans) plutôt que `pickCalc()`
-// (pensée pour l'écran Résultats une fois TOUT résolu, où les bonus sont publics : la réutiliser
-// ici inclurait par erreur des effets encore secrets côté adversaire).
-// ⚠️ Un match ANNULÉ compte comme "terminé" (mise rendue, net 0 des deux côtés — même convention
-// que `gainMise()`/`winCount()` ailleurs) ; un match pas encore résolu n'est ni compté ni chiffré.
-function duelSituationCalc(duel){
+// (onglet Pronos) et `waitingResultsBody()` (onglet Résultats) plutôt que dupliquée une 3ᵉ fois.
+/* ⚠️ v8.540 (validé par Hervé, 11/10/2026 — cas réel P9RWG J7 : Celta 5 € + 🧈 Nul, 0–0 → +11,80 €, alors que la
+   Situation affichait −5 €) — LA SITUATION COMPTE MES PROPRES BONUS, ET SEULEMENT LES MIENS.
+   • `viewerId` = le joueur qui regarde SON écran (S.myId). Son bonus est appliqué PAR LE MOTEUR LUI-MÊME
+     (`runEngine`, celui de la résolution — AUCUNE formule recopiée) : 🧈 🐗 🔥 🛡 🃏 🏷️ sur ses paris, mais aussi
+     ses effets sur l'ADVERSAIRE (🎁 inversion, 🤛 gain réduit, ❄️ échange, 🩸 ponction, ✂️ moitié) et sur lui-même
+     (🪂). Je connais mon bonus : il est normal que mon écran en tienne compte, des deux côtés.
+   • Le bonus de l'ADVERSAIRE n'est JAMAIS lu, même si le client l'a reçu : secret jusqu'à la résolution, même avec
+     ⚡ Duel Live. Sa carte est passée à `null` au moteur. Règle symétrique : sur SON écran, c'est son bonus qui
+     compte et jamais le mien — ce qu'il voit est donc identique, au caractère près, que j'aie joué un bonus ou non.
+   • 🥷 Voleur / 🧬 Clone agissent sur le bonus adverse, inconnu : sans effet ici (le moteur ne trouve rien à
+     prendre ni à copier) — ils ne se dévoilent qu'aux résultats. Bonus volé (`stolenBy`) : neutralisé, comme
+     `pariNetReel`.
+   • `viewerId` nul (autres duels, `duelSituationAutreHTML`) : AUCUN bonus, des deux côtés — ceux d'un tiers sont
+     secrets pour moi.
+   • Matchs pas encore terminés : passés au moteur comme ANNULÉS (mise rendue, net 0, ignorés par 🏷️/❄️/🤛) —
+     « ni comptés ni chiffrés », comme avant ; un match réellement annulé compte comme terminé, net 0.
+   • Le doublement Favori 👑 est compté des deux côtés : les deux 👑 sont déjà révélés à cet instant sur ce même
+     écran (`ligne()`/`myTxt`/`opTxt`), contrairement au bonus adverse.
+   ⚠️ Après la résolution, cet encart n'existe plus : Résultats affiche le net DÉFINITIF (pickCalc/bets.net). */
+function duelSituationCalc(duel, viewerId){
   if(!duel || !Array.isArray(duel.fixtures)) return null;
-  const fx=duel.fixtures.filter(f=>f);
-  if(!fx.length) return null;
-  const homeB=(bets||[]).find(b=>b.player_id===duel.home_id);
-  const awayB=(bets||[]).find(b=>b.player_id===duel.away_id);
-  const legNet=(bt,f,i)=>{
-    if(!bt || !Array.isArray(bt.picks) || !bt.picks[i]) return 0;
-    const b=bt.picks[i]; if(b.sel==null) return 0;
-    const odd=oddOf(f,b.sel); if(!odd) return 0;
-    const win=(b.sel===f.res);
-    let g=win?(+b.stake||0)*(odd-1):-(+b.stake||0);
-    if(i===bt.captain) g*=2;
-    return g;
-  };
-  let nFini=0, gHome=0, gAway=0;
-  fx.forEach((f,i)=>{
-    if(f.canceled){ nFini++; return; }
-    if(!liveVerdict(f,null)) return;
-    nFini++;
-    gHome+=legNet(homeB,f,i); gAway+=legNet(awayB,f,i);
+  const fixtures=duel.fixtures, total=fixtures.filter(f=>f).length;
+  if(!total) return null;
+  // Résultat d'un match terminé (score tombé), sinon null — même détecteur que l'affichage (`liveVerdict`).
+  const resFini=f=>{ if(!f||f.canceled||!liveVerdict(f,null)) return null; return f.res||((liveRes[f.evId]||{}).res)||null; };
+  const ids=[duel.home_id,duel.away_id], PD={}, capStart={};
+  ids.forEach((pid,k)=>{
+    const bt=(bets||[]).find(b=>b.player_id===pid);
+    if(!bt || !Array.isArray(bt.picks) || !bt.picks.length) return;
+    const c=(viewerId!=null && pid===viewerId && bt.card && bt.card.id && !bt.card.stolenBy) ? bt.card : null;
+    PD[pid]={ oppId:ids[1-k], captain:bt.captain, card:c,
+      picks:fixtures.map((f,i)=>{ const b=bt.picks[i]; return {sel:(b&&b.sel!=null)?b.sel:null, stake:b?(+b.stake||0):0}; }),
+      fx:fixtures.map((f,i)=>{ const b=bt.picks[i], r=resFini(f);
+        return (r && b && b.sel!=null && oddOf(f,b.sel)) ? Object.assign({},f,{res:r}) : {canceled:true}; }) };
+    capStart[pid]=+((pById(pid)||{}).capital)||0;
   });
-  return {total:fx.length, nFini, gHome:Math.round(gHome*100)/100, gAway:Math.round(gAway*100)/100};
+  const net=Object.keys(PD).length ? runEngine(PD,capStart,[duel]).dayNet : {};
+  const nFini=fixtures.filter(f=>f && (f.canceled || resFini(f))).length;
+  return {total, nFini, gHome:(net[duel.home_id]||0), gAway:(net[duel.away_id]||0)};
 }
 // ⚠️ v8.513 (validé par Hervé) — FORFAIT : même règle que sur les autres duels (duelSituationForfait,
 // partagée). Un joueur sans pari à la clôture a perdu d'office : « devant/derrière pour l'instant »
@@ -10128,7 +10128,7 @@ function duelSituationForfait(duel){
 }
 function duelSituationHTML(duel){
   if(!duel) return '';
-  const calc=duelSituationCalc(duel); if(!calc) return '';
+  const calc=duelSituationCalc(duel, S.myId); if(!calc) return '';
   const fo=duelSituationForfait(duel); if(fo.iaAttente) return '';
   const iAmHome=(duel.home_id===S.myId);
   const oppNom=avaName(pById(iAmHome?duel.away_id:duel.home_id)||{});
@@ -10139,6 +10139,12 @@ function duelSituationHTML(duel){
     : advOubli ? t("{a} n'a pas parié : duel gagné d'office pour toi.",{a:pname(pById(iAmHome?duel.away_id:duel.home_id)||{})})
     : gMoi>gAdv ? t("Tu es devant pour l'instant") : (gMoi<gAdv ? t("Tu es derrière pour l'instant") : t("Vous êtes à égalité pour l'instant"));
   const mnt=v=>`<b class="${v>0?'green':(v<0?'red':'muted')}">${euroSigned(v)}</b>`;
+  // v8.540 — la note dit ce qui est compté : MON bonus (lu sur MON pari seulement), jamais celui de l'adversaire.
+  const mb=(bets||[]).find(b=>b.player_id===S.myId), mc=(mb&&mb.card&&mb.card.id&&!mb.card.stolenBy)?mb.card.id:null;
+  const advN=pname(pById(iAmHome?duel.away_id:duel.home_id)||{});
+  const note = !mc ? t("Situation indicative basée sur les matchs terminés. Un éventuel bonus de {a} reste secret jusqu'aux résultats et peut encore modifier le résultat final.",{a:advN})
+    : (mc==="voleur"||mc==="clone") ? t("Situation indicative basée sur les matchs terminés. Ton bonus agit sur celui de {a}, secret jusqu'aux résultats : son effet n'y est pas encore compté.",{a:advN})
+    : t("Situation indicative basée sur les matchs terminés, ton bonus compris. Un éventuel bonus de {a} reste secret jusqu'aux résultats et peut encore modifier le résultat final.",{a:advN});
   return `<div class="box" style="border:1px dashed var(--gold-dim);background:rgba(231,184,75,.08)">
     <div class="boxttl">⚡ ${t("Situation actuelle")}</div>
     <div class="mini muted" style="margin:2px 0 10px">${t("{a} matchs terminés sur {b}",{a:calc.nFini,b:calc.total})}</div>
@@ -10147,12 +10153,12 @@ function duelSituationHTML(duel){
       <div style="text-align:right"><div class="mini muted">${oppNom}</div>${mnt(gAdv)}</div>
     </div>
     <div class="mini" style="margin-top:8px">${cmp}</div>
-    <div class="mini muted" style="margin-top:8px;line-height:1.5">${t("Situation indicative basée sur les informations actuellement révélées. Les Favoris et bonus encore secrets peuvent modifier le résultat final.")}</div>
+    <div class="mini muted" style="margin-top:8px;line-height:1.5">${note}</div>
   </div>`;
 }
 /* ⚠️ v8.513 (demandé par Hervé, 01/10/2026) — « SITUATION ACTUELLE » SUR LES AUTRES DUELS, pour qui
    possède ⚡ Duel Live, une fois les paris clôturés. MÊME CALCUL que sur son propre duel
-   (`duelSituationCalc`, inchangé) : AUCUN effet de bonus, des deux côtés ; le doublement Favori 👑
+   (`duelSituationCalc`), mais SANS VIEWER (v8.540) : AUCUN effet de bonus, des deux côtés — ceux d'un tiers sont secrets ; le doublement Favori 👑
    compté, car sur ces duels aussi les deux 👑 sont déjà affichés juste au-dessus par `ligne()` dès que
    l'option révèle les pronos (`voirAdv`) — ce n'est plus un secret à cet instant, contrairement aux
    bonus, jamais révélés avant les résultats. Seule la FORME change : les deux noms au lieu de
@@ -10164,7 +10170,7 @@ function duelSituationHTML(duel){
    comme terminé, net 0 (mêmes conventions que `duelSituationCalc`). */
 function duelSituationAutreHTML(duel){
   if(!duel) return '';
-  const calc=duelSituationCalc(duel); if(!calc) return '';
+  const calc=duelSituationCalc(duel, null); if(!calc) return '';
   const fo=duelSituationForfait(duel); if(fo.iaAttente) return '';
   const {pH, pA, oH, oA}=fo;
   const verdict = (oH && oA) ? t("Aucun des deux n'a parié : pas de vainqueur.")
