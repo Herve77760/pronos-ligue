@@ -2982,7 +2982,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538";
+const APP_VERSION = "v8.538.1";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -7916,6 +7916,12 @@ const EN={
   // v8.532 — rythme unique Tactizo (phrase des Règles)
   "Tu as <b>au moins 12 h pour choisir tes matchs</b>, un peu plus si l'échéance tombe la nuit. Ensuite, <b>au moins 12 h pour faire tes pronostics</b>.":"You have <b>at least 12 hours to pick your matches</b>, a little longer if the deadline falls at night. Then <b>at least 12 hours to make your predictions</b>.",
   "Ces rencontres commencent <b>au moins {p} h</b> après la fin du choix des matchs — le temps de faire tes pronostics — et se jouent dans les 24 h qui suivent, jamais des jours plus tard. Si la période est creuse — trop peu de rencontres, ou trop peu de football — la fenêtre s'ouvre <b>d'une seule journée de plus</b> pour aller chercher de vraies affiches plutôt qu'un match anonyme tout proche. Au-delà, la journée compte simplement <b>moins de {a} rencontres</b>.":"These matches start <b>at least {p} h</b> after the match pick closes — time for your predictions — and are played within the following 24 hours, never days later. If the period is quiet — too few matches, or too little football — the window opens <b>one more day</b> to find real headline games rather than an anonymous match close by. Beyond that, the matchday simply has <b>fewer than {a} matches</b>.",
+  // v8.540 — Duel Live / Résultats : mon 🧈 et mes bonus ciblés sur le match visé
+  "{a} ou {b}":"{a} or {b}", "{e} {n} : {d}":"{e} {n}: {d}",
+  "2 résultats couverts pour 1 mise":"2 outcomes covered for 1 stake", "gain doublé si ce pari gagne":"winnings doubled if this bet wins",
+  "gain ×3, perte ×2 sur ce pari":"win ×3, loss ×2 on this bet", "perte divisée par 2 si ce pari perd":"loss halved if this bet loses",
+  "gain et perte doublés sur ce pari":"win and loss doubled on this bet", "gain en plus si tes 2 matchs ciblés passent":"extra winnings if both your targeted matches come in",
+  "gain adverse divisé par 2 sur ce match":"opponent's winnings halved on this match", "pari adverse inversé sur ce match":"opponent's bet flipped on this match",
 };
 function t(s,subs){ let out=(lang==="en"&&EN[s]!=null)?EN[s]:s; if(subs){ for(const k in subs) out=out.split("{"+k+"}").join(subs[k]); }
   // Espace INSÉCABLE entre un nombre et son unité : « 10 € » ne doit jamais se retrouver coupé en
@@ -10009,7 +10015,10 @@ function dcOdd(o1,o2){ return +(1/(1/o1+1/o2)).toFixed(2); }
    ⚠️ AUCUNE FUITE : `f.res` n'est écrit que pour un match TERMINÉ, et `liveVerdict` n'est appelé
    que derrière l'option ⏱️ (`liveShow`). On montre ce que la base sait déjà, pas plus tôt.
    ⚠️ Et c'est la source la PLUS SÛRE des deux : c'est exactement celle qui décidera des gains. */
-function liveVerdict(f, sel){
+/* ⚠️ v8.540 (Hervé, 11/10/2026) — `sel2` = 2ᵉ résultat couvert par MON 🧈 « Le beurre et l'argent du beurre »
+   (voir `sel2Proprio`). ⚠️ JAMAIS celui d'un adversaire : son bonus reste secret jusqu'à la résolution, même
+   avec ⚡ Duel Live — son pari se juge sur son 1er choix seul, comme s'il n'avait aucun bonus. */
+function liveVerdict(f, sel, sel2){
   const r = (f && f.res) ? {completed:true, res:f.res} : liveRes[f.evId];
   if(!(r && r.completed && r.res)) return null;
   const w = r.res==='1' ? tnm(f,f.home) : (r.res==='2' ? tnm(f,f.away) : t("Nul"));
@@ -10027,8 +10036,39 @@ function liveVerdict(f, sel){
   const as = (r.as!=null) ? r.as : (f ? f.as : null);
   const sc = (hs!=null && as!=null) ? ` ${hs}–${as}` : '';
   if(sel==null) return {txt:esc(w)+sc, ok:null};
-  const ok=(r.res===sel);
+  const ok=(r.res===sel) || (sel2!=null && r.res===sel2);
   return {txt:(ok?"✓ ":"✗ ")+esc(w)+sc, ok};
+}
+/* ⚠️ v8.540 (demandé par Hervé, 11/10/2026 — cas réel P9RWG J7, Elche–Celta, Celta 5 € @2,62 + 🧈 Nul @3,36,
+   0–0 → gagné +11,80 €) — MON PARI 🧈 EN DIRECT. Duel Live et Résultats ne montraient que le 1er choix et le
+   jugeaient seul : « ✗ Nul 0–0 » en ROUGE sur un pari GAGNÉ. Le 2ᵉ choix et sa cote s'affichent désormais, et le
+   verdict compte les deux résultats couverts (`liveVerdict(f, sel, sel2)`).
+   ⚠️ CONFIDENTIALITÉ — CES AIDES NE SERVENT QU'À MON PROPRE PARI (`bt` = mon pari). Celui de l'adversaire
+   s'affiche et se juge TOUJOURS sur son 1er choix seul, COMME S'IL N'AVAIT AUCUN BONUS — même avec ⚡ Duel Live :
+   un ✓ vert sur un prono « perdu », une 2ᵉ cote ou un 🧈 trahiraient son bonus avant la résolution.
+   AUTRES BONUS CIBLÉS (vérifié sur `pariNetReel`/`runEngine`) : AUCUN ne change l'issue gagné/perdu de MON pari —
+   🐗 ×2 si gagné, 🔥 ×3/×2, 🛡 ½ perte, 🃏 ×2, 🏷️ supplément si les 2 passent : seul le MONTANT change, que le direct
+   ne chiffre pas. 🤛 et 🎁 visent le pari ADVERSE (réduit / inversé à la résolution). Limite assumée : un 🎁 ou un
+   🥷 Voleur joué CONTRE moi (secret) peut encore changer mon issue réelle — inconnaissable avant la résolution. */
+function sel2Proprio(bt,i){ const c=bt&&bt.card; return (c&&c.id==="chance"&&c.target===i&&c.sel2&&!c.stolenBy)?c.sel2:null; }
+// Effet en quelques mots, sur le match visé par MON bonus (la fiche complète reste au clic : showCardInfo).
+const BONUS_EFFET_COURT={ chance:"2 résultats couverts pour 1 mise", double:"gain doublé si ce pari gagne",
+  tout:"gain ×3, perte ×2 sur ce pari", assurance:"perte divisée par 2 si ce pari perd", joker:"gain et perte doublés sur ce pari",
+  dbl:"gain en plus si tes 2 matchs ciblés passent", face:"gain adverse divisé par 2 sur ce match", cadeau:"pari adverse inversé sur ce match" };
+// MON pari sur un match : « 🧈 Celta Vigo ou Nul · 5 € @2,62 / 3,36 👑 » (🧈) ou « Celta Vigo · 5 € @2,62 👑 ».
+// Un seul <span> : dans `.two-col .pick-row` (flex en colonne) chaque enfant passerait sinon à la ligne.
+function monPariHTML(f,b,bt,i){
+  const s2=sel2Proprio(bt,i), o=oddOf(f,b.sel), cap=(bt&&bt.captain===i)?' 👑':'';
+  if(!s2) return `<span>${esc(labelSel(f,b.sel))} · ${euro(b.stake)}${o?` @${cote(o)}`:''}${cap}</span>`;
+  const o2=oddOf(f,s2);
+  return `<span><span class="clik" onclick="event.stopPropagation();showCardInfo('chance')">${CARDS.chance.e}</span> ${t("{a} ou {b}",{a:esc(labelSel(f,b.sel)),b:esc(labelSel(f,s2))})} · ${euro(b.stake)}${o?` @${cote(o)}${o2?' / '+cote(o2):''}`:''}${cap}</span>`;
+}
+// Courte ligne sous MON pari, sur le match visé par MON bonus : « 🧈 Le beurre et l'argent du beurre : 2 résultats
+// couverts pour 1 mise ⓘ », touchable → fiche du bonus. Rien pour un bonus sans cible (il reste dans l'encart du bonus).
+function monBonusMatchHTML(bt,i){
+  const c=bt&&bt.card; if(!(c&&c.id&&CARDS[c.id]&&cardOnMatch(c,i))) return '';
+  const C=CARDS[c.id], eff=BONUS_EFFET_COURT[c.id];
+  return `<div class="mini clik" style="margin-top:3px;color:var(--blue)" onclick="event.stopPropagation();showCardInfo('${c.id}')">${eff?t("{e} {n} : {d}",{e:C.e,n:'<b>'+esc(t(C.n))+'</b>',d:t(eff)}):`${C.e} <b>${esc(t(C.n))}</b>`} <span class="muted">ⓘ</span></div>`;
 }
 // ⚠️ LOT 4 (2026-09-10) — "Situation actuelle du duel" : estimation indicative réservée à
 // `hasOpt('duel_live')`, une fois les paris clôturés. Fonction PARTAGÉE entre `afterCloseDuelHTML()`
@@ -16738,8 +16778,9 @@ function afterCloseDuelHTML(){
      colonnes s'étirent l'une sur l'autre PAR DÉFAUT, `align-items:stretch` : le défaut d'alors ne
      peut plus se reproduire avec ce conteneur, pas besoin de reprendre le contournement flex. */
   // `sel` = mon prono sur ce match → la pastille dit si JE l'ai gagné, pas seulement qui a gagné.
-  const liveTag=(f,sel)=>{ if(!liveOn||!f.evId) return '';
-    const v=liveVerdict(f,sel);
+  // v8.540 : `sel2` = 2ᵉ résultat de MON 🧈 sur ce match (jamais celui de l'adversaire, cf. `sel2Proprio`).
+  const liveTag=(f,sel,sel2)=>{ if(!liveOn||!f.evId) return '';
+    const v=liveVerdict(f,sel,sel2);
     if(v) return ` <span class="chip ${v.ok===true?'g':(v.ok===false?'red':'')}" style="flex:0 0 auto">${v.txt}</span>`;
     if(f.canceled) return ` <span class="chip" style="flex:0 0 auto">🚫</span>`;
     return ` <span class="mini muted" style="flex:0 0 auto">⏳</span>`; };
@@ -16757,7 +16798,8 @@ function afterCloseDuelHTML(){
     : `<div class="box mini muted">${t("🃏 Aucun bonus joué cette journée.")}</div>`;
   const cards=md.fixtures.map((f,i)=>{ const mb=mine&&mine.picks&&mine.picks[i]; const ob=oppBet&&oppBet.picks&&oppBet.picks[i];
       // Bonus À CIBLE : on la marque aussi sur le match visé (cardOnMatch gère les bonus à 2 cibles).
-      const marque=cardOnMatch(mc,i)?` <span class="bem clik" onclick="event.stopPropagation();showCardInfo('${mc.id}')">${CARDS[mc.id].e}</span>`:'';
+      // v8.540 : nommé + effet en quelques mots sous MON pari (au lieu d'un emoji seul), fiche au clic.
+      const monBonus=mc?monBonusMatchHTML(mine,i):'';
       /* ⚠️ v7.41 — LA COTE MANQUAIT ICI (signalé par Hervé). On lisait « Cruzeiro · 12 € » sans
          savoir ce que ça pouvait rapporter, alors que la même information figure sur l'écran
          Résultats. La cote fait partie du pari autant que la mise : sans elle, impossible de
@@ -16779,7 +16821,8 @@ function afterCloseDuelHTML(){
       const jeNaiPasParie = !mine || (Array.isArray(mine.picks) && mine.picks.length===0);
       const myTxt = jeNaiPasParie
         ? `<span class="mini red"><b>🚫 ${t("tu n'as pas parié")}</b></span>`
-        : (mb?`${esc(labelSel(f,mb.sel))} · ${euro(mb.stake)}${cd(mb.sel)}${(mine.captain===i)?' 👑':''}${marque}`:'—');
+        // v8.540 : MON pari, 🧈 compris (« 🧈 Celta Vigo ou Nul · 5 € @2,62 / 3,36 ») — cf. monPariHTML.
+        : (mb?`${monPariHTML(f,mb,mine,i)}${monBonus}`:'—');
       /* ⚠️ v8.19 (relevé par Hervé) — « IL N'A PAS PARIÉ » DOIT SE VOIR. Un adversaire sans aucun
          pari tombait sur le même `—` discret qu'un match sans prono, alors que c'est l'information
          la plus lourde de l'écran : il perd le duel d'office. On la dit en clair et en rouge.
@@ -16791,7 +16834,7 @@ function afterCloseDuelHTML(){
         ? (seeOpp?`<span class="mini red"><b>🚫 ${t("n'a pas parié")}</b></span>`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`)
         : (ob?(seeOpp?`${esc(labelSel(f,ob.sel))} · ${euro(ob.stake)}${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—');
       return `<div class="two-col-card">
-        <div class="match-lbl">${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}${liveTag(f, mb?mb.sel:null)}</div>
+        <div class="match-lbl">${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}${liveTag(f, mb?mb.sel:null, mb?sel2Proprio(mine,i):null)}</div>
         ${compBadge(f)?`<div class="match-lbl" style="text-transform:none;letter-spacing:0;font-weight:600;padding-top:4px">${compBadge(f)}</div>`:''}
         <div class="two-col">
           <div><div class="mini muted" style="text-align:center;padding:8px 12px 0">👤 ${t("Toi")}</div><div class="pick-row" style="border-left:2px solid var(--green)">${myTxt}</div></div>
@@ -18631,8 +18674,9 @@ function waitingResultsBody(d){
     ${lastDayBanner(d)}`;
   // Résultat en direct (option premium, données réelles) à droite d'une ligne d'affiche.
   // `sel` = mon prono (null sur les duels des AUTRES : on reste neutre, cf. liveVerdict).
-  const resPart = (f,sel)=>{ if(!liveShow||!f.evId) return '';
-    const v=liveVerdict(f,sel);
+  // v8.540 : `sel2` = 2ᵉ résultat de MON 🧈 (uniquement sur mon duel, jamais celui d'un autre joueur).
+  const resPart = (f,sel,sel2)=>{ if(!liveShow||!f.evId) return '';
+    const v=liveVerdict(f,sel,sel2);
     /* ⚠️ v7.40 — UN RÉSULTAT CONNU N'EST PLUS GRISÉ (demandé par Hervé). Sur les duels des AUTRES,
        on ne tranche pas (ni ✓ ni ✗, ce n'est pas mon pari) — mais le résultat est bel et bien
        TOMBÉ. L'afficher dans le même gris que « 🕐 demain 05:00 » mettait sur le même plan un
@@ -18740,10 +18784,12 @@ function waitingResultsBody(d){
        écran pour une autre raison pour tomber dessus. */
     // ⚠️ v8.19 — même distinction que dans `line()` du récap : l'absence TOTALE de pari se dit en
     // clair et en rouge, l'absence sur un seul match reste un tiret. Voir la note là-bas.
-    const ligne=(b,capIdx,f,i)=>{
+    // v8.540 : `moi` → mon pari complet (🧈 : 2 choix + 2 cotes, bonus ciblé nommé) ; un autre joueur → 1er choix seul.
+    const ligne=(b,capIdx,f,i,moi)=>{
       if(!b || (Array.isArray(b.picks) && b.picks.length===0)) return `<span class="mini red"><b>🚫 ${t("n'a pas parié")}</b></span>`;
       if(!Array.isArray(b.picks)||!b.picks[i]) return '<span class="mini muted">—</span>';
       const p=b.picks[i]; const o=oddOf(f,p.sel);
+      if(moi) return `<span class="mini">${monPariHTML(f,p,b,i)}</span>${monBonusMatchHTML(b,i)}`;
       return `<span class="mini">${esc(labelSel(f,p.sel))} · ${euro(p.stake)}${o?' @'+cote(o):''}${capIdx===i?' 👑':''}</span>`; };
     /* ⚠️ v8.07 (demandé par Hervé) — MES MARQUEURS 👑 / 🃏 SUR L'ÉCRAN D'ATTENTE. La liste des
        affiches ne disait pas où j'avais posé mon Capitaine ni mon bonus : entre la validation et
@@ -18761,7 +18807,7 @@ function waitingResultsBody(d){
       <div class="mini" style="margin-bottom:6px"><b>${mine?'⚔️ ':''}${titreDuel}</b>${mine?` <span class="chip g">${t("ton duel")}</span>`:''}</div>
       ${fx.map((f,i)=>{ /* mon prono UNIQUEMENT sur mon duel : ailleurs on n'a pas à trancher */
         const sel=(mine && myBetNow && Array.isArray(myBetNow.picks) && myBetNow.picks[i]) ? myBetNow.picks[i].sel : null;
-        const rp=resPart(f,sel); /* résultat live si dispo ; sinon heure du coup d'envoi puis état (v7.05) */
+        const rp=resPart(f,sel,(mine && myBetNow)?sel2Proprio(myBetNow,i):null); /* résultat live si dispo ; sinon heure du coup d'envoi puis état (v7.05) */
         /* ⚠️ v8.111 (capture d'Hervé) — LE VERDICT ("✓ Wolverhampton Wanderers") DÉBORDAIT OU
            CASSAIT LE NOM DU MATCH. Même cause que le défaut corrigé en v8.57 sur l'écran Pronos,
            jamais reporté ici : le badge de droite est `flex:0 0 auto` (ne rétrécit jamais) et la
@@ -18794,7 +18840,7 @@ function waitingResultsBody(d){
                    `event.stopPropagation()` : la cellule vit dans des blocs cliquables ailleurs. */
                 const visible=(moi||voirAdv);
                 const contenu=visible
-                  ? ligne(b,b?b.captain:-1,f,i)
+                  ? ligne(b,b?b.captain:-1,f,i,moi)
                   : `<span class="mini clik" style="color:var(--muted);letter-spacing:2px" title="${t("Fonction premium")}" onclick="event.stopPropagation();showPremiumInfo('duel_live')">🔒 •••</span>`;
                 /* ⚠️ TROIS CONDITIONS, ET AUCUNE N'EST FACULTATIVE.
                    1. `liveShow` — le verdict est sous l'option ⏱️. `f.res` est écrit dès que le
@@ -18804,13 +18850,12 @@ function waitingResultsBody(d){
                       cadenassée dirait si le prono caché est gagnant : le cadenas ne cacherait plus
                       rien. C'est la fuite de la v7.43, à l'identique.
                    3. un prono existe sur ce match — sinon il n'y a rien à juger.
-                   ⚠️ LE 🧈 DOUBLE CHANCE N'EST PAS PRIS EN COMPTE (il couvre un 2ᵉ résultat) : un
-                   pari gagné par ce bonus s'affichera rouge jusqu'à la résolution. C'est le même
-                   raccourci que `liveTag` et `resPart` font déjà — les bonus restent cachés jusqu'aux
-                   résultats, on ne PEUT pas en tenir compte ici sans les dévoiler. Corriger cette
-                   cellule seule la ferait diverger des deux autres affichages. */
+                   ⚠️ v8.540 — LE 🧈 EST PRIS EN COMPTE POUR MA CELLULE SEULEMENT (et, à l'identique, par
+                   `liveTag` et `resPart`) : mon pari gagné par mon 2ᵉ résultat couvert passe au vert. Pour
+                   tout AUTRE joueur, on juge le 1er choix seul, comme s'il n'avait aucun bonus — son
+                   bonus est secret jusqu'à la résolution, et un vert « inexpliqué » le trahirait. */
                 const selJ=(visible && b && Array.isArray(b.picks) && b.picks[i]) ? b.picks[i].sel : null;
-                const vj=(liveShow && selJ!=null) ? liveVerdict(f,selJ) : null;
+                const vj=(liveShow && selJ!=null) ? liveVerdict(f,selJ,moi?sel2Proprio(b,i):null) : null;
                 const ok=vj?vj.ok:null;
                 const marque=(ok===true)?' <b class="green">✓</b>':((ok===false)?' <b class="red">✗</b>':'');
                 return `<div style="display:flex;flex-direction:column">${cell(moi,`<div class="mini muted">${nom}${marque}</div>${contenu}`,ok)}</div>`; }).join('')}
