@@ -2940,6 +2940,26 @@
      terminé : dépendance déjà réelle (votesManquants() bloquait déjà la validation), juste rendue
      visible dès le hub. Reste cliquable (toast explicatif), jamais totalement désactivée. */
   .a2-step-card.locked{opacity:.55}
+  /* ⟦RUSH-TEST-QG⟧ début — carte « Tactizo Rush · test privé » du QG (admin seulement, interrupteur serveur) et sa
+     couche plein écran. Rien ici ne s'affiche pour un autre compte : la carte n'est rendue que si rushtest_droit() dit
+     vrai ET si l'illustration a été servie par l'Edge rush-test-acces (rush/test-qg/PLAN-TEST-RUSH-QG.md). */
+  .rt-carte{display:block;width:100%;padding:0;margin:0 0 12px;border:1px solid var(--a2-border,#2c3448);border-radius:16px;
+    overflow:hidden;background:var(--a2-panel,#1f2635);color:var(--a2-ink,#f4ecd8);text-align:left;cursor:pointer;font:inherit;
+    -webkit-tap-highlight-color:transparent}
+  .rt-carte img{display:block;width:100%;height:auto;aspect-ratio:1774/887;object-fit:cover}
+  .rt-carte .rt-infos{display:flex;align-items:center;gap:10px;padding:10px 12px 12px;min-height:44px}
+  .rt-carte .rt-ttl{display:block;font-weight:800;font-size:14px}
+  .rt-carte .rt-sub{display:block;font-size:11.5px;color:var(--a2-muted,#9aa1b5)}
+  .rt-carte:focus-visible{outline:2px solid #ecd382;outline-offset:2px}
+  .rt-couche{position:fixed;inset:0;z-index:2147483000;display:flex;flex-direction:column;background:#0a0f1e}
+  .rt-barre{display:flex;align-items:center;gap:10px;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;
+    background:#0a0f1e;border-bottom:1px solid #2c3448;color:#f4ecd8;flex:0 0 auto}
+  .rt-retour{min-height:44px;padding:0 14px;border-radius:12px;border:1px solid #2c3448;background:#1f2635;color:#f4ecd8;
+    font:inherit;font-weight:800;cursor:pointer}
+  .rt-titre{font-size:13px;font-weight:700;color:#9aa1b5;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rt-couche iframe{flex:1 1 auto;width:100%;min-height:0;border:0;background:#0a0f1e;padding-bottom:env(safe-area-inset-bottom)}
+  html.rt-ouvert,html.rt-ouvert body{overflow:hidden}
+  /* ⟦RUSH-TEST-QG⟧ fin */
 </style>
 <!-- ⚠️ v8.344 (Tactizo V2) — THÈME CLAIR RETIRÉ, SOMBRE FORCÉ AVANT LE PREMIER RENDU (anti-flash).
      Avant : lisait pl_theme (défaut "light" si absent) — un ancien "light" en localStorage
@@ -2982,7 +3002,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.3";
+const APP_VERSION = "v8.538.4";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5529,6 +5549,28 @@ const EN={
   "La même saison, mais tout est expliqué.":"The same season, with everything explained.",
   "📖 Lire les règles":"📖 Read the rules",
   "Confidentialité":"Privacy", "Conditions d'utilisation":"Terms of use",
+  "Informations légales":"Legal information",
+  "Mentions légales":"Legal notice",
+  "Politique de confidentialité":"Privacy policy",
+  "Assistance et médiation":"Support and mediation",
+  /* ⟦RUSH-TEST-QG⟧ début — carte Rush test privé du QG (admin seulement) */
+  "Tactizo Rush — test privé : accès réservé, code requis":"Tactizo Rush — private test: restricted access, code required",
+  "Test privé":"Private test",
+  "Accès réservé · code requis":"Restricted access · code required",
+  "Accès réservé":"Restricted access",
+  "Test privé de Tactizo Rush. Saisis ton code d'accès.":"Tactizo Rush private test. Enter your access code.",
+  "Code d'accès":"Access code",
+  "Ouvrir":"Open",
+  "Saisis le code.":"Enter the code.",
+  "Vérification…":"Checking…",
+  "Code incorrect. Essais restants : {a}.":"Wrong code. Attempts left: {a}.",
+  "Trop d'essais. Réessaie dans {a} min.":"Too many attempts. Try again in {a} min.",
+  "Le test est fermé pour le moment.":"The test is closed for now.",
+  "Accès refusé.":"Access denied.",
+  "Le test Rush n'a pas pu s'ouvrir. Réessaie depuis le QG.":"The Rush test could not open. Try again from the HQ.",
+  "Tactizo Rush — test privé":"Tactizo Rush — private test",
+  "Retour au QG":"Back to HQ",
+  /* ⟦RUSH-TEST-QG⟧ fin */
   "🗑️ Supprimer mon compte":"🗑️ Delete my account",
   "Supprimer mon compte":"Delete my account",
   "Cette action est définitive.\n\nCe qui disparaît : ton compte, ton mot de passe, ton pseudo, ton avatar et tes options.\n\nCe qui reste : tes résultats dans les ligues où tu as joué, rattachés à « Joueur supprimé » — pour ne pas casser l'historique de tes adversaires.\n\nTu ne pourras plus te reconnecter.":"This cannot be undone.\n\nWhat disappears: your account, your password, your username, your avatar and your options.\n\nWhat remains: your results in the leagues you played, attached to “Deleted player” — so your opponents' history is not broken.\n\nYou will not be able to log back in.",
@@ -11608,6 +11650,7 @@ async function loadMyLeagues(){
   // fini, au lieu de partir en parallèle. loadHomeTodo() garde son propre comportement inchangé
   // (rendu immédiat de l'accueil, bandeau posé après) — seul CE second étage est chaîné derrière.
   loadHomeTodo().then(loadMaestroMood);
+  rushTestRafraichir();   // v8.541 : carte Rush test — AUCUN appel hors compte admin, hors QG, ou en natif
 }
 /* ─── HUMEUR DU MAESTRO, QG (Bloc 3C, 2026-09-06 → refonte v8.414, 2026-09-10) ─────────────────
    ⚠️ v8.414 (demandé par Hervé, audit du 2026-09-10) — REFONTE COMPLÈTE. L'ancien calcul menait sa
@@ -12803,6 +12846,143 @@ function ligueBadgeTodo(lid){
 }
 // 🏠 ACCUEIL — vraie page d'accueil (≠ page « Ligues », qui n'est que la liste). Bonjour + slogan +
 // principe de jeu, puis on navigue via les onglets du bas (Ligues, Stats, …).
+/* ⟦RUSH-TEST-QG⟧ début ═══════════════════════════════════════════════════════════════════════════════════════
+   TACTIZO RUSH — TEST PRIVÉ DEPUIS LE VRAI QG (v8.541, 13/10/2026, demandé par Hervé). Plan, sécurité, mise en ligne,
+   retour arrière : rush/test-qg/PLAN-TEST-RUSH-QG.md. RIEN de ceci n'est visible pour un autre compte.
+
+   QUI DÉCIDE : LA BASE, JAMAIS CE CODE. Ce bloc ne contient AUCUN secret : ni code, ni hachage, ni clé.
+     1. rushtest_droit()      — vrai seulement pour l'admin (public.tml_admin_id()), interrupteur ouvert, code posé ;
+     2. Edge rush-test-acces  — « carte » : l'illustration validée, lue dans un bucket PRIVÉ (jamais publiée) ;
+     3. rushtest_ouvrir(code) — compare le code à son hachage bcrypt, compte les essais, verrouille, rend un jeton court ;
+     4. Edge rush-test-acces  — « paquet » : le prototype en UN fichier, seulement contre JWT admin + jeton valable.
+   ⚠️ ZÉRO REQUÊTE POUR LES AUTRES JOUEURS : `rushTestEligible()` coupe avant tout appel si le compte n'est pas l'admin
+      (ADMIN_ID, déjà présent dans l'app) ou si l'app est NATIVE (pas de Rush dans les apps des stores — Apple 2.3.6).
+      Pour l'admin : 1 RPC légère par passage au QG (au plus toutes les 30 s) + l'illustration une fois par session.
+   ⚠️ ISOLATION : le prototype tourne dans une iframe `sandbox="allow-scripts …"` SANS allow-same-origin (origine
+      opaque : ni la session Supabase, ni le localStorage de tactizo.com, ni cette page ne lui sont accessibles), et le
+      paquet porte sa propre CSP (connect-src 'none' : aucun appel réseau possible). Son état vit sous UNE clé dédiée
+      de ce navigateur, « tactizo-rush-test:etat », écrite ICI à partir de ses messages (jamais par lui).
+   ⚠️ Aucune écriture dans les ligues, joueurs, capitaux, paiements ; aucun crédit Odds API (matchs figés du paquet). */
+const RUSH_TEST_FN = SB_URL+"/functions/v1/rush-test-acces";
+const RUSH_TEST_CLE = "tactizo-rush-test:etat";
+const RUSH_TEST_CANAL = "tactizo-rush-test";
+const RUSH_TEST_MARQUE = "/*__RUSH_TEST_INIT__*/null";
+const RT = { droit:false, carte:null, verifieLe:0, enCours:false, busy:false, jeton:null, ouvert:false, fenetre:null };
+function rushTestEligible(){ return !!(AUTH && AUTH.id===ADMIN_ID && !estNatif()); }
+async function rushTestAppelEdge(corps, enTexte){
+  const { data:{ session } } = await db.auth.getSession();
+  const jwt = (session && session.access_token) || "";
+  if(!jwt) throw new Error("session");
+  const r = await fetch(RUSH_TEST_FN, { method:"POST", cache:"no-store", credentials:"omit", referrerPolicy:"no-referrer",
+    headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jwt, "Content-Type":"application/json" }, body:JSON.stringify(corps) });
+  if(!r.ok) throw new Error("refus "+r.status);
+  return enTexte ? r.text() : r.json();
+}
+// Appelée à la fin de loadMyLeagues() : ne fait RIEN hors du QG, hors du compte admin, ou en natif.
+async function rushTestRafraichir(){
+  if(S.view!=="home" || !rushTestEligible() || RT.enCours) return;
+  if(Date.now()-RT.verifieLe < 30000) return;
+  RT.enCours=true; RT.verifieLe=Date.now();
+  let droit=false;
+  try{ const { data, error } = await db.rpc("rushtest_droit"); droit = !error && data===true; }catch(e){ droit=false; }
+  if(droit && !RT.carte){
+    try{ const j = await rushTestAppelEdge({ action:"carte" });
+      RT.carte = (j && typeof j.image==="string" && /^data:image\/webp;base64,[A-Za-z0-9+/=]+$/.test(j.image)) ? j.image : null;
+    }catch(e){ RT.carte=null; }
+  }
+  if(!droit) RT.carte=null;
+  RT.enCours=false;
+  const avant=RT.droit; RT.droit = droit && !!RT.carte;
+  if(avant!==RT.droit && S.view==="home") render();
+}
+// Carte du QG : entre les actions prioritaires et « Tes ligues en cours ». Chaîne VIDE pour tout autre compte.
+function rushTestCarteHTML(){
+  if(!RT.droit || !RT.carte || !rushTestEligible()) return "";
+  return `<button type="button" class="rt-carte" id="qgCarteRushTest" onclick="rushTestDemanderCode()" aria-label="${esc(t("Tactizo Rush — test privé : accès réservé, code requis"))}">
+      <img src="${RT.carte}" width="1774" height="887" alt="" decoding="async">
+      <span class="rt-infos"><span style="min-width:0;flex:1"><span class="rt-ttl">${t("Test privé")}</span><span class="rt-sub">${t("Accès réservé · code requis")}</span></span>
+        <svg class="a2-lr-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></span>
+    </button>`;
+}
+function rushTestDemanderCode(){
+  if(!rushTestEligible() || !RT.droit) return;
+  infoModal("🔐", t("Accès réservé"),
+    `<div class="mini muted" style="margin-bottom:10px;text-align:left">${t("Test privé de Tactizo Rush. Saisis ton code d'accès.")}</div>
+     <form id="rtForm" onsubmit="event.preventDefault();rushTestValiderCode()" autocomplete="off" style="text-align:left">
+       <label for="rtCode" class="mini">${t("Code d'accès")}</label>
+       <input id="rtCode" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" maxlength="200" enterkeyhint="go" style="width:100%;margin-top:4px">
+       <div id="rtErr" class="mini" role="alert" aria-live="assertive" style="color:var(--red);min-height:18px;margin-top:6px"></div>
+       <button class="btn" type="submit" id="rtOk" style="margin-top:8px">${t("Ouvrir")}</button>
+     </form>
+     <button class="btn ghost" type="button" style="margin-top:8px" onclick="closeCardInfo()">${t("Annuler")}</button>`, true);
+  setTimeout(()=>{ const i=$("rtCode"); if(i) i.focus(); }, 60);
+}
+async function rushTestValiderCode(){
+  if(RT.busy) return;
+  const i=$("rtCode"), e=$("rtErr"), b=$("rtOk");
+  const code=(i && i.value) || "";
+  if(!code){ if(e) e.textContent=t("Saisis le code."); return; }
+  RT.busy=true; if(b){ b.classList.add("off"); b.setAttribute("aria-disabled","true"); b.textContent=t("Vérification…"); }
+  let r=null;
+  try{ const { data, error } = await db.rpc("rushtest_ouvrir", { p_code:code }); r = error ? null : data; }catch(x){ r=null; }
+  if(i) i.value="";                       // le code ne reste jamais dans la page
+  RT.busy=false; if(b){ b.classList.remove("off"); b.removeAttribute("aria-disabled"); b.textContent=t("Ouvrir"); }
+  if(r && r.ok===true && /^[0-9a-f]{64}$/.test(r.jeton||"")){ RT.jeton=r.jeton; closeCardInfo(); rushTestOuvrir(); return; }
+  const c=r && r.code;
+  if(e) e.textContent = c==="code" ? t("Code incorrect. Essais restants : {a}.",{a:(r.essais_restants|0)})
+    : c==="verrou" ? t("Trop d'essais. Réessaie dans {a} min.",{a:Math.max(1,Math.ceil((r.reessayer_dans_s|0)/60))})
+    : c==="ferme" ? t("Le test est fermé pour le moment.") : t("Accès refusé.");
+  if(c==="ferme" || c==="refus"){ RT.verifieLe=0; }
+  if(i) i.focus();
+}
+async function rushTestOuvrir(){
+  if(!RT.jeton || RT.ouvert || !rushTestEligible()) return;
+  let html=null;
+  try{ html = await rushTestAppelEdge({ action:"paquet", jeton:RT.jeton }, true); }catch(e){ html=null; }
+  if(typeof html!=="string" || html.indexOf(RUSH_TEST_MARQUE)<0){
+    RT.jeton=null; infoWin(t("Le test Rush n'a pas pu s'ouvrir. Réessaie depuis le QG."),"⚠️"); return;
+  }
+  let etat={};
+  try{ const s=localStorage.getItem(RUSH_TEST_CLE); const o=s?JSON.parse(s):null; if(o && typeof o==="object" && !Array.isArray(o)) etat=o; }catch(e){}
+  const init=JSON.stringify({ etat, lang:(lang==="en"?"en":"fr") }).replace(/</g,"\\u003c");   // aucun « < » brut : la marque ne peut pas fermer la balise script du paquet
+  html = html.replace(RUSH_TEST_MARQUE, ()=>init);
+  const c=document.createElement("div");
+  c.id="rushTestCouche"; c.className="rt-couche";
+  c.setAttribute("role","dialog"); c.setAttribute("aria-modal","true"); c.setAttribute("aria-label", t("Tactizo Rush — test privé"));
+  c.innerHTML=`<div class="rt-barre"><button type="button" class="rt-retour" id="rushTestRetour" onclick="rushTestFermer()" aria-label="${esc(t("Retour au QG"))}">← ${t("QG")}</button>
+    <span class="rt-titre">${t("Tactizo Rush — test privé")}</span></div>`;
+  const f=document.createElement("iframe");
+  f.id="rushTestCadre"; f.title=t("Tactizo Rush — test privé");
+  f.setAttribute("sandbox","allow-scripts allow-modals allow-downloads");   // ⚠️ JAMAIS allow-same-origin
+  f.setAttribute("referrerpolicy","no-referrer");
+  f.setAttribute("allow","clipboard-write; web-share");
+  f.srcdoc=html;
+  c.appendChild(f); document.body.appendChild(c);
+  document.documentElement.classList.add("rt-ouvert");
+  RT.ouvert=true; RT.fenetre=f.contentWindow;
+  const r=$("rushTestRetour"); if(r) r.focus();
+}
+function rushTestFermer(){
+  const c=$("rushTestCouche"); if(c) c.remove();
+  document.documentElement.classList.remove("rt-ouvert");
+  RT.ouvert=false;
+  const j=RT.jeton; RT.jeton=null;              // rouvrir redemande le code
+  if(j){ try{ db.rpc("rushtest_fermer").then(()=>{},()=>{}); }catch(e){} }
+  if(S.view!=="home") goAccueil(); else render();
+}
+// État du prototype : SEULS les messages de NOTRE iframe (origine opaque « null »), rangés sous NOTRE clé.
+window.addEventListener("message", e=>{
+  if(!RT.fenetre || e.source!==RT.fenetre || e.origin!=="null") return;
+  const d=e.data;
+  if(!d || d.canal!==RUSH_TEST_CANAL || d.type!=="etat" || !d.etat || typeof d.etat!=="object" || Array.isArray(d.etat)) return;
+  const propre={}; let taille=0;
+  for(const k of Object.keys(d.etat)){ const v=d.etat[k];
+    if(k.length<=100 && typeof v==="string"){ propre[k]=v; taille+=k.length+v.length; } }
+  if(taille>2e6) return;
+  try{ localStorage.setItem(RUSH_TEST_CLE, JSON.stringify(propre)); }catch(x){}
+});
+document.addEventListener("keydown", e=>{ if(RT.ouvert && e.key==="Escape") rushTestFermer(); });
+/* ⟦RUSH-TEST-QG⟧ fin ══════════════════════════════════════════════════════════════════════════════════════════ */
 function viewHome(){
   // ⚠️ Bloc 2 Tactizo V2 (2026-09-05, maquette qg-tactizo-accueil.html) — RE-SKIN UNIQUEMENT :
   // `alerte`/`act`/`doitJouer`/`lignes`/`dejaJoue`/`bloc`/`tuto` ci-dessous sont recopiés à
@@ -13023,7 +13203,7 @@ function viewHome(){
   // désormais un point d'entrée unique et stable, "Revoir la présentation" dans Profil (plus le
   // déclenchement automatique pour les nouveaux comptes) — un troisième accès ici aurait fait
   // doublon sans rien ajouter.
-  return `<div class="a2-wrap a2-wrap-tight">${maestro+alerte+closureCards+bloc}</div>`;
+  return `<div class="a2-wrap a2-wrap-tight">${maestro+alerte+closureCards+rushTestCarteHTML()+bloc}</div>`;   // v8.541 : carte Rush test (« » pour tout autre compte)
   // v7.04 (Hervé) : le bouton « 🛠 Admin » a été RETIRÉ de l'accueil. Il faisait doublon avec
   // « ⚙️ Espace admin » de l'écran Profil, seul point d'entrée conservé. Motif : l'accueil de
   // l'administrateur doit être EXACTEMENT celui de n'importe quel joueur — sans quoi on teste
@@ -22690,9 +22870,22 @@ function render(){
   // le SEUL interrupteur du mention "· prototype de test ·" : au go-live, la repasser à `false`
   // suffit pour passer de "Tactizo · prototype de test · vX" à "Tactizo · vX" — aucune autre ligne
   // à toucher. Toujours `true` pour l'instant, tant que le test reste en cours.
+  /* ⚠️ v8.541 (demandé par Hervé, 13/10) — LES LIENS JURIDIQUES QUITTENT LE PIED DE PAGE DU QG.
+     Ils sont regroupés dans Profil, rubrique « Informations légales » (les 5 documents : mentions
+     légales, CGU, CGV, confidentialité, assistance et médiation). Le pied de page du QG et celui de
+     Profil (qui porte désormais la rubrique, inutile de doubler) ne gardent que « Tactizo · version ».
+     ⚠️ CONSERVÉS PARTOUT AILLEURS, VOLONTAIREMENT : écrans de connexion et d'inscription (un visiteur
+     NON connecté n'a pas accès à Profil — RGPD : la politique de confidentialité doit rester lisible
+     avant de créer un compte ; boutiques : liens vérifiés depuis l'app), choix du pseudo (Profil
+     masqué), et les autres écrans hors ligue (Mes ligues, Boutique hors ligue, Règles, Créer/Rejoindre).
+     Le QG reste joignable en un geste vers Profil (bouton en haut à droite), donc les mentions
+     légales restent « directement et facilement accessibles » (LCEN art. 6-III). */
+  const liensLegauxPied = !(S.view==="home" || S.view==="profil");
   if(fo) fo.innerHTML = inLeague ? "" : "Tactizo"+(SHOW_TEST_TAG?" · "+esc(t("prototype de test")):"")+" · "+esc(APP_VERSION)
-    +'<br><a href="confidentialite.html" onclick="ouvrirLien(&quot;confidentialite.html&quot;,event)">'+esc(t("Confidentialité"))+'</a>'
-    +' · <a href="cgu.html" onclick="ouvrirLien(&quot;cgu.html&quot;,event)">'+esc(t("Conditions d'utilisation"))+'</a>';
+    +(liensLegauxPied
+      ? '<br><a href="confidentialite.html" onclick="ouvrirLien(&quot;confidentialite.html&quot;,event)">'+esc(t("Confidentialité"))+'</a>'
+       +' · <a href="cgu.html" onclick="ouvrirLien(&quot;cgu.html&quot;,event)">'+esc(t("Conditions d'utilisation"))+'</a>'
+      : '');
   /* ⚠️ v8.213 — LE 📖 RESTE MASQUÉ SUR LA CONNEXION (arbitrage d'Hervé : « pas besoin de voir
      les règles totales depuis cette page, juste le tuto suffit »). Ce choix produit reste vrai
      aujourd'hui, mais 📖 a quitté le header : `viewProfil()` porte déjà "Comment marche le jeu"
@@ -23169,8 +23362,9 @@ function viewProfil(){
   // Ajouts strictement additifs, aucune logique retirée : (1) l'e-mail du compte (AUTH.email, déjà
   // capturé à la connexion/inscription, jamais affiché nulle part avant) ; (2) un bloc Premium
   // compact (myOpts, déjà chargé par loadOpts(), jusqu'ici visible uniquement dans Boutique) avec un
-  // lien vers openShop(). Juridique : le pied de page global (render(), CGU + Confidentialité)
-  // reste affiché sous cet écran comme sous tous les autres — pas de doublon ici.
+  // lien vers openShop(). Juridique : depuis la v8.541, la rubrique « Informations légales » (en
+  // bas de cet écran) porte les 5 documents ; le pied de page de Profil
+  // et du QG n'affiche plus ses deux liens (cf. `liensLegauxPied` dans render()).
   // ⚠️ Portage V2 (2026-09-06, demandé par Hervé) — FINALISATION : avatar/pseudo/suppression du
   // compte vivent désormais dans des bottom-sheets dédiées (openAvatarSheet/changeMyUsername/
   // deleteMyAccount, tous via infoModal()), plus de prompt() natif ni de grille inline sur cet
@@ -23309,6 +23503,27 @@ function viewProfil(){
         <div class="a2-danger-note">${t("Action définitive.")}</div>
       </div>`}
     </div>
+
+    ${/* ⚠️ v8.541 (demandé par Hervé, 13/10) — RUBRIQUE « INFORMATIONS LÉGALES » : les 5 documents publiés le
+         07/10 (tools/build-pages-juridiques.py), mêmes URL qu'avant (relatives sur le web, tactizo.com en natif :
+         c'est ouvrirLien() qui choisit, cf. sa note iOS — jamais de target="_blank"). Vrais liens <a href> :
+         focalisables, annoncés « lien », une ligne entière à toucher au doigt (≥ 44 px). Le CONTENU des pages n'est
+         pas touché. ⚠️ En ligne ici (pas d'aide séparée) : des tests extraient viewProfil() seule. Libellés en
+         appels t() LITTÉRAUX : check-i18n ne voit que ceux-là. */''}
+    <div class="a2-sec-title" id="profilInfosLegales">${t("Informations légales")}</div>
+    <nav class="a2-card" aria-labelledby="profilInfosLegales">${[
+      ["mentions-legales.html", t("Mentions légales"), '<path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'],
+      ["cgu.html", t("Conditions d'utilisation"), '<path d="M4 4.5A2.5 2.5 0 016.5 2H20v17H6.5A2.5 2.5 0 004 21.5v-17z"/><path d="M8 7h8M8 11h6"/>'],
+      ["cgv.html", t("Conditions Générales de Vente"), '<path d="M6 2l1.5 3h9L18 2"/><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M9 11h6M9 15h4"/>'],
+      ["confidentialite.html", t("Politique de confidentialité"), '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/>'],
+      ["assistance.html", t("Assistance et médiation"), '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5M12 17h.01"/>'],
+    ].map(([url, lib, ic])=>`
+      <a class="a2-menu-row" href="${url}" onclick="ouvrirLien('${url}',event)" style="cursor:pointer;text-decoration:none;color:inherit">
+        <span class="a2-menu-ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ic}</svg></span>
+        <span class="a2-menu-text"><span class="a2-menu-label">${esc(lib)}</span></span>
+        <svg class="a2-menu-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </a>`).join("")}
+    </nav>
   </div>`;
 }
 function openSettings(){ navOpen("settings"); }
