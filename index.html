@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.7";
+const APP_VERSION = "v8.538.8";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -13315,6 +13315,128 @@ function rushQgHistoriqueHTML(){
   if(showFinished) h+=finished.map(row).join("");
   return h;
 }
+/* ── Lot E (14/10/2026) — PONT DU MOTEUR SERVEUR RUSH V6 (rush/CLIENT-RUSH-V6.md) ─────────────────────────────────────────
+   L'iframe Rush (sandbox SANS allow-same-origin, CSP connect-src 'none') n'a ni réseau ni session. Elle DEMANDE ici, par
+   postMessage (canal « tactizo-rush-serveur »), l'une des 10 RPC joueur du moteur Rush V6 ou l'Edge rush-fictif ; l'app
+   contrôle la demande, appelle AVEC LA SESSION DU JOUEUR et renvoie la seule réponse. Le serveur décide de tout (accès :
+   rush_acces = interrupteur ET compte dans rush_testeurs ; « rush_ferme » sinon).
+   ⚠️ PÉRIMÈTRE : rushOngletActif() (compte testeur, accès ouvert, JAMAIS en natif). Tout autre compte : ce code ne fait RIEN.
+   ⚠️ SÉCURITÉ : source = NOTRE iframe (e.source === RT.fenetre, origine "null") ; fonctions en LISTE BLANCHE (aucune
+      fonction d'administration ni de service) ; arguments contrôlés (types, tailles, clés exactes) et RECONSTRUITS ; une
+      requête à la fois par fonction ; 60 par minute au plus ; délais 15 s (RPC) / 35 s (Edge) ; réponse envoyée à la SEULE
+      iframe qui a demandé, si elle est toujours là ; le jeton n'est JAMAIS transmis. */
+const RUSH_SERVEUR_CANAL = "tactizo-rush-serveur";
+const RUSH_SERVEUR_FICTIF = SB_URL+"/functions/v1/rush-fictif";
+const RSV = { enCours:Object.create(null), debit:[], lien:null };
+const rsvActif = ()=>{ try{ return typeof rushOngletActif==="function" && rushOngletActif()===true; }catch(e){ return false; } };   // inerte si l'onglet Rush n'est pas là (bancs « avant »)
+const RSV_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const rsvUuid = v=>typeof v==="string" && RSV_UUID.test(v);
+const rsvSel = v=>v==="1" || v==="N" || v==="2";
+const rsvSel2 = v=>v===null || rsvSel(v);
+const rsvMise = v=>typeof v==="number" && isFinite(v) && v>0 && v<=100000 && Math.abs(Math.round(v*100)-v*100)<1e-6;
+const rsvBonus = v=>v===null || (typeof v==="string" && /^[a-z]{2,16}$/.test(v));
+const rsvMode = v=>v==="reel" || v==="fictif";
+const RSV_PARI = { p_sel:rsvSel, p_mise:rsvMise, p_bonus:rsvBonus, p_sel2:rsvSel2 };
+// Les 10 RPC joueur (grant … to authenticated de rush/sql/MIGRATION-rush-v6.sql), avec la forme EXACTE de leurs arguments.
+const RSV_RPC = Object.freeze({
+  rush_valider: Object.assign({ p_rencontre:rsvUuid }, RSV_PARI),
+  rush_modifier: Object.assign({ p_rencontre:rsvUuid }, RSV_PARI),
+  rush_annuler: { p_rencontre:rsvUuid },
+  rush_changer_rencontre: Object.assign({ p_de:rsvUuid, p_vers:rsvUuid }, RSV_PARI),
+  rush_statut_rencontres: {},
+  rush_etat_joueur: { p_mode:rsvMode },
+  rush_historique: { p_mode:rsvMode },
+  rush_palmares: { p_top:v=>Number.isInteger(v) && v>=1 && v<=10, p_mode:rsvMode, p_mois:v=>v===null || (typeof v==="string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v)) },
+  rush_fictif_affiches: {},
+  rush_marquer_decouvert: { p_mode:rsvMode, p_rencontre:v=>v===null || rsvUuid(v) },
+});
+// Edge rush-fictif (Verify JWT ON) : { action:"affiches" } | { action:"jouer", affiche, sel, mise, bonus, sel2 }.
+const RSV_FICTIF = Object.freeze({
+  affiches: { action:v=>v==="affiches" },
+  jouer: { action:v=>v==="jouer", affiche:rsvUuid, sel:rsvSel, mise:rsvMise, bonus:rsvBonus, sel2:rsvSel2 },
+});
+function rsvArgs(fn, a){
+  if(!a || typeof a!=="object" || Array.isArray(a) || Object.getPrototypeOf(a)!==Object.prototype) return null;
+  const sch = fn==="rush-fictif" ? (a.action==="affiches" ? RSV_FICTIF.affiches : a.action==="jouer" ? RSV_FICTIF.jouer : null)
+    : (Object.prototype.hasOwnProperty.call(RSV_RPC, fn) ? RSV_RPC[fn] : null);
+  if(!sch) return null;
+  const k=Object.keys(a), ks=Object.keys(sch);
+  if(k.length!==ks.length || k.some(x=>!Object.prototype.hasOwnProperty.call(sch, x))) return null;
+  const out={};
+  for(const x of ks){ if(!sch[x](a[x])) return null; out[x]=a[x]; }
+  return out;
+}
+async function rsvAppeler(fn, args){
+  const delai=ms=>new Promise(res=>setTimeout(()=>res({ ok:false, code:"delai" }), ms));
+  const appel=(async()=>{
+    try{
+      if(fn==="rush-fictif"){
+        const { data:{ session } } = await db.auth.getSession();
+        const jwt=(session && session.access_token) || "";
+        if(!jwt) return { ok:false, code:"session" };
+        const r=await fetch(RUSH_SERVEUR_FICTIF, { method:"POST", cache:"no-store", credentials:"omit", referrerPolicy:"no-referrer",
+          headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jwt, "Content-Type":"application/json" }, body:JSON.stringify(args) });
+        let j=null; try{ j=await r.json(); }catch(e){ j=null; }
+        return (j && typeof j==="object" && !Array.isArray(j)) ? { ok:true, data:j } : { ok:false, code:"erreur_reseau" };
+      }
+      const { data, error } = await db.rpc(fn, args);
+      if(error) return { ok:false, code:"erreur" };
+      return { ok:true, data };
+    }catch(e){ return { ok:false, code:"erreur_reseau" }; }
+  })();
+  return Promise.race([appel, delai(fn==="rush-fictif" ? 35000 : 15000)]);
+}
+function rsvPoster(src, msg){
+  if(!src || src!==RT.fenetre) return;                       // iframe recréée entre-temps : la réponse est abandonnée
+  try{ src.postMessage(Object.assign({ canal:RUSH_SERVEUR_CANAL }, msg), "*"); }catch(e){}   // origine opaque : "*", destinataire = NOTRE iframe
+}
+function rsvNettoyerUrl(){
+  try{ const u=new URL(location.href); if(!u.searchParams.has("rush") && !u.searchParams.has("duel")) return;
+    u.searchParams.delete("rush"); u.searchParams.delete("duel"); history.replaceState(history.state, "", u.pathname+(u.search||"")+(u.hash||"")); }catch(e){}
+}
+window.addEventListener("message", e=>{
+  if(!rsvActif()) return;                                              // tout autre compte, natif : rien
+  if(!RT.fenetre || e.source!==RT.fenetre || e.origin!=="null") return;
+  const d=e.data;
+  if(!d || typeof d!=="object" || Array.isArray(d) || d.canal!==RUSH_SERVEUR_CANAL) return;
+  const src=e.source;
+  if(d.type==="bonjour"){
+    if(d.v!==1) return;
+    const o=RSV.lien; RSV.lien=null; if(o) rsvNettoyerUrl();
+    rsvPoster(src, { type:"pont", v:1, ouvrir:o });
+    return;
+  }
+  if(d.type!=="rpc" || typeof d.id!=="string" || !/^[A-Za-z0-9_-]{1,40}$/.test(d.id)) return;
+  const fn=d.fn, id=d.id;
+  if(typeof fn!=="string" || !(fn==="rush-fictif" || Object.prototype.hasOwnProperty.call(RSV_RPC, fn))) return rsvPoster(src, { type:"reponse", id, ok:false, code:"fonction_refusee" });
+  const args=rsvArgs(fn, d.args);
+  if(!args) return rsvPoster(src, { type:"reponse", id, ok:false, code:"arguments_invalides" });
+  if(RSV.enCours[fn]) return rsvPoster(src, { type:"reponse", id, ok:false, code:"occupe" });
+  const t0=Date.now(); RSV.debit=RSV.debit.filter(x=>t0-x<60000);
+  if(RSV.debit.length>=60) return rsvPoster(src, { type:"reponse", id, ok:false, code:"debit" });
+  RSV.debit.push(t0); RSV.enCours[fn]=true;
+  rsvAppeler(fn, args).then(r=>{ RSV.enCours[fn]=false;
+    rsvPoster(src, r.ok ? { type:"reponse", id, ok:true, data:r.data } : { type:"reponse", id, ok:false, code:r.code }); });
+});
+// Lien « ?rush=reel&duel=<uuid> » (notification « résultat prêt ») : lu SANS toucher l'URL ; consommé seulement pour un
+// compte testeur (rushServeurLienAttente, après chaque vérification du droit Rush).
+(function(){ try{ const q=new URLSearchParams(location.search), du=String(q.get("duel")||"").toLowerCase();
+  if(q.get("rush")==="reel" && RSV_UUID.test(du)) RSV.lien={ mode:"reel", duel:du }; }catch(e){} })();
+function rushServeurLienAttente(){
+  if(!RSV.lien || !rsvActif()) return;
+  if(S.view!=="rush"){ openRush(); return; }                            // l'iframe le recevra avec « pont » (bonjour)
+  if(RT.fenetre && document.getElementById("rushTestCadre") && !RT.chargement){
+    const o=RSV.lien; RSV.lien=null; rsvNettoyerUrl();
+    try{ RT.fenetre.postMessage({ canal:RUSH_SERVEUR_CANAL, type:"ouvrir_duel", mode:o.mode, duel:o.duel }, "*"); }catch(e){}
+  }
+}
+// Donnée d'une notification « résultat prêt » (kind=rush_resultat, rush/serveur/rush-notif) côté WEB : même chemin que le lien.
+function rushServeurNotification(data){
+  if(!rsvActif() || !data || data.kind!=="rush_resultat" || data.mode!=="reel" || !rsvUuid(data.engagement)) return false;
+  RSV.lien={ mode:"reel", duel:data.engagement }; rushServeurLienAttente(); return true;
+}
+const rushServeurRafraichirOrigine = rushTestRafraichir;
+rushTestRafraichir = async function(){ const r=await rushServeurRafraichirOrigine.apply(this, arguments); try{ rushServeurLienAttente(); }catch(e){} return r; };
 /* ⟦RUSH-TEST-QG⟧ fin ══════════════════════════════════════════════════════════════════════════════════════════ */
 function viewHome(){
   // ⚠️ Bloc 2 Tactizo V2 (2026-09-05, maquette qg-tactizo-accueil.html) — RE-SKIN UNIQUEMENT :
