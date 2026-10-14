@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.6";
+const APP_VERSION = "v8.538.7";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5665,6 +5665,7 @@ const EN={
   "Retour au QG":"Back to HQ",
   "Rush":"Rush",
   "Retour aux ligues":"Back to leagues",
+  "Règles Rush":"Rush rules",
   "Chargement de Tactizo Rush…":"Loading Tactizo Rush…",
   "Tactizo Rush n'a pas pu s'ouvrir.":"Tactizo Rush could not open.",
   "Tactizo Rush est fermé pour le moment.":"Tactizo Rush is closed for now.",
@@ -13033,7 +13034,8 @@ const RUSH_TEST_CLE = "tactizo-rush-test:etat";
 const RUSH_TEST_CANAL = "tactizo-rush-test";
 const RUSH_TEST_MARQUE = "/*__RUSH_TEST_INIT__*/null";
 const RT = { droit:false, carte:null, verifieLe:0, enCours:false, busy:false, jeton:null, ouvert:false, fenetre:null };
-function rushTestEligible(){ return !!(AUTH && AUTH.id===ADMIN_ID && !estNatif()); }
+const RUSH_TESTEURS_WEB=[ADMIN_ID,"76707dec-1602-4bcb-b041-0c841a33f206"];   // 14/10 : + Baptiste (filtre d'appel seulement — la base décide, rushtest_droit)
+function rushTestEligible(){ return !!(AUTH && RUSH_TESTEURS_WEB.includes(AUTH.id) && !estNatif()); }
 async function rushTestAppelEdge(corps, enTexte){
   const { data:{ session } } = await db.auth.getSession();
   const jwt = (session && session.access_token) || "";
@@ -13257,6 +13259,7 @@ async function rushChargerCadre(){
   f.srcdoc=page;
   hote.innerHTML=""; hote.appendChild(f);
   RT.fenetre=f.contentWindow; RT.cadreSig=sigCadre; RT.chargement=false;
+  if(RT.ouvrirApres){ const ec=RT.ouvrirApres; f.addEventListener("load", ()=>rushEnvoyerOuvrir(ec), { once:true }); }   // 14/10 : Règles depuis le Profil
 }
 // Repli tant que rushtest_ouvrir_onglet() n'est pas en base : le code d'accès existant (rushtest_ouvrir), UNE fois par
 // session (le paquet reste ensuite en mémoire). Mêmes messages et mêmes protections serveur que la carte du QG.
@@ -13282,6 +13285,21 @@ function navLiguesNotifHTML(){
   return (notifAvailable()&&Notification.permission==="default")
     ? `<div style="height:8px"></div><button class="btn ghost dashed" onclick="askNotif()">${t("🔔 Activer les notifications")}</button><div class="mini muted" style="text-align:center;margin-top:-4px">${t("Pour être prévenu quand c'est à toi de jouer (onglet ouvert).")}</div>`
     : "";
+}
+// 14/10 — « 📜 Règles Rush » depuis le Profil général (compte testeur) : onglet Rush, puis l'iframe ouvre ses Règles.
+function rushEnvoyerOuvrir(ecran){
+  RT.ouvrirApres=null;
+  try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", ecran }, "*"); }catch(e){}   // origine opaque : "*" ; le prototype ne lit que window.parent
+}
+function rushOuvrirRegles(){
+  if(!rushOngletActif()) return;
+  const deja = !!document.getElementById("rushTestCadre");
+  RT.ouvrirApres="regles"; openRush();
+  if(deja) requestAnimationFrame(()=>rushEnvoyerOuvrir("regles"));   // après le rendu de l'onglet (pas de minuterie)
+}
+function rushReglesLienHTML(){
+  if(!rushOngletActif()) return "";
+  return `<button type="button" class="a2-card" id="profilReglesRush" style="display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;font:inherit;color:inherit" onclick="rushOuvrirRegles()">📜 <span style="flex:1;font-weight:700">${t("Règles Rush")}</span><svg class="a2-lr-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>`;
 }
 // Section « Ligues terminées » du QG (admin avec onglet Rush seulement) : MÊME rendu et MÊME bascule (showFinished)
 // que l'onglet Ligues (viewLeagues), qui n'est plus dans la barre d'onglets de ce compte.
@@ -23969,7 +23987,7 @@ function viewProfil(){
       </div>
     </div>
 
-    <div class="a2-card">${tmlLevelHTML()}</div>${typeof spv2ProfilLienHTML==="function"?spv2ProfilLienHTML():""}
+    <div class="a2-card">${tmlLevelHTML()}</div>${typeof spv2ProfilLienHTML==="function"?spv2ProfilLienHTML():""}${typeof rushReglesLienHTML==="function"?rushReglesLienHTML():""}
 
     <div class="a2-sec-title">${t("Mes préférences")}</div>
     <div class="a2-card">
