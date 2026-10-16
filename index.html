@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.11";
+const APP_VERSION = "v8.538.12";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -23454,6 +23454,42 @@ sprRecHTML = function(mode){                         // « Champion du mois : <b
   return spcEnAnglais() ? h.split(`: <b>${esc(SPC_SUPPRIME)}</b></div>`).join(`: <b>${esc(SPC_SUPPRIME_EN)}</b></div>`) : h;
 };
 /* ⟦N2C-STATS-RPC⟧ fin ─────────────────────────────────────────────────────────────────────────────────────────── */
+/* ⟦N2D-STATS-RUSH-MESSAGES⟧ début ──────────────────────────────────────────────────────────────────────────────
+   Lot UX Rush (16/10/2026) — Stats et Palmarès Rush : un message EXACT au lieu de « En préparation » quand la fonctionnalité est
+   active (lots N2a / N2c). Par mode SÉPARÉ : aucune saison officielle terminée ; aucun trophée ; démonstration locale seulement
+   (serveur Rush non ouvert au compte : « rush_ferme ») ; données indisponibles (erreur technique). Les carrières de démonstration
+   ne sont JAMAIS lues ici. Affichage seulement : aucun appel ajouté. Retrait exact : tools/lib/stats_rush_messages.py. */
+const SPM_ANCIEN = { saison:["Aucune saison Rush terminée pour l'instant.","No finished Rush season yet."], titre:["Aucun titre Rush pour l'instant.","No Rush title yet."] };
+const SPM_NOUVEAU = { saison:["Aucune saison officielle terminée pour l'instant.","No official season finished yet."], titre:["Aucun trophée obtenu pour le moment.","No trophy won yet."] };
+function spmTextes(h){
+  if(typeof h!=="string") return h;
+  ["saison","titre"].forEach(k=>{ h=h.split(esc(sprL(SPM_ANCIEN[k][0], SPM_ANCIEN[k][1]))).join(esc(sprL(SPM_NOUVEAU[k][0], SPM_NOUVEAU[k][1]))); });
+  return h;
+}
+// État d'une réponse du serveur : null = lue (ou en cours) ; "demo" = serveur Rush fermé pour ce compte ; "erreur" = indisponible.
+function spmEtat(r){ if(!r || r.ok===true) return null; return r.code==="rush_ferme" ? "demo" : "erreur"; }
+function spmMessage(fam, q, etat, mode){
+  const nom = mode==="fictif" ? sprL("Rush Fictif","Fictional Rush") : sprL("Rush Réel","Real Rush");
+  const tete = etat==="demo" ? "🧪 "+sprL("Démonstration locale seulement","Local demo only") : "⚠️ "+sprL("Données indisponibles","Data unavailable");
+  const txt = etat==="demo"
+    ? sprL(`${nom} n'est pas encore ouvert sur le serveur pour ton compte : tes parties de démonstration restent locales, sur cet appareil, et ne sont jamais comptées dans tes statistiques ni ton palmarès.`,
+           `${nom} isn't open on the server for your account yet: your demo games stay local, on this device, and never count in your statistics or record.`)
+    : sprL("Données Rush indisponibles pour le moment (erreur technique). Rien n'est perdu : réessaie plus tard.","Rush data unavailable for now (technical error). Nothing is lost: try again later.");
+  return `<div class="spv2-prep" data-famille="${fam}" data-rush-etat="${etat}" data-rush-q="${q}"><div class="ft">${spv2FamTag(fam)}<span class="spv2-prep-t">${esc(tete)}</span></div>
+    <div class="spv2-prep-s">${esc(txt)}</div></div>`;
+}
+const spmPrepAvant = spv2RushPrep;
+spv2RushPrep = function(fam, q){
+  const mode = fam==="rush-reel" ? "reel" : (fam==="rush-fictif" ? "fictif" : null);
+  if(!mode || !sprActif() || ["stats","trophees","historique","records"].indexOf(q)<0) return spmPrepAvant.apply(this, arguments);
+  const M=SPR.m[mode], h=spmPrepAvant.apply(this, arguments);
+  if(typeof h==="string" && h.indexOf('data-rush-prep="')>=0){            // repli « En préparation » des lots N2a / N2c
+    const e = q==="records" ? spmEtat(M.palm) : spmEtat(M.hist) || (M.hist && !Array.isArray(M.hist.saisons) ? "erreur" : null);
+    if(e) return spmMessage(fam, q, e, mode);
+  }
+  return spmTextes(h);
+};
+/* ⟦N2D-STATS-RUSH-MESSAGES⟧ fin ──────────────────────────────────────────────────────────────────────────────── */
 /* ⟦STATS-PALMARES-V2⟧ fin ═════════════════════════════════════════════════════════════════════════════════════════ */
 /* Relève du solde exact. Ne coûte AUCUN crédit (v8.189) : sert quand on veut le chiffre à la
    seconde près, par exemple avant d'ouvrir des ligues en données réelles. */
