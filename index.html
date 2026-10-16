@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.8";
+const APP_VERSION = "v8.538.9";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -13315,6 +13315,118 @@ function rushQgHistoriqueHTML(){
   if(showFinished) h+=finished.map(row).join("");
   return h;
 }
+/* ⟦N2A-REGLES⟧ début ════════════════════════════════════════════════════════════════════════════════════════════
+   Lot N2a-1 (16/10/2026, décisions d'Hervé du 15/10 soir) — PROFIL SANS RACCOURCIS RUSH + PAGE DES RÈGLES À DEUX ONGLETS.
+   ⚠️ PÉRIMÈTRE : rgActif() = rushOngletActif() (comptes testeurs, accès Rush ouvert côté serveur) et JAMAIS en natif. Tout
+      autre compte, avant connexion, app native : viewRulesFull() / openRulesFull() rendent EXACTEMENT la page actuelle.
+   ⚠️ AUCUNE REQUÊTE, AUCUNE ÉCRITURE : textes et chiffres embarqués. Chiffres = RUSH_REGLES (règles ACTIVES en production le
+      15/10 : barème V2/N1/D0 +1 net positif, grille B1, Super Finale ×2, Maestro v2, Joueur IA « 1 bonus au plus par duel
+      parmi 10 » ; PAS le barème cible, PAS l'IA 50/50). Égalité avec le moteur ET le serveur : tools/test-regles-stats-rush.py.
+   ⚠️ « CHANGER UNE RÈGLE = METTRE À JOUR CET ÉCRAN DANS LE MÊME COMMIT » : RUSH_REGLES, puis la prose (RG_SECTIONS).
+   Retrait exact : tools/lib/regles_rush.py. Source des textes : rush/ux-2026-10-15/REGLES-RUSH-FR-EN.md (preuves R1-R40). */
+const RUSH_REGLES = Object.freeze({"source": "rush-saison 1.4 (Maestro v2) · rush-moteur-v4 · rush-droits v2 · MIGRATION-rush-v6 + CORRECTIF 15/10 (lot A)", "duels": 10, "capital": 100, "mise_min": 1, "plafond_pct": 50, "invest_pct": 70, "points": {"victoire": 2, "nul": 1, "defaite": 0, "net_positif": 1}, "super_finale": {"multiplicateur": 2, "plafond_pct": 100}, "recap": {"seuil": 30, "cible": 40, "penalite": 1}, "effets": {"assurance_perte_pct": 50, "double_gain": 2, "tout_gain": 3, "tout_perte": 2, "parachute_pct": 30, "sangsue_pct": 15, "face_diviseur": 2}, "bonus": {"gratuits": ["assurance", "double", "tout", "parachute", "miroir"], "complets": ["assurance", "double", "tout", "parachute", "miroir", "chance", "invest", "sangsue", "face", "cadeau"]}, "reel": {"horizon_h": 48, "verrou_min": 1, "resultat_min": 90, "neutralisation_h": 24, "tennis": false, "notif_debut": "07:00", "notif_fin": "23:59"}, "fictif": {"affiches": 13, "foot": 7, "basket": 3, "tennis": 3, "saisons_gratuites": 3}, "palmares": {"cloture_h": 48, "top_mois": 3, "top_tous": 10, "affiche_tous": 3}, "maestro": {"vigilant_pct": 35, "determine_pct": 50, "tendu_pct": 65, "reprise": 3}, "divisions": [{"d": 1, "elite": true, "maintien": 19, "montee": null, "titre": 26}, {"d": 2, "maintien": 15, "montee": 20}, {"d": 3, "maintien": 14, "montee": 19}, {"d": 4, "maintien": 13, "montee": 18}, {"d": 5, "maintien": 12, "montee": 17}, {"d": 6, "maintien": 11, "montee": 16}, {"d": 7, "entree": true, "maintien": null, "montee": 14}], "exemples": {"cote": 1.65, "net_moi": -5, "net_adv": -30}});
+const RG_SECTIONS = [{"id": "bref", "ic": "⚡", "t": ["Rush en bref", "Rush in a nutshell"], "c": ["Rush est une compétition <b>en solo, duel après duel</b>. À chaque duel, tu choisis <b>une</b> rencontre, tu fais <b>un</b> prono avec <b>une</b> mise, et tu peux ajouter <b>un</b> bonus.<br>Ton adversaire est un autre joueur engagé sur la même rencontre, ou le 🤖 Joueur IA. Ton résultat d'argent est comparé au sien : tu marques des points, et tes points te font monter de division jusqu'à l'<b>Élite</b>.<br><i>Rush est un jeu à part : ses règles ne changent rien à tes ligues.</i>", "Rush is a <b>solo competition, one duel after another</b>. In each duel, you pick <b>one</b> match, make <b>one</b> prediction with <b>one</b> stake, and may add <b>one</b> boost.<br>Your opponent is another player on the same match, or the 🤖 AI player. Your money result is compared with theirs: you score points, and your points take you up the divisions to the <b>Elite</b>.<br><i>Rush is a game of its own: its rules change nothing in your leagues.</i>"]}, {"id": "pas", "ic": "🚀", "t": ["Jouer, pas à pas", "Playing, step by step"], "c": ["<ol style=\"margin:4px 0;padding-left:18px\">\n<li>Touche l'onglet <b>⚡ Rush</b> de la barre du bas, puis <b>⚡ Rush Réel</b> ou <b>🎲 Rush Fictif</b>. Aucune inscription : à ta première visite d'un mode, ta carrière y est créée en <b>Division {entree}</b>, avec <b>{capital}</b> et 0 point.</li>\n<li>Choisis <b>une rencontre</b>, ton <b>prono</b>, ta <b>mise</b> et, si tu veux, <b>un bonus</b>, puis valide ton duel.</li>\n<li><b>Rush Réel</b> : jusqu'à {verrou} min avant le coup d'envoi, tu peux encore tout modifier ou annuler ; ton adversaire est désigné au coup d'envoi. <b>Rush Fictif</b> : le résultat s'affiche juste après ta validation.</li>\n<li><b>Rush Réel</b> : quand le match est fini, une notification te prévient ; touche <b>Voir le résultat</b> pour découvrir l'issue du duel, tes points et ton nouveau capital.</li>\n<li>Enchaîne les duels : ta saison en compte <b>{duels}</b> au plus, et s'arrête plus tôt dès que son issue est certaine (montée, relégation…).</li>\n<li>Saison terminée : tu vois ton <b>bilan</b> (montée, maintien ou descente), puis une <b>nouvelle saison</b> s'ouvre aussitôt dans ta nouvelle division. Objectif : l'<b>Élite</b>.</li>\n<li>Tes saisons, tes titres et les records se retrouvent dans les onglets <b>Stats</b> et <b>Palmarès</b>, filtre <b>⚡ Rush</b>.</li></ol>", "<ol style=\"margin:4px 0;padding-left:18px\">\n<li>Tap the <b>⚡ Rush</b> tab in the bottom bar, then <b>⚡ Real Rush</b> or <b>🎲 Fictional Rush</b>. No sign-up: on your first visit to a mode, your career there starts in <b>Division {entree}</b>, with <b>{capital}</b> and 0 points.</li>\n<li>Pick <b>a match</b>, your <b>prediction</b>, your <b>stake</b> and, if you like, <b>a boost</b>, then confirm your duel.</li>\n<li><b>Real Rush</b>: until {verrou} min before kick-off, you can still change or cancel everything; your opponent is assigned at kick-off. <b>Fictional Rush</b>: the result appears right after you confirm.</li>\n<li><b>Real Rush</b>: when the match is over, a notification lets you know; tap <b>See the result</b> to find out the duel's outcome, your points and your new capital.</li>\n<li>Keep playing duels: your season has <b>{duels}</b> at most, and stops earlier as soon as its outcome is certain (promotion, relegation…).</li>\n<li>Season over: you see your <b>season review</b> (promotion, survival or relegation), then a <b>new season</b> opens straight away in your new division. Goal: the <b>Elite</b>.</li>\n<li>Your seasons, titles and the records are in the <b>Stats</b> and <b>Honours</b> tabs, <b>⚡ Rush</b> filter.</li></ol>"]}, {"id": "modes", "ic": "🎲", "t": ["Deux modes : Rush Réel et Rush Fictif", "Two modes: Real Rush and Fictional Rush"], "c": ["Tu as <b>deux carrières séparées</b>. Chacune a sa division, son capital, ses points, ses bonus, son historique, ses titres et son palmarès. Rien ne passe de l'une à l'autre.{TABLE_MODES}", "You have <b>two separate careers</b>. Each has its own division, capital, points, boosts, history, titles and hall of fame. Nothing carries over from one to the other.{TABLE_MODES}"]}, {"id": "saison", "ic": "🗓️", "t": ["Ta saison", "Your season"], "c": ["Une saison compte <b>{duels} duels</b> ; un duel neutralisé (voir plus bas) ne compte pas.<br>Tu commences en <b>Division {entree}</b> avec <b>{capital}</b> de capital. Chaque saison repart de <b>{capital}</b>, 0 point et un <b>stock de bonus neuf</b>.<br>La saison est <b>personnelle</b> : elle avance à ton rythme, duel après duel. Tu n'attends personne.", "A season is <b>{duels} duels</b>; a neutralised duel (see below) doesn't count.<br>You start in <b>Division {entree}</b> with <b>{capital}</b> of capital. Every season starts again from <b>{capital}</b>, 0 points and a <b>fresh boost stock</b>.<br>The season is <b>personal</b>: it moves at your own pace, duel after duel. You wait for nobody."]}, {"id": "duel", "ic": "🎯", "t": ["Jouer un duel", "Playing a duel"], "c": ["<ol style=\"margin:4px 0;padding-left:18px\">\n<li><b>Choisis une rencontre.</b> Tu n'as qu'<b>un duel en cours à la fois dans chaque mode</b> : tant que le résultat de ton duel n'a pas été <b>découvert</b>, tu ne peux pas en lancer un autre dans ce mode.</li>\n<li><b>Fais ton prono</b> : 1 (domicile), N (nul, au football seulement) ou 2 (extérieur).</li>\n<li><b>Choisis ta mise</b> : au moins <b>{mise_min}</b> ; au plus <b>{plafond} %</b> de ton capital, <b>{invest} %</b> avec 📈 Investisseur, et jusqu'à <b>{sf_plafond} %</b> en Super Finale. Ta perte possible ne dépasse jamais ton capital : avec 🔥, qui double une perte, la mise est donc limitée à la moitié de ton capital.</li>\n<li><b>Ajoute un bonus</b> si tu le souhaites, puis <b>valide</b>.</li></ol>\nEn <b>Rush Réel</b>, jusqu'au coup d'envoi, tu peux librement modifier ton prono, ta mise ou ton bonus, changer de rencontre ou annuler sans pénalité (mise et bonus rendus). Les paris ferment <b>{verrou} min</b> avant le coup d'envoi ; ensuite, plus aucune annulation.", "<ol style=\"margin:4px 0;padding-left:18px\">\n<li><b>Pick a match.</b> You only have <b>one duel in progress at a time in each mode</b>: until your duel's result has been <b>checked</b>, you can't start another one in that mode.</li>\n<li><b>Make your prediction</b>: 1 (home), D (draw, football only) or 2 (away).</li>\n<li><b>Choose your stake</b>: at least <b>{mise_min}</b>; at most <b>{plafond}%</b> of your capital, <b>{invest}%</b> with 📈 Investor, and up to <b>{sf_plafond}%</b> in the Super Final. Your possible loss never exceeds your capital: with 🔥, which doubles a loss, your stake is therefore capped at half your capital.</li>\n<li><b>Add a boost</b> if you like, then <b>confirm</b>.</li></ol>\nIn <b>Real Rush</b>, until kick-off, you can freely change your prediction, stake or boost, switch matches, or cancel at no cost (stake and boost returned). Bets close <b>{verrou} min</b> before kick-off; after that, nothing can be cancelled."]}, {"id": "adversaire", "ic": "🤝", "t": ["Ton adversaire", "Your opponent"], "c": ["<b>Rush Réel</b> : ton adversaire est attribué <b>au coup d'envoi</b>, puis figé. Le serveur cherche d'abord un joueur de <b>ta division</b> engagé sur la même rencontre, puis d'une autre division ; si personne n'est disponible, tu affrontes le 🤖 <b>Joueur IA</b>. C'est un vrai duel, compté normalement : aucune victoire n'est jamais donnée faute d'adversaire, et tu gardes toujours les objectifs de <b>ta</b> division.<br>Avant le match, tu sais seulement si un joueur humain est disponible ou si le Joueur IA est possible — jamais le nombre de joueurs.<br>Il peut arriver que tu serves aussi de référence au duel d'un autre joueur (nombre impair de joueurs, par exemple) : ce duel-là ne change <b>ni ton capital ni tes points</b>. Tu n'as qu'<b>un</b> résultat par rencontre.<br><b>Rush Fictif</b> : ton adversaire est toujours le 🤖 Joueur IA.<br><b>Le 🤖 Joueur IA</b> pronostique, mise et peut jouer un bonus, comme un joueur. Ses choix sont faits par le serveur <b>sans voir ton pari</b>. Il dispose des <b>{complets} bonus Rush</b> et en joue <b>au plus un par duel</b>, chacun une seule fois dans ta saison ; son bonus reste <b>secret jusqu'au résultat</b>. En Rush Réel, l'IA de secours est <b>gratuite</b>.", "<b>Real Rush</b>: your opponent is assigned <b>at kick-off</b>, then fixed. The server first looks for a player from <b>your division</b> on the same match, then from another division; if nobody is available, you face the 🤖 <b>AI player</b>. It's a real duel, counted normally: no win is ever handed out for lack of an opponent, and you always keep <b>your</b> division's targets.<br>Before the match, you only know whether a human player is available or the AI player is possible — never the number of players.<br>You may also serve as the reference for another player's duel (an odd number of players, for instance): that duel changes <b>neither your capital nor your points</b>. You get <b>one</b> result per match.<br><b>Fictional Rush</b>: your opponent is always the 🤖 AI player.<br><b>The 🤖 AI player</b> predicts, stakes and may play a boost, just like a player. Its choices are made by the server <b>without seeing your bet</b>. It has the <b>{complets} Rush boosts</b> and plays <b>at most one per duel</b>, each once in your season; its boost stays <b>secret until the result</b>. In Real Rush, the stand-in AI is <b>free</b>."]}, {"id": "net", "ic": "💶", "t": ["Résultat du duel : tout se joue « au net »", "Duel result: it's all about the “net”"], "c": ["Ton <b>net</b> est ce que ton pari te rapporte ou te coûte — jamais le retour « mise × cote ». Pari gagné : <b>mise × (cote − 1)</b> ; par exemple {ex_mise} à {ex_cote} rapportent <b>{ex_gain}</b>. Pari perdu : <b>−mise</b>.<br>Les bonus des <b>deux</b> joueurs modifient ensuite ces résultats, dans un ordre fixe (voir « Les bonus »).<br><b>Qui gagne ?</b> Le meilleur net, comparé au centime. À égalité parfaite, c'est un <b>nul</b>.<br>Ton <b>capital</b> évolue de ton net, plus un éventuel crédit 🩸. Il ne descend jamais sous {zero}. En Rush Réel, une mise reste réservée jusqu'au résultat.", "Your <b>net</b> is what your bet earns or costs you — never the \"stake × odds\" return. Bet won: <b>stake × (odds − 1)</b>; for example {ex_mise} at {ex_cote} earns <b>{ex_gain}</b>. Bet lost: <b>−stake</b>.<br>Both players' boosts then modify these results, in a fixed order (see \"Boosts\").<br><b>Who wins?</b> The better net, compared to the cent. A perfect tie is a <b>draw</b>.<br>Your <b>capital</b> moves by your net, plus any 🩸 credit. It never goes below {zero}. In Real Rush, a stake stays reserved until the result."]}, {"id": "points", "ic": "🏆", "t": ["Points de championnat", "League points"], "c": ["{TABLE_POINTS}On peut donc <b>gagner le duel en perdant de l'argent</b> : par exemple {ex_net_moi} contre {ex_net_adv} pour ton adversaire. Tu marques alors {pts_v} points, sans le +{pts_net}.<br>À l'inverse, on peut <b>perdre le duel en gagnant de l'argent</b> : {pts_d} + {pts_net} = {pts_dn} point.", "{TABLE_POINTS}So you can <b>win the duel while losing money</b>: for example {ex_net_moi} against {ex_net_adv} for your opponent. You then score {pts_v} points, without the +{pts_net}.<br>Conversely, you can <b>lose the duel while making money</b>: {pts_d} + {pts_net} = {pts_dn} point."]}, {"id": "recap", "ic": "💸", "t": ["Recapitalisation", "Recapitalisation"], "c": ["Si ton capital passe <b>sous {recap_seuil}</b> après un duel, il est remonté à <b>{recap_cible}</b> et tu perds <b>{recap_pen} point</b>.<br>Il n'y a <b>jamais</b> de recapitalisation après la Super Finale, ni après un duel qui termine ta saison.<br>Cas particulier : quand la recapitalisation (−{recap_pen} point) ne pourrait plus rien changer à l'issue de ta saison, la saison s'arrête là, sans recapitalisation.", "If your capital drops <b>below {recap_seuil}</b> after a duel, it is topped back up to <b>{recap_cible}</b> and you lose <b>{recap_pen} point</b>.<br>There is <b>never</b> a recapitalisation after the Super Final, nor after a duel that ends your season.<br>Special case: when the recapitalisation (−{recap_pen} point) could no longer change your season's outcome, the season stops there, without a recapitalisation."]}, {"id": "divisions", "ic": "📊", "t": ["Divisions, montées, maintiens, relégations", "Divisions, promotion, survival, relegation"], "c": ["{TABLE_DIVISIONS}<b>Divisions {entree} à {div_sous_elite}</b> — <b>montée immédiate</b> : dès que tu atteins le seuil de montée, ta saison s'arrête et tu montes. La saison s'arrête aussi dès que l'issue est <b>certaine</b> : relégation certaine (le maintien n'est plus atteignable) ou, en Division {entree}, montée devenue impossible. Sinon, elle va jusqu'au {duels}ᵉ duel : sous le seuil de maintien, tu descends d'une division ; sinon, tu restes.<br><b>Titre « Champion de Division »</b> (Divisions {entree} à {div_sous_elite}) : tu le gagnes si tu montes <b>avant le {duels}ᵉ duel</b>. Une montée obtenue au {duels}ᵉ duel, la Super Finale, fait monter <b>sans</b> ce titre. Le titre est permanent.<br><b>Élite</b> — pas de montée. La saison dure {duels} duels, sauf si la relégation devient certaine : elle s'arrête alors aussitôt. Le titre <b>Champion Élite</b> est acquis dès <b>{elite_titre} points</b> ; il est conservé, la saison continue, et il se cumule d'une saison à l'autre. Sous <b>{elite_maintien} points</b> au terme de la saison, tu redescends en Division {div_sous_elite}.<br>Quand la saison est terminée, tu vois ton <b>bilan</b>, la saison est archivée dans ton historique, et la <b>nouvelle saison s'ouvre aussitôt</b> dans ta nouvelle division.", "{TABLE_DIVISIONS}<b>Divisions {entree} to {div_sous_elite}</b> — <b>instant promotion</b>: as soon as you reach the promotion mark, your season stops and you go up. The season also stops as soon as the outcome is <b>certain</b>: relegation certain (survival can no longer be reached) or, in Division {entree}, promotion no longer possible. Otherwise it runs to the {duels}th duel: below the survival mark, you drop one division; otherwise, you stay.<br><b>\"Division Champion\" title</b> (Divisions {entree} to {div_sous_elite}): you earn it if you go up <b>before the {duels}th duel</b>. A promotion won on the {duels}th duel, the Super Final, goes up <b>without</b> the title. The title is permanent.<br><b>Elite</b> — no promotion. The season lasts {duels} duels, unless relegation becomes certain: it then stops at once. The <b>Elite Champion</b> title is won at <b>{elite_titre} points</b>; it is kept, the season goes on, and it adds up from one season to the next. Below <b>{elite_maintien} points</b> at the end of the season, you drop to Division {div_sous_elite}.<br>When the season is over, you see your <b>season review</b>, the season is archived in your history, and the <b>new season opens straight away</b> in your new division."]}, {"id": "superfinale", "ic": "🏁", "t": ["La Super Finale", "The Super Final"], "c": ["Le <b>{duels}ᵉ duel joué</b> de ta saison est la <b>Super Finale</b> :<ul style=\"margin:4px 0;padding-left:18px\"><li><b>points ×{sf_mult}</b> : victoire {sf_v}, nul {sf_n}, défaite {sf_d}, +{sf_net} si ton net est positif, soit {sf_max} au plus ;</li><li><b>mise jusqu'à {sf_plafond} %</b> de ton capital, avec ou sans 📈 (📈 n'y a aucun effet) ;</li><li><b>aucune recapitalisation</b> après.</li></ul>Si ta saison s'arrête avant le {duels}ᵉ duel, il n'y a pas de Super Finale.", "The <b>{duels}th duel played</b> in your season is the <b>Super Final</b>:<ul style=\"margin:4px 0;padding-left:18px\"><li><b>points ×{sf_mult}</b>: win {sf_v}, draw {sf_n}, defeat {sf_d}, +{sf_net} if your net is positive, so {sf_max} at most;</li><li><b>stake up to {sf_plafond}%</b> of your capital, with or without 📈 (📈 has no effect there);</li><li><b>no recapitalisation</b> afterwards.</li></ul>If your season ends before the {duels}th duel, there is no Super Final."]}, {"id": "bonus", "ic": "🃏", "t": ["Les bonus", "Boosts"], "c": ["<b>Stock de chaque saison</b> : {gratuits} bonus gratuits, ou les {complets} bonus Rush avec l'option <b>Bonus complets</b> ou <b>Tactizo Premium</b>. <b>Un bonus au plus par duel</b>, et chaque bonus une seule fois par saison. Le stock est renouvelé à chaque nouvelle saison, selon tes options à ce moment-là.{TABLE_BONUS}<b>Ordre d'application</b> dans un duel, pour chacun des deux joueurs :{ORDRE_BONUS}", "<b>Stock each season</b>: {gratuits} free boosts, or all {complets} Rush boosts with the <b>Full boosts</b> option or <b>Tactizo Premium</b>. <b>At most one boost per duel</b>, and each boost once per season. The stock is renewed every new season, according to your options at that time.{TABLE_BONUS}<b>Order of application</b> in a duel, for each of the two players:{ORDRE_BONUS}"]}, {"id": "live", "ic": "👀", "t": ["Pendant le match et découverte du résultat", "During the match and checking your result"], "c": ["<b>Duel Live</b> (option du classique) : pendant le match, tu vois le prono, la mise et la cote de ton adversaire. Sans l'option, tu ne vois rien de son pari avant le résultat. Avant le début réel du match, rien n'est visible, et son <b>bonus reste secret</b> jusqu'au résultat.<br><b>Résultat à découvrir</b> : le résultat t'attend jusqu'à ce que tu viennes le voir. En Rush Réel, une notification te prévient (de {notif_debut} à {notif_fin}, heure de Paris). Tant que tu ne l'as pas découvert, rien ne te le dévoile ailleurs, y compris dans le palmarès.<br>Une fois officiellement résolu, un duel est <b>définitif</b> : une correction ultérieure du score par le fournisseur ne change rien.", "<b>Live Duel</b> (classic option): during the match, you see your opponent's prediction, stake and odds. Without the option, you see nothing of their bet before the result. Before the actual start of the match, nothing is visible, and their <b>boost stays secret</b> until the result.<br><b>Result to check</b>: the result waits until you come and see it. In Real Rush, a notification lets you know (from {notif_debut} to {notif_fin}, Paris time). Until you've checked it, nothing reveals it elsewhere, hall of fame included.<br>Once officially settled, a duel is <b>final</b>: a later score correction by the data provider changes nothing."]}, {"id": "neutralise", "ic": "⏸️", "t": ["Duel neutralisé", "Neutralised duel"], "c": ["En Rush Réel, ton duel est <b>neutralisé</b> si le match est reporté, ou s'il n'y a pas de résultat fiable <b>{neutralisation} h</b> après le coup d'envoi programmé. Ta mise et ton bonus te sont alors rendus, tu marques 0 point, et le duel <b>ne compte pas</b> dans tes {duels}.<br>Un simple changement d'horaire n'est pas une preuve de report.", "In Real Rush, your duel is <b>neutralised</b> if the match is postponed, or if there is no reliable result <b>{neutralisation} h</b> after the scheduled kick-off. Your stake and boost are then returned, you score 0 points, and the duel <b>doesn't count</b> towards your {duels}.<br>A mere change of kick-off time is not proof of a postponement."]}, {"id": "palmares", "ic": "🏅", "t": ["Palmarès Élite", "Elite hall of fame"], "c": ["Il existe un palmarès pour Rush Réel et un autre pour Rush Fictif : ils sont <b>séparés</b>.<br><b>Chaque mois</b> : <b>Champion du mois</b> = le meilleur total de points d'une saison Élite terminée ; <b>Stratège du mois</b> = le meilleur <b>capital final</b>. Top {top_mois} dans chaque classement, une seule performance par joueur et par classement. Départage : pour les points, capital final puis antériorité ; pour le capital, points puis antériorité.<br>Le mois est <b>clôturé {cloture_h} h après sa fin</b> (heure de Paris) : les titres sont alors définitifs. Le mois en cours n'est jamais affiché.<br><b>Records de tous les temps</b> : Top {top_tous}, dont le Top {affiche_tous} affiché par défaut.<br>Seul le <b>capital final</b> d'une saison Élite terminée est public — jamais ton capital en cours.", "There is one hall of fame for Real Rush and another for Fictional Rush: they are <b>separate</b>.<br><b>Each month</b>: <b>Champion of the month</b> = the best points total of a finished Elite season; <b>Strategist of the month</b> = the best <b>final capital</b>. Top {top_mois} in each ranking, one performance per player and per ranking. Tie-breaks: for points, final capital then whoever did it first; for capital, points then whoever did it first.<br>The month <b>closes {cloture_h} h after it ends</b> (Paris time): the titles are then final. The current month is never shown.<br><b>All-time records</b>: Top {top_tous}, with the Top {affiche_tous} shown by default.<br>Only the <b>final capital</b> of a finished Elite season is public — never your current capital."]}, {"id": "maestro", "ic": "🎩", "t": ["Le Maestro", "The Maestro"], "c": ["Le Maestro commente ta saison. Son attitude dépend de la part des points qu'il te faut encore, parmi ceux encore possibles (Super Finale comprise) :<ul style=\"margin:4px 0;padding-left:18px\"><li><b>Confiant</b> sous {m_vig} % ;</li><li><b>Vigilant</b> de {m_vig} à {m_det} % ;</li><li><b>Déterminé</b> de {m_det} à {m_ten} % ;</li><li><b>Tendu</b> au-delà ;</li><li><b>Tout ou rien</b> quand seul un parcours parfait suffit.</li></ul>Il est <b>Confiant avant ton premier duel</b> et le reste tant que tes duels ne dégradent pas ta situation. À l'approche de la fin de saison, il se rapproche des chiffres exacts : dans les {reprise} derniers duels, son attitude est exactement celle de la grille. Quand ton objectif n'est plus atteignable, il juge de la même façon ce qu'il te faut pour te maintenir — il n'est alors jamais Confiant.", "The Maestro comments on your season. His mood depends on the share of points you still need, out of those still possible (Super Final included):<ul style=\"margin:4px 0;padding-left:18px\"><li><b>Confident</b> below {m_vig}%;</li><li><b>Watchful</b> from {m_vig} to {m_det}%;</li><li><b>Determined</b> from {m_det} to {m_ten}%;</li><li><b>Tense</b> above that;</li><li><b>All or nothing</b> when only a perfect run will do.</li></ul>He is <b>Confident before your first duel</b> and stays so as long as your duels don't worsen your situation. As the season draws to a close, he moves towards the exact numbers: over the last {reprise} duels, his mood is exactly the one given by the scale. When your target can no longer be reached, he judges what you need to stay up in the same way — he is then never Confident."]}, {"id": "acces", "ic": "🔓", "t": ["Accès", "Access"], "c": ["<b>Rush Réel</b> : libre. Le Joueur IA de secours est gratuit et n'utilise pas les parties IA du classique.<br><b>Rush Fictif</b> : <b>{fictif_gratuites} saisons gratuites</b> par compte ; pour commencer la suivante, il faut l'option <b>Joueur IA</b> (la même que dans les ligues). Une saison commencée va toujours à son terme.<br><i>Pendant la phase de test, Rush n'est ouvert qu'aux comptes invités, sur le web.</i>", "<b>Real Rush</b>: open. The stand-in AI player is free and doesn't use the classic AI games.<br><b>Fictional Rush</b>: <b>{fictif_gratuites} free seasons</b> per account; to start the next one, you need the <b>AI player</b> option (the same as in leagues). A season you've started always runs to its end.<br><i>During the test phase, Rush is only open to invited accounts, on the web.</i>"]}];
+const RG_BONUS = {"assurance": ["Si ton pari est perdu, tu ne perds que <b>{assurance_pct} %</b> de ta mise.", "If your bet loses, you only lose <b>{assurance_pct}%</b> of your stake."], "double": ["Si ton pari gagne, gain <b>×{double_gain}</b>.", "If your bet wins, gain <b>×{double_gain}</b>."], "tout": ["Gain <b>×{tout_gain}</b>, perte <b>×{tout_perte}</b>.", "Gain <b>×{tout_gain}</b>, loss <b>×{tout_perte}</b>."], "parachute": ["Si ton résultat final est négatif, <b>{parachute} %</b> de ta perte est amorti.", "If your final result is negative, <b>{parachute}%</b> of your loss is cushioned."], "miroir": ["Ton résultat et celui de ton adversaire sont <b>échangés</b> (gain ou perte), et ton capital suit le résultat échangé. Deux ❄️ s'annulent.", "Your result and your opponent's are <b>swapped</b> (gain or loss), and your capital follows the swapped result. Two ❄️ cancel out."], "chance": ["Tu couvres <b>deux issues</b> pour une seule mise, au football seulement : tu gagnes à la cote de l'issue qui sort.", "You cover <b>two outcomes</b> for a single stake, football only: you win at the odds of the outcome that comes in."], "invest": ["Plafond de mise porté à <b>{invest} %</b> pour ce duel. Il ne change pas le résultat, et il est sans effet en Super Finale.", "Stake cap raised to <b>{invest}%</b> for this duel. It doesn't change the result, and it has no effect in the Super Final."], "sangsue": ["Si ton adversaire finit le duel <b>bénéficiaire</b>, <b>{sangsue} %</b> de son bénéfice sont crédités sur ton capital. Rien ne lui est prélevé, et ce crédit ne compte ni dans la comparaison ni dans les points.", "If your opponent ends the duel <b>in profit</b>, <b>{sangsue}%</b> of their profit is credited to your capital. Nothing is taken from them, and this credit counts neither in the comparison nor in the points."], "face": ["Si ton adversaire gagne son pari, son gain est <b>divisé par {face_div}</b> dans ce duel.", "If your opponent wins their bet, their gain is <b>divided by {face_div}</b> in this duel."], "cadeau": ["Le prono de ton adversaire est <b>inversé</b> (1 ↔ 2 ; un nul n'est pas touché).", "Your opponent's prediction is <b>flipped</b> (1 ↔ 2; a draw is untouched)."]};
+const RG_ORDRE = [["🎁 de l'adversaire : ton prono est inversé.", "The opponent's 🎁: your prediction is flipped."], ["Résultat de ton pari, avec ton 🧈 s'il est joué.", "Your bet's result, with your 🧈 if played."], ["Ton 🐗, 🔥 ou 🛡.", "Your 🐗, 🔥 or 🛡."], ["🤛 de l'adversaire.", "The opponent's 🤛."], ["❄️, si un seul des deux joueurs l'a joué : échange des résultats.", "❄️, if only one of the two players played it: results swapped."], ["Ton 🪂.", "Your 🪂."], ["Arrondi au centime : c'est ton <b>net du duel</b>. Il est comparé au net de l'adversaire et décide du +{pts_net}.", "Rounded to the cent: this is your <b>duel net</b>. It is compared with the opponent's net and decides the +{pts_net}."], ["Ton 🩸 : crédit ajouté <b>après</b>, à ton capital seulement.", "Your 🩸: credit added <b>afterwards</b>, to your capital only."]];
+const RG_LIB = {"col_reel": ["⚡ Rush Réel", "⚡ Real Rush"], "col_fictif": ["🎲 Rush Fictif", "🎲 Fictional Rush"], "mode_rencontres": ["Rencontres", "Matches"], "mode_cotes": ["Cotes", "Odds"], "mode_resultat": ["Résultat", "Result"], "mode_adv": ["Adversaire", "Opponent"], "reel_rencontres": ["Vrais matchs ({sports_reel}), dans les prochaines {horizon} h", "Real matches ({sports_reel}), within the next {horizon} h"], "fictif_rencontres": ["Rencontres fictives générées pour toi ({affiches} affiches : {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)", "Fictional matches generated for you ({affiches} fixtures: {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)"], "reel_cotes": ["Cotes réelles, <b>figées à la publication</b> : elles ne changent plus ensuite", "Real odds, <b>frozen when published</b>: they never change afterwards"], "fictif_cotes": ["Cotes du générateur de Tactizo", "Odds from Tactizo's generator"], "reel_resultat": ["Résultat officiel du match, lu au plus tôt {resultat_min} min après le coup d'envoi", "Official match result, read at the earliest {resultat_min} min after kick-off"], "fictif_resultat": ["Tiré <b>aussitôt</b> par le serveur, avec les probabilités données par les cotes. Personne, ni toi ni l'IA, ne peut le connaître avant ta validation", "Drawn <b>instantly</b> by the server, with the probabilities given by the odds. Nobody, you or the AI, can know it before you confirm"], "reel_adv": ["Un autre joueur si possible, sinon le 🤖 Joueur IA", "Another player when possible, otherwise the 🤖 AI player"], "fictif_adv": ["Toujours le 🤖 Joueur IA", "Always the 🤖 AI player"], "sports_avec_tennis": ["football, basket et tennis", "football, basketball and tennis"], "sports_sans_tennis": ["football et basket ; le tennis n'est pas proposé pour le moment", "football and basketball; tennis is not offered for now"], "pts_issue": ["Issue du duel", "Duel outcome"], "pts_points": ["Points", "Points"], "pts_victoire": ["Victoire", "Win"], "pts_nul": ["Nul", "Draw"], "pts_defaite": ["Défaite", "Defeat"], "pts_bonus": ["<b>+{pts_net}</b> si ton net du duel est <b>strictement positif</b>", "<b>+{pts_net}</b> if your duel net is <b>strictly positive</b>"], "pts_toujours": ["quelle que soit l'issue", "whatever the outcome"], "div_division": ["Division", "Division"], "div_montee": ["Montée dès", "Promotion at"], "div_maintien": ["Maintien", "Survival"], "div_note": ["Remarque", "Note"], "div_elite": ["★ Élite", "★ Elite"], "div_n": ["Division {n}", "Division {n}"], "div_titre": ["Titre <b>Champion Élite</b> dès {elite_titre}", "<b>Elite Champion</b> title at {elite_titre}"], "div_entree": ["Départ ; pas de descente", "Start; no relegation"], "bon_bonus": ["Bonus", "Boost"], "bon_stock": ["Stock", "Stock"], "bon_effet": ["Effet dans ton duel", "Effect in your duel"], "bon_gratuit": ["gratuit", "free"], "bon_complet": ["complet", "full"], "titre_page": ["⚡ Règles de Rush", "⚡ Rush rules"], "intro": ["Les règles de Tactizo Rush, telles qu'elles s'appliquent aujourd'hui. Touche une rubrique pour l'ouvrir.", "Tactizo Rush rules, as they apply today. Tap a section to open it."], "onglets": ["Règles du jeu", "Game rules"], "ong_ligues": ["🏆 Ligues", "🏆 Leagues"], "ong_rush": ["⚡ Rush", "⚡ Rush"]};
+const RG = { onglet:"ligues" };
+function rgActif(){ try{ return rushOngletActif()===true && !estNatif(); }catch(e){ return false; } }
+function rgL(p){ return (lang==="en" ? p[1] : p[0]) || ""; }
+function rgRemplir(s, V){ return String(s).replace(/\{([A-Za-z0-9_]+)\}/g, (m,k)=>Object.prototype.hasOwnProperty.call(V,k) ? V[k] : m); }
+function rgValeurs(){
+  const R=RUSH_REGLES, P=R.points, SF=R.super_finale, E=R.effets, ex=R.exemples, en=lang==="en";
+  const elite=R.divisions.find(d=>d.elite), entree=R.divisions.find(d=>d.entree), sousElite=R.divisions.filter(d=>!d.elite).map(d=>d.d).sort((a,b)=>a-b)[0];
+  const heure=h=>{ const [hh,mm]=String(h).split(":").map(Number); return en ? hh+":"+String(mm).padStart(2,"0") : hh+" h"+(mm?" "+String(mm).padStart(2,"0"):""); };
+  const cote=x=>en ? x.toFixed(2) : x.toFixed(2).replace(".",",");
+  const pct=f=>String(f);
+  const V={
+    duels:R.duels, capital:euro(R.capital), mise_min:euro(R.mise_min), plafond:pct(R.plafond_pct), invest:pct(R.invest_pct),
+    sf_plafond:pct(SF.plafond_pct), sf_mult:SF.multiplicateur, sf_v:P.victoire*SF.multiplicateur, sf_n:P.nul*SF.multiplicateur,
+    sf_d:P.defaite*SF.multiplicateur, sf_net:P.net_positif*SF.multiplicateur, sf_max:(P.victoire+P.net_positif)*SF.multiplicateur,
+    pts_v:P.victoire, pts_n:P.nul, pts_d:P.defaite, pts_net:P.net_positif, pts_dn:P.defaite+P.net_positif,
+    recap_seuil:euro(R.recap.seuil), recap_cible:euro(R.recap.cible), recap_pen:R.recap.penalite,
+    entree:entree.d, div_sous_elite:sousElite, elite_titre:elite.titre, elite_maintien:elite.maintien,
+    verrou:R.reel.verrou_min, horizon:R.reel.horizon_h, resultat_min:R.reel.resultat_min, neutralisation:R.reel.neutralisation_h,
+    notif_debut:heure(R.reel.notif_debut), notif_fin:heure(R.reel.notif_fin),
+    affiches:R.fictif.affiches, foot:R.fictif.foot, basket:R.fictif.basket, tennis_f:R.fictif.tennis, fictif_gratuites:R.fictif.saisons_gratuites,
+    gratuits:R.bonus.gratuits.length, complets:R.bonus.complets.length,
+    assurance_pct:pct(E.assurance_perte_pct), double_gain:E.double_gain, tout_gain:E.tout_gain, tout_perte:E.tout_perte,
+    parachute:pct(E.parachute_pct), sangsue:pct(E.sangsue_pct), face_div:E.face_diviseur,
+    cloture_h:R.palmares.cloture_h, top_mois:R.palmares.top_mois, top_tous:R.palmares.top_tous, affiche_tous:R.palmares.affiche_tous,
+    m_vig:R.maestro.vigilant_pct, m_det:R.maestro.determine_pct, m_ten:R.maestro.tendu_pct, reprise:R.maestro.reprise,
+    ex_mise:euro(R.capital*R.plafond_pct/100), ex_cote:cote(ex.cote), ex_gain:euroSigned(Math.round(R.capital*R.plafond_pct/100*(ex.cote-1)*100)/100),
+    ex_net_moi:euroSigned(ex.net_moi), ex_net_adv:euroSigned(ex.net_adv), zero:euro(0),
+  };
+  V.sports_reel=rgL(R.reel.tennis ? RG_LIB.sports_avec_tennis : RG_LIB.sports_sans_tennis);
+  return V;
+}
+function rgTable(entetes, lignes){
+  const th=x=>`<th style="text-align:left;padding:5px 6px;border-bottom:1px solid var(--border);font-weight:800;color:var(--a2-ink,inherit)">${x}</th>`;
+  const td=x=>`<td style="padding:5px 6px;border-bottom:1px solid var(--border);vertical-align:top">${x}</td>`;
+  return `<div style="overflow-x:auto;margin:8px 0"><table style="width:100%;border-collapse:collapse;font-size:12px;line-height:1.45"><thead><tr>${entetes.map(th).join("")}</tr></thead><tbody>${lignes.map(l=>`<tr>${l.map(td).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+function rgTables(V){
+  const L=k=>rgRemplir(rgL(RG_LIB[k]), V), R=RUSH_REGLES;
+  const T={};
+  T.TABLE_MODES=rgTable(["", L("col_reel"), L("col_fictif")], [
+    [L("mode_rencontres"), L("reel_rencontres"), L("fictif_rencontres")], [L("mode_cotes"), L("reel_cotes"), L("fictif_cotes")],
+    [L("mode_resultat"), L("reel_resultat"), L("fictif_resultat")], [L("mode_adv"), L("reel_adv"), L("fictif_adv")]]);
+  T.TABLE_POINTS=rgTable([L("pts_issue"), L("pts_points")], [[L("pts_victoire"), "<b>"+V.pts_v+"</b>"], [L("pts_nul"), "<b>"+V.pts_n+"</b>"],
+    [L("pts_defaite"), "<b>"+V.pts_d+"</b>"], [L("pts_bonus"), L("pts_toujours")]]);
+  T.TABLE_DIVISIONS=rgTable([L("div_division"), L("div_montee"), L("div_maintien"), L("div_note")], R.divisions.map(d=>[
+    "<b>"+(d.elite ? L("div_elite") : rgRemplir(rgL(RG_LIB.div_n), {n:d.d}))+"</b>", d.montee==null ? "—" : String(d.montee),
+    d.maintien==null ? "—" : String(d.maintien), d.elite ? L("div_titre") : (d.entree ? L("div_entree") : "")]));
+  T.TABLE_BONUS=rgTable([L("bon_bonus"), L("bon_stock"), L("bon_effet")], R.bonus.complets.map(id=>{
+    const c=(typeof CARDS!=="undefined" && CARDS[id]) || { e:"", n:id };
+    return [`${c.e} <b>${esc(t(c.n))}</b>`, R.bonus.gratuits.includes(id) ? L("bon_gratuit") : L("bon_complet"), rgRemplir(rgL(RG_BONUS[id]), V)]; }));
+  T.ORDRE_BONUS=`<ol style="margin:4px 0;padding-left:18px">${RG_ORDRE.map(p=>`<li>${rgRemplir(rgL(p), V)}</li>`).join("")}</ol>`;
+  return T;
+}
+function rgRushHTML(){
+  const V=rgValeurs(), T=rgTables(V), W=Object.assign({}, V, T);
+  const sommaire=RG_SECTIONS.map(s=>`<button type="button" class="ghost-btn-sm" style="margin:3px 4px 0 0;max-width:100%;white-space:normal;text-align:left" onclick="rgAller('${s.id}')">${s.ic} ${esc(rgL(s.t))}</button>`).join("");
+  return `<div class="box" data-rg="rush"><div class="boxttl">${esc(rgL(RG_LIB.titre_page))}</div><div class="mini muted">${esc(rgL(RG_LIB.intro))}</div><div style="margin-top:6px">${sommaire}</div></div>`
+    + RG_SECTIONS.map((s,i)=>`<details class="box" id="rg-${s.id}" data-rg-sec="${s.id}"${i===0?" open":""}><summary style="cursor:pointer;font-weight:800;font-size:14px;padding:2px 0">${s.ic} ${esc(rgL(s.t))}</summary>
+      <div class="mini muted" style="line-height:1.75;margin-top:8px">${rgRemplir(rgL(s.c), W)}</div></details>`).join("");
+}
+function rgOngletsHTML(){
+  const b=(o,lib)=>`<button type="button" role="tab" id="rgOnglet-${o}" data-rg-onglet="${o}" class="${RG.onglet===o?"on":""}" aria-selected="${RG.onglet===o}" onclick="rgOnglet('${o}')">${esc(rgL(lib))}</button>`;
+  // .a2-theme : porte les variables --a2-* du contrôle segmenté (la page des règles n'est pas dans un écran a2).
+  return `<div class="a2-theme" id="rgOnglets" style="padding-bottom:0;margin:10px 0 12px"><div class="spv2-seg" role="tablist" aria-label="${esc(rgL(RG_LIB.onglets))}">${b("ligues",RG_LIB.ong_ligues)}${b("rush",RG_LIB.ong_rush)}</div></div>`;
+}
+function rgOnglet(o){ if(!rgActif()) return; RG.onglet = o==="rush" ? "rush" : "ligues"; render(); try{ window.scrollTo(0,0); }catch(e){} }
+function rgAller(id){ const d=document.getElementById("rg-"+id); if(!d) return; d.open=true; try{ d.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){ d.scrollIntoView(); } }
+// Page des règles : la page actuelle (onglet Ligues) au caractère près ; contrôle segmenté + onglet Rush pour les testeurs.
+const rgVueLigues = viewRulesFull;
+viewRulesFull = function(){
+  const h = rgVueLigues.apply(this, arguments);
+  if(!rgActif()) return h;
+  const retour = `<button class="btn ghost sm" onclick="closeRulesFull()">${t("← Retour")}</button>`;
+  if(RG.onglet==="rush") return retour + rgOngletsHTML() + rgRushHTML() + `<button class="btn ghost" onclick="closeRulesFull()">${t("← Retour")}</button>`;
+  return h.startsWith(retour) ? retour + rgOngletsHTML() + h.slice(retour.length) : rgOngletsHTML() + h;
+};
+const rgOuvrirOrigine = openRulesFull;
+openRulesFull = function(onglet){
+  const deja = S.view==="rulesfull";
+  RG.onglet = (onglet==="rush" && rgActif()) ? "rush" : "ligues";
+  const r = rgOuvrirOrigine();
+  if(deja) render();
+  return r;
+};
+// Profil (décision 1) : les raccourcis « 🏆 Palmarès Rush » et « 📜 Règles Rush » sont retirés (doublons d'accès). Les fonctions
+// restent déclarées (retraits exacts des correctifs précédents intacts) ; le palmarès et les règles eux-mêmes ne bougent pas.
+if(typeof spv2ProfilLienHTML==="function") spv2ProfilLienHTML = function(){ return ""; };
+if(typeof rushReglesLienHTML==="function") rushReglesLienHTML = function(){ return ""; };
+// iframe Rush → app : « 📜 Règles » du prototype ouvre l'onglet Rush de la page générale. Liste blanche, NOTRE iframe seulement.
+window.addEventListener("message", e=>{
+  if(!rgActif()) return;
+  if(!RT.fenetre || e.source!==RT.fenetre || e.origin!=="null") return;
+  const d=e.data;
+  if(!d || typeof d!=="object" || Array.isArray(d) || d.canal!==RUSH_TEST_CANAL || d.v!==1) return;
+  if(d.type==="capacites"){ try{ RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"capacites", v:1, regles:"app" }, "*"); }catch(x){} return; }
+  if(d.type==="regles"){ if(!(S.view==="rulesfull" && RG.onglet==="rush")) openRulesFull("rush"); }
+});
+/* ⟦N2A-REGLES⟧ fin */
 /* ── Lot E (14/10/2026) — PONT DU MOTEUR SERVEUR RUSH V6 (rush/CLIENT-RUSH-V6.md) ─────────────────────────────────────────
    L'iframe Rush (sandbox SANS allow-same-origin, CSP connect-src 'none') n'a ni réseau ni session. Elle DEMANDE ici, par
    postMessage (canal « tactizo-rush-serveur »), l'une des 10 RPC joueur du moteur Rush V6 ou l'Edge rush-fictif ; l'app
@@ -22944,6 +23056,277 @@ function spv2ProfilLienHTML(){
       <span class="a2-menu-ic">🏆</span><span class="a2-menu-text"><span class="a2-menu-label">${t("Palmarès Rush")}</span><span class="a2-menu-sub">${t("Tes trophées et saisons Rush, dans Palmarès › Moi")}</span></span>
       <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div></div>`; }
 function spv2PalmaresRush(){ if(!statsV2Actif()) return; SPV2.jeu="rush"; palmView="moi"; openPalmares(); }
+/* ⟦N2A-STATS-RUSH⟧ début ─────────────────────────────────────────────────────────────────────────────────────────
+   Lot N2a-2 (16/10/2026) — STATS ET PALMARÈS RUSH, données SERVEUR uniquement (lot « a », aucune nouvelle RPC).
+   ⚠️ PÉRIMÈTRE : sprActif() = statsV2Actif() (comptes testeurs, accès Rush ouvert) et jamais en natif ; ces fonctions ne sont
+      appelées QUE par les pages Stats/Palmarès V2, elles-mêmes réservées aux testeurs.
+   ⚠️ DONNÉES : rush_historique(p_mode) et rush_palmares(p_top, p_mode, p_mois) — lecture seule, identité = session du joueur,
+      anti-spoiler et confidentialité appliqués PAR LE SERVEUR (saison close par un duel non découvert absente ; mois ≥ ce duel
+      « a_decouvrir » ; des autres joueurs : pseudo, points et capital FINAL de saisons Élite terminées seulement).
+      JAMAIS rush_etat_joueur (écrit à la première visite d'un mode). Réel et Fictif : appels, caches et rendus SÉPARÉS ;
+      une réponse dont le mode ne correspond pas est rejetée. Aucune lecture des carrières de démo (stockage du prototype).
+   ⚠️ RIEN N'EST INVENTÉ : erreur / rush_ferme → bloc « En préparation » d'origine ; 0 saison → « aucune saison terminée ».
+   Retrait exact : tools/lib/stats_palmares_rush.py. Banc : tools/test-regles-stats-rush.py. */
+const SPR = { vue:null, gen:0, m:{ reel:{}, fictif:{} }, mois:{ reel:{}, fictif:{} }, sel:{ reel:null, fictif:null },
+  rec:{ reel:"mois", fictif:"mois" }, top10:{ reel:false, fictif:false }, ouverte:null };
+const SPR_MOIS = /^\d{4}-(0[1-9]|1[0-2])$/;
+function sprActif(){ try{ return statsV2Actif()===true && !estNatif(); }catch(e){ return false; } }
+function sprL(fr, en){ return lang==="en" ? en : fr; }
+function sprGen(){ if(S.view!==SPR.vue){ SPR.vue=S.view; SPR.gen++; } return SPR.gen; }   // nouvelle visite de Stats / Palmarès = relecture
+async function sprRpc(fn, args){
+  try{
+    const r = await db.rpc(fn, args), data = r && r.data;
+    if(!r || r.error || !data || typeof data!=="object" || Array.isArray(data)) return { ok:false, code:"erreur" };
+    if(data.ok!==true) return { ok:false, code:String(data.code||"erreur").slice(0,40) };
+    if(data.mode!==args.p_mode) return { ok:false, code:"mode_incoherent" };   // Réel et Fictif jamais mélangés
+    return data;
+  }catch(e){ return { ok:false, code:"erreur_reseau" }; }
+}
+function sprRafraichir(){ if(S.view==="stats" || S.view==="palmares") render(); }
+function sprCharger(mode){
+  if(!sprActif() || (mode!=="reel" && mode!=="fictif")) return;
+  const g=sprGen(), M=SPR.m[mode];
+  if(M.enCours || M.gen===g) return;
+  M.enCours=true;
+  Promise.all([sprRpc("rush_historique", { p_mode:mode }), sprRpc("rush_palmares", { p_top:10, p_mode:mode, p_mois:null })]).then(([h, p])=>{
+    M.enCours=false; M.gen=g; M.hist=h; M.palm=p; SPR.mois[mode]={};
+    sprRafraichir();
+  });
+}
+function sprChargerMois(mode, liste){
+  if(!sprActif()) return;
+  const g=sprGen(), X=SPR.mois[mode];
+  const a=(liste||[]).filter(m=>SPR_MOIS.test(m) && !(X[m] && (X[m].enCours || X[m].gen===g))).slice(0, 12);
+  if(!a.length) return;
+  a.forEach(m=>{ X[m]={ enCours:true, gen:g, data:X[m] && X[m].data }; });
+  Promise.all(a.map(m=>sprRpc("rush_palmares", { p_top:3, p_mode:mode, p_mois:m }))).then(rs=>{
+    rs.forEach((r, i)=>{ X[a[i]]={ enCours:false, gen:g, data:r }; });
+    sprRafraichir();
+  });
+}
+// ── Lecture des réponses ─────────────────────────────────────────────────────────────────────────────────────────────
+const sprNum = v=>{ const n=Number(v); return isFinite(n) ? n : 0; };
+function sprDiv(d){ d=sprNum(d); return d===1 ? sprL("Élite","Elite") : "Division "+d; }
+function sprMoisLib(m){ const d=new Date(m+"-15T12:00:00Z"); return isNaN(d) ? m : d.toLocaleDateString(lang==="en"?"en-GB":"fr-FR", { month:"long", year:"numeric" }); }
+function sprDate(x){ const d=new Date(x); return (x && !isNaN(d)) ? d.toLocaleDateString(lang==="en"?"en-GB":"fr-FR", { day:"numeric", month:"short", year:"numeric" }) : ""; }
+function sprIssue(i){ return i==="montee" ? ["⬆️", sprL("Montée","Promotion")] : (i==="descente" ? ["⬇️", sprL("Descente","Relegation")] : ["⏺️", sprL("Maintien","Survival")]); }
+function sprSaisons(mode){ const h=SPR.m[mode].hist; return (h && h.ok && Array.isArray(h.saisons)) ? h.saisons.filter(s=>s && typeof s==="object" && s.statut==="terminee") : null; }
+function sprTitres(mode){ const h=SPR.m[mode].hist; return (h && h.ok && Array.isArray(h.titres)) ? h.titres.filter(x=>x && typeof x==="object") : []; }
+function sprCarriere(mode){
+  const L=sprSaisons(mode); if(!L) return null;
+  const tri=[...L].sort((a,b)=>sprNum(b.numero)-sprNum(a.numero));
+  const apres=s=>Math.max(1, sprNum(s.division)+(s.issue==="montee" ? -1 : (s.issue==="descente" ? 1 : 0)));
+  const max=(a,f,g)=>a.reduce((m,s)=>(!m || f(s)>f(m) || (f(s)===f(m) && g(s)>g(m))) ? s : m, null);
+  const pts=s=>sprNum(s.points), cap=s=>sprNum(s.capital_final), T=sprTitres(mode), el=tri.filter(s=>sprNum(s.division)===1);
+  const somme=k=>tri.reduce((a,s)=>a+sprNum(s[k]), 0);
+  return { n:tri.length, tri, actuelle:tri.length ? apres(tri[0]) : null,
+    meilleure:tri.length ? Math.min(...tri.map(s=>Math.min(sprNum(s.division), apres(s)))) : null,
+    montees:tri.filter(s=>s.issue==="montee").length, maintiens:tri.filter(s=>s.issue==="maintien").length, descentes:tri.filter(s=>s.issue==="descente").length,
+    anticipees:tri.filter(s=>s.cloture_anticipee===true).length, recaps:somme("recaps"), duels:somme("duels"), neutralises:somme("neutralises"),
+    ptsMoy:tri.length ? Math.round(somme("points")/tri.length*10)/10 : null, bestPts:max(tri,pts,cap), bestCap:max(tri,cap,pts),
+    eliteN:el.length, elitePts:max(el,pts,cap), eliteCap:max(el,cap,pts),
+    tElite:T.filter(x=>x.type==="champion_elite").length, tDiv:T.filter(x=>x.type==="champion_division").length,
+    tMois:T.filter(x=>x.type==="champion_du_mois").length, tStrat:T.filter(x=>x.type==="stratege_du_mois").length, titres:T };
+}
+// Podiums mensuels (rangs 1 à 3, points ou capital) : lus dans les mois figés PUBLIÉS pour ce lecteur (jamais « a_decouvrir »).
+function sprPodiums(mode){
+  const p=SPR.m[mode].palm, X=SPR.mois[mode], out=[];
+  if(!(p && p.ok && Array.isArray(p.mois_figes))) return out;
+  p.mois_figes.filter(m=>SPR_MOIS.test(m)).forEach(m=>{
+    const d=X[m] && X[m].data && X[m].data.ok && X[m].data.dernier_mois_fige;
+    if(!d || d.statut!=="publie" || d.mois!==m) return;
+    ["points","capital"].forEach(c=>(Array.isArray(d[c]) ? d[c] : []).forEach(r=>{ if(r && r.moi===true) out.push({ mois:m, classement:c, rang:sprNum(r.rang) }); }));
+  });
+  return out.sort((a,b)=>a.mois<b.mois ? 1 : (a.mois>b.mois ? -1 : a.rang-b.rang));
+}
+// ── Rendus ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+const sprLigne=(lab, val, attr)=>`<div class="statrow"${attr||""}><span class="mini muted">${lab}</span><b class="mini" style="text-align:right">${val}</b></div>`;
+function sprCadre(fam, q, corps, tete){ return `<div class="spv2-fam" data-famille="${fam}" data-rush="${q}"><div class="ft">${spv2FamTag(fam)}${tete||""}</div>${corps}</div>`; }
+function sprAttente(fam, q){ return `<div class="spv2-prep" data-famille="${fam}" data-rush="chargement" data-rush-q="${q}"><div class="ft">${spv2FamTag(fam)}<span class="spv2-prep-t">⏳ ${esc(sprL("Chargement…","Loading…"))}</span></div></div>`; }
+function sprVide(txt){ return `<div class="mini muted" data-rush-vide="1" style="margin:4px 2px 2px">${esc(txt)}</div>`; }
+const SPR_SANS_SAISON = ()=>sprL("Aucune saison Rush terminée pour l'instant.","No finished Rush season yet.");
+function sprStatsHTML(fam, mode){
+  const C=sprCarriere(mode);
+  if(SPV2.jeu==="tout"){   // « Tout Tactizo » : résumé du mode, jamais additionné aux Ligues
+    const btn=`<button type="button" class="ghost-btn-sm" onclick="spv2Filtre('jeu','rush')">${t("Toutes les rubriques →")}</button>`;
+    const r=!C.n ? SPR_SANS_SAISON() : sprL("Division actuelle : ","Current division: ")+sprDiv(C.actuelle)+" · "
+      +(C.n===1 ? sprL("1 saison terminée","1 finished season") : sprL(C.n+" saisons terminées", C.n+" finished seasons"))
+      +" · "+sprL("titres : ","titles: ")+C.titres.length;
+    return sprCadre(fam, "resume", `<div class="mini muted" data-rush-resume="1">${esc(r)}</div>`, btn);
+  }
+  if(!C.n) return sprCadre(fam, "stats", sprVide(SPR_SANS_SAISON())+sprDuelsPrep());
+  const s=x=>x ? `${sprL("Saison","Season")} ${sprNum(x.numero)} · ${sprDiv(x.division)}` : "–";
+  const kp=`<div class="spv2-kpis">
+      <div class="spv2-kpi"><b data-k="division" data-v="${C.actuelle}">${esc(sprDiv(C.actuelle))}</b><span>${esc(sprL("Division actuelle","Current division"))}</span></div>
+      <div class="spv2-kpi"><b data-k="meilleure" data-v="${C.meilleure}">${esc(sprDiv(C.meilleure))}</b><span>${esc(sprL("Meilleure division","Best division"))}</span></div>
+      <div class="spv2-kpi"><b data-k="saisons" data-v="${C.n}">${C.n}</b><span>${esc(sprL("Saisons terminées","Finished seasons"))}</span></div></div>`;
+  let h=kp+`<div class="smalllbl" style="margin-top:8px">${esc(sprL("Saisons","Seasons"))}</div>`
+    +sprLigne("⬆️ "+esc(sprL("Montées","Promotions")), C.montees, ' data-k="montees"')
+    +sprLigne("⏺️ "+esc(sprL("Maintiens","Survivals")), C.maintiens, ' data-k="maintiens"')
+    +sprLigne("⬇️ "+esc(sprL("Descentes","Relegations")), C.descentes, ' data-k="descentes"')
+    +sprLigne(esc(sprL("Saisons arrêtées avant le dernier duel","Seasons stopped before the last duel")), C.anticipees, ' data-k="anticipees"')
+    +sprLigne(esc(sprL("Points moyens par saison","Average points per season")), String(C.ptsMoy).replace(".", lang==="en"?".":","), ' data-k="ptsmoy"')
+    +sprLigne(esc(sprL("Meilleure saison (points)","Best season (points)")), `${sprNum(C.bestPts.points)} pts · ${esc(s(C.bestPts))}`, ' data-k="bestpts"')
+    +sprLigne(esc(sprL("Meilleur capital final","Best final capital")), `${euro(sprNum(C.bestCap.capital_final))} · ${esc(s(C.bestCap))}`, ' data-k="bestcap"')
+    +sprLigne(esc(sprL("Duels joués (neutralisés)","Duels played (neutralised)")), `${C.duels} (${C.neutralises})`, ' data-k="duels"')
+    +sprLigne("💸 "+esc(sprL("Recapitalisations","Recapitalisations")), C.recaps, ' data-k="recaps"');
+  h+=`<div class="smalllbl" style="margin-top:8px">${esc(sprL("Titres","Titles"))}</div>`
+    +sprLigne("🏆 "+esc(sprL("Champion Élite","Elite Champion")), C.tElite, ' data-k="t-elite"')
+    +sprLigne("🎖️ "+esc(sprL("Champion de Division","Division Champion")), C.tDiv, ' data-k="t-division"')
+    +sprLigne("🥇 "+esc(sprL("Champion du mois","Champion of the month")), C.tMois, ' data-k="t-mois"')
+    +sprLigne("🧠 "+esc(sprL("Stratège du mois","Strategist of the month")), C.tStrat, ' data-k="t-stratege"');
+  h+=`<div class="smalllbl" style="margin-top:8px">${esc(sprL("Records personnels en Élite","Personal Elite records"))}</div>`
+    +(C.eliteN ? sprLigne(esc(sprL("Meilleur total de points","Best points total")), `${sprNum(C.elitePts.points)} pts · ${esc(s(C.elitePts))}`, ' data-k="elite-pts"')
+      +sprLigne(esc(sprL("Meilleur capital final","Best final capital")), `${euro(sprNum(C.eliteCap.capital_final))} · ${esc(s(C.eliteCap))}`, ' data-k="elite-cap"')
+      : sprVide(sprL("Pas encore de saison terminée en Élite.","No finished Elite season yet.")));
+  return sprCadre(fam, "stats", h+sprDuelsPrep());
+}
+function sprDuelsPrep(){ return `<div class="spv2-prep-s" data-rush-prep-duels="1" style="margin-top:8px">⏳ ${esc(sprL("Bilan duel par duel (victoires, nuls, défaites ; contre un joueur ou le Joueur IA ; Super Finales) : en préparation.","Duel-by-duel record (wins, draws, defeats; against a player or the AI player; Super Finals): in preparation."))}</div>`; }
+function sprTrophee(ic, titre, sb, fam, attr){ return `<div class="spv2-tr${ic==="🏆"||ic==="🥇"?" or":""}" data-famille="${fam}"${attr||""}><span class="ic">${ic}</span><b>${esc(titre)}</b><span class="sb">${esc(sb)}</span>${spv2FamTag(fam)}</div>`; }
+function sprTropheesHTML(fam, mode){
+  const C=sprCarriere(mode), P=sprPodiums(mode), num=id=>{ const x=C.tri.find(s=>s.saison===id); return x ? `${sprL("Saison","Season")} ${sprNum(x.numero)}` : ""; };
+  const p=SPR.m[mode].palm; if(p && p.ok && Array.isArray(p.mois_figes)) sprChargerMois(mode, p.mois_figes);
+  const tr=[];
+  [...C.titres].reverse().forEach(x=>{
+    if(x.type==="champion_elite") tr.push(sprTrophee("🏆", sprL("Champion Élite","Elite Champion"), num(x.saison), fam, ' data-titre="champion_elite"'));
+    else if(x.type==="champion_division") tr.push(sprTrophee("🎖️", sprL("Champion de Division","Division Champion"), [sprDiv(x.division), num(x.saison)].filter(Boolean).join(" · "), fam, ' data-titre="champion_division"'));
+    else if(x.type==="champion_du_mois" && SPR_MOIS.test(x.mois)) tr.push(sprTrophee("🥇", sprL("Champion du mois","Champion of the month"), sprMoisLib(x.mois), fam, ' data-titre="champion_du_mois"'));
+    else if(x.type==="stratege_du_mois" && SPR_MOIS.test(x.mois)) tr.push(sprTrophee("🧠", sprL("Stratège du mois","Strategist of the month"), sprMoisLib(x.mois), fam, ' data-titre="stratege_du_mois"')); });
+  const pod=P.filter(x=>x.rang>=2 && x.rang<=3);   // le rang 1 est déjà un titre (Champion / Stratège du mois)
+  pod.forEach(x=>tr.push(sprTrophee(x.rang===2?"🥈":"🥉", sprL(`${x.rang}ᵉ du mois`, `${x.rang===2?"2nd":"3rd"} of the month`)+" · "+(x.classement==="points" ? sprL("points","points") : sprL("capital final","final capital")), sprMoisLib(x.mois), fam, ` data-podium="${x.rang}"`)));
+  if(!C.n && !tr.length) return sprCadre(fam, "trophees", sprVide(sprL("Aucun titre Rush pour l'instant.","No Rush title yet.")));   // rien d'inventé : pas de compteurs à 0
+  const cab=`<div class="spv2-cab"><div><b data-k="saisons" data-v="${C.n}">${C.n}</b><span>${esc(sprL("Saisons terminées","Finished seasons"))}</span></div>
+    <div><b data-k="titres" data-v="${C.titres.length}">${C.titres.length}</b><span>${esc(sprL("Titres","Titles"))}</span></div>
+    <div><b data-k="podiums" data-v="${pod.length}">${pod.length}</b><span>${esc(sprL("Podiums","Podiums"))}</span></div></div>`;
+  return sprCadre(fam, "trophees", cab+(tr.length ? `<div class="spv2-troph">${tr.join("")}</div>` : sprVide(sprL("Aucun titre Rush pour l'instant.","No Rush title yet."))));
+}
+const SPR_MOTIFS = { montee_garantie:["Montée acquise avant le dernier duel","Promotion secured before the last duel"], titre_division:["Montée acquise avant le dernier duel","Promotion secured before the last duel"],
+  relegation_certaine:["Relégation devenue certaine","Relegation became certain"], maintien_garanti_montee_impossible:["Montée devenue impossible","Promotion no longer possible"],
+  dixieme_duel:["Saison jouée jusqu'au dernier duel","Season played to the last duel"] };
+const SPR_MAESTRO = { confiant:["Confiant","Confident"], vigilant:["Vigilant","Watchful"], determine:["Déterminé","Determined"], tendu:["Tendu","Tense"], tout_ou_rien:["Tout ou rien","All or nothing"] };
+function sprOuvrir(mode, id){ SPR.ouverte = (SPR.ouverte===mode+":"+id) ? null : mode+":"+id; render(); }
+function sprHistoriqueHTML(fam, mode){
+  const C=sprCarriere(mode);
+  if(!C.n) return sprCadre(fam, "historique", sprVide(SPR_SANS_SAISON()));
+  const rows=C.tri.map(s=>{
+    const id=String(s.saison||""), ouvert=SPR.ouverte===mode+":"+id, [ic, lib]=sprIssue(s.issue);
+    const titres=[s.titre===true ? "🏆 "+sprL("Champion Élite","Elite Champion") : "", s.titre_division===true ? "🎖️ "+sprL("Champion de Division","Division Champion") : ""].filter(Boolean).join(" · ");
+    const mo=SPR_MOTIFS[s.motif], ma=SPR_MAESTRO[s.maestro];
+    const det=ouvert ? `<div class="mini muted" data-rush-bilan="1" style="margin-top:6px;line-height:1.6">
+        ${esc(sprL("Duels joués","Duels played"))} : <b>${sprNum(s.duels)}</b>${sprNum(s.neutralises) ? ` · ${esc(sprL("neutralisés","neutralised"))} : <b>${sprNum(s.neutralises)}</b>` : ""} · ${esc(sprL("recapitalisations","recapitalisations"))} : <b>${sprNum(s.recaps)}</b><br>
+        ${mo ? esc(sprL(mo[0], mo[1]))+"<br>" : ""}${ma ? "🎩 "+esc(sprL("Maestro au bilan : ","Maestro at the review: "))+"<b>"+esc(sprL(ma[0], ma[1]))+"</b><br>" : ""}
+        ${esc(sprDate(s.debut))} → ${esc(sprDate(s.fin))}<br>
+        <span style="opacity:.8">⏳ ${esc(sprL("Détail des duels et partage du bilan : en préparation.","Duel details and review sharing: in preparation."))}</span></div>` : "";
+    return `<div class="box" style="padding:9px 11px;margin:6px 0;cursor:pointer" role="button" aria-expanded="${ouvert}" data-rush-saison="${sprNum(s.numero)}" onclick="sprOuvrir('${mode}','${esc(id).replace(/'/g,"")}')">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="min-width:0;overflow-wrap:anywhere">${esc(sprL("Saison","Season"))} ${sprNum(s.numero)} · ${esc(sprDiv(s.division))}</b><span class="mini" style="white-space:nowrap">${ic} ${esc(lib)}</span></div>
+      <div class="mini muted">${sprNum(s.points)} pts · ${esc(sprL("capital final","final capital"))} ${euro(sprNum(s.capital_final))}${titres ? " · "+esc(titres) : ""}</div>${det}</div>`; }).join("");
+  return sprCadre(fam, "historique", `<div class="mini muted" style="margin:2px 2px 4px">${esc(C.n===1 ? sprL("1 saison terminée","1 finished season") : sprL(C.n+" saisons terminées", C.n+" finished seasons"))}</div>${rows}`);
+}
+// Palmarès Élite (Records) : onglets Mois | Tous les temps, par mode séparé.
+function sprRecTab(mode, v){ SPR.rec[mode] = v==="tous" ? "tous" : "mois"; render(); }
+function sprRecMois(mode, m){ SPR.sel[mode] = SPR_MOIS.test(m) ? m : null; render(); }
+function sprTop10(mode){ SPR.top10[mode] = !SPR.top10[mode]; render(); }
+function sprListe(rangs, crit){
+  if(!Array.isArray(rangs) || !rangs.length) return "";
+  const med=r=>r===1 ? "🥇" : (r===2 ? "🥈" : (r===3 ? "🥉" : r+"."));
+  return rangs.filter(r=>r && typeof r==="object").map(r=>`<div class="statrow"${r.moi===true ? ' data-moi="1" style="border-radius:8px;background:rgba(236,211,130,.08);box-shadow:0 0 0 1px rgba(236,211,130,.4)"' : ""} data-rang="${sprNum(r.rang)}">
+      <span class="mini" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${med(sprNum(r.rang))} ${esc(String(r.pseudo||"?"))}${r.moi===true ? " <b>("+esc(sprL("toi","you"))+")</b>" : ""}</span>
+      <b class="mini" style="white-space:nowrap">${crit==="capital" ? euro(sprNum(r.capital_final))+" · "+sprNum(r.points)+" pts" : sprNum(r.points)+" pts · "+euro(sprNum(r.capital_final))}</b></div>`).join("");
+}
+function sprRecHTML(mode){
+  const fam="rush-"+mode, p=SPR.m[mode].palm, onglet=SPR.rec[mode];
+  const tab=(v, lib)=>`<button type="button" role="tab" aria-selected="${onglet===v}" class="${onglet===v?"on":""}" data-rush-rec="${v}" onclick="sprRecTab('${mode}','${v}')" style="border:0;background:${onglet===v?"var(--a2-panel)":"none"};border-radius:999px;padding:5px 11px;font:inherit;font-size:11px;font-weight:800;color:${onglet===v?"var(--a2-brass-light)":"var(--a2-muted)"};cursor:pointer">${esc(lib)}</button>`;
+  let h=`<div class="spv2-minitabs" role="tablist" style="opacity:1">${tab("mois", t("Mois"))}${tab("tous", t("Tous les temps"))}</div>`;
+  if(onglet==="mois"){
+    const figes=(Array.isArray(p.mois_figes) ? p.mois_figes : []).filter(m=>SPR_MOIS.test(m)).sort().reverse();
+    const clo=(typeof RUSH_REGLES!=="undefined" && RUSH_REGLES.palmares) ? RUSH_REGLES.palmares.cloture_h : null;
+    if(!figes.length) return h+sprVide(sprL("Aucun mois clôturé pour l'instant. ","No closed month yet. ")
+      +(clo ? sprL(`Le palmarès d'un mois est publié ${clo} h après sa fin (heure de Paris).`, `A month's hall of fame is published ${clo} h after it ends (Paris time).`)
+            : sprL("Le palmarès d'un mois est publié à sa clôture.","A month's hall of fame is published when it closes.")));
+    const sel=SPR.sel[mode] && figes.includes(SPR.sel[mode]) ? SPR.sel[mode] : null;
+    let d=null;
+    if(!sel) d=p.dernier_mois_fige;
+    else { const X=SPR.mois[mode][sel]; if(!(X && X.gen===SPR.gen && !X.enCours)) sprChargerMois(mode, [sel]); d=X && X.data && X.data.ok ? X.data.dernier_mois_fige : (X && X.data && !X.data.ok ? { erreur:true } : null); }
+    if(figes.length>1) h+=`<div style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0">${figes.slice(0,12).map((m,i)=>{ const on=(sel||figes[0])===m;
+      return `<button type="button" class="ghost-btn-sm" data-rush-mois-choix="${m}" aria-pressed="${on}" style="${on?"border-color:var(--accent);color:var(--accent)":""}" onclick="sprRecMois('${mode}','${i===0?"":m}')">${esc(sprMoisLib(m))}</button>`; }).join("")}</div>`;
+    if(!d) return h+sprVide(sprL("Chargement…","Loading…"));
+    if(d.erreur) return h+sprVide(sprL("Ce mois n'a pas pu être chargé.","This month could not be loaded."));
+    if(d.statut==="a_decouvrir") return h+`<div class="spv2-avis" data-rush-mois="a_decouvrir">👀 ${esc(sprL(`${sprMoisLib(d.mois)} : découvre d'abord le résultat de ton dernier duel ${mode==="fictif"?"Rush Fictif":"Rush Réel"} pour voir ce mois.`,
+      `${sprMoisLib(d.mois)}: check the result of your last ${mode==="fictif"?"Fictional Rush":"Real Rush"} duel first to see this month.`))}</div>`;
+    if(d.statut!=="publie") return h+sprVide(sprL("Ce mois n'est pas disponible.","This month is not available."));
+    h+=`<div class="mini muted" data-rush-mois="publie" data-mois="${esc(String(d.mois))}" style="margin:4px 2px">${esc(sprMoisLib(d.mois))} · ${esc(sprL("titres définitifs","final titles"))}</div>`;
+    h+=`<div class="smalllbl" style="margin-top:8px">🥇 ${esc(sprL("Champion du mois","Champion of the month"))} : <b>${esc(String(d.champion_du_mois||"–"))}</b></div>`
+      +(sprListe(d.points, "points") || sprVide(sprL("Aucune saison Élite terminée ce mois-ci.","No finished Elite season this month.")));
+    h+=`<div class="smalllbl" style="margin-top:10px">🧠 ${esc(sprL("Stratège du mois","Strategist of the month"))} : <b>${esc(String(d.stratege_du_mois||"–"))}</b></div>`
+      +(sprListe(d.capital, "capital") || sprVide(sprL("Aucune saison Élite terminée ce mois-ci.","No finished Elite season this month.")));
+    return h;
+  }
+  const H=p.historique || {}, aff=(typeof RUSH_REGLES!=="undefined" && RUSH_REGLES.palmares) ? RUSH_REGLES.palmares.affiche_tous : 3, plein=SPR.top10[mode];
+  const pts=Array.isArray(H.points) ? H.points : [], cap=Array.isArray(H.capital) ? H.capital : [];
+  if(!pts.length && !cap.length) return h+sprVide(sprL("Aucune saison Élite terminée pour l'instant.","No finished Elite season yet."));
+  const coupe=a=>plein ? a : a.slice(0, aff);
+  h+=`<div class="smalllbl" style="margin-top:8px">🏆 ${esc(sprL("Meilleurs totaux de points","Best points totals"))}</div>${sprListe(coupe(pts), "points")}`
+    +`<div class="smalllbl" style="margin-top:10px">💰 ${esc(sprL("Meilleurs capitaux finaux","Best final capitals"))}</div>${sprListe(coupe(cap), "capital")}`;
+  if(Math.max(pts.length, cap.length)>aff) h+=`<button type="button" class="ghost-btn-sm" style="margin-top:8px" data-rush-top10="1" onclick="sprTop10('${mode}')">${esc(plein ? sprL("Réduire","Show less") : sprL(`Voir le Top ${sprNum(H.taille)||pts.length}`, `See the Top ${sprNum(H.taille)||pts.length}`))}</button>`;
+  return h;
+}
+// ── Branchements (réaffectation des fonctions de Stats/Palmarès V2 ; « En préparation » d'origine en repli) ──────────────
+const sprPrepOrigine = spv2RushPrep;
+spv2RushPrep = function(fam, q){
+  const mode = fam==="rush-reel" ? "reel" : (fam==="rush-fictif" ? "fictif" : null);
+  if(!mode || !sprActif() || ["stats","trophees","historique"].indexOf(q)<0) return sprPrepOrigine(fam, q);
+  sprCharger(mode);
+  const M=SPR.m[mode];
+  if(!M.hist && M.enCours) return sprAttente(fam, q);
+  if(!(M.hist && M.hist.ok && Array.isArray(M.hist.saisons))) return sprPrepOrigine(fam, q);
+  if(q==="stats") return sprStatsHTML(fam, mode);
+  if(q==="trophees") return sprTropheesHTML(fam, mode);
+  return sprHistoriqueHTML(fam, mode);
+};
+const sprRecOrigine = spv2RecRush;
+spv2RecRush = function(mode){
+  if(!sprActif() || (mode!=="reel" && mode!=="fictif")) return sprRecOrigine(mode);
+  sprCharger(mode);
+  const M=SPR.m[mode], fam="rush-"+mode;
+  if(!(M.palm && M.palm.ok)) return (!M.palm && M.enCours)
+    ? `<section class="spv2-famsec" id="spv2-rec-${fam}" data-famille="${fam}"><div class="spv2-famhd"><span class="serif">🏛 ${esc(t("Palmarès Élite"))}</span>${spv2FamTag(fam)}</div>${sprAttente(fam,"records")}</section>`
+    : sprRecOrigine(mode);
+  return `<section class="spv2-famsec" id="spv2-rec-${fam}" data-famille="${fam}" data-rush="records"><div class="spv2-famhd"><span class="serif">🏛 ${esc(t("Palmarès Élite"))}</span>${spv2FamTag(fam)}</div>
+    <div class="spv2-perim">${esc(mode==="fictif"?t("Tous les joueurs Rush Fictif · saisons Élite terminées, classements indépendants du Réel."):t("Tous les joueurs Rush Réel · saisons Élite terminées."))} ${esc(sprL("Seul le capital FINAL d'une saison terminée y figure ; le capital en cours d'un joueur n'est jamais visible.","Only the FINAL capital of a finished season is shown; a player's current capital is never visible."))}</div>
+    ${sprRecHTML(mode)}</section>`;
+};
+// Textes du périmètre et de la fiche ⓘ : Rush n'est plus « en préparation » (carrière, saisons, titres, palmarès), mais
+// n'entre toujours dans AUCUN indicateur comparable des Ligues (statistiques par duel : RPC à créer).
+const sprPerimOrigine = spv2Perimetre;
+spv2Perimetre = function(){
+  if(!sprActif()) return sprPerimOrigine.apply(this, arguments);
+  const k=SPV2.jeu+"/"+SPV2.type;
+  if(k==="tout/tout") return sprL("Ligues et Rush, rencontres réelles et fictives. Rush a ses propres unités : jamais additionné aux Ligues.","Leagues and Rush, real and fictional matches. Rush has its own units: never added to Leagues.");
+  if(k==="tout/reel") return sprL("Tes pronostics sur de vrais matchs : ligues réelles et Rush Réel, chacun avec ses unités.","Your predictions on real matches: real leagues and Real Rush, each with its own units.");
+  if(k==="tout/fictif") return sprL("Tes pronostics sur des rencontres fictives : ligues simulées et Rush Fictif, chacun avec ses unités.","Your predictions on fictional matches: simulated leagues and Fictional Rush, each with its own units.");
+  if(k==="rush/tout") return sprL("Rush Réel et Rush Fictif : deux carrières séparées, jamais additionnées.","Real Rush and Fictional Rush: two separate careers, never added up.");
+  if(k==="rush/reel") return sprL("Rush Réel : ta carrière sur de vrais matchs.","Real Rush: your career on real matches.");
+  if(k==="rush/fictif") return sprL("Rush Fictif : ta carrière sur des rencontres fictives.","Fictional Rush: your career on fictional matches.");
+  return sprPerimOrigine.apply(this, arguments);
+};
+const SPR_AVIS_NOUVEAU = ()=>sprL("Rush n'entre pas dans ces indicateurs : ses carrières ont leurs propres unités (divisions, points, capital). Les chiffres ci-dessous portent uniquement sur tes Ligues.",
+  "Rush is not part of these indicators: its careers have their own units (divisions, points, capital). The figures below cover your Leagues only.");
+const sprStatsOrigine = viewStatsV2;
+viewStatsV2 = function(){
+  const h=sprStatsOrigine.apply(this, arguments);
+  if(!sprActif()) return h;
+  const ancien=esc(t("Rush : en préparation, non compté. Les chiffres ci-dessous portent uniquement sur tes Ligues."));
+  return h.split(ancien).join(esc(SPR_AVIS_NOUVEAU()));
+};
+const sprVocabOrigine = spv2InfoVocab;
+spv2InfoVocab = function(){
+  if(!sprActif()) return sprVocabOrigine.apply(this, arguments);
+  const o=infoModal, ancienFr="Rush est en préparation : il n'est compté nulle part pour l'instant.", ancienEn="Rush is in preparation: it is not counted anywhere for now.";
+  const nouveau=sprL("Rush n'entre dans aucun de ces indicateurs : il a ses propres unités, et Réel et Fictif ne s'additionnent jamais.","Rush is not part of any of these indicators: it has its own units, and Real and Fictional are never added up.");
+  infoModal=function(a, b, c){ return o(a, b, String(c).split(ancienFr).join(nouveau).split(ancienEn).join(nouveau)); };
+  try{ return sprVocabOrigine.apply(this, arguments); } finally { infoModal=o; }
+};
+/* ⟦N2A-STATS-RUSH⟧ fin ─────────────────────────────────────────────────────────────────────────────────────────── */
 /* ⟦STATS-PALMARES-V2⟧ fin ═════════════════════════════════════════════════════════════════════════════════════════ */
 /* Relève du solde exact. Ne coûte AUCUN crédit (v8.189) : sert quand on veut le chiffre à la
    seconde près, par exemple avant d'ouvrir des ligues en données réelles. */
