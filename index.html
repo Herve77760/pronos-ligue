@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.9";
+const APP_VERSION = "v8.538.10";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -23327,6 +23327,133 @@ spv2InfoVocab = function(){
   try{ return sprVocabOrigine.apply(this, arguments); } finally { infoModal=o; }
 };
 /* ⟦N2A-STATS-RUSH⟧ fin ─────────────────────────────────────────────────────────────────────────────────────────── */
+/* ⟦N2C-STATS-RPC⟧ début ─────────────────────────────────────────────────────────────────────────────────────────
+   Lot N2c (16/10/2026) — Stats et Palmarès Rush branchés sur rush_stats, rush_podiums et rush_duels_saison (lecture seule,
+   rush/sql/MIGRATION-rush-v6-stats-rpc-2026-10-16.sql), DERRIÈRE UNE DÉTECTION : RPC absente (PGRST202 / 404) → notée pour la
+   session, plus jamais appelée, et le rendu du lot N2a reste AU CARACTÈRE PRÈS. Erreur / rush_ferme / autre mode / chargement →
+   rendu N2a. Mêmes portes que N2a (sprActif) ; aucune écriture ni stockage ; Réel et Fictif séparés. Anti-spoiler : SERVEUR
+   (résultats découverts seulement, saison publiée seulement, mois masqués exclus). Retrait exact : tools/lib/stats_rush_rpc.py. */
+const SPC = { absent:{}, enCours:{}, gen:{ stats:{ reel:-1, fictif:-1 }, podiums:{ reel:-1, fictif:-1 } }, d:{ stats:{ reel:null, fictif:null }, podiums:{ reel:null, fictif:null } }, duels:{} };
+const SPC_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function spcAbsente(r){ const e=r && r.error; if(!e) return false; const c=String(e.code||""), m=String(e.message||"");
+  return c==="PGRST202" || c==="42883" || r.status===404 || e.status===404 || /could not find the function|function [^ ]+ does not exist/i.test(m); }
+async function spcRpc(fn, args){
+  if(SPC.absent[fn]) return { ok:false, code:"absente" };
+  try{
+    const r = await db.rpc(fn, args), data = r && r.data;
+    if(r && r.error){ if(spcAbsente(r)){ SPC.absent[fn]=true; return { ok:false, code:"absente" }; } return { ok:false, code:"erreur" }; }
+    if(!data || typeof data!=="object" || Array.isArray(data)) return { ok:false, code:"erreur" };
+    if(data.ok!==true) return { ok:false, code:String(data.code||"erreur").slice(0,40) };
+    if(data.mode!==args.p_mode) return { ok:false, code:"mode_incoherent" };    // Réel et Fictif jamais mélangés
+    return data;
+  }catch(e){ return { ok:false, code:"erreur_reseau" }; }
+}
+function spcCharger(quoi, mode){                     // une lecture par visite de Stats / Palmarès (comme N2a)
+  const fn="rush_"+quoi, k=quoi+":"+mode, g=sprGen();
+  if(!sprActif() || SPC.absent[fn] || SPC.enCours[k] || SPC.gen[quoi][mode]===g) return;
+  SPC.enCours[k]=true;
+  spcRpc(fn, { p_mode:mode }).then(r=>{ SPC.enCours[k]=false; SPC.gen[quoi][mode]=g; SPC.d[quoi][mode]=r; sprRafraichir(); });
+}
+function spcPret(quoi, mode){ const d=SPC.d[quoi][mode]; return (!SPC.enCours[quoi+":"+mode] && SPC.gen[quoi][mode]===SPR.gen && d && d.ok===true) ? d : null; }
+const spcSigne = n=>(typeof euroSigned==="function" ? euroSigned(n) : euro(n));
+function spcVND(o){ return `${sprNum(o && o.victoires)} – ${sprNum(o && o.nuls)} – ${sprNum(o && o.defaites)}`; }
+// ── Stats › Rush : bilan duel par duel ──────────────────────────────────────────────────────────────────────────────────
+function spcDuelsHTML(d, mode){
+  const n=sprNum(d.duels), att=d.a_decouvrir===true ? `<div class="mini muted" data-rush-a-decouvrir="1" style="margin-top:4px">👀 ${esc(sprL("Un résultat t'attend dans l'onglet Rush : il sera compté quand tu l'auras découvert.","A result is waiting in the Rush tab: it will count once you have checked it."))}</div>` : "";
+  if(!n) return `<div class="mini muted" data-rush-duels="vide" style="margin-top:8px">${esc(sprL("Aucun duel joué pour l'instant.","No duel played yet."))}</div>`+att;
+  const pct=x=>Math.round(sprNum(x)*100/n)+" %", moy=String(Math.round(sprNum(d.points)/n*10)/10).replace(".", lang==="en"?".":",");
+  const sf=d.super_finales||{}, cj=d.contre_joueur||{}, ci=d.contre_ia||{}, b=d.meilleur_net;
+  let h=`<div class="smalllbl" style="margin-top:8px" data-rush-duels="1">${esc(sprL("Duels","Duels"))}</div>`
+    +sprLigne(esc(sprL("Victoires – nuls – défaites","Wins – draws – defeats")), spcVND(d), ' data-k="vnd"')
+    +sprLigne(esc(sprL("Victoires","Wins")), pct(d.victoires), ' data-k="pct-v"')
+    +sprLigne(esc(sprL("Points moyens par duel","Average points per duel")), moy, ' data-k="pts-duel"')
+    +sprLigne(esc(sprL("Duels à net positif","Duels with a positive net")), `${sprNum(d.net_positif)} (${pct(d.net_positif)})`, ' data-k="net-pos"');
+  if(mode==="reel") h+=sprLigne("🤝 "+esc(sprL("Contre un joueur","Against a player")), spcVND(cj), ' data-k="contre-joueur"');
+  h+=sprLigne("🤖 "+esc(sprL("Contre le Joueur IA","Against the AI player")), spcVND(ci), ' data-k="contre-ia"')
+    +sprLigne("🏁 "+esc(sprL("Super Finales jouées (gagnées)","Super Finals played (won)")), `${sprNum(sf.jouees)} (${sprNum(sf.gagnees)})`, ' data-k="sf"');
+  if(b && typeof b==="object") h+=sprLigne(esc(sprL("Meilleur net d'un duel","Best net in a duel")), `${spcSigne(sprNum(b.net))} · ${esc(sprL("Saison","Season"))} ${sprNum(b.saison_numero)}`, ' data-k="best-net"');
+  return h+att;
+}
+const spcStatsN2a = sprStatsHTML;
+sprStatsHTML = function(fam, mode){
+  const h=spcStatsN2a.apply(this, arguments);
+  if(!sprActif() || SPV2.jeu==="tout" || (mode!=="reel" && mode!=="fictif")) return h;   // résumé « Tout Tactizo » : inchangé
+  spcCharger("stats", mode);
+  const d=spcPret("stats", mode), prep=sprDuelsPrep();
+  return (d && h.indexOf(prep)>=0) ? h.split(prep).join(spcDuelsHTML(d, mode)) : h;
+};
+// ── Palmarès › Moi : podiums en UN appel ────────────────────────────────────────────────────────────────────────────────
+function spcPodiums(d){
+  const out=(Array.isArray(d.podiums) ? d.podiums : []).filter(x=>x && SPR_MOIS.test(x.mois) && (x.classement==="points" || x.classement==="capital") && sprNum(x.rang)>=1 && sprNum(x.rang)<=3)
+    .map(x=>({ mois:x.mois, classement:x.classement, rang:sprNum(x.rang) }));
+  const c=x=>x.classement==="points" ? 0 : 1;                         // même ordre que sprPodiums (N2a) : mois ↓, rang ↑, points puis capital
+  return out.sort((a,b)=>a.mois<b.mois ? 1 : (a.mois>b.mois ? -1 : (a.rang-b.rang || c(a)-c(b))));
+}
+const spcTropheesN2a = sprTropheesHTML;
+sprTropheesHTML = function(fam, mode){
+  if(!sprActif() || SPC.absent.rush_podiums || (mode!=="reel" && mode!=="fictif")) return spcTropheesN2a.apply(this, arguments);
+  spcCharger("podiums", mode);
+  if(SPC.absent.rush_podiums) return spcTropheesN2a.apply(this, arguments);
+  const enCours=SPC.enCours["podiums:"+mode] || SPC.gen.podiums[mode]!==SPR.gen, d=spcPret("podiums", mode);
+  if(!enCours && !d) return spcTropheesN2a.apply(this, arguments);   // erreur → N2a (ses N appels rush_palmares)
+  const ch=sprChargerMois;
+  if(enCours){ sprChargerMois=function(){};                          // chargement : rendu N2a, SANS ses N appels (un seul appel attendu)
+    try{ return spcTropheesN2a.apply(this, arguments); } finally { sprChargerMois=ch; } }
+  const liste=spcPodiums(d), po=sprPodiums;
+  sprChargerMois=function(){}; sprPodiums=function(m){ return m===mode ? liste : po.apply(this, arguments); };
+  try{ return spcTropheesN2a.apply(this, arguments); } finally { sprChargerMois=ch; sprPodiums=po; }
+};
+// ── Palmarès › Moi › historique : détail des duels d'une saison (au dépliage) ───────────────────────────────────────────────
+const SPC_ISSUE = { V:"✅", N:"🟰", D:"❌" };
+function spcScore(r){ const x=r && (r.score_final || r.score); if(!x || typeof x!=="object") return "";
+  const a=("hs" in x) ? x.hs : x.domicile, b=("as" in x) ? x.as : x.exterieur;
+  return (a==null || b==null || !isFinite(+a) || !isFinite(+b)) ? "" : ` ${+a}-${+b}`; }
+function spcPick(sel, r){ return sel==="1" ? String(r.domicile||"1") : (sel==="2" ? String(r.exterieur||"2") : (sel==="N" ? sprL("Nul","Draw") : "–")); }
+function spcBonus(id){ const c=(typeof CARDS!=="undefined" && id && CARDS[id]) || null; return c && c.e ? " "+c.e : ""; }
+function spcDuelsSaisonHTML(data){
+  const L=Array.isArray(data.duels) ? data.duels.filter(x=>x && typeof x==="object") : [];
+  const lignes=L.map(x=>{
+    const r=x.rencontre||{}, nom=`${esc(String(r.domicile||"?"))} – ${esc(String(r.exterieur||"?"))}`;
+    if(x.etat==="neutralise") return `<div data-rush-duel="neutralise" style="margin:3px 0">⏸️ ${nom} · ${esc(sprL("duel neutralisé, mise rendue","duel neutralised, stake returned"))}</div>`;
+    const p=x.pari||{}, s=x.resultat||{}, a=x.adversaire||{}, sf=s.super_finale===true ? " 🏁" : "";
+    const adv = a.indisponible===true ? sprL("joueur indisponible","player unavailable") : (a.ia===true ? sprL("Joueur IA","AI player") : String(a.pseudo||"?"));
+    return `<div data-rush-duel="${sprNum(x.numero)}" style="margin:3px 0;overflow-wrap:anywhere">${sprNum(x.numero)}. ${SPC_ISSUE[s.issue]||""} ${nom}${esc(spcScore(r))}${sf}<br>
+      <span style="opacity:.85">${esc(spcPick(p.sel, r))} · ${euro(sprNum(p.mise))}${p.cote!=null ? " @ "+esc(String(p.cote).replace(".", lang==="en"?".":",")) : ""}${spcBonus(p.bonus)} · ${esc(sprL("net","net"))} ${spcSigne(sprNum(s.net))} · ${sprNum(s.points)} pts · ${esc(sprL("contre","vs"))} ${esc(adv)}</span></div>`; }).join("");
+  return `<div data-rush-duels-saison="${L.length}" style="margin-top:4px">${lignes || esc(sprL("Aucun duel.","No duel."))}</div>`
+    +`<span style="opacity:.8">⏳ ${esc(sprL("Partage du bilan : en préparation.","Review sharing: in preparation."))}</span>`;
+}
+const spcHistN2a = sprHistoriqueHTML;
+sprHistoriqueHTML = function(fam, mode){
+  const h=spcHistN2a.apply(this, arguments);
+  if(!sprActif() || SPC.absent.rush_duels_saison || (mode!=="reel" && mode!=="fictif") || !SPR.ouverte || SPR.ouverte.indexOf(mode+":")!==0) return h;
+  const id=SPR.ouverte.slice(mode.length+1), k=mode+":"+id, X=SPC.duels[k], g=SPR.gen;
+  if(!SPC_UUID.test(id)) return h;
+  if(!X || (X.gen!==g && !X.enCours)){
+    SPC.duels[k]={ enCours:true, gen:g };
+    spcRpc("rush_duels_saison", { p_mode:mode, p_saison:id }).then(r=>{ SPC.duels[k]={ enCours:false, gen:g, data:r }; sprRafraichir(); });
+    return h;
+  }
+  const d=X.data;
+  if(X.enCours || !(d && d.ok===true && d.saison && d.saison.saison===id)) return h;
+  const ancien=`<span style="opacity:.8">⏳ ${esc(sprL("Détail des duels et partage du bilan : en préparation.","Duel details and review sharing: in preparation."))}</span>`;
+  return h.indexOf(ancien)>=0 ? h.replace(ancien, ()=>spcDuelsSaisonHTML(d)) : h;
+};
+// ── Comptes supprimés (option B restreinte, 16/10) : le serveur rend « Joueur supprimé » (rush_pseudo(null), FR seulement) pour
+//    une ligne de podium figé ou un titre du mois conservés ; en anglais, « Deleted player ». Affichage seulement (Palmarès Élite) ;
+//    rien n'est relu, réécrit ni stocké. Un vrai pseudo n'est jamais touché ; le français reste le libellé du serveur.
+const SPC_SUPPRIME = "Joueur supprimé", SPC_SUPPRIME_EN = "Deleted player";
+function spcEnAnglais(){ return sprActif() && lang==="en"; }
+const spcListeN2a = sprListe;
+sprListe = function(rangs, crit){
+  if(!spcEnAnglais() || !Array.isArray(rangs)) return spcListeN2a.apply(this, arguments);
+  return spcListeN2a.call(this, rangs.map(r=>(r && typeof r==="object" && r.pseudo===SPC_SUPPRIME) ? Object.assign({}, r, { pseudo:SPC_SUPPRIME_EN }) : r), crit);
+};
+const spcRecN2a = sprRecHTML;
+sprRecHTML = function(mode){                         // « Champion du mois : <b>…</b> » / « Stratège du mois : <b>…</b> »
+  const h=spcRecN2a.apply(this, arguments);
+  return spcEnAnglais() ? h.split(`: <b>${esc(SPC_SUPPRIME)}</b></div>`).join(`: <b>${esc(SPC_SUPPRIME_EN)}</b></div>`) : h;
+};
+/* ⟦N2C-STATS-RPC⟧ fin ─────────────────────────────────────────────────────────────────────────────────────────── */
 /* ⟦STATS-PALMARES-V2⟧ fin ═════════════════════════════════════════════════════════════════════════════════════════ */
 /* Relève du solde exact. Ne coûte AUCUN crédit (v8.189) : sert quand on veut le chiffre à la
    seconde près, par exemple avant d'ouvrir des ligues en données réelles. */
