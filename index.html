@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.22";
+const APP_VERSION = "v8.538.23";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5767,6 +5767,17 @@ const EN={
   "Exemple":"Example",
   "Duel perdu":"Duel lost",
   "Revoir la présentation":"Replay the walkthrough",
+  /* ⟦COMPRENDRE-HUB⟧ (tools/patch-comprendre-hub.py) */
+  "Tutoriels, règles essentielles et règles complètes":"Tutorials, essential rules and full rules",
+  "Les règles essentielles en 2 minutes":"The essential rules in 2 minutes",
+  "Le tutoriel pas à pas, au choix : Ligues ou Rush.":"The step-by-step tutorial, your choice: Leagues or Rush.",
+  "Le tutoriel pas à pas, pour tout revoir en quelques écrans.":"The step-by-step tutorial, to go over everything in a few screens.",
+  "Tutoriel des Ligues":"Leagues tutorial",
+  "Tutoriel Rush":"Rush tutorial",
+  "Choisis le mode : Ligues ou Rush.":"Pick the mode: Leagues or Rush.",
+  "Tout ce qu'il faut savoir pour bien démarrer.":"Everything you need to get off to a good start.",
+  "Consulter les règles complètes":"See the full rules",
+  "Les tutoriels, l'essentiel des règles en 2 minutes, puis les règles complètes.":"The tutorials, the essential rules in 2 minutes, then the full rules.",
   "la présentation":"the walkthrough",
   "Le fonctionnement complet du jeu, dans le détail. Pour un aperçu rapide, essaie plutôt {a}.":"The full game rules, in detail. For a quick overview, try {a} instead.",
   "🎓 Le tuto complet (2 min)":"🎓 The full tutorial (2 min)",
@@ -13608,6 +13619,7 @@ const RSV_RPC = Object.freeze({
   rush_historique: { p_mode:rsvMode },
   rush_palmares: { p_top:v=>Number.isInteger(v) && v>=1 && v<=10, p_mode:rsvMode, p_mois:v=>v===null || (typeof v==="string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(v)) },
   rush_fictif_affiches: {},
+  rush_resume_carriere: { p_mode:rsvMode },   // ⟦RUSH-RESUME-CARRIERE⟧ 22/10 : lecture seule, carte Fictif de l'Accueil (rush/sql/MIGRATION-rush-resume-carriere-2026-10-22.sql)
   rush_marquer_decouvert: { p_mode:rsvMode, p_rencontre:v=>v===null || rsvUuid(v) },
 });
 // Edge rush-fictif (Verify JWT ON) : { action:"affiches" } | { action:"jouer", affiche, sel, mise, bonus, sel2 }.
@@ -25040,6 +25052,42 @@ async function showPointsTactizoInfo(){
      ⚠️ ${t("Les Points provenant de comptes artificiels ou frauduleux peuvent être suspendus ou annulés à tout moment.")}
    </div>`);
 }
+/* ⟦COMPRENDRE-HUB⟧ début — 22/10 (tools/patch-comprendre-hub.py) : Profil → une seule entrée « Comprendre Tactizo » ; sa page :
+   1. les tutoriels (openTuto2, Ligues / Rush), 2. les règles essentielles en 2 minutes (p4ComprendreLigues / p4ComprendreRush, inchangés,
+   sans leurs boutons du bas), 3. « Consulter les règles complètes ». Rush seulement pour les comptes qui l'ont (p4Rush()). */
+const chProfilOrigine = viewProfil;
+viewProfil = function(){
+  let h = chProfilOrigine.apply(this, arguments);
+  try{
+    // la ligne « Revoir la présentation » (openTuto2) est retirée : le tutoriel se revoit depuis « Comprendre Tactizo »
+    const a = h.indexOf('<div class="a2-menu-row" style="cursor:pointer" onclick="openTuto2()">');
+    const ch = '<svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>';
+    const b = a < 0 ? -1 : h.indexOf(ch, a), c = b < 0 ? -1 : h.indexOf("</div>", b + ch.length);
+    if(c >= 0) h = h.slice(0, a).replace(/\s+$/, "\n      ") + h.slice(c + 6).replace(/^\s+/, "");
+    h = h.replace(t("L'essentiel en 2 minutes, et les règles complètes"), t("Tutoriels, règles essentielles et règles complètes"));
+  }catch(e){}
+  return h;
+};
+viewComprendre = function(){
+  const R = p4Rush(); if(!R) P4.page = "ligues";
+  const page = P4.page === "rush" ? "rush" : "ligues";
+  const retour = `<button class="btn ghost sm" onclick="navBack()">${t("← Retour")}</button>`;
+  const ong = (o, lib) => `<button type="button" role="tab" id="p4Onglet-${o}" data-p4-onglet="${o}" class="${page===o?"on":""}" aria-selected="${page===o}" onclick="p4Onglet('${o}')">${lib}</button>`;
+  const seg = R ? `<div class="a2-theme" id="p4Onglets" style="padding-bottom:0;margin:10px 0 12px"><div class="spv2-seg" role="tablist" aria-label="${esc(t("Les règles essentielles en 2 minutes"))}">${ong("ligues","🏆 "+t("Ligues"))}${ong("rush","⚡ "+t("Rush"))}</div></div>` : "";
+  const tutos = `<div class="box" data-ch="tutos"><div class="boxttl">🎓 ${t("Revoir la présentation")}</div>
+      <div class="mini muted" style="margin-bottom:10px">${R ? t("Le tutoriel pas à pas, au choix : Ligues ou Rush.") : t("Le tutoriel pas à pas, pour tout revoir en quelques écrans.")}</div>
+      ${R ? `<button class="btn" id="chTutoLigues" onclick="openTuto2('ligues')">🏆 ${t("Tutoriel des Ligues")}</button><div style="height:8px"></div><button class="btn" id="chTutoRush" onclick="openTuto2('rush')">⚡ ${t("Tutoriel Rush")}</button>`
+          : `<button class="btn" id="chTutoLigues" onclick="openTuto2()">🎓 ${t("Revoir la présentation")}</button>`}</div>`;
+  // contenus existants, sans leur encadré du bas (tutoriel + règles complètes : remontés en haut / descendus tout en bas)
+  const corps = (page === "rush" ? p4ComprendreRush() : p4ComprendreLigues()).replace(/<div class="box" data-p4="(?:ligues|rush)-acces">[\s\S]*$/, "");
+  const essentiel = `<div class="box" data-ch="essentiel" style="margin-top:14px"><div class="boxttl">⏱️ ${t("Les règles essentielles en 2 minutes")}</div>
+      <div class="mini muted">${R ? t("Choisis le mode : Ligues ou Rush.") : t("Tout ce qu'il faut savoir pour bien démarrer.")}</div></div>`;
+  const completes = `<div class="box" data-ch="regles-completes" style="text-align:center"><b class="clik" id="chReglesCompletes" style="color:var(--brand)" onclick="openRulesFull('${page}')">📚 ${t("Consulter les règles complètes")}</b></div>`;
+  return retour
+    + `<div class="box" data-p4="comprendre"><div class="boxttl">📘 ${t("Comprendre Tactizo")}</div><div class="mini muted">${t("Les tutoriels, l'essentiel des règles en 2 minutes, puis les règles complètes.")}</div></div>`
+    + tutos + essentiel + seg + corps + completes + retour;
+};
+/* ⟦COMPRENDRE-HUB⟧ fin */
 function viewProfil(){
   // ⚠️ v8.343 (Tactizo V2) — RE-SKIN (maquette profil.html consolidée) : toutes les actions restent
   // les VRAIES fonctions existantes (changeMyUsername/choisirAvatar/uploadAvatar/toggleLang/
