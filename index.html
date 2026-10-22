@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.25";
+const APP_VERSION = "v8.538.26";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -6259,7 +6259,7 @@ const EN={
   "terminé":"finished",   // état d'un MATCH sur l'écran Résultats, sans dévoiler le score (v7.05)
   /* ⟦SCORES-DIRECT⟧ (tools/patch-scores-direct.py) */
   "terminé (direct)":"finished (live)",
-  "en cours depuis {m} min":"in progress for {m} min",
+  "en cours depuis {m} min":"in progress for {m} min", "≈ {m}′ (1ʳᵉ mi-temps)":"≈ {m}′ (1st half)", "≈ 45′+":"≈ 45′+", "Mi-temps":"Half-time", "≈ {m}′ (2ᵉ mi-temps)":"≈ {m}′ (2nd half)", "≈ 90′+":"≈ 90′+", "≈ {m} min depuis le coup d'envoi":"≈ {m} min since tip-off", "mis à jour à {h}":"updated at {h}", "relevé toutes les {n} min":"refreshed every {n} min",   /* ⟦MINUTE-DIRECT⟧ */
   "màj {h}":"updated {h}",
   "🔒 Tes pronos (verrouillés — consultation seule)":"🔒 Your picks (locked — view only)",
   "🃏 Bonus joué :":"🃏 Bonus played:", "(visible par toi seul jusqu'aux résultats)":"(visible only to you until the results)",
@@ -13587,7 +13587,7 @@ window.addEventListener("message", e=>{
   const d=e.data;
   if(!d || typeof d!=="object" || Array.isArray(d) || d.canal!==RUSH_TEST_CANAL || d.v!==1) return;
   if(d.type==="capacites"){ try{ RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"capacites", v:1, regles:"app" }, "*"); }catch(x){} return; }
-  if(d.type==="regles"){ if(!(S.view==="rulesfull" && RG.onglet==="rush")) openRulesFull("rush"); }
+  if(d.type==="regles"){ if(typeof openTuto2==="function"){ if(S.view!=="tuto2") openTuto2("rush"); } else if(!(S.view==="rulesfull" && RG.onglet==="rush")) openRulesFull("rush"); }   // 22/10 : accueil Rush → tutoriel Rush
 });
 /* ⟦N2A-REGLES⟧ fin */
 /* ── Lot E (14/10/2026) — PONT DU MOTEUR SERVEUR RUSH V6 (rush/CLIENT-RUSH-V6.md) ─────────────────────────────────────────
@@ -17688,14 +17688,14 @@ function directEligible(f){
   const n=Date.now(); return n>=ko && n<ko+6*3600e3;
 }
 function directHeure(iso){ const d=new Date(iso); if(isNaN(d)) return ""; return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
-// Contenu du direct pour un match, ou null (aucun score reçu : on garde le repli).
+function minuteJeuEstimee(e, sport, fini){ if(fini) return t("Terminé"); if(e==null || !Number.isFinite(+e) || +e<0) return t("en cours"); e=Math.floor(+e); if(sport==="foot"){ if(e<=45) return t("≈ {m}′ (1ʳᵉ mi-temps)",{m:e}); if(e<=48) return t("≈ 45′+"); if(e<63) return t("Mi-temps"); const m=e-18; return m<=90 ? t("≈ {m}′ (2ᵉ mi-temps)",{m}) : t("≈ 90′+"); } if(sport==="basket") return t("≈ {m} min depuis le coup d'envoi",{m:e}); return t("en cours"); }   // ⟦MINUTE-DIRECT⟧ 22/10 soir (tools/patch-minute-direct.py) : minute de jeu ESTIMÉE (mi-temps comprise). Contenu du direct pour un match, ou null (aucun score reçu : on garde le repli).
 function directInner(f){
   const s=DIRECT.data[f.sportKey], e=s && s.evs && s.evs[f.evId];
   if(!e || e.hs==null || e.as==null) return null;
   const sc=String(e.hs)+"–"+String(e.as), h=directHeure(s.maj), fini=!!(e.c||e.fini);
   const ko=fixtureKickoff(f), m=ko?Math.max(0,Math.floor((Date.now()-ko)/60000)):null;
-  const etat=fini ? t("terminé (direct)") : (m!=null ? t("en cours depuis {m} min",{m}) : t("en cours"));
-  return `<span class="chip ${fini?'':'red'}" style="flex:0 0 auto">${fini?'🏁':'🔴'} ${esc(sc)}</span> <span class="mini muted">${esc(etat)}${h?' · '+esc(t("màj {h}",{h})):''}</span>`;
+  const sp=/^soccer_/.test(f.sportKey)?"foot":/^basketball_/.test(f.sportKey)?"basket":"tennis", etat=minuteJeuEstimee(m, sp, fini);   // ⟦MINUTE-DIRECT⟧
+  return `<span class="chip ${fini?'':'red'}" style="flex:0 0 auto">${fini?'🏁':'🔴'} ${esc(sc)}</span> <span class="mini muted">${esc(etat)}${h?' · '+esc(t("mis à jour à {h}",{h})):''} · ${esc(t("relevé toutes les {n} min",{n:DIRECT.frequence||5}))}</span>`;
 }
 // Enveloppe d'affichage : match éligible → <span data-direct-ev> (mis à jour sur place) ; sinon le repli tel quel.
 function directTagHTML(f, repli){
