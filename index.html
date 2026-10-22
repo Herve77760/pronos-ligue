@@ -3095,7 +3095,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.26";
+const APP_VERSION = "v8.538.27";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -20892,12 +20892,12 @@ function pfComparaison(G,R,refTxt){
   return statDetailLigne(t("{a} gagnés sur {b} ({c} %), alors que les cotes en promettaient {d} %.",{a:G.w,b:G.n,c:pfPct(G.hit),d:pfPct(G.exp)}))
     +statDetailLigne(t(refTxt,{a:pfPct(R.hit),b:pfPct(R.exp)}));
 }
-function pfAnalyse(picks,nowMs){
+function pfAnalyse(picks,nowMs,sansLigues){   // ⟦N2G-STATS-RUSH-POINTS-FORTS⟧ sansLigues : analyse sans aucun prono de ligue
   const P=(picks||[]).filter(p=>p && p.exp!=null), forts=[], bientot=[];
   const fort=(dim,solid,html)=>forts.push({dim,solid,html});
   const robuste=(G,R)=>pfWilson(G.w,G.n)-G.exp>R.sur;
   // 👑 FAVORI — seuil 10/20 et écart 10 pts INCHANGÉS ; référence = les AUTRES pronos.
-  const capP=P.filter(p=>p.cap), autres=P.filter(p=>!p.cap), nf=capP.length;
+  const PL=P.filter(p=>!p.rush), capP=PL.filter(p=>p.cap), autres=PL.filter(p=>!p.cap), nf=capP.length;   // ⟦N2G-STATS-RUSH-POINTS-FORTS⟧ 👑 : pronos de ligue seulement
   if(nf>=10 && autres.length>=20){
     const G=pfGroupe(capP), R=pfGroupe(autres), ecart=G.hit-R.hit;
     if(G.jours>=6 && G.matchs>=10){
@@ -20923,7 +20923,7 @@ function pfAnalyse(picks,nowMs){
       +statDetailLigne(t("Rendement {a} % sur {b} pronos (sans le doublement du favori), contre {c} % sur tes autres cotes.",{a:pfPct(G.roi),b:G.n,c:pfPct(R.roi)}))); }
   // 🏟️ DOMICILE / EXTÉRIEUR / NUL du VRAI match — foot et basket, matchs réels, Double Chance exclue.
   const reels=P.filter(p=>p.reel);
-  const DE=reels.filter(p=>(p.sport==="⚽"||p.sport==="🏀") && !p.dc && ["1","N","2"].indexOf(p.sel)>=0);
+  const DE=reels.filter(p=>!p.rush && (p.sport==="⚽"||p.sport==="🏀") && !p.dc && ["1","N","2"].indexOf(p.sel)>=0);   // ⟦N2G-STATS-RUSH-POINTS-FORTS⟧ pronos de ligue seulement
   const COTES={"1":"à domicile","2":"à l'extérieur","N":"sur le nul"};
   const TXT_DE={"1":"Tu lis particulièrement bien les victoires à domicile.","2":"Tu lis particulièrement bien les victoires à l'extérieur.","N":"Tu lis particulièrement bien les matchs nuls."};
   let bestDE=null;
@@ -20960,11 +20960,11 @@ function pfAnalyse(picks,nowMs){
   ajoute("🏟️","Domicile ou extérieur",["1","2","N"].map(sel=>{ const g=DE.filter(p=>p.sel===sel); return {nom:t(COTES[sel]),reste:20-g.length,eta:g.length?pfAPortee(g,20,nowMs):null}; }));
   ajoute("🏆","Tes compétitions",comps.map(k=>{ const g=CO.filter(p=>p.comp===k); return {nom:esc(compNom({compKey:k})),reste:25-g.length,eta:g.length?pfAPortee(g,25,nowMs):null}; }));
   ajoute("🏅","Tes meilleurs sports",sports.map(k=>{ const g=SP.filter(p=>p.sport===k); return {nom:t(SPORT_NOM[k]),reste:20-g.length,eta:g.length?pfAPortee(g,20,nowMs):null}; }));
-  if(!retenus.some(x=>x.dim==="cap") && nf<20){ const r=20-nf; lignes.push(`👑 ${t("La solidité de ton match favori")} — ${r===1?t("encore 1 match favori"):t("encore {a} matchs favoris",{a:r})}`); }
+  if(!sansLigues && !retenus.some(x=>x.dim==="cap") && nf<20){   /* ⟦N2G-STATS-RUSH-POINTS-FORTS⟧ */ const r=20-nf; lignes.push(`👑 ${t("La solidité de ton match favori")} — ${r===1?t("encore 1 match favori"):t("encore {a} matchs favoris",{a:r})}`); }
   dims.sort((x,y)=>x.eta-y.eta).forEach(d=>{ if(lignes.length<3) lignes.push(d.txt); });
   return {forts:retenus, bientot:lignes};
 }
-function pfDe(a,nowMs){ return pfAnalyse(a&&a.prPicks, nowMs!=null?nowMs:Date.now()); }
+function pfDe(a,nowMs){ return pfAnalyse(a&&a.prPicks, nowMs!=null?nowMs:Date.now(), !!(a&&a.pfSansLigues)); }   // ⟦N2G-STATS-RUSH-POINTS-FORTS⟧
 function buildStatInsights(a,nowMs){
   if(!a) return [];
   return pfDe(a,nowMs).forts.map(x=>x.html);
@@ -23959,6 +23959,119 @@ spcDuelsSaisonHTML = function(data){
     +`<span style="opacity:.8">⏳ ${esc(sprL("Partage du bilan : en préparation.","Review sharing: in preparation."))}</span>`;
 };
 /* ⟦N2F-STATS-RUSH-POINTS⟧ fin ──────────────────────────────────────────────────────────────────────────────── */
+/* ⟦N2G-STATS-RUSH-POINTS-FORTS⟧ début ───────────────────────────────────────────────────────────────────────
+   22/10/2026 (lot validé par Hervé) — « TES POINTS FORTS » POUR RUSH ET DANS ✦ TOUT TACTIZO. MÊME MÉTHODE ET MÊMES SEUILS que les
+   Ligues (v8.521, pfAnalyse : surperformance = réussite − chance implicite normalisée par les cotes, borne de Wilson 90 %, matchs
+   DISTINCTS et JOURS différents, 3 points forts au plus, 1 par dimension) : AUCUNE copie, les duels Rush découverts sont donnés à
+   pfAnalyse au format de prPicks (rush:true). Rush Réel : 📈 tranche de cotes, 🌍 sport, 🏆 compétition (tennis exclu) ; Rush Fictif :
+   📈 seulement (reel:false, comme les ligues en matchs simulés) ; ni 👑 ni domicile / nul / extérieur en Rush (pfAnalyse les calcule
+   sur les seuls pronos de ligue). ✦ Tout Tactizo : RECALCUL sur l'ensemble Ligues + Rush du filtre Type (jamais deux listes bout à
+   bout), « Nouveau départ » à la date de résolution du duel ; un même match joué dans une ligue et dans Rush Réel = un seul match
+   distinct (identifiant du fournisseur). Stats › ⚡ Rush : toute la carrière (pas de sélecteur de période sur cette vue).
+   Données : rush_stats.pronos enrichi le 22/10 (match, coup_envoi, competition, sel, cote, sel2, cote2, cotes ; correctif SQL
+   CORRECTIF-rush-v6-stats-points-forts-2026-10-22.sql). Sans ces clés (serveur d'avant, RPC absente, erreur, rush_ferme, autre mode,
+   chargement) ou sans AUCUN duel Rush découvert dans le filtre (indiscernable d'un serveur d'avant) : RIEN n'est ajouté, rendu d'avant
+   au caractère près. Portes : sprActif (testeurs, jamais en natif). Aucune RPC nouvelle, aucune écriture, aucun stockage.
+   Retrait exact : tools/lib/stats_rush_points_forts.py. */
+const SPPF_SPORT = { foot:"⚽", basket:"🏀", tennis:"🎾" };
+const SPPF_STYLE = "border-color:var(--gold-dim);background:rgba(231,184,75,.08)";      // même boîte que « Tes points forts » des Ligues
+// Détail du 22/10 lisible pour ce mode : réponse prête, au moins un duel, et CHAQUE duel porte les clés ajoutées.
+function sppfLisible(m){ const d=spcPret("stats", m);
+  return !!(d && Array.isArray(d.pronos) && d.pronos.length && d.pronos.every(x=>x && typeof x==="object" && ("cotes" in x) && ("match" in x))); }
+// Un duel Rush découvert → un prono au format de prPicks (loadMyStats, v8.521) ; null s'il est inexploitable.
+function sppfPick(x, mode){
+  if(!x || typeof x!=="object" || !x.cotes || typeof x.cotes!=="object" || x.match==null) return null;
+  const c=x.cotes, f={ oh:Number(c.oh), oa:Number(c.oa), od:c.od!=null ? Number(c.od) : undefined };
+  const sel=String(x.sel||""), sel2=x.sel2 ? String(x.sel2) : null, win=x.gagne===true, st=Number(x.mise);
+  const odd=win ? Number(x.cote_gagnee) : Number(x.cote);                      // 🧈 gagné : cote du résultat sorti (dcWinOdd des Ligues)
+  if(!(st>0) || !(odd>1) || ["1","N","2"].indexOf(sel)<0) return null;
+  const ko=Date.parse(x.coup_envoi), rz=Date.parse(x.at), reel=mode==="reel", tj=isFinite(ko) ? ko : (isFinite(rz) ? rz : null);
+  return { rush:true, reel, sport:SPPF_SPORT[x.sport]||"?", comp:(reel && x.competition) ? String(x.competition) : null, sel, dc:!!sel2,
+    win, odd, st, base:win ? st*(odd-1) : -st, cap:false, exp:pfProbImplicite(f, sel, sel2),
+    match:reel ? String(x.match) : "rush-fictif:"+String(x.match), jour:tj!=null ? new Date(tj).toISOString().slice(0,10) : "?", t:tj };
+}
+// Duels Rush des modes du filtre (« Nouveau départ » : date de résolution) ; null = détail du 22/10 indisponible → rendu d'avant.
+function sppfRush(modes, depuis){
+  const out=[]; let n=0;
+  for(const m of modes){ spcCharger("stats", m); const d=spcPret("stats", m);
+    if(!d || !Array.isArray(d.pronos) || (d.pronos.length && !sppfLisible(m))) return null; }
+  if(!modes.some(sppfLisible)) return null;                                    // aucun duel découvert : indiscernable d'un serveur d'avant
+  const dep=depuis ? new Date(depuis).getTime() : null;
+  modes.forEach(m=>spcPret("stats", m).pronos.forEach(x=>{
+    if(dep!=null){ const ts=new Date(x.at).getTime(); if(!(ts>=dep)) return; }
+    n++; const p=sppfPick(x, m); if(p) out.push(p); }));
+  return { picks:out, n };
+}
+// Dossier pour buildStatInsights / statInsightsAttente / statAnalyseAussiHTML (picks = nombre de pronos, pour le seuil « patience »).
+function sppfDossierRush(){
+  if(!sprActif() || S.view!=="stats" || SPV2.jeu!=="rush") return null;
+  const R=sppfRush(spv2Modes(), null); return R ? { picks:R.n, prPicks:R.picks, pfSansLigues:true } : null; }
+function sppfDossierTout(d){
+  if(!sprActif() || S.view!=="stats" || SPV2.jeu!=="tout" || !d || !d.agg) return null;
+  const R=sppfRush(spv2Modes(), sptDepuis()); if(!R) return null;
+  const a=d.agg; return { picks:(+a.picks||0)+R.n, prPicks:(Array.isArray(a.prPicks) ? a.prPicks : []).concat(R.picks) }; }
+// Rubrique : mêmes briques que la boîte « Tes points forts » de viewStats(), dans une section dépliable (spv2Sec) comme en Ligues.
+function sppfSection(a, vue, info, perim){
+  const ins=buildStatInsights(a), nf=ins.length;
+  const corps=(ins.length ? ins.map(x=>`<div class="mini" style="margin-top:4px">${x}</div>`).join("") : `<div class="mini muted" style="margin-top:4px">${statInsightsAttente(a)}</div>`)
+    +statAnalyseAussiHTML(a, ins)+`<div class="mini muted" data-sppf="perimetre" style="margin-top:8px">${esc(perim)}</div>`;
+  return spv2Sec("pointsforts", "💡 "+t("Tes points forts"), nf ? (nf===1 ? t("1 repéré") : t("{a} repérés",{a:nf})) : "",
+    `<div data-sppf="${vue}" data-sppf-n="${nf}">${corps}</div>`, info, SPPF_STYLE); }
+const sppfPerimRush = ()=>{ const n=sptNomRush(); return sptTypo(sprL(`Sur tes duels ${n} découverts : un duel = un pronostic (ton choix, ou le 2ᵉ choix du 🧈).`,
+  `From your checked ${n} duels: one duel = one pick (your choice, or the 🧈 second choice).`)); };
+const sppfPerimTout = ()=>{ const n=sptNomRush(); return sptTypo(sprL(`Ligues et ${n} réunis : un duel Rush = un pronostic. 👑 et domicile / extérieur : pronos de ligue seulement.`,
+  `Leagues and ${n} combined: one Rush duel = one pick. 👑 and home / away: league picks only.`)); };
+// ── Stats › ⚡ Rush : la rubrique en tête, juste après les filtres ─────────────────────────────────────────────────────────
+const sppfVueAvant = viewStatsV2;
+viewStatsV2 = function(){
+  const h=sppfVueAvant.apply(this, arguments);
+  const a=sppfDossierRush(); if(!a) return h;
+  const fl=spv2FiltresHTML("stats", false), i=h.indexOf(fl);
+  if(i<0 || h.indexOf(fl, i+1)>=0) return h;
+  return h.slice(0, i+fl.length)+sppfSection(a, "rush", "pfrush", sppfPerimRush())+h.slice(i+fl.length);
+};
+// ── Stats › ✦ Tout Tactizo : la rubrique en tête, recalculée sur Ligues + Rush ─────────────────────────────────────────────
+const sppfToutAvant = spv2StatsTout;
+spv2StatsTout = function(F, d){
+  const h=sppfToutAvant.apply(this, arguments), a=sppfDossierTout(d), deb='<div data-vue="tout">';
+  if(!a || h.indexOf(deb)!==0 || h.split(deb).length!==2) return h;
+  return deb+sppfSection(a, "tout", "pftout", sppfPerimTout())+h.slice(deb.length);
+};
+// Avis, périmètre et fiche ⓘ « Réel et Fictif » de Tout Tactizo : exacts quand les points forts réunissent Ligues et Rush.
+const sppfAvisAvant = sptAvis;
+sptAvis = function(){
+  if(!sppfDossierTout(statsVue())) return sppfAvisAvant.apply(this, arguments);
+  const n=sptNomRush();
+  return sptTypo(sprL(`Pronos joués, réussite, ROI, cotes gagnantes et tes points forts réunissent tes Ligues et ${n} (un duel Rush = un pronostic). Évolution et Par sport : Ligues seulement. Points, capitaux, divisions et résultats nets restent propres à chaque jeu.`,
+                      `Picks played, hit rate, ROI, winning odds and your strengths combine your Leagues and ${n} (one Rush duel = one pick). Progress and By sport: Leagues only. Points, capital, divisions and net results stay specific to each game.`)); };
+const sppfPerimAvant = spv2Perimetre;
+spv2Perimetre = function(){
+  if(SPV2.type==="tout" && sppfDossierTout(statsVue()))
+    return sptTypo(sprL("Ligues et Rush, rencontres réelles et fictives : pronos, réussite, ROI, cotes et points forts réunis ; points, capitaux et divisions jamais additionnés.",
+                        "Leagues and Rush, real and fictional matches: picks, hit rate, ROI, odds and strengths combined; points, capital and divisions never added up."));
+  return sppfPerimAvant.apply(this, arguments);
+};
+const sppfVocabAvant = spv2InfoVocab;
+spv2InfoVocab = function(){
+  if(!sprActif() || !SPT_MODES.some(sppfLisible)) return sppfVocabAvant.apply(this, arguments);
+  const o=infoModal, R=[[sptTypo(sprL("Rush y entre aussi : un duel Rush compte comme un pronostic","Rush counts too: one Rush duel counts as one pick")),
+                         sptTypo(sprL("Rush y entre aussi, points forts compris : un duel Rush compte comme un pronostic","Rush counts too, strengths included: one Rush duel counts as one pick"))],
+                        [sprL("(pronostics, réussite, ROI, cotes)","(predictions, hit rate, ROI, odds)"), sprL("(pronostics, réussite, ROI, cotes, points forts)","(predictions, hit rate, ROI, odds, strengths)")]];
+  infoModal=function(x, y, z){ let c=String(z); R.forEach(([a_, b_])=>{ c=c.split(a_).join(b_); }); return o(x, y, c); };
+  try{ return sppfVocabAvant.apply(this, arguments); } finally { infoModal=o; }
+};
+// Fiches ⓘ des deux nouvelles rubriques (« Tes points forts » des Ligues : fiche d'origine, inchangée).
+const SPPF_FICHE = {
+  pfrush:["Ce que tu réussis nettement mieux que le reste de tes duels Rush : une <b>tranche de cotes</b> et, en <b>Rush Réel</b>, un <b>sport</b> ou une <b>compétition</b> (jamais un tournoi de tennis). En <b>Rush Fictif</b>, rencontres et cotes sont tirées au sort : seule la tranche de cotes y est analysée. Le match favori 👑 et domicile / extérieur n'existent pas en Rush.<br><br>Un duel Rush compte comme un pronostic (ton choix, ou le 2ᵉ choix du 🧈), une fois son résultat découvert ; avec le filtre Tout, Rush Réel et Rush Fictif sont analysés ensemble. Chaque catégorie est comparée à <b>tes autres pronos Rush</b>, en tenant compte de la chance que te donnaient les cotes — jouer des favoris n'est pas un talent en soi. Mêmes règles et mêmes seuils que dans tes Ligues : Tactizo ne parle d'un point fort que si l'écart reste net même en retirant la part de chance, sur assez de matchs et de jours différents.",
+          "What you do clearly better than the rest of your Rush duels: an <b>odds range</b> and, in <b>Real Rush</b>, a <b>sport</b> or a <b>competition</b> (never a tennis tournament). In <b>Fictional Rush</b>, matches and odds are drawn at random: only the odds range is analysed there. The 👑 favourite match and home / away do not exist in Rush.<br><br>One Rush duel counts as one pick (your choice, or the 🧈 second choice), once its result has been checked; with the All filter, Real Rush and Fictional Rush are analysed together. Each category is compared with <b>your other Rush picks</b>, taking into account the chance the odds gave you — backing favourites is not a talent in itself. Same rules and same thresholds as in your Leagues: Tactizo only mentions a strength if the gap stays clear even once luck is removed, over enough matches and different days."],
+  pftout:["Tes points forts calculés sur <b>tous tes pronostics du filtre choisi, Ligues et Rush réunis</b> (un duel Rush = un pronostic) — jamais deux listes mises bout à bout. La tranche de cotes, le sport et la compétition (matchs réels, jamais un tournoi de tennis) comptent tes Ligues et Rush ; le match favori 👑 et domicile / extérieur n'existent que dans les Ligues : ils sont calculés sur tes seuls pronos de ligue. Un même match joué dans une ligue et dans Rush ne compte qu'une fois parmi les matchs différents.<br><br>Chaque catégorie est comparée à <b>tes autres pronos</b>, en tenant compte de la chance que te donnaient les cotes. Mêmes règles et mêmes seuils que dans tes Ligues ; « Nouveau départ » s'applique aussi à Rush (date du résultat du duel).",
+          "Your strengths calculated on <b>all your picks for the chosen filter, Leagues and Rush combined</b> (one Rush duel = one pick) — never two lists put end to end. The odds range, the sport and the competition (real matches, never a tennis tournament) count your Leagues and Rush; the 👑 favourite match and home / away only exist in Leagues: they are calculated on your league picks only. The same match played in a league and in Rush only counts once among the different matches.<br><br>Each category is compared with <b>your other picks</b>, taking into account the chance the odds gave you. Same rules and same thresholds as in your Leagues; “Fresh start” also applies to Rush (date of the duel's result)."] };
+const sppfInfoAvant = showStatInfo;
+showStatInfo = function(k){
+  const f=SPPF_FICHE[k]; if(!f) return sppfInfoAvant.apply(this, arguments);
+  infoModal("📊", t("Tes points forts"), `<div class="mini muted" style="text-align:left;line-height:1.6">${sptTypo(sprL(f[0], f[1]))}</div>`);
+};
+/* ⟦N2G-STATS-RUSH-POINTS-FORTS⟧ fin ───────────────────────────────────────────────────────────────────────── */
 /* ⟦STATS-PALMARES-V2⟧ fin ═════════════════════════════════════════════════════════════════════════════════════════ */
 /* Relève du solde exact. Ne coûte AUCUN crédit (v8.189) : sert quand on veut le chiffre à la
    seconde près, par exemple avant d'ouvrir des ligues en données réelles. */
