@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.33";
+const APP_VERSION = "v8.538.34";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -8039,7 +8039,7 @@ const EN={
   "Tu prends les points et ta cagnotte progresse.":"You take the points and your capital grows.",
   "Les points sont là.":"The points are there.",
   "0 pt":"0 pts", "Pas de point cette fois.":"No points this time.", "Mieux que ton adversaire, mais cagnotte en baisse.":"Better than your opponent, but your pot went down.",
-  "Égalité, dans le vert !":"A draw, in the green!", "Ta cagnotte progresse : les points sont pour toi.":"Your pot grew: the points are yours.",
+  "Égalité, dans le vert !":"A draw, in the green!", "Duel perdu":"Duel lost", "Prono gagnant !":"Winning pick!", "Ta cagnotte progresse : les points sont pour toi.":"Your pot grew: the points are yours.",
   "La cagnotte recule, mais tu remportes le duel.":"Your capital shrinks, but you win the duel.",
   "Défaite…":"Defeat…", "Tout n'est pas perdu.":"Not all is lost.",
   "Tu perds le duel, mais ta cagnotte progresse.":"You lose the duel, but your capital grows.",
@@ -19314,10 +19314,12 @@ function recapBody(D){
     'victoire-neg0':{img:'qg-tactizo-resultats-defaite-pos-v2.png',ar:'1464/1074',box:'left:49%;top:24.5%;right:6.5%;bottom:32%',color:'#F59E42',
       eyebrow:"0 pt",title:"Pas de point cette fois.",text:"Mieux que ton adversaire, mais cagnotte en baisse."},   // 23/10 : Maestro main au menton, cadre ambre (comme Rush), jamais « Victoire » à 0 pt
     'nul-pos':{img:'qg-tactizo-resultats-nul-v2.png',ar:'1597/985',box:'left:58.5%;top:24.5%;right:5%;bottom:29%',color:'var(--a2-purple-light,#c9b6f5)',
-      eyebrow:"Match nul",title:"Égalité, dans le vert !",text:"Ta cagnotte progresse : les points sont pour toi."}
+      eyebrow:"Match nul",title:"Égalité, dans le vert !",text:"Ta cagnotte progresse : les points sont pour toi."},
+    'defaite-pos2':{img:'qg-tactizo-resultats-victoire-neg-v2.png',ar:'1446/1087',box:'left:52.5%;top:27.5%;right:2%;bottom:31%',color:'var(--green)',
+      eyebrow:"Duel perdu",title:"Prono gagnant !",text:"Ta cagnotte progresse : les points sont pour toi."}   // 23/10 : défaite qui rapporte des points (2+1) = comme Rush
   };
   const resKey = oppId==null?null:(won?(netPositive?'victoire-pos':'victoire-neg'):(tie?'nul':(netPositive?'defaite-pos':'defaite-neg')));
-  const resTexteKey = resKey==='victoire-neg' && !(fpDuelPts>0) ? 'victoire-neg0' : (resKey==='nul' && fpDuelPts>0 ? 'nul-pos' : resKey);   // 23/10 : jamais « les points sont là » à 0 pt
+  const resTexteKey = resKey==='victoire-neg' && !(fpDuelPts>0) ? 'victoire-neg0' : (resKey==='nul' && fpDuelPts>0 ? 'nul-pos' : (resKey==='defaite-pos' && fpDuelPts>0 ? 'defaite-pos2' : resKey));   // 23/10 : jamais « les points sont là » à 0 pt
   const revealed = oppId==null || st0.phase==='revealed';   // pas d'adversaire → rien à suspendre
   // N'invente AUCUN Maestro pour un jour sans duel (repos) : la maquette n'en prévoit pas.
   const maestroHTML = oppId==null ? '' : (revealed ? (()=>{ const rs=RES_ASSETS[resTexteKey]||RES_ASSETS[resKey];
