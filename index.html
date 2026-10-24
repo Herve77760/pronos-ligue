@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.36";
+const APP_VERSION = "v8.538.37";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -22671,8 +22671,8 @@ function adminUserCards(list){
           </div>
           ${(()=>{ if(u.id===AUTH.id) return `<div class="mini muted" style="margin-top:9px">🎟️ Options premium — <b>toutes</b> (compte admin, automatique).</div>`;
             const oo=Array.isArray(u.options)?u.options:null;
-            return `<div class="mini muted" style="margin-top:9px">🎟️ Options premium — ${oo?(oo.length+'/'+SHOP_ORDER.length+' activée'+(oo.length>1?'s':'')):'défaut (aucune activée)'} · touche pour activer / verrouiller :</div>
-            <div class="row" style="gap:5px;flex-wrap:wrap;margin-top:5px">${SHOP_ORDER.map(k=>{
+            return `<div class="mini muted" style="margin-top:9px">🎟️ Options premium — ${oo?(oo.length+'/'+ADMIN_OPTS.length+' activée'+(oo.length>1?'s':'')):'défaut (aucune activée)'} · touche pour activer / verrouiller :</div>
+            <div class="row" style="gap:5px;flex-wrap:wrap;margin-top:5px">${ADMIN_OPTS.map(k=>{
               /* ⚠️ v7.45 — une option peut s'écrire « stats » (héritage) OU « stats@2027-… » (datée).
                  Chercher la clé brute rendait toute option datée invisible ici : l'admin l'aurait
                  crue verrouillée alors qu'elle était active. On repère les deux formes, et on
@@ -23007,17 +23007,18 @@ async function adminSetOptions(uid, key){ const u=(adminUsers||[]).find(x=>x.id=
   // récente ne ferait rien du tout et l'admin croirait l'avoir retirée.
   const dedans=cur.some(s=>{ const x=String(s); return x===key || x.indexOf(key+"@")===0; });
   cur=cur.filter(s=>{ const x=String(s); return x!==key && x.indexOf(key+"@")!==0; });
-  if(!dedans && SHOP_ORDER.indexOf(key)>=0) cur.push(optAvecFin(key));
+  if(!dedans && ADMIN_OPTS.indexOf(key)>=0) cur.push(optAvecFin(key));
   try{ await q(db.rpc("admin_set_options",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_options:cur}));
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute MIGRATION-admin-id.sql dans Supabase — OPTIONS-ADMIN.sql est périmé)")); } }
 async function adminSetAllOptions(uid, all){
   // v7.45 : « Tout activer » accorde des options DATÉES (un an), comme un achat.
-  try{ await q(db.rpc("admin_set_options",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_options:all?SHOP_ORDER.map(optAvecFin):[]}));
+  try{ await q(db.rpc("admin_set_options",{p_admin_id:AUTH.id,p_admin_password:adminPwd,p_target_id:uid,p_options:all?ADMIN_OPTS.map(optAvecFin):[]}));
     adminUsers=await q(db.rpc("admin_list_users",{p_admin_id:AUTH.id,p_admin_password:adminPwd})); render(); }
   catch(e){ showErr(/not_admin/.test(e.message)?"Ré-affiche les comptes (mot de passe admin requis).":("Options : "+e.message+" (exécute MIGRATION-admin-id.sql dans Supabase — OPTIONS-ADMIN.sql est périmé)")); } }
 // Libellés courts des options pour l'écran Admin (français ; l'écran Admin n'est pas traduit).
-const OPT_LABELS={rachat:"🤝 Rachat", bonuscomplets:"🎴 Bonus complets", treve:"🔄 Trêve", ia:"🤖 Joueur IA", stats:"📊 Stats perso", duel_live:"⚡ Duel Live", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
+const ADMIN_OPTS=SHOP_ORDER.concat(["rushillimite"]);   // 24/10 : options accordables par l'admin (Rush illimité en plus du catalogue)
+const OPT_LABELS={rushillimite:"⚡ Rush illimité", rachat:"🤝 Rachat", bonuscomplets:"🎴 Bonus complets", treve:"🔄 Trêve", ia:"🤖 Joueur IA", stats:"📊 Stats perso", duel_live:"⚡ Duel Live", recap:"📤 Partage", direct:"📡 Données réelles", live:"⏱️ Résultats en direct", gageperso:"✏️ Gage sur mesure", voiradv:"🕵️ Voir l'adversaire"};
 function togglePalm(k){ palmOpen=palmOpen===k?"":k; render(); }
 async function loadPalmares(){
   try{
