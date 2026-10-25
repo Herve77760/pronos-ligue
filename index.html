@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.41";
+const APP_VERSION = "v8.538.42";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5809,7 +5809,7 @@ const EN={
   "Tactizo Rush — test privé":"Tactizo Rush — private test",
   "Retour au QG":"Back to HQ",
   "Rush":"Rush",
-  "Retour aux ligues":"Back to leagues",
+  "Retour au Palmarès":"Back to Hall of Fame", "Retour aux ligues":"Back to leagues",
   "Règles Rush":"Rush rules",
   "Tactizo Rush — mot de passe requis":"Tactizo Rush — password required",
   "Accès test · mot de passe requis":"Test access · password required",
@@ -13687,6 +13687,7 @@ window.addEventListener("message", e=>{
   if(d.type==="capacites"){ try{ RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"capacites", v:1, regles:"app", options:rqlOptionsPont() }, "*"); }catch(x){} return; }   // ⟦RUSH-QUOTA-REEL⟧ + options annoncées
   if(d.type==="option"){ const L=rqlOptionsPont(), i=L.indexOf(d.cle); if(i>=0 && typeof showPremiumInfo==="function") showPremiumInfo(L[i]); return; }   // ⟦RUSH-QUOTA-REEL⟧ fiche Boutique demandée par l'iframe (clé en liste blanche)
   if(d.type==="regles"){ if(typeof openTuto2==="function"){ if(S.view!=="tuto2") openTuto2("rush"); } else if(!(S.view==="rulesfull" && RG.onglet==="rush")) openRulesFull("rush"); }   // 22/10 : accueil Rush → tutoriel Rush
+  if(d.type==="retour" && d.vers==="palmares" && typeof retourPalmares!=="undefined" && retourPalmares==="rush"){ retourPalmares=null; palmView="moi"; openPalmares(); }   // 25/10 : bilan Rush → Palmarès
 });
 /* ⟦N2A-REGLES⟧ fin */
 /* ── Lot E (14/10/2026) — PONT DU MOTEUR SERVEUR RUSH V6 (rush/CLIENT-RUSH-V6.md) ─────────────────────────────────────────
@@ -14182,6 +14183,7 @@ function viewJoinLeague(){
 function openLeague(lid,pid,fresh,consultation){
   LECTURE_SEULE=!!consultation; if(!LECTURE_SEULE){ lectureSeuleVu=""; lectureSeuleCode=""; }
   decouverteDirecte=null;   // v8.530 : toute entrée désarme ; seul `openLeagueDecouvrir` le réarme, après
+  if(typeof retourPalmares!=="undefined") retourPalmares=null;   // 25/10 : seul openOldSeason le réarme, après
   navRoot(); S.leagueId=lid; S.myId=pid; S.view="game"; S.ptab="infos"; prevLeagueStatus=null; prevDay=null; chartBets=null; chartDay=-1; standDuels=null; standTrades=null; standDay=null; endStats=null; S.bidLLeague=null; S.editingBet=false; notifKey=null;
   if(fresh) setSeen(0);
   askNotif(); startPoll(); refresh();
@@ -14269,7 +14271,8 @@ function bandeauMesLigues(){ if(!S.leagueId) return "";
   // (Lobby, Prépa, Pronos, Coulisses, Résultats, Classement, Stats). N'enlève pas le ✏️ dédié
   // ci-dessus (déjà en prod) : le menu propose aussi "Modifier le nom" en doublon, sans risque.
   const menuBtn = L ? `<button type="button" class="mesligues-edit" title="${t("Options de la ligue")}" onclick="openLeagueMenu()">⋯</button>` : '';
-  return `<div class="mesligues-row"><div class="mesligues" onclick="backToLeagues()">${(typeof rushOngletActif==="function"&&rushOngletActif())?"← "+t("Retour aux ligues"):"🏆 "+t("Mes ligues")}</div>${nom?`<div class="mesligues-nom">${nom}</div>${editBtn}${menuBtn}`:''}</div>`; }
+  const versPalm = typeof retourPalmares!=="undefined" && retourPalmares==="ligue";   // 25/10 : ligue ouverte depuis Palmarès
+  return `<div class="mesligues-row"><div class="mesligues" onclick="${versPalm?'retourAuPalmares()':'backToLeagues()'}">${versPalm?"← "+t("Retour au Palmarès"):((typeof rushOngletActif==="function"&&rushOngletActif())?"← "+t("Retour aux ligues"):"🏆 "+t("Mes ligues"))}</div>${nom?`<div class="mesligues-nom">${nom}</div>${editBtn}${menuBtn}`:''}</div>`; }
 // ⚠️ Bloc 3B (2026-09-05) — menu contextuel « ⋯ » de la maquette menu-ligue.html : chaque ligne
 // réutilise TEL QUEL une fonction réelle déjà existante (copyCode/openRulesFull/renameLeague/
 // shareSeason/relaunchLeague/openLeagueParamsModal) — aucune mécanique nouvelle, seulement un
@@ -14349,6 +14352,7 @@ async function renameLeague(){ if(busy||!L||(L.status!=="lobby"&&L.status!=="pre
 }
 function backToLeagues(){ sortirConsultation(); if(poll)clearInterval(poll);
   retourStats=null;   // v7.93 : on quitte la ligue par la voie normale → le lien 🔗 d'origine est périmé
+  if(typeof retourPalmares!=="undefined" && retourPalmares==="ligue") retourPalmares=null;
   showFinished=false;   // v6.42 : les ligues terminées sont toujours repliées quand on revient sur l'onglet Ligues
   navRoot(); S.leagueId=null; S.myId=null; L=null; S.view=(typeof rushOngletActif==="function"&&rushOngletActif())?"home":"leagues"; loadMyLeagues(); }   // 14/10 : compte testeur → QG (l'ancienne page Mes ligues n'est plus une destination)
 
@@ -22600,7 +22604,20 @@ function tmlLevelHTML(){
 // d'une de mes anciennes saisons — même chemin que "Retour à l'accueil" → "Mes ligues" → une ligue
 // terminée, seulement atteint depuis le Palmarès. `openLeague()` inchangé, `fresh` omis (on ne
 // remet pas "vu" à zéro sur une saison déjà découverte).
-function openOldSeason(lid){ const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m) return; openLeague(lid, m.pid); S.view="standings"; }
+/* 25/10 (Hervé) — « ← Retour au Palmarès » : provenance retenue à part (openLeague vide la pile, comme pour retourStats).
+   "ligue" : ligue ouverte depuis Palmarès › Moi ; "rush" : bilan d'une saison Rush ouvert depuis Palmarès › Moi. */
+var retourPalmares=null;   // var : lue par openLeague, qui peut tourner avant cette ligne au démarrage
+function openOldSeason(lid){ const m=(myLeagues||[]).find(x=>x.lg.id===lid); if(!m) return; openLeague(lid, m.pid); retourPalmares="ligue"; S.view="standings"; }
+function retourAuPalmares(){ retourPalmares=null; backToLeagues(); palmView="moi"; openPalmares(); }
+const SPR_UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+function sprBilanRush(mode, id){
+  if((mode!=="reel" && mode!=="fictif") || !SPR_UUID.test(String(id||""))) return;
+  if(typeof nvRushOk==="function" && !nvRushOk()) return;
+  const o={ ecran:"bilan", mode, saison:String(id), retour:"palmares" };
+  const deja=!!document.getElementById("rushTestCadre") && !RT.chargement;
+  RT.ouvrirApres=o; openRush(); retourPalmares="rush";
+  if(deja && S.view==="rush") requestAnimationFrame(()=>rushEnvoyerOuvrir(o));
+}
 function viewPalmaresMoi(){
   const M=palmMoi;
   if(!M) return `<div class="box">${t("Chargement…")}</div>`;
@@ -23645,7 +23662,7 @@ function sprHistoriqueHTML(fam, mode){
         ${mo ? esc(sprL(mo[0], mo[1]))+"<br>" : ""}${ma ? "🎩 "+esc(sprL("Maestro au bilan : ","Maestro at the review: "))+"<b>"+esc(sprL(ma[0], ma[1]))+"</b><br>" : ""}
         ${esc(sprDate(s.debut))} → ${esc(sprDate(s.fin))}<br>
         <span style="opacity:.8">⏳ ${esc(sprL("Détail des duels et partage du bilan : en préparation.","Duel details and review sharing: in preparation."))}</span></div>` : "";
-    return `<div class="box" style="padding:9px 11px;margin:6px 0;cursor:pointer" role="button" aria-expanded="${ouvert}" data-rush-saison="${sprNum(s.numero)}" onclick="sprOuvrir('${mode}','${esc(id).replace(/'/g,"")}')">
+    return `<div class="box" style="padding:9px 11px;margin:6px 0;cursor:pointer" role="button" aria-expanded="${ouvert}" data-rush-saison="${sprNum(s.numero)}" onclick="sprBilanRush('${mode}','${esc(id).replace(/'/g,"")}')">
       <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline"><b style="min-width:0;overflow-wrap:anywhere">${esc(sprL("Saison","Season"))} ${sprNum(s.numero)} · ${esc(sprDiv(s.division))}</b><span class="mini" style="white-space:nowrap">${ic} ${esc(lib)}</span></div>
       <div class="mini muted">${sprNum(s.points)} pts · ${esc(sprL("capital final","final capital"))} ${euro(sprNum(s.capital_final))}${titres ? " · "+esc(titres) : ""}</div>${det}</div>`; }).join("");
   return sprCadre(fam, "historique", `<div class="mini muted" style="margin:2px 2px 4px">${esc(C.n===1 ? sprL("1 saison terminée","1 finished season") : sprL(C.n+" saisons terminées", C.n+" finished seasons"))}</div>${rows}`);
@@ -27601,6 +27618,10 @@ const nvEnvoyerOrigine = rushEnvoyerOuvrir;
 rushEnvoyerOuvrir = function(ecran){
   if(!ecran || typeof ecran!=="object") return nvEnvoyerOrigine.apply(this, arguments);
   RT.ouvrirApres=null;
+  if(ecran.ecran==="bilan"){   // 25/10 : bilan d'une saison Rush depuis Palmarès › Moi (liste blanche)
+    if((ecran.mode!=="reel" && ecran.mode!=="fictif") || !SPR_UUID.test(String(ecran.saison||""))) return;
+    try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"bilan", mode:ecran.mode, saison:String(ecran.saison), retour:ecran.retour==="palmares"?"palmares":null }, "*"); }catch(e){}
+    return; }
   if(ecran.ecran!=="mode" || (ecran.mode!=="reel" && ecran.mode!=="fictif")) return;   // liste blanche
   try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"mode", mode:ecran.mode, decouvrir:ecran.decouvrir===true }, "*"); }catch(e){}   // origine opaque : "*"
 };
