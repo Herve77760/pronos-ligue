@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.46";
+const APP_VERSION = "v8.538.47";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -8334,6 +8334,8 @@ const EN={
   "{a}, et {b}.":"{a}, and {b}.",
   "Un résultat Rush est tombé.":"A Rush result is in.",
   "Ton match Rush est en cours.":"Your Rush match is live.",
+  "tes matchs Rush sont en cours":"your Rush matches are live",
+  "Tes matchs Rush sont en cours.":"Your Rush matches are live.",
   "Ton duel Rush t'attend.":"Your Rush duel is waiting.",
   "Tes ligues entre amis. Ou Rush, en solo.":"Your leagues with friends. Or Rush, solo.",
   "Bienvenue {a}":"Welcome {a}",
@@ -27539,6 +27541,11 @@ function nvRushMode(mode){
       o.duelLive=!!(E.duel && E.duel.duel_live && E.duel.duel_live.droit===true);
       if(hl && now>=hl) o.live=true; else o.avant=hl||null;
     }
+    // 29/10 (Hervé) : un match par ligne — duels Réel commencés (engagements_ouverts, ordre du coup d'envoi), 3 au plus
+    const LO=mode==="reel" && Array.isArray(E.engagements_ouverts) ? E.engagements_ouverts : [];
+    o.lives=LO.filter(x=>x && x.id && x.rencontre && (x.etat==="verrouille" || now>=(Date.parse(x.rencontre.heure_limite || x.rencontre.coup_envoi_prevu || "")||Infinity))).slice(0,3)
+      .map(x=>{ const rr=x.rencontre; return { id:String(x.id), rencontre:String(rr.domicile||"")+"–"+String(rr.exterieur||""), rid:rr.id?String(rr.id):null,
+        sport:rr.sport||"foot", ko:Date.parse(rr.coup_envoi_prevu||"")||null, duelLive:o.duelLive===true }; });
     const dr=E.droits;
     if(mode==="reel" && dr && dr.quota && typeof dr.quota==="object" && dr.quota.actif===true && dr.illimite!==true){
       const S7=dr.quota.semaine||{};
@@ -27578,21 +27585,20 @@ function nvSituation(o){
    rush_scores_direct, appelée avec la session, au plus une fois par minute, MON engagement seulement) et même règle de minute
    (minuteJeuEstimee, partagée avec les Ligues : ⟦MINUTE-DIRECT⟧), sans la mention de mi-temps entre parenthèses. Sans Duel Live,
    sans relevé ou RPC absente : « en cours ». */
-NV.direct = { rid:null, at:0, enCours:false, r:null };
+NV.direct = {};   // 29/10 : rid → { at, enCours, r } (plusieurs matchs Rush en cours)
 function nvRushDirectCharger(o){
   if(!o || !o.rid || !o.duelLive) return;
-  const n=Date.now(), d=NV.direct;
-  if(d.rid===o.rid && (d.enCours || n-d.at<55000)) return;
-  NV.direct={ rid:o.rid, at:n, enCours:true, r:d.rid===o.rid ? d.r : null };
+  const n=Date.now(), d=NV.direct[o.rid];
+  if(d && (d.enCours || n-d.at<55000)) return;
+  const c=NV.direct[o.rid]={ at:n, enCours:true, r:d ? d.r : null };
   (async()=>{ let r=null; try{ const x=await db.rpc("rush_scores_direct",{ p_rencontre:o.rid }); r=(x && !x.error) ? x.data : null; }catch(e){ r=null; }
-    if(NV.direct.rid!==o.rid) return;
-    NV.direct.enCours=false; if(r && r.ok===true) NV.direct.r=r;
+    c.enCours=false; if(r && r.ok===true) c.r=r;
     if(S.view==="accueil") render(); })();
 }
 function nvRushDirect(o){
   if(!o || !o.duelLive) return t("en cours");
   nvRushDirectCharger(o);
-  const x=NV.direct.rid===o.rid ? NV.direct.r : null, sc=x && x.ok===true && x.droit===true && x.actif===true ? x.score : null;
+  const x=(NV.direct[o.rid]||{}).r||null, sc=x && x.ok===true && x.droit===true && x.actif===true ? x.score : null;
   if(!sc || sc.hs==null || sc.as==null || !Number.isFinite(+sc.hs) || !Number.isFinite(+sc.as)) return t("en cours");
   const fini=!!(sc.c || sc.fini), ko=o.ko || (x.ko ? Date.parse(x.ko) : null), e=ko ? Math.max(0, Math.floor((Date.now()-ko)/60000)) : null;
   const sp=/^basket/.test(o.sport) ? "basket" : (/^tennis/.test(o.sport) ? "tennis" : "foot");
@@ -27605,7 +27611,10 @@ function nvBlocRush(){
   const tete=`<div class="nv-tete"><span class="nv-titre vi">${NV_RUSH_SVG}${t("Rush")}</span><button type="button" class="nv-lien" onclick="openRush()">${t("Accueil Rush")} ›</button></div>`;
   let ligne="";
   if(r && r.aDecouvrir) ligne=`<button type="button" class="nv-act dec" id="nvRushAction" data-nv-rush="decouvrir" onclick="nvOuvrirMode('reel',true)"><span class="nv-pt"></span><span class="nv-t">🎁 ${t("Découvre ton résultat")}</span>${NV_CHEV}</button>`;
-  else if(r && r.live) ligne=`<button type="button" class="nv-act live" id="nvRushAction" data-nv-rush="live" onclick="nvOuvrirMode('reel',false)"><span class="nv-pt"></span><span class="nv-t">${esc(r.rencontre||t("Duel en cours"))}</span><span class="nv-q" id="nvRushDirect">${esc(nvRushDirect(r))}</span></button>`;
+  else if(r && r.live){   // 29/10 (Hervé) : un match par ligne (plusieurs matchs en cours), chacun son direct, chacun ouvre son duel
+    const L=r.lives && r.lives.length>1 ? r.lives : [{ id:null, rencontre:r.rencontre, rid:r.rid, sport:r.sport, ko:r.ko, duelLive:r.duelLive }];
+    ligne=L.map((x,i)=>`<button type="button" class="nv-act live" id="nvRushAction${i?i+1:""}" data-nv-rush="live"${x.id?` data-engagement="${esc(x.id)}"`:""} onclick="nvOuvrirMode('reel',false${x.id?`,'${esc(x.id)}'`:""})"><span class="nv-pt"></span><span class="nv-t">${esc(x.rencontre||t("Duel en cours"))}</span><span class="nv-q"${i?"":` id="nvRushDirect"`} data-rid="${esc(x.rid||"")}">${esc(nvRushDirect(x))}</span></button>`).join("");
+  }
   else if(r && r.commence && r.peutChoisir) ligne=`<button type="button" class="nv-act vi" id="nvRushAction" data-nv-rush="choisir" onclick="nvOuvrirMode('reel',false)"><span class="nv-pt"></span><span class="nv-t">${t("Choisis ta rencontre")}</span><span class="nv-q">${r.quota?t("duel du jour · {a}/{b}",{a:r.quota.n,b:r.quota.N}):""}</span></button>`;
   const [r1,r2]=nvSituation(r), [f1,f2]=nvSituation(f);
   const modes=`<div class="nv-modes">
@@ -27618,11 +27627,12 @@ function nvPhrase(lignes){
   const nL=lignes.length;
   const r=nvRushOk() ? nvRushMode("reel") : null;
   const pr = r && r.aDecouvrir ? "decouvrir" : (r && r.live ? "live" : (r && r.commence && r.peutChoisir ? "choisir" : ""));
+  const plus = !!(r && r.lives && r.lives.length>1);   // 29/10 : plusieurs matchs en cours
   const pL = nL===1 ? t("Une ligue t'attend") : (nL>1 ? t("{a} actions t'attendent en Ligues",{a:nL}) : "");
-  const pR = pr==="decouvrir" ? t("un résultat Rush est tombé") : (pr==="live" ? t("ton match Rush est en cours") : (pr==="choisir" ? t("ton duel Rush t'attend") : ""));
+  const pR = pr==="decouvrir" ? t("un résultat Rush est tombé") : (pr==="live" ? (plus ? t("tes matchs Rush sont en cours") : t("ton match Rush est en cours")) : (pr==="choisir" ? t("ton duel Rush t'attend") : ""));
   if(pL && pR) return t("{a}, et {b}.",{a:pL,b:pR});
   if(pL) return pL+".";
-  if(pR) return pr==="decouvrir" ? t("Un résultat Rush est tombé.") : (pr==="live" ? t("Ton match Rush est en cours.") : t("Ton duel Rush t'attend."));
+  if(pR) return pr==="decouvrir" ? t("Un résultat Rush est tombé.") : (pr==="live" ? (plus ? t("Tes matchs Rush sont en cours.") : t("Ton match Rush est en cours.")) : t("Ton duel Rush t'attend."));
   return t("Tes ligues entre amis. Ou Rush, en solo.");
 }
 function nvVueAccueil(){
@@ -27637,9 +27647,10 @@ function nvVueAccueil(){
   return `<div class="a2-wrap a2-wrap-tight nv-acc" id="nvAccueil">${hero}${nouveau?nvInvitLigues():nvBlocLigues(lignes)}${nvRushOk()?nvBlocRush():""}</div>`;
 }
 // Contrat avec le paquet Rush : ouvrir DIRECTEMENT le QG d'un mode (decouvrir : lancer tout de suite la découverte du résultat).
-function nvOuvrirMode(mode, decouvrir){
+function nvOuvrirMode(mode, decouvrir, duel){
   if(!nvRushOk() || (mode!=="reel" && mode!=="fictif")) return;
   const o={ ecran:"mode", mode, decouvrir:decouvrir===true };
+  if(mode==="reel" && typeof duel==="string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(duel)) o.duel=duel;   // 29/10 : CE duel (plusieurs matchs)
   const deja=!!document.getElementById("rushTestCadre") && !RT.chargement;
   RT.ouvrirApres=o; openRush();
   if(deja && S.view==="rush") requestAnimationFrame(()=>rushEnvoyerOuvrir(o));   // iframe déjà prête : après le rendu de l'onglet
@@ -27653,7 +27664,7 @@ rushEnvoyerOuvrir = function(ecran){
     try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"bilan", mode:ecran.mode, saison:String(ecran.saison), retour:ecran.retour==="palmares"?"palmares":null }, "*"); }catch(e){}
     return; }
   if(ecran.ecran!=="mode" || (ecran.mode!=="reel" && ecran.mode!=="fictif")) return;   // liste blanche
-  try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"mode", mode:ecran.mode, decouvrir:ecran.decouvrir===true }, "*"); }catch(e){}   // origine opaque : "*"
+  try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"mode", mode:ecran.mode, decouvrir:ecran.decouvrir===true, ...(ecran.duel ? { duel:ecran.duel } : {}) }, "*"); }catch(e){}   // origine opaque : "*"
 };
 
 /* ── 2. BARRE DU BAS, EN-TÊTE ────────────────────────────────────────────────────────────────────────────────────────── */
