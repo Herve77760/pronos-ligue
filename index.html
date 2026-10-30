@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.49";
+const APP_VERSION = "v8.538.50";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -8099,6 +8099,10 @@ const EN={
   "Économise environ {a} %":"Save about {a}%", "Paiement unique · Aucun renouvellement automatique":"One-time payment · No auto-renewal",
   "Actif jusqu'au {a}":"Active until {a}", "Actif sur ton compte":"Active on your account",
   "Toutes les options sont débloquées.":"Every option is unlocked.",
+  "Division Rush · voir sa fiche":"Rush division · see their card", "Aucun duel joué":"No duel played yet", "Fiche Rush":"Rush card",
+  "Rejoins Rush pour suivre les joueurs.":"Join Rush to follow players.", "Fiche indisponible pour le moment.":"Card unavailable for now.",
+  "{a} pts ({b}/10 duels)":"{a} pts ({b}/10 duels)", "Découvre d'abord ton résultat Rush pour voir sa forme.":"Reveal your Rush result first to see their form.",
+  "{a} victoires de suite":"{a} wins in a row", "{a} abonné(s)":"{a} follower(s)", "te suit":"follows you", "Suivi · ne plus suivre":"Following · unfollow",
   "Inclus dans Premium":"Included in Premium", "Premium":"Premium",
   "3 parties Solo offertes":"3 free Solo games", "1 partie Solo offerte restante":"1 free Solo game left",
   "{a} parties Solo offertes restantes":"{a} free Solo games left",
@@ -13730,6 +13734,10 @@ const RSV_RPC = Object.freeze({
   rush_resume_carriere: { p_mode:rsvMode },   // ⟦RUSH-RESUME-CARRIERE⟧ 22/10 : lecture seule, carte Fictif de l'Accueil (rush/sql/MIGRATION-rush-resume-carriere-2026-10-22.sql)
   rush_scores_direct: { p_rencontre:rsvUuid },   // ⟦RUSH-SCORES-DIRECT⟧ 22/10 : score en direct du Duel Live (audits/odds-api-2026-10-22/direct/MIGRATION-scores-direct-2026-10-22.sql)
   rush_marquer_decouvert: { p_mode:rsvMode, p_rencontre:v=>v===null || rsvUuid(v) },
+  // ⟦RUSH-ABONNEMENTS⟧ 30/10 : suivre des joueurs (rush/sql/abonnements/MIGRATION-rush-abonnements-2026-10-30.sql) — une seule entrée
+  rush_social: { p_action:v=>typeof v==="string" && /^(suivis|chercher|fiche|suivre|ne_plus_suivre|abonnes|bloquer|debloquer|badges)$/.test(v),
+    p_texte:v=>v===null || (typeof v==="string" && v.length<=40), p_cible:v=>v===null || rsvUuid(v),
+    p_liste:v=>v===null || (Array.isArray(v) && v.length<=100 && v.every(x=>typeof x==="string" && x.length>=1 && x.length<=40)) },
 });
 // Edge rush-fictif (Verify JWT ON) : { action:"affiches" } | { action:"jouer", affiche, sel, mise, bonus, sel2 }.
 const RSV_FICTIF = Object.freeze({
@@ -19394,9 +19402,9 @@ function recapBody(D){
     ? `<div class="a2-res-duelbig compact">
         <div class="a2-res-duelbig-head">${t("Ton duel")}</div>
         <div class="a2-res-faces">
-          <div class="a2-res-face">${avatarHTML(fpP.emoji,34)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span></div>
+          <div class="a2-res-face">${avatarHTML(fpP.emoji,34)}${rbBadge(fpP)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span></div>
           <div class="a2-res-vs">${t("vs")}</div>
-          <div class="a2-res-face">${avatarHTML(pById(oppId).emoji,34)}<span class="nm">${esc(oppName)}</span></div>
+          <div class="a2-res-face">${avatarHTML(pById(oppId).emoji,34)}${rbBadge(pById(oppId))}<span class="nm">${esc(oppName)}</span></div>
         </div>
         <div class="a2-res-nets" id="recapDuelNets">
           <div class="a2-res-net"><div class="lbl">${t("Net")}</div><div class="val" id="recapNetYou">${st0.amt} €</div></div>
@@ -19406,9 +19414,9 @@ function recapBody(D){
         <div class="a2-res-caption">${t("Calcul des résultats… Patience Maestro !")}</div>
       </div>`
     : `<div class="a2-res-summary ${won?'win':(tie?'tie':'lose')}">
-        <div class="side clik" onclick="showGainDetail('${fp}')">${avatarHTML(fpP.emoji,28)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span><span class="amt ${myNet>=0?'pos':'neg'}">${euroSigned(myNet)}</span></div>
+        <div class="side clik" onclick="showGainDetail('${fp}')">${avatarHTML(fpP.emoji,28)}${rbBadge(fpP)}<span class="nm">${isMe?t("Toi"):esc(fpName)}</span><span class="amt ${myNet>=0?'pos':'neg'}">${euroSigned(myNet)}</span></div>
         <div class="vsmini">${t("vs")}</div>
-        <div class="side right clik" onclick="showGainDetail('${oppId}')">${avatarHTML(pById(oppId).emoji,28)}<span class="nm">${esc(oppName)}</span><span class="amt ${oppNet>=0?'pos':'neg'}">${euroSigned(oppNet)}</span></div>
+        <div class="side right clik" onclick="showGainDetail('${oppId}')">${avatarHTML(pById(oppId).emoji,28)}${rbBadge(pById(oppId))}<span class="nm">${esc(oppName)}</span><span class="amt ${oppNet>=0?'pos':'neg'}">${euroSigned(oppNet)}</span></div>
       </div>`);
   // Carte "Tes points de la journée" : décompose `fpDuelPts` en ses composantes RÉELLES (résultat +
   // net positif, `duelPtsF`/`duelPts` ci-dessus dans ce fichier : "V=2, N=1, D=0, +1 si net>0",
@@ -22009,7 +22017,7 @@ function viewStandings(){
         const nameHTML = p.id===S.myId ? `<b class="nmtxt">${pname(p)}</b>` : `<span class="nmtxt">${pname(p)}</span>`;
         return `<div class="a2-rank-row${p.id===S.myId?' me':''}" onclick="showPlayerCards('${p.id}',${useLive?"'actuel'":shownIdx})">
           <div class="a2-rank-num-cell"><span class="a2-rank-num${medalCls}">${rk}</span>${moveHTML(p.id,rk)}</div>
-          <div class="a2-rank-nm">${avatarHTML(p.emoji,24)}<div style="min-width:0">${nameHTML}${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div></div>
+          <div class="a2-rank-nm">${avatarHTML(p.emoji,24)}${rbBadge(p)}<div style="min-width:0">${nameHTML}${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div></div>
           <div class="a2-rank-pts clik" onclick="event.stopPropagation();showPenInfo('${p.id}',${shownIdx},${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen(p,shownIdx)}</div>
           <div class="a2-rank-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',${shownIdx})" title="${t("Détail du capital")}">${euro(p.capital)}</div>
         </div>`;}).join("")}
@@ -22460,7 +22468,7 @@ function viewEnd(){
        const nameHTML = p.id===S.myId ? `<b class="nmtxt">${pname(p)}</b>` : `<span class="nmtxt">${pname(p)}</span>`;
        return `<div class="a2-rank-row${p.id===S.myId?' me':''}" onclick="showPlayerCards('${p.id}')">
          <div class="a2-rank-num-cell"><span class="a2-rank-num${medalCls}">${rk}</span></div>
-         <div class="a2-rank-nm">${avatarHTML(p.emoji,24)}<div style="min-width:0">${nameHTML}${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div></div>
+         <div class="a2-rank-nm">${avatarHTML(p.emoji,24)}${rbBadge(p)}<div style="min-width:0">${nameHTML}${tags.length?`<div class="tags">${tags.join('')}</div>`:''}</div></div>
          <div class="a2-rank-pts clik" onclick="event.stopPropagation();showPenInfo('${p.id}',-1,${+p.points||0})" title="${t("Détail des points")}">${ptsAvecPen({id:p.id,points:p.points,penOubli:(penF[p.id]||{}).penOubli,penRecap:(penF[p.id]||{}).penRecap},-1)}</div>
          <div class="a2-rank-cap clik" onclick="event.stopPropagation();showCapInfo('${p.id}',-1)" title="${t("Détail du capital")}">${euro(p.capital)}</div>
        </div>`;}).join("")}</div>
@@ -27290,6 +27298,73 @@ function rqlCarteBoutique(){
       <svg class="a2-shop-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`;
 }
 /* ⟦RUSH-QUOTA-REEL⟧ fin */
+/* ⟦RUSH-ABONNEMENTS⟧ début — 30/10/2026 (Hervé : suivi libre, badge de division visible pour tous ; tools/patch-rush-abonnements.py).
+   Badge « D5 » / « Élite » sur l'avatar des joueurs Rush dans les Ligues (classement, résultats du duel) ; toucher le badge ouvre
+   la fiche Rush du joueur avec « ⭐ Suivre ». Données : rush_social (security definer) — jamais un pari, seulement division,
+   saison, forme des duels réglés et abonnés ; forme et saison masquées tant que MON résultat Rush Réel n'est pas découvert. */
+const RB = { div:Object.create(null), cle:"", lu:0, enCours:false, prevu:false };
+function rbCharger(){
+  try{
+    if(!AUTH || typeof players==="undefined" || !Array.isArray(players) || RB.enCours) return;
+    const ids=[...new Set(players.filter(p=>p && !p.is_ai && typeof p.user_id==="string").map(p=>p.user_id))].sort().slice(0,100);
+    if(!ids.length) return;
+    const cle=ids.join(",");
+    if(cle===RB.cle && Date.now()-RB.lu<10*60000) return;
+    RB.enCours=true;
+    db.rpc("rush_social",{ p_action:"badges", p_texte:null, p_cible:null, p_liste:ids }).then(({ data })=>{
+      RB.enCours=false; RB.cle=cle; RB.lu=Date.now();
+      const b=(data && data.ok && data.badges && typeof data.badges==="object") ? data.badges : {};
+      const avant=JSON.stringify(RB.div); RB.div=Object.create(null);
+      Object.keys(b).forEach(k=>{ const d=+b[k]; if(Number.isInteger(d) && d>=1 && d<=7) RB.div[k]=d; });
+      if(JSON.stringify(RB.div)!==avant) render();
+    }, ()=>{ RB.enCours=false; RB.cle=cle; RB.lu=Date.now(); });
+  }catch(e){ RB.enCours=false; }
+}
+function rbLib(d){ return d===1 ? t("Élite") : "D"+d; }
+function rbBadge(p){
+  if(!RB.prevu){ RB.prevu=true; setTimeout(()=>{ RB.prevu=false; rbCharger(); }, 0); }
+  const d=p && typeof p.user_id==="string" ? RB.div[p.user_id] : null;
+  if(!d) return "";
+  return `<span class="rb-div${d===1?' elite':''}" role="button" tabindex="0" data-rb-uid="${esc(p.user_id)}" onclick="event.stopPropagation();rbFiche('${esc(p.user_id)}')" title="${esc(t("Division Rush · voir sa fiche"))}">${rbLib(d)}</span>`;
+}
+function rbForme(f){
+  if(!Array.isArray(f) || !f.length) return `<span class="mini muted">${t("Aucun duel joué")}</span>`;
+  return f.map(x=>`<span class="rb-f rb-f-${x==="V"?"v":x==="D"?"d":"n"}">${x==="V"?"✓":x==="D"?"✗":"="}</span>`).join("");
+}
+const RBF = { uid:null, enCours:false };
+async function rbFiche(uid){
+  if(!AUTH || typeof uid!=="string" || !/^[0-9a-f-]{36}$/.test(uid)) return;
+  RBF.uid=uid;
+  infoModal("⚡", t("Fiche Rush"), `<div class="mini muted" id="rbFiche">${t("Chargement…")}</div>`);
+  let r=null; try{ const { data }=await db.rpc("rush_social",{ p_action:"fiche", p_texte:null, p_cible:uid, p_liste:null }); r=data; }catch(e){ r=null; }
+  if(RBF.uid!==uid) return;
+  const el=document.getElementById("rbFiche"); if(!el) return;
+  if(!r || !r.ok){
+    el.innerHTML = r && r.code==="rush_ferme" ? t("Rejoins Rush pour suivre les joueurs.") : t("Fiche indisponible pour le moment.");
+    return;
+  }
+  const j=r.joueur||{}, s=j.saison;
+  const lignes=[
+    `<div class="row" style="gap:10px;align-items:center;justify-content:center;margin-bottom:8px">${avatarHTML(j.avatar,42)}<b style="font-size:17px">${esc(j.pseudo||"?")}</b></div>`,
+    `<div class="mini" style="text-align:center">🏅 <b>${j.division ? (j.division===1?t("Élite"):t("Division {a}",{a:j.division})) : "—"}</b>${s ? " · "+t("{a} pts ({b}/10 duels)",{a:s.points,b:s.duels}) : ""}</div>`,
+    j.masque ? `<div class="mini muted" style="text-align:center;margin-top:6px">🔒 ${t("Découvre d'abord ton résultat Rush pour voir sa forme.")}</div>`
+             : `<div style="text-align:center;margin-top:8px">${rbForme(j.forme)}${j.serie>=2?` <span class="mini">🔥 ${t("{a} victoires de suite",{a:j.serie})}</span>`:""}</div>`,
+    `<div class="mini muted" style="text-align:center;margin-top:6px">👥 ${t("{a} abonné(s)",{a:j.abonnes||0})}${r.me_suit?" · "+t("te suit"):""}</div>`,
+    j.moi ? "" : `<button class="${j.suivi?'btn ghost':'cta-gold'}" style="margin-top:10px" id="rbSuivre" onclick="rbBasculer('${esc(uid)}',${j.suivi?'false':'true'})">${j.suivi?"✓ "+t("Suivi · ne plus suivre"):"⭐ "+t("Suivre")}</button>`,
+  ];
+  el.classList.remove("mini","muted"); el.innerHTML=lignes.join("");
+}
+async function rbBasculer(uid, suivre){
+  if(RBF.enCours) return; RBF.enCours=true;
+  try{ await db.rpc("rush_social",{ p_action:suivre?"suivre":"ne_plus_suivre", p_texte:null, p_cible:uid, p_liste:null }); }catch(e){}
+  RBF.enCours=false; rbFiche(uid);
+}
+(function(){ try{ if(document.getElementById("rbStyle")) return; const s=document.createElement("style"); s.id="rbStyle";
+  s.textContent=".rb-div{display:inline-block;vertical-align:bottom;margin:0 2px 0 -9px;position:relative;z-index:1;transform:translateY(3px);font-size:9px;line-height:13px;font-weight:800;padding:0 4px;border-radius:7px;background:#6d28d9;color:#fff;border:1.5px solid var(--bg,#0b0f1a);cursor:pointer;white-space:nowrap}"
+   +".rb-div.elite{background:linear-gradient(135deg,#f5d77a,#c9a227);color:#1a1300}"
+   +".rb-f{display:inline-block;min-width:20px;margin:0 2px;padding:1px 5px;border-radius:6px;font-size:11px;font-weight:800;color:#fff}.rb-f-v{background:#16a34a}.rb-f-d{background:#dc2626}.rb-f-n{background:#64748b}";
+  document.head.appendChild(s); }catch(e){} })();
+/* ⟦RUSH-ABONNEMENTS⟧ fin */
 /* ⟦NAV-V2⟧ début ═════════════════════════════════════════════════════════════════════════════════════════════════════
 /* NAVIGATION V2 (23/10/2026, décisions d'Hervé : design/accueil/DECISIONS-NAVIGATION-2026-10-23.md, points 1-13 ; GO du 23/10).
    Posé par tools/patch-nav-v2-accueil.py (retrait EXACT : --retirer, ou tools/lib/nav_v2.py), APRÈS tous les autres correctifs.
