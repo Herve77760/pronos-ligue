@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.538.53";
+const APP_VERSION = "v8.538.54";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -3584,6 +3584,37 @@ function jourTreve(lg){ const g=lg||L; return hasTreve(g) ? ((g.num_days|0)/2) :
 function treveState(){ const s=L&&L.prep_summary; return (s&&s.treve_st)||null; }
 function treveFaite(lg){ const g=lg||L; const s=g&&g.prep_summary;
   return !!(s && s.treve_st && s.treve_st.day!=null); }
+/* ─── RELIQUAT DE LA TRÊVE (v8.540, règle validée par Hervé le 12/10/2026) ───────────────────
+   Reliquat = 40 € − enchères REMPORTÉES, versé à 100 % au capital SEULEMENT si le joueur a validé
+   (`treve_st.done[pid]`), sinon 0. C'est le SERVEUR qui fait tout (resolve_treve) ; l'app ne fait que LIRE :
+   • `treve_st.regle_reliquat` (≥ 1) : MARQUEUR posé par le serveur à l'OUVERTURE de la trêve. Sans lui, la
+     trêve suit l'ancienne règle (rien n'est rendu) → anciens textes, ancien historique, au caractère près.
+   • `treve_st.reliquat = {pid: montant}` : JOURNAL écrit par le serveur à la CLÔTURE (montant ≥ 0, joueur
+     ABSENT = non crédité). C'est lui, et lui seul, qui entre dans l'historique du capital (computeStandHist,
+     capChart, showCapInfo, qgComputeGestion), appliqué au jour `treve_st.day` AVANT les gains de ce jour,
+     jamais dans le `net` d'une journée.
+   ⚠️ L'app n'ÉCRIT RIEN de nouveau : `saveTreve()` réécrit `treve_st` tel que relu en base (marqueur et journal
+   compris, que `tml_garde_treve` reprend de toute façon de la base) ; les clients 8.515/8.539 ignorent ces clés.
+   ⚠️ Deux temps pour les TEXTES : pendant la trêve on annonce la RÈGLE (marqueur) ; après la clôture on dit ce
+   que le serveur a FAIT (journal) — une trêve marquée close sans journal n'affiche aucun montant.
+   ⚠️ Textes GÉNÉRAUX (Règles, création, salon, caractéristiques d'une ligue dont la trêve n'a pas encore eu
+   lieu) : pilotés par `app_config.treve_reliquat` (TREVE_RELIQUAT_ANNONCE, lu au démarrage, FAUX par défaut et
+   en cas d'échec de lecture) — à basculer quand le serveur pose le marqueur, sans nouvelle build. */
+let TREVE_RELIQUAT_ANNONCE=false;   // ⟦TREVE-RELIQUAT⟧ 30/10/2026 : posé par tools/patch-treve-reliquat.py ; interrupteurs = audits/treve-reliquat-2026-10-30/ACTIVATION-treve-reliquat-2026-10-30.sql (les DEUX ensemble)
+function treveRegleReliquat(lg){ const g=(lg===undefined)?L:lg; const s=g&&g.prep_summary; const st=s&&s.treve_st;
+  return !!(st && st.regle_reliquat!=null && (+st.regle_reliquat)>=1); }
+// Textes généraux : une ligue dont la trêve a déjà été OUVERTE suit SON marqueur (une trêve d'avant la règle
+// garde l'ancien texte) ; sinon (création, salon, Règles, ligue avant la mi-saison) : le drapeau serveur.
+function treveReliquatTexte(lg){ const g=(lg===undefined)?L:lg;
+  if(g && treveFaite(g)) return treveRegleReliquat(g); return !!TREVE_RELIQUAT_ANNONCE; }
+function treveReliquatJournal(lg){ const g=(lg===undefined)?L:lg; if(!treveRegleReliquat(g)) return null;
+  const j=g.prep_summary.treve_st.reliquat; return (j && typeof j==="object" && !Array.isArray(j)) ? j : null; }
+// Montant crédité à `pid` (≥ 0, au centime), ou null si non crédité / pas de journal.
+function treveReliquatDe(pid,lg){ const j=treveReliquatJournal(lg); if(!j || j[pid]==null) return null;
+  const v=+j[pid]; return isFinite(v) ? Math.max(0,Math.round(v*100)/100) : null; }
+// Jour (index 0) où le crédit entre dans le capital = `treve_st.day` (1re journée après la trêve), ou −1.
+function treveReliquatJour(lg){ const g=(lg===undefined)?L:lg; if(!treveReliquatJournal(g)) return -1;
+  const d=g.prep_summary.treve_st.day; return (d==null||!isFinite(+d)) ? -1 : (d|0); }
 /* ⚠️ v8.100 (bug vécu par Hervé : après les enchères de la trêve, l'app annonçait « 🚀 Démarrage
    du championnat… ») — `resolveTreve()` réutilise `status:"starting"` COMME VERROU ATOMIQUE, sur
    le même modèle que `resolvePrep()` au tout premier lancement (cf. `resolveTreve()`, un peu plus
@@ -5598,6 +5629,8 @@ const EN={
   "Soit {a} au plus":"So {a} at most",
   "Mise jusqu'à {a} % de ton capital, et aucune recapitalisation après.":"Stake up to {a}% of your capital, and no top-up afterwards.",
   "📈 Investisseur et 🩸 Sangsue y sont « Sans impact ».":"📈 Investor and 🩸 Leech have “No impact” there.",
+  "🪂 <b>Exception</b> : avec le Parachute joué, un net négatif mais meilleur que celui de ton adversaire rapporte quand même <b>+1 point</b>.":"🪂 <b>Exception</b>: with Parachute played, a negative net that still beats your opponent's earns <b>+1 point</b> anyway.",
+  "Net négatif mais meilleur que celui de ton adversaire : <b>+1 pt</b> quand même.":"Negative net but better than your opponent's: <b>+1 pt</b> anyway.",
   "Objectif : l'Élite !":"Goal: the Elite!",
   "Titre « Champion Élite » dès {a} points.":"“Elite Champion” title from {a} points.",
   "Sous {a} points en fin de saison : retour en Division {b}.":"Below {a} points at the end of the season: back to Division {b}.",
@@ -5646,6 +5679,8 @@ const EN={
   "+{a} points si ton pronostic est gagnant et que ton net est positif":"+{a} points if your prediction wins and your net is positive",
   "+{a} point supplémentaire si tu remportes ton duel avec un net positif":"+{a} extra point if you win your duel with a positive net",
   "0 point si ton net est nul ou négatif":"0 points if your net is zero or negative",
+  "0 point si ton net est nul ou négatif (sauf 🪂 : +1 si tu perds moins que ton adversaire)":"0 points if your net is zero or negative (except 🪂: +1 if you lose less than your opponent)",
+  "📈 Investisseur, 🩸 Sangsue et 🛡 Assurance y sont « Sans impact ».":"📈 Investor, 🩸 Leech and 🛡 Better Safe Than Sorry have “No impact” there.",
   // === Voyants dynamiques du QG (v8.393) ===
   "TON ÉTAT":"YOUR STATUS",
   "Forme":"Form",
@@ -7111,6 +7146,8 @@ const EN={
   "Tactizo évolue":"Tactizo is evolving", "Une nouvelle version est en cours de préparation.":"A new version is being prepared.",
   "Le jeu est temporairement indisponible pendant la mise à jour.":"The game is temporarily unavailable during the update.",
   "Reviens très bientôt !":"Come back very soon!",
+  "Pause technique":"Technical break", "Le Maestro règle un détail en coulisses.":"The Maestro is fixing something behind the scenes.",   // ⟦MAINTENANCE-MAESTRO⟧
+  "Le jeu revient très vite.":"The game will be back very soon.", "À tout de suite !":"See you shortly!",
   "Recrue":"Recruit", "Tacticien":"Tactician", "Stratège":"Strategist", "Visionnaire":"Visionary",
   "Maestro":"Maestro", "Grand Maestro":"Grand Maestro",
   "{a} pronostics":"{a} predictions", "{a} / {b} pronostics":"{a} / {b} predictions",
@@ -7189,7 +7226,7 @@ const EN={
   "Achat de « {a} » — {b}":"Purchasing “{a}” — {b}",
   "J'accepte les":"I accept the",
   "Conditions Générales de Vente":"Terms of Sale",
-  "Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'une fois pleinement exécutée à ma demande, je perdrai mon droit de rétractation.":"I request that this digital option be activated immediately, before the end of the 14-day withdrawal period, and I acknowledge that once fully performed at my request, I will lose my right of withdrawal.",
+  "Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'en demandant cette activation immédiate, je perds mon droit de rétractation.":"I request that performance of this digital option begin immediately, before the end of the 14-day withdrawal period, and I acknowledge that by requesting this immediate activation, I lose my right of withdrawal.",
   "Continuer vers le paiement":"Continue to payment",
   "— valable 365 jours":"— valid for 365 days",
   "Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.":"Subscribe to “{a}”?\n\nTest phase: no payment — the option activates instantly on your account.",
@@ -8103,7 +8140,7 @@ const EN={
   "Rejoins Rush pour suivre les joueurs.":"Join Rush to follow players.", "Fiche indisponible pour le moment.":"Card unavailable for now.",
   "{a} pts ({b}/10 duels)":"{a} pts ({b}/10 duels)", "Découvre d'abord ton résultat Rush pour voir sa forme.":"Reveal your Rush result first to see their form.",
   "{a} victoires de suite":"{a} wins in a row", "{a} abonné(s)":"{a} follower(s)", "te suit":"follows you", "Suivi · ne plus suivre":"Following · unfollow",
-  "Derniers duels":"Latest duels", "contre {a}":"vs {a}", "référence, sans effet pour lui":"reference only, no effect for them",
+  "Derniers duels":"Latest duels", "contre {a}":"vs {a}", "référence, sans effet pour l’adversaire":"reference only, no effect for them",
   "Inclus dans Premium":"Included in Premium", "Premium":"Premium",
   "3 parties Solo offertes":"3 free Solo games", "1 partie Solo offerte restante":"1 free Solo game left",
   "{a} parties Solo offertes restantes":"{a} free Solo games left",
@@ -8129,6 +8166,32 @@ const EN={
   "Voir les {a} enchères de mi-saison":"See all {a} mid-season auctions",
   "Voir tous les joueurs":"See all players", "Tous les joueurs":"All players",
   "Capital de départ : 100 € par joueur — capital réel, non affecté par la trêve":"Starting capital: €100 per player — real capital, unaffected by the truce",
+  // v8.540 — RELIQUAT DE LA TRÊVE (40 € − enchères remportées, rendu au capital si validé) : textes affichés
+  // seulement sous le marqueur serveur `treve_st.regle_reliquat` / le journal `treve_st.reliquat` / le drapeau
+  // `app_config.treve_reliquat` (cf. treveRegleReliquat). Les anciens textes ci-dessus restent pour les autres trêves.
+  "Ces {a} € ne sortent pas de ta cagnotte. <b>Valide tes enchères, même sans miser</b> : ce que tu ne dépenses pas est <b>ajouté à ton capital</b> à la reprise. Sans validation, tu ne récupères rien. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.":"These €{a} don't come out of your capital. <b>Confirm your bids, even without bidding</b>: whatever you don't spend is <b>added to your capital</b> when play resumes. No confirmation, nothing back. You can take <b>{b}</b> bonuses at most — the number of matchdays left.",
+  "Valide tes enchères, même sans miser : ce que tu ne dépenses pas est ajouté à ton capital.":"Confirm your bids, even without bidding: whatever you don't spend is added to your capital.",
+  "⚠️ Sans validation avant l'échéance, tu perds les {a} €.":"⚠️ If you don't confirm before the deadline, you lose the €{a}.",
+  "Valider sans enchère (+{a} €) →":"Confirm with no bid (+€{a}) →",
+  "Personne n'a misé sur les bonus de la trêve — chaque joueur qui a validé récupère ses {a} € dans son capital.":"Nobody bid on the truce bonuses — every player who confirmed gets their €{a} added to their capital.",
+  "🧘 <b>Le zen :</b> {N} a snobé les enchères de la trêve. Zéro bonus, {a} € mis de côté.":"🧘 <b>The zen one:</b> {N} snubbed the truce auction. Zero bonuses, €{a} put aside.",
+  "🙈 <b>Les abstentionnistes :</b> {N} n'ont misé sur aucun bonus — {a} € reversés au capital de chacun.":"🙈 <b>The abstainers:</b> {N} bid on no bonus — €{a} back into each one's capital.",
+  "💨 <b>L'étourdi :</b> {N} n'a pas validé — ni bonus, ni les {a} €.":"💨 <b>The scatterbrain:</b> {N} didn't confirm — no bonus, no €{a}.",
+  "💨 <b>Les étourdis :</b> {N} n'ont pas validé — ni bonus, ni {a} €.":"💨 <b>The scatterbrains:</b> {N} didn't confirm — no bonus, no €{a}.",
+  "Au capital":"To capital",
+  "— non validé":"— not confirmed",
+  "Tu n'as pas validé tes enchères : rien n'est ajouté à ton capital.":"You didn't confirm your bids: nothing is added to your capital.",
+  "💰 Rendu au capital : <b>{a}</b>":"💰 Returned to your capital: <b>{a}</b>",
+  "Capital de départ : 100 € par joueur, moins les enchères gagnées au départ. Le reliquat de la trêve s'ajoute ensuite.":"Starting capital: €100 per player, minus winning bids at the start. The truce leftover is added later.",
+  "c'est la trêve : mise sur les bonus, ou valide sans miser pour récupérer tes {a} €.":"it's the truce: bid on bonuses, or confirm without bidding to get your €{a} back.",
+  "À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Seules les enchères gagnantes sont payées : <b>le reste rejoint ton capital</b>, à condition de valider tes enchères : valider sans miser rapporte les 40 €, ne pas valider ne rapporte rien.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés.":"Half-way through, the season pauses: any bonus you haven't played is <b>lost</b>, and everyone receives <b>€40</b> — not taken from your capital — to buy again from <b>all</b> the bonuses. Only winning bids are paid: <b>the rest goes to your capital</b>, as long as you confirm your bids: confirming with no bid brings back the €40, not confirming brings back nothing.<br><br>That is why, at the start, everyone is capped at <b>half</b> the matchdays in bonuses: they are meant to be played, not hoarded.",
+  "À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>{a} €</b> pour tout racheter ; ce qu'il n'en dépense pas rejoint son capital (s'il valide).":"Half-way through, unplayed bonuses are <b>lost</b> and everyone receives <b>€{a}</b> to buy again; whatever they don't spend goes to their capital (if they confirm).",
+  "À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € pour tout racheter ; le non-dépensé rejoint son capital s'il valide.":"Halfway through the matchdays, unplayed bonuses are lost and everyone gets €{a} to buy back into any bonus; anything unspent goes to their capital if they confirm.",
+  "À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>40 €</b> pour tout racheter ; le non-dépensé rejoint son capital s'il valide. Au départ, chacun est limité à la <b>moitié</b> des journées en bonus.":"Half-way through, unplayed bonuses are <b>lost</b> and everyone gets <b>€40</b> to buy again; anything unspent goes to their capital if they confirm. At the start, everyone is capped at <b>half</b> the matchdays in bonuses.",
+  "Seules les enchères gagnantes sont payées : le reste des {a} € est <b>ajouté à ton capital</b>, à condition d'avoir validé tes enchères. Valider sans miser rapporte donc les {a} € ; sans validation, rien n'est rendu.":"Only winning bids are paid: the rest of the €{a} is <b>added to your capital</b>, provided you confirmed your bids. Confirming with no bid therefore brings back the €{a}; without confirmation, nothing is returned.",
+  "🔄 Trêve":"🔄 Truce",
+  "🔄 Le reliquat de la trêve (enchères validées) est ajouté au capital avant la reprise : il ne compte pas dans le résultat de la journée suivante.":"🔄 The truce leftover (confirmed bids) is added to the capital before play resumes: it doesn't count in the next matchday's result.",
+  "reliquat de la trêve":"truce leftover",
   "Propositions des joueurs":"Players' proposals", "Voir les propositions des joueurs":"See players' proposals",
   "Propositions de gage":"Forfeit proposals", "Propositions de récompense":"Reward proposals",
   "🎭 1. L'enjeu de la ligue":"🎭 1. The league's stake", "🔨 2. Les enchères":"🔨 2. The auctions",
@@ -8992,6 +9055,8 @@ const PITCHES={
     "Le confort maximal, zéro prise de tête.",
     "Paiement unique, valable 365 jours : aucun renouvellement automatique."], hookRush:"Toutes les options, Ligues et Rush. Toute l'année.", rush:["⚡ Valable aussi dans Rush : 10 bonus, duels Rush Réel illimités (⚡ Rush illimité), Duel Live et statistiques Rush."]}   // ⟦RUSH-QUOTA-REEL⟧
 };
+// ⟦PAIEMENT-WEB⟧ 30/10 : fiche d'une option quand le SITE paie (app_config.paiement_web).
+const PREM_LOCKED_PAYANT="🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>paiement unique, valable 365 jours</b>, sans renouvellement automatique.";
 const PREM_OWNED="✅ Cette option est <b>active sur ton compte</b>. Profites-en !";
 const PREM_LOCKED="🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.";
 // ─── Options premium ACTIVÉES sur le compte connecté ───────────────────────────────────────────
@@ -9347,7 +9412,7 @@ function ownsOpt(key){ return key==='pack' ? SHOP_ORDER.every(k=>hasOpt(k)) : ha
 // séparé — utilisé par showPremiumInfo() (masque prix+bouton) et subscribeOpt() (refuse la requête).
 function sellable(key){ return key==='pack' || SHOP_ORDER.indexOf(key)>=0; }
 function showPremiumInfo(key){
-  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:PREM_LOCKED;
+  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:((!estNatif() && PAIEMENT_WEB_ACTIF===true)?PREM_LOCKED_PAYANT:PREM_LOCKED);   // ⟦PAIEMENT-WEB⟧
   /* ⚠️ v7.45 — L'ÉCHÉANCE DOIT ÊTRE ÉCRITE. Une option valable un an qui s'éteint sans prévenir se
      vit comme une panne, pas comme une fin d'abonnement : le joueur perd une fonction qu'il a payée
      et ne comprend pas pourquoi. On affiche donc la date tant qu'elle est là, et un message explicite
@@ -9434,7 +9499,7 @@ function consentementAchat(key){
          <span class="mini"><span id="consCgvMark">☐</span> ${t("J'accepte les")} <a href="cgv.html" onclick="ouvrirLien('cgv.html',event)">${t("Conditions Générales de Vente")}</a></span>
        </div>
        <div class="box clik" id="consRetract" onclick="consentToggleRetract()" style="text-align:left;margin:0 0 14px;border-color:var(--border)">
-         <span class="mini"><span id="consRetractMark">☐</span> ${t("Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'une fois pleinement exécutée à ma demande, je perdrai mon droit de rétractation.")}</span>
+         <span class="mini"><span id="consRetractMark">☐</span> ${t("Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'en demandant cette activation immédiate, je perds mon droit de rétractation.")}</span>
        </div>
        <button class="btn" id="consOk" style="opacity:.5" onclick="consentModalEnd(true)" disabled>${t("Continuer vers le paiement")}</button>`,
       true);
@@ -9454,6 +9519,8 @@ async function subscribeOpt(key){
   if(busy) return; busy=true;
   try{
   if(!await confirmTxt("🛒",t("Souscrire à cette option"),t("Souscrire à « {a} » ?",{a:t(p.t)}),t("Souscrire"))) return;
+  // ⟦PAIEMENT-WEB⟧ 30/10 : sur le SITE payant, jamais de souscription gratuite — le paiement Stripe directement.
+  if(!estNatif() && await paiementWebActif()){ await paiementStripe(key); return; }
   /* ⚠️ La leçon de la v7.45 reste valable sous la nouvelle forme : on efface l'ancienne ligne de
      cette option avant d'en écrire une neuve. Sinon, réactiver une option périmée laisserait la
      périmée à côté de la nouvelle et le droit ne prendrait pas effet. C'est ce que fait le
@@ -9484,6 +9551,18 @@ async function subscribeOpt(key){
       catch(e2){ if(!(e2&&e2.userCancelled)) showErr(t("Souscription : ")+(e2.message||e2)); }
       return;
     }
+    await paiementStripe(key);
+  }
+  } finally { busy=false; }
+}
+// ⟦PAIEMENT-WEB⟧ 30/10 : paiement Stripe (consentement CGV + renoncement, puis session Checkout) — extrait de subscribeOpt pour le site payant.
+let PAIEMENT_WEB_ACTIF=null;   // null = pas encore lu
+async function paiementWebActif(){
+  if(PAIEMENT_WEB_ACTIF===null){ try{ const rows=await q(db.from("app_config").select("actif").eq("k","paiement_web")); PAIEMENT_WEB_ACTIF=!!(rows&&rows[0]&&rows[0].actif); }catch(e){ return true; } }
+  return PAIEMENT_WEB_ACTIF===true;
+}
+async function paiementStripe(key){
+  try{ {
     if(!await consentementAchat(key)) return;   // annulé : pas de CGV/renoncement, pas de Stripe
     try{
       const { data:{ session } } = await db.auth.getSession();
@@ -9564,6 +9643,7 @@ const SHOP_ORDER=["ia","bonuscomplets","treve","rachat","duel_live","stats"];   
 const PRICES={
   ia:2.99, bonuscomplets:4.99, treve:2.99, rachat:1.99, duel_live:3.99, stats:2.99,
   pack:14.99,
+  rushillimite:4.99,   // ⟦PAIEMENT-WEB⟧ 30/10 : ⚡ Rush illimité (CGV art. 2, Stripe Live)
   // Retirées du catalogue commercial (Lot 3) — gardées pour l'affichage rétro-compatible de
   // PITCHES.direct/live/gageperso/voiradv (cf. commentaire au-dessus de SHOP_ORDER). Prix historiques,
   // jamais réaffichés dans la Boutique (plus dans SHOP_ORDER) ni dans checkout/index.ts.
@@ -9875,8 +9955,8 @@ function showDuelPtsInfo(pid,star){
   const p=pById(pid)||{}; const d=dayDuels.find(x=>x.home_id===pid||x.away_id===pid);
   let ctx=`<div class="mini muted" style="text-align:left">${t("Pas de duel trouvé pour cette journée.")}</div>`;
   if(d){ const hb=dayBets.find(x=>x.player_id===d.home_id), ab=dayBets.find(x=>x.player_id===d.away_id);
-    const H=Object.assign({net:(hb&&hb.net)||0},gainMiseReel(hb,d.fixtures,ab));
-    const A=Object.assign({net:(ab&&ab.net)||0},gainMiseReel(ab,d.fixtures,hb));
+    const H=Object.assign({net:(hb&&hb.net)||0, parachute:(typeof parachuteJour==="function")&&parachuteJour(L,_day)&&parachuteJoue(hb&&hb.card)},gainMiseReel(hb,d.fixtures,ab));   // 🪂 (30/10)
+    const A=Object.assign({net:(ab&&ab.net)||0, parachute:(typeof parachuteJour==="function")&&parachuteJour(L,_day)&&parachuteJoue(ab&&ab.card)},gainMiseReel(ab,d.fixtures,hb));
     const fg=b=>!!(b&&Array.isArray(b.picks)&&b.picks.length===0); // pronos non validés à temps → forfait
     const r=duelPtsF(H,A,fg(hb),fg(ab),isScoring2(),baremeCommunJour(L,_day)); const iAmHome=d.home_id===pid; const mult=lastDayMult(_day); const pts=(iAmHome?r.h:r.a)*mult; const netMe=iAmHome?H.net:A.net; const pos=netMe>0;
     const issue = fg(iAmHome?hb:ab) ? t("déclaré forfait (pronos non faits)") : (r.win==null?t("fait match nul") : (((r.win==='h')===iAmHome)?t("gagné son duel"):t("perdu son duel")));
@@ -12671,7 +12751,15 @@ function qgComputeGestion(ctx){
     const lastRecapDay = recapDays.length?Math.max(...recapDays):-1;
     const myBets=(bts||[]).filter(b=>b.league_id===lg.id&&b.player_id===pid&&b.net!=null&&(b.day|0)>lastRecapDay&&(b.day|0)<vusJ).sort((a,b)=>(b.day|0)-(a.day|0));
     let runningCap=curCap;
+    /* ⚠️ v8.540 — RELIQUAT DE LA TRÊVE (cf. computeStandHist) : crédité au DÉBUT de la journée `treve_st.day`. Si
+       `curCap` le contient (valeurs en direct, ou état figé à une journée ≥ ce jour-là — `player_day_stats` ne le
+       voit qu'à partir de la résolution de cette journée), on l'ôte en franchissant ce jour en remontant : le
+       capital de début des journées d'AVANT la trêve n'en est pas gonflé. Sans journal : relAOter = 0 (inchangé). */
+    const relDayG=treveReliquatJour(lg), relV=(relDayG>=0)?(treveReliquatDe(pid,lg)||0):0;
+    const fgG=ctx.figee?ctx.figee[lg.id]:undefined;
+    let relAOter=(relV>0 && (!fgG || fgG.day>=relDayG)) ? relV : 0;
     for(let i=0;i<myBets.length;i++){
+      if(relAOter && (myBets[i].day|0)<relDayG){ runningCap-=relAOter; relAOter=0; }
       const b=myBets[i], capBefore=runningCap-(b.net||0);
       const ageMs=b.created_at?(now-new Date(b.created_at).getTime()):Infinity;
       if(ageMs<=QG_WINDOW_MS && capBefore>0){
@@ -13593,10 +13681,10 @@ function rushQgHistoriqueHTML(){
    ⚠️ « CHANGER UNE RÈGLE = METTRE À JOUR CET ÉCRAN DANS LE MÊME COMMIT » : RUSH_REGLES, puis la prose (RG_SECTIONS).
    Retrait exact : tools/lib/regles_rush.py. Source des textes : rush/ux-2026-10-15/REGLES-RUSH-FR-EN.md (preuves R1-R40). */
 const RUSH_REGLES = Object.freeze({"source": "rush-saison 1.6 (Maestro v2, barème 2+1 et grille du 21/10) · rush-moteur-v4 · rush-droits v2 · MIGRATION-rush-v6 + CORRECTIF 15/10 (lot A) + CORRECTIFS barème 16/10 et 21/10", "duels": 10, "capital": 100, "mise_min": 1, "plafond_pct": 50, "invest_pct": 70, "points": {"victoire": 1, "nul": 0, "defaite": 0, "net_positif": 2, "gain_requis": true}, "bareme": {"nom": "2+1", "depuis": ["21 octobre 2026", "21 October 2026"], "avant": {"nom": "cible", "victoire": 1, "nul": 0, "defaite": 0, "net_positif": 2}}, "super_finale": {"multiplicateur": 2, "plafond_pct": 100}, "recap": {"seuil": 30, "cible": 40, "penalite": 1}, "effets": {"assurance_perte_pct": 50, "double_gain": 2, "tout_gain": 3, "tout_perte": 2, "parachute_pct": 30, "sangsue_pct": 15, "face_diviseur": 2}, "bonus": {"gratuits": ["assurance", "double", "tout", "parachute", "miroir"], "complets": ["assurance", "double", "tout", "parachute", "miroir", "chance", "invest", "sangsue", "face", "cadeau"]}, "reel": {"horizon_h": 48, "verrou_min": 0, "resultat_min": 90, "neutralisation_h": 24, "tennis": false, "notif_debut": "07:00", "notif_fin": "23:59"}, "fictif": {"affiches": 9, "foot": 7, "basket": 1, "tennis": 1, "saisons_gratuites": 3}, "palmares": {"cloture_h": 48, "top_mois": 3, "top_tous": 10, "affiche_tous": 3}, "maestro": {"vigilant_pct": 35, "determine_pct": 50, "tendu_pct": 65, "reprise": 3}, "divisions": [{"d": 1, "elite": true, "maintien": 20, "montee": null, "titre": 26}, {"d": 2, "maintien": 18, "montee": 24}, {"d": 3, "maintien": 16, "montee": 22}, {"d": 4, "maintien": 14, "montee": 20}, {"d": 5, "maintien": 12, "montee": 18}, {"d": 6, "maintien": 10, "montee": 16}, {"d": 7, "entree": true, "maintien": null, "montee": 14}], "exemples": {"cote": 1.65, "net_moi": -5, "net_adv": -30}});
-const RG_SECTIONS = [{"id": "bref", "ic": "⚡", "t": ["Rush en bref", "Rush in a nutshell"], "c": ["Rush est une compétition <b>en solo, duel après duel</b>. À chaque duel, tu choisis <b>une</b> rencontre, tu fais <b>un</b> prono avec <b>une</b> mise, et tu peux ajouter <b>un</b> bonus.<br>Ton adversaire est un autre joueur engagé sur la même rencontre, ou le 🤖 Joueur IA. Ton résultat d'argent est comparé au sien : tu marques des points, et tes points te font monter de division jusqu'à l'<b>Élite</b>.<br><i>Rush est un jeu à part : ses règles ne changent rien à tes ligues.</i>", "Rush is a <b>solo competition, one duel after another</b>. In each duel, you pick <b>one</b> match, make <b>one</b> prediction with <b>one</b> stake, and may add <b>one</b> boost.<br>Your opponent is another player on the same match, or the 🤖 AI player. Your money result is compared with theirs: you score points, and your points take you up the divisions to the <b>Elite</b>.<br><i>Rush is a game of its own: its rules change nothing in your leagues.</i>"]}, {"id": "pas", "ic": "🚀", "t": ["Jouer, pas à pas", "Playing, step by step"], "c": ["<ol style=\"margin:4px 0;padding-left:18px\">\n<li>Touche l'onglet <b>⚡ Rush</b> de la barre du bas, puis <b>⚡ Rush Réel</b> ou <b>🎲 Rush Fictif</b>. Aucune inscription : à ta première visite d'un mode, ta carrière y est créée en <b>Division {entree}</b>, avec <b>{capital}</b> et 0 point.</li>\n<li>Choisis <b>une rencontre</b>, ton <b>prono</b>, ta <b>mise</b> et, si tu veux, <b>un bonus</b>, puis valide ton duel.</li>\n<li><b>Rush Réel</b> : jusqu'au coup d'envoi, tu peux encore tout modifier ou annuler ; ton adversaire est désigné au coup d'envoi. <b>Rush Fictif</b> : le résultat s'affiche juste après ta validation.</li>\n<li><b>Rush Réel</b> : quand le match est fini, une notification te prévient ; touche <b>Voir le résultat</b> pour découvrir l'issue du duel, tes points et ton nouveau capital.</li>\n<li>Enchaîne les duels : ta saison en compte <b>{duels}</b> au plus, et s'arrête plus tôt dès que son issue est certaine (montée, relégation…).</li>\n<li>Saison terminée : tu vois ton <b>bilan</b> (montée, maintien ou descente), puis une <b>nouvelle saison</b> s'ouvre aussitôt dans ta nouvelle division. Objectif : l'<b>Élite</b>.</li>\n<li>Tes saisons, tes titres et les records se retrouvent dans les onglets <b>Stats</b> et <b>Palmarès</b>, filtre <b>⚡ Rush</b>.</li></ol>", "<ol style=\"margin:4px 0;padding-left:18px\">\n<li>Tap the <b>⚡ Rush</b> tab in the bottom bar, then <b>⚡ Real Rush</b> or <b>🎲 Fictional Rush</b>. No sign-up: on your first visit to a mode, your career there starts in <b>Division {entree}</b>, with <b>{capital}</b> and 0 points.</li>\n<li>Pick <b>a match</b>, your <b>prediction</b>, your <b>stake</b> and, if you like, <b>a boost</b>, then confirm your duel.</li>\n<li><b>Real Rush</b>: until kick-off, you can still change or cancel everything; your opponent is assigned at kick-off. <b>Fictional Rush</b>: the result appears right after you confirm.</li>\n<li><b>Real Rush</b>: when the match is over, a notification lets you know; tap <b>See the result</b> to find out the duel's outcome, your points and your new capital.</li>\n<li>Keep playing duels: your season has <b>{duels}</b> at most, and stops earlier as soon as its outcome is certain (promotion, relegation…).</li>\n<li>Season over: you see your <b>season review</b> (promotion, survival or relegation), then a <b>new season</b> opens straight away in your new division. Goal: the <b>Elite</b>.</li>\n<li>Your seasons, titles and the records are in the <b>Stats</b> and <b>Honours</b> tabs, <b>⚡ Rush</b> filter.</li></ol>"]}, {"id": "modes", "ic": "🎲", "t": ["Deux modes : Rush Réel et Rush Fictif", "Two modes: Real Rush and Fictional Rush"], "c": ["Tu as <b>deux carrières séparées</b>. Chacune a sa division, son capital, ses points, ses bonus, son historique, ses titres et son palmarès. Rien ne passe de l'une à l'autre.{TABLE_MODES}", "You have <b>two separate careers</b>. Each has its own division, capital, points, boosts, history, titles and hall of fame. Nothing carries over from one to the other.{TABLE_MODES}"]}, {"id": "saison", "ic": "🗓️", "t": ["Ta saison", "Your season"], "c": ["Une saison compte <b>{duels} duels</b> ; un duel neutralisé (voir plus bas) ne compte pas.<br>Tu commences en <b>Division {entree}</b> avec <b>{capital}</b> de capital. Chaque saison repart de <b>{capital}</b>, 0 point et un <b>stock de bonus neuf</b>.<br>La saison est <b>personnelle</b> : elle avance à ton rythme, duel après duel. Tu n'attends personne.", "A season is <b>{duels} duels</b>; a neutralised duel (see below) doesn't count.<br>You start in <b>Division {entree}</b> with <b>{capital}</b> of capital. Every season starts again from <b>{capital}</b>, 0 points and a <b>fresh boost stock</b>.<br>The season is <b>personal</b>: it moves at your own pace, duel after duel. You wait for nobody."]}, {"id": "duel", "ic": "🎯", "t": ["Jouer un duel", "Playing a duel"], "c": ["<ol style=\"margin:4px 0;padding-left:18px\">\n<li><b>Choisis une rencontre.</b> Tu n'as qu'<b>un duel en cours à la fois dans chaque mode</b> : tant que le résultat de ton duel n'a pas été <b>découvert</b>, tu ne peux pas en lancer un autre dans ce mode.</li>\n<li><b>Fais ton prono</b> : 1 (domicile), N (nul, au football seulement) ou 2 (extérieur).</li>\n<li><b>Choisis ta mise</b> : au moins <b>{mise_min}</b> ; au plus <b>{plafond} %</b> de ton capital, <b>{invest} %</b> avec 📈 Investisseur, et jusqu'à <b>{sf_plafond} %</b> en Super Finale. Ta perte possible ne dépasse jamais ton capital : avec 🔥, qui double une perte, la mise est donc limitée à la moitié de ton capital.</li>\n<li><b>Ajoute un bonus</b> si tu le souhaites, puis <b>valide</b>.</li></ol>\nEn <b>Rush Réel</b>, jusqu'au coup d'envoi, tu peux librement modifier ton prono, ta mise ou ton bonus, changer de rencontre ou annuler sans pénalité (mise et bonus rendus). Les paris ferment <b>au coup d'envoi</b> ; ensuite, plus aucune annulation.", "<ol style=\"margin:4px 0;padding-left:18px\">\n<li><b>Pick a match.</b> You only have <b>one duel in progress at a time in each mode</b>: until your duel's result has been <b>checked</b>, you can't start another one in that mode.</li>\n<li><b>Make your prediction</b>: 1 (home), D (draw, football only) or 2 (away).</li>\n<li><b>Choose your stake</b>: at least <b>{mise_min}</b>; at most <b>{plafond}%</b> of your capital, <b>{invest}%</b> with 📈 Investor, and up to <b>{sf_plafond}%</b> in the Super Final. Your possible loss never exceeds your capital: with 🔥, which doubles a loss, your stake is therefore capped at half your capital.</li>\n<li><b>Add a boost</b> if you like, then <b>confirm</b>.</li></ol>\nIn <b>Real Rush</b>, until kick-off, you can freely change your prediction, stake or boost, switch matches, or cancel at no cost (stake and boost returned). Bets close <b>at kick-off</b>; after that, nothing can be cancelled."]}, {"id": "adversaire", "ic": "🤝", "t": ["Ton adversaire", "Your opponent"], "c": ["<b>Rush Réel</b> : ton adversaire est attribué <b>au coup d'envoi</b>, puis figé. Le serveur cherche d'abord un joueur de <b>ta division</b> engagé sur la même rencontre, puis de la division la plus proche, en priorité celle du dessous ; si personne n'est disponible, tu affrontes le 🤖 <b>Joueur IA</b>. C'est un vrai duel, compté normalement : aucune victoire n'est jamais donnée faute d'adversaire, et tu gardes toujours les objectifs de <b>ta</b> division.<br>Avant le match, tu sais seulement si un joueur humain est disponible ou si le Joueur IA est possible — jamais le nombre de joueurs.<br>Les duels sont <b>réciproques</b> : vous jouez l'un contre l'autre. Si le nombre de joueurs est impair, un seul joueur est comparé à un autre, <b>sans effet</b> pour ce dernier (ni capital ni points). Tu n'as qu'<b>un</b> résultat par rencontre.<br><b>Rush Fictif</b> : ton adversaire est toujours le 🤖 Joueur IA.<br><b>Le 🤖 Joueur IA</b> pronostique, mise et peut jouer un bonus, comme un joueur. Ses choix sont faits par le serveur <b>sans voir ton pari</b>. Il dispose des <b>{complets} bonus Rush</b> et en joue <b>au plus un par duel</b>, chacun une seule fois dans ta saison ; son bonus reste <b>secret jusqu'au résultat</b>. En Rush Réel, l'IA de secours est <b>gratuite</b>.", "<b>Real Rush</b>: your opponent is assigned <b>at kick-off</b>, then fixed. The server first looks for a player from <b>your division</b> on the same match, then from the closest division, the one below first; if nobody is available, you face the 🤖 <b>AI player</b>. It's a real duel, counted normally: no win is ever handed out for lack of an opponent, and you always keep <b>your</b> division's targets.<br>Before the match, you only know whether a human player is available or the AI player is possible — never the number of players.<br>Duels are <b>mutual</b>: you play against each other. If there is an odd number of players, a single player is compared with another one, <b>with no effect</b> on the latter (neither capital nor points). You get <b>one</b> result per match.<br><b>Fictional Rush</b>: your opponent is always the 🤖 AI player.<br><b>The 🤖 AI player</b> predicts, stakes and may play a boost, just like a player. Its choices are made by the server <b>without seeing your bet</b>. It has the <b>{complets} Rush boosts</b> and plays <b>at most one per duel</b>, each once in your season; its boost stays <b>secret until the result</b>. In Real Rush, the stand-in AI is <b>free</b>."]}, {"id": "net", "ic": "💶", "t": ["Résultat du duel : tout se joue « au net »", "Duel result: it's all about the “net”"], "c": ["Ton <b>net</b> est ce que ton pari te rapporte ou te coûte — jamais le retour « mise × cote ». Pari gagné : <b>mise × (cote − 1)</b> ; par exemple {ex_mise} à {ex_cote} rapportent <b>{ex_gain}</b>. Pari perdu : <b>−mise</b>.<br>Les bonus des <b>deux</b> joueurs modifient ensuite ces résultats, dans un ordre fixe (voir « Les bonus »).<br><b>Qui gagne ?</b> Le meilleur net, comparé au centime. À égalité parfaite, c'est un <b>nul</b>.<br>Ton <b>capital</b> évolue de ton net, plus un éventuel crédit 🩸. Il ne descend jamais sous {zero}. En Rush Réel, une mise reste réservée jusqu'au résultat.", "Your <b>net</b> is what your bet earns or costs you — never the \"stake × odds\" return. Bet won: <b>stake × (odds − 1)</b>; for example {ex_mise} at {ex_cote} earns <b>{ex_gain}</b>. Bet lost: <b>−stake</b>.<br>Both players' boosts then modify these results, in a fixed order (see \"Boosts\").<br><b>Who wins?</b> The better net, compared to the cent. A perfect tie is a <b>draw</b>.<br>Your <b>capital</b> moves by your net, plus any 🩸 credit. It never goes below {zero}. In Real Rush, a stake stays reserved until the result."]}, {"id": "points", "ic": "🏆", "t": ["Points de championnat", "League points"], "c": ["{TABLE_POINTS}Le net qui compte est ton <b>net final</b> du duel, après les bonus des deux joueurs (le crédit 🩸 n'y entre pas). Quelques cas : tu gagnes de l'argent, et plus que ton adversaire → <b>{pts_max}</b> points ; vous gagnez tous les deux de l'argent, mais lui davantage → <b>{pts_net}</b> points ; vous gagnez exactement la même somme → <b>{pts_net}</b> points chacun ; tu perds {ex_net_moi} et ton adversaire {ex_net_adv} → <b>0 point</b>, même si tu perds moins que lui : sans net positif, aucun point. Un net nul ne rapporte rien.<br><b>Date d'effet</b> : ce barème s'applique à tout duel <b>résolu depuis le {bareme_depuis}</b>. Les duels résolus avant gardent leurs points (barème précédent : +{av_net} si ton net est positif, +{av_v} si ton net est meilleur que celui de ton adversaire, même négatif).", "{TABLE_POINTS}The net that counts is your <b>final net</b> for the duel, after both players' boosts (the 🩸 credit is not included). A few cases: you make money, and more than your opponent → <b>{pts_max}</b> points; you both make money, but they make more → <b>{pts_net}</b> points; you both make exactly the same amount → <b>{pts_net}</b> points each; you lose {ex_net_moi} and your opponent {ex_net_adv} → <b>0 points</b>, even though you lose less: without a positive net, no points. A zero net earns nothing.<br><b>Effective date</b>: this scoring applies to every duel <b>settled since {bareme_depuis}</b>. Duels settled earlier keep their points (previous scoring: +{av_net} if your net is positive, +{av_v} if your net beats your opponent's, even if negative)."]}, {"id": "recap", "ic": "💸", "t": ["Recapitalisation", "Recapitalisation"], "c": ["Si ton capital passe <b>sous {recap_seuil}</b> après un duel, il est remonté à <b>{recap_cible}</b> et tu perds <b>{recap_pen} point</b>.<br>Il n'y a <b>jamais</b> de recapitalisation après la Super Finale, ni après un duel qui termine ta saison.<br>Cas particulier : quand la recapitalisation (−{recap_pen} point) ne pourrait plus rien changer à l'issue de ta saison, la saison s'arrête là, sans recapitalisation.", "If your capital drops <b>below {recap_seuil}</b> after a duel, it is topped back up to <b>{recap_cible}</b> and you lose <b>{recap_pen} point</b>.<br>There is <b>never</b> a recapitalisation after the Super Final, nor after a duel that ends your season.<br>Special case: when the recapitalisation (−{recap_pen} point) could no longer change your season's outcome, the season stops there, without a recapitalisation."]}, {"id": "divisions", "ic": "📊", "t": ["Divisions, montées, maintiens, relégations", "Divisions, promotion, survival, relegation"], "c": ["{TABLE_DIVISIONS}<b>Divisions {entree} à {div_sous_elite}</b> — <b>montée immédiate</b> : dès que tu atteins le seuil de montée, ta saison s'arrête et tu montes. La saison s'arrête aussi dès que l'issue est <b>certaine</b> : relégation certaine (le maintien n'est plus atteignable) ou, en Division {entree}, montée devenue impossible. Sinon, elle va jusqu'au {duels}ᵉ duel : sous le seuil de maintien, tu descends d'une division ; sinon, tu restes.<br><b>Titre « Champion de Division »</b> (Divisions {entree} à {div_sous_elite}) : tu le gagnes si tu montes <b>avant le {duels}ᵉ duel</b>. Une montée obtenue au {duels}ᵉ duel, la Super Finale, fait monter <b>sans</b> ce titre. Le titre est permanent.<br><b>Élite</b> — pas de montée. La saison dure {duels} duels, sauf si la relégation devient certaine : elle s'arrête alors aussitôt. Le titre <b>Champion Élite</b> est acquis dès <b>{elite_titre} points</b> ; il est conservé, la saison continue, et il se cumule d'une saison à l'autre. Sous <b>{elite_maintien} points</b> au terme de la saison, tu redescends en Division {div_sous_elite}.<br>Quand la saison est terminée, tu vois ton <b>bilan</b>, la saison est archivée dans ton historique, et la <b>nouvelle saison s'ouvre aussitôt</b> dans ta nouvelle division.<br><b>Seuils en vigueur depuis le {bareme_depuis}</b> : une saison en cours continue avec ces seuils (elle peut s'arrêter au duel suivant si la relégation devient certaine) ; une saison terminée garde son issue.", "{TABLE_DIVISIONS}<b>Divisions {entree} to {div_sous_elite}</b> — <b>instant promotion</b>: as soon as you reach the promotion mark, your season stops and you go up. The season also stops as soon as the outcome is <b>certain</b>: relegation certain (survival can no longer be reached) or, in Division {entree}, promotion no longer possible. Otherwise it runs to the {duels}th duel: below the survival mark, you drop one division; otherwise, you stay.<br><b>\"Division Champion\" title</b> (Divisions {entree} to {div_sous_elite}): you earn it if you go up <b>before the {duels}th duel</b>. A promotion won on the {duels}th duel, the Super Final, goes up <b>without</b> the title. The title is permanent.<br><b>Elite</b> — no promotion. The season lasts {duels} duels, unless relegation becomes certain: it then stops at once. The <b>Elite Champion</b> title is won at <b>{elite_titre} points</b>; it is kept, the season goes on, and it adds up from one season to the next. Below <b>{elite_maintien} points</b> at the end of the season, you drop to Division {div_sous_elite}.<br>When the season is over, you see your <b>season review</b>, the season is archived in your history, and the <b>new season opens straight away</b> in your new division.<br><b>Marks in force since {bareme_depuis}</b>: a season in progress carries on with these marks (it can stop at the next duel if relegation becomes certain); a finished season keeps its outcome."]}, {"id": "superfinale", "ic": "🏁", "t": ["La Super Finale", "The Super Final"], "c": ["Le <b>{duels}ᵉ duel joué</b> de ta saison est la <b>Super Finale</b> :<ul style=\"margin:4px 0;padding-left:18px\"><li><b>points ×{sf_mult}</b> : +{sf_net} si ton net final est positif, +{sf_v} de plus si tu remportes le duel avec ce gain, soit {sf_max} au plus ; sans net positif, aucun point ;</li><li><b>mise jusqu'à {sf_plafond} %</b> de ton capital ; 📈 et 🩸 y sont <b>sans impact</b> (sélectionnables et consommés, sans aucun effet) ;</li><li><b>aucune recapitalisation</b> après.</li></ul>Si ta saison s'arrête avant le {duels}ᵉ duel, il n'y a pas de Super Finale.", "The <b>{duels}th duel played</b> in your season is the <b>Super Final</b>:<ul style=\"margin:4px 0;padding-left:18px\"><li><b>points ×{sf_mult}</b>: +{sf_net} if your final net is positive, +{sf_v} more if you win the duel with that profit, so {sf_max} at most; without a positive net, no points;</li><li><b>stake up to {sf_plafond}%</b> of your capital; 📈 and 🩸 have <b>no impact</b> there (selectable and used up, with no effect);</li><li><b>no recapitalisation</b> afterwards.</li></ul>If your season ends before the {duels}th duel, there is no Super Final."]}, {"id": "bonus", "ic": "🃏", "t": ["Les bonus", "Boosts"], "c": ["<b>Stock de chaque saison</b> : {gratuits} bonus gratuits, ou les {complets} bonus Rush avec l'option <b>Bonus complets</b> ou <b>Tactizo Premium</b>. <b>Un bonus au plus par duel</b>, et chaque bonus une seule fois par saison. Le stock est renouvelé à chaque nouvelle saison, selon tes options à ce moment-là.{TABLE_BONUS}<b>Ordre d'application</b> dans un duel, pour chacun des deux joueurs :{ORDRE_BONUS}", "<b>Stock each season</b>: {gratuits} free boosts, or all {complets} Rush boosts with the <b>Full boosts</b> option or <b>Tactizo Premium</b>. <b>At most one boost per duel</b>, and each boost once per season. The stock is renewed every new season, according to your options at that time.{TABLE_BONUS}<b>Order of application</b> in a duel, for each of the two players:{ORDRE_BONUS}"]}, {"id": "live", "ic": "👀", "t": ["Pendant le match et découverte du résultat", "During the match and checking your result"], "c": ["<b>Duel Live</b> (option du classique) : pendant le match, tu vois le prono, la mise et la cote de ton adversaire. Sans l'option, tu ne vois rien de son pari avant le résultat. Avant le début réel du match, rien n'est visible, et son <b>bonus reste secret</b> jusqu'au résultat.<br><b>Résultat à découvrir</b> : le résultat t'attend jusqu'à ce que tu viennes le voir. En Rush Réel, une notification te prévient (de {notif_debut} à {notif_fin}, heure de Paris). Tant que tu ne l'as pas découvert, rien ne te le dévoile ailleurs, y compris dans le palmarès.<br>Une fois officiellement résolu, un duel est <b>définitif</b> : une correction ultérieure du score par le fournisseur ne change rien.", "<b>Live Duel</b> (classic option): during the match, you see your opponent's prediction, stake and odds. Without the option, you see nothing of their bet before the result. Before the actual start of the match, nothing is visible, and their <b>boost stays secret</b> until the result.<br><b>Result to check</b>: the result waits until you come and see it. In Real Rush, a notification lets you know (from {notif_debut} to {notif_fin}, Paris time). Until you've checked it, nothing reveals it elsewhere, hall of fame included.<br>Once officially settled, a duel is <b>final</b>: a later score correction by the data provider changes nothing."]}, {"id": "neutralise", "ic": "⏸️", "t": ["Duel neutralisé", "Neutralised duel"], "c": ["En Rush Réel, ton duel est <b>neutralisé</b> si le match est reporté, ou s'il n'y a pas de résultat fiable <b>{neutralisation} h</b> après le coup d'envoi programmé. Ta mise et ton bonus te sont alors rendus, tu marques 0 point, et le duel <b>ne compte pas</b> dans tes {duels}.<br>Un simple changement d'horaire n'est pas une preuve de report.", "In Real Rush, your duel is <b>neutralised</b> if the match is postponed, or if there is no reliable result <b>{neutralisation} h</b> after the scheduled kick-off. Your stake and boost are then returned, you score 0 points, and the duel <b>doesn't count</b> towards your {duels}.<br>A mere change of kick-off time is not proof of a postponement."]}, {"id": "palmares", "ic": "🏅", "t": ["Palmarès Élite", "Elite hall of fame"], "c": ["Il existe un palmarès pour Rush Réel et un autre pour Rush Fictif : ils sont <b>séparés</b>.<br><b>Chaque mois</b> : <b>Champion du mois</b> = le meilleur total de points d'une saison Élite <b>maintenue</b> ; <b>Stratège du mois</b> = le meilleur <b>capital final</b> d'une saison Élite maintenue (une descente n'y figure pas). Top {top_mois} dans chaque classement, une seule performance par joueur et par classement. Départage : pour les points, capital final puis antériorité ; pour le capital, points puis antériorité.<br>Le mois est <b>clôturé {cloture_h} h après sa fin</b> (heure de Paris) : les titres sont alors définitifs. Le mois en cours n'est jamais affiché.<br><b>Records de tous les temps</b> : Top {top_tous}, dont le Top {affiche_tous} affiché par défaut.<br>Seul le <b>capital final</b> d'une saison Élite terminée est public — jamais ton capital en cours.", "There is one hall of fame for Real Rush and another for Fictional Rush: they are <b>separate</b>.<br><b>Each month</b>: <b>Champion of the month</b> = the best points total of an Elite season with <b>survival</b>; <b>Strategist of the month</b> = the best <b>final capital</b> of such a season (a relegation is not listed). Top {top_mois} in each ranking, one performance per player and per ranking. Tie-breaks: for points, final capital then whoever did it first; for capital, points then whoever did it first.<br>The month <b>closes {cloture_h} h after it ends</b> (Paris time): the titles are then final. The current month is never shown.<br><b>All-time records</b>: Top {top_tous}, with the Top {affiche_tous} shown by default.<br>Only the <b>final capital</b> of a finished Elite season is public — never your current capital."]}, {"id": "maestro", "ic": "🎩", "t": ["Le Maestro", "The Maestro"], "c": ["Le Maestro commente ta saison. Son attitude dépend de la part des points qu'il te faut encore, parmi ceux encore possibles (Super Finale comprise) :<ul style=\"margin:4px 0;padding-left:18px\"><li><b>Confiant</b> sous {m_vig} % ;</li><li><b>Vigilant</b> de {m_vig} à {m_det} % ;</li><li><b>Déterminé</b> de {m_det} à {m_ten} % ;</li><li><b>Tendu</b> au-delà ;</li><li><b>Tout ou rien</b> quand seul un parcours parfait suffit.</li></ul>Il est <b>Confiant avant ton premier duel</b> et le reste tant que tes duels ne dégradent pas ta situation. À l'approche de la fin de saison, il se rapproche des chiffres exacts : dans les {reprise} derniers duels, son attitude est exactement celle de la grille. Quand ton objectif n'est plus atteignable, il juge de la même façon ce qu'il te faut pour te maintenir — il n'est alors jamais Confiant.", "The Maestro comments on your season. His mood depends on the share of points you still need, out of those still possible (Super Final included):<ul style=\"margin:4px 0;padding-left:18px\"><li><b>Confident</b> below {m_vig}%;</li><li><b>Watchful</b> from {m_vig} to {m_det}%;</li><li><b>Determined</b> from {m_det} to {m_ten}%;</li><li><b>Tense</b> above that;</li><li><b>All or nothing</b> when only a perfect run will do.</li></ul>He is <b>Confident before your first duel</b> and stays so as long as your duels don't worsen your situation. As the season draws to a close, he moves towards the exact numbers: over the last {reprise} duels, his mood is exactly the one given by the scale. When your target can no longer be reached, he judges what you need to stay up in the same way — he is then never Confident."]}, {"id": "acces", "ic": "🔓", "t": ["Accès", "Access"], "c": ["<b>Rush Réel</b> : gratuit, <b>{quota_jour} duel par jour</b> et <b>{quota_semaine} par semaine</b> au plus (jour et semaine du calendrier, heure de Paris ; remise à zéro le lundi à 0 h). Un duel compte dès que tu l'engages ; un duel neutralisé (match annulé ou reporté, par exemple) ou annulé avant le coup d'envoi t'est rendu, et changer de rencontre ne compte pas. Les duels non joués ne se reportent pas. La <b>Super Finale</b> compte comme un duel. Duels illimités avec l'option <b>⚡ Rush illimité</b> ou <b>Tactizo Premium</b>. Le Joueur IA de secours est gratuit et n'utilise pas les parties IA du classique.<br><b>Rush Fictif</b> : <b>gratuit et illimité</b>, toujours contre le 🤖 Joueur IA.<br><i>Pendant la phase de test, Rush n'est ouvert qu'aux comptes invités, sur le web.</i>", "<b>Real Rush</b>: free, up to <b>{quota_jour} duel per day</b> and <b>{quota_semaine} per week</b> (calendar day and week, Paris time; resets on Monday at midnight). A duel counts as soon as you enter it; a neutralised duel (match cancelled or postponed, for instance) or one cancelled before kick-off is given back, and switching matches doesn't count. Unplayed duels don't carry over. The <b>Super Final</b> counts like any duel. Unlimited duels with the <b>⚡ Unlimited Rush</b> option or <b>Tactizo Premium</b>. The stand-in AI player is free and doesn't use the classic AI games.<br><b>Fictional Rush</b>: <b>free and unlimited</b>, always against the 🤖 AI player.<br><i>During the test phase, Rush is only open to invited accounts, on the web.</i>"]}];
-const RG_BONUS = {"assurance": ["Si ton pari est perdu, tu ne perds que <b>{assurance_pct} %</b> de ta mise.", "If your bet loses, you only lose <b>{assurance_pct}%</b> of your stake."], "double": ["Si ton pari gagne, gain <b>×{double_gain}</b>.", "If your bet wins, gain <b>×{double_gain}</b>."], "tout": ["Gain <b>×{tout_gain}</b>, perte <b>×{tout_perte}</b>.", "Gain <b>×{tout_gain}</b>, loss <b>×{tout_perte}</b>."], "parachute": ["Si ton résultat final est négatif, <b>{parachute} %</b> de ta perte est amorti.", "If your final result is negative, <b>{parachute}%</b> of your loss is cushioned."], "miroir": ["Ton résultat et celui de ton adversaire sont <b>échangés</b> (gain ou perte), et ton capital suit le résultat échangé. Deux ❄️ s'annulent.", "Your result and your opponent's are <b>swapped</b> (gain or loss), and your capital follows the swapped result. Two ❄️ cancel out."], "chance": ["Tu couvres <b>deux issues</b> pour une seule mise, au football seulement : tu gagnes à la cote de l'issue qui sort.", "You cover <b>two outcomes</b> for a single stake, football only: you win at the odds of the outcome that comes in."], "invest": ["Plafond de mise porté à <b>{invest} %</b> pour ce duel. Il ne change pas le résultat. <b>Sans impact en Super Finale</b> : il reste sélectionnable et il est consommé, mais sans aucun effet.", "Stake cap raised to <b>{invest}%</b> for this duel. It doesn't change the result. <b>No impact in the Super Final</b>: it can still be selected and is used up, but has no effect."], "sangsue": ["Si ton adversaire finit le duel <b>bénéficiaire</b>, <b>{sangsue} %</b> de son bénéfice sont crédités sur ton capital. Rien ne lui est prélevé, et ce crédit ne compte ni dans la comparaison ni dans les points. <b>Sans impact en Super Finale</b> : il reste sélectionnable et il est consommé, mais aucun crédit n'est versé.", "If your opponent ends the duel <b>in profit</b>, <b>{sangsue}%</b> of their profit is credited to your capital. Nothing is taken from them, and this credit counts neither in the comparison nor in the points. <b>No impact in the Super Final</b>: it can still be selected and is used up, but no credit is paid."], "face": ["Si ton adversaire gagne son pari, son gain est <b>divisé par {face_div}</b> dans ce duel.", "If your opponent wins their bet, their gain is <b>divided by {face_div}</b> in this duel."], "cadeau": ["Le prono de ton adversaire est <b>inversé</b> (1 ↔ 2 ; un nul n'est pas touché).", "Your opponent's prediction is <b>flipped</b> (1 ↔ 2; a draw is untouched)."]};
+const RG_SECTIONS = [{"id": "bref", "ic": "⚡", "t": ["Rush en bref", "Rush in a nutshell"], "c": ["Rush est une compétition <b>en solo, duel après duel</b>. À chaque duel, tu choisis <b>une</b> rencontre, tu fais <b>un</b> prono avec <b>une</b> mise, et tu peux ajouter <b>un</b> bonus.<br>Ton adversaire est un autre joueur engagé sur la même rencontre, ou le 🤖 Joueur IA. Ton résultat d'argent est comparé au sien : tu marques des points, et tes points te font monter de division jusqu'à l'<b>Élite</b>.<br><i>Rush est un jeu à part : ses règles ne changent rien à tes ligues.</i>", "Rush is a <b>solo competition, one duel after another</b>. In each duel, you pick <b>one</b> match, make <b>one</b> prediction with <b>one</b> stake, and may add <b>one</b> boost.<br>Your opponent is another player on the same match, or the 🤖 AI player. Your money result is compared with theirs: you score points, and your points take you up the divisions to the <b>Elite</b>.<br><i>Rush is a game of its own: its rules change nothing in your leagues.</i>"]}, {"id": "pas", "ic": "🚀", "t": ["Jouer, pas à pas", "Playing, step by step"], "c": ["<ol style=\"margin:4px 0;padding-left:18px\">\n<li>Touche l'onglet <b>⚡ Rush</b> de la barre du bas, puis <b>⚡ Rush Réel</b> ou <b>🎲 Rush Fictif</b>. Aucune inscription : à ta première visite d'un mode, ta carrière y est créée en <b>Division {entree}</b>, avec <b>{capital}</b> et 0 point.</li>\n<li>Choisis <b>une rencontre</b>, ton <b>prono</b>, ta <b>mise</b> et, si tu veux, <b>un bonus</b>, puis valide ton duel.</li>\n<li><b>Rush Réel</b> : jusqu'au coup d'envoi, tu peux encore tout modifier ou annuler ; ton adversaire est désigné au coup d'envoi. <b>Rush Fictif</b> : le résultat s'affiche juste après ta validation.</li>\n<li><b>Rush Réel</b> : quand le match est fini, une notification te prévient ; touche <b>Voir le résultat</b> pour découvrir l'issue du duel, tes points et ton nouveau capital.</li>\n<li>Enchaîne les duels : ta saison en compte <b>{duels}</b> au plus, et s'arrête plus tôt dès que son issue est certaine (montée, relégation…).</li>\n<li>Saison terminée : tu vois ton <b>bilan</b> (montée, maintien ou descente), puis une <b>nouvelle saison</b> s'ouvre aussitôt dans ta nouvelle division. Objectif : l'<b>Élite</b>.</li>\n<li>Tes saisons, tes titres et les records se retrouvent dans les onglets <b>Stats</b> et <b>Palmarès</b>, filtre <b>⚡ Rush</b>.</li></ol>", "<ol style=\"margin:4px 0;padding-left:18px\">\n<li>Tap the <b>⚡ Rush</b> tab in the bottom bar, then <b>⚡ Real Rush</b> or <b>🎲 Fictional Rush</b>. No sign-up: on your first visit to a mode, your career there starts in <b>Division {entree}</b>, with <b>{capital}</b> and 0 points.</li>\n<li>Pick <b>a match</b>, your <b>prediction</b>, your <b>stake</b> and, if you like, <b>a boost</b>, then confirm your duel.</li>\n<li><b>Real Rush</b>: until kick-off, you can still change or cancel everything; your opponent is assigned at kick-off. <b>Fictional Rush</b>: the result appears right after you confirm.</li>\n<li><b>Real Rush</b>: when the match is over, a notification lets you know; tap <b>See the result</b> to find out the duel's outcome, your points and your new capital.</li>\n<li>Keep playing duels: your season has <b>{duels}</b> at most, and stops earlier as soon as its outcome is certain (promotion, relegation…).</li>\n<li>Season over: you see your <b>season review</b> (promotion, survival or relegation), then a <b>new season</b> opens straight away in your new division. Goal: the <b>Elite</b>.</li>\n<li>Your seasons, titles and the records are in the <b>Stats</b> and <b>Honours</b> tabs, <b>⚡ Rush</b> filter.</li></ol>"]}, {"id": "modes", "ic": "🎲", "t": ["Deux modes : Rush Réel et Rush Fictif", "Two modes: Real Rush and Fictional Rush"], "c": ["Tu as <b>deux carrières séparées</b>. Chacune a sa division, son capital, ses points, ses bonus, son historique, ses titres et son palmarès. Rien ne passe de l'une à l'autre.{TABLE_MODES}", "You have <b>two separate careers</b>. Each has its own division, capital, points, boosts, history, titles and hall of fame. Nothing carries over from one to the other.{TABLE_MODES}"]}, {"id": "saison", "ic": "🗓️", "t": ["Ta saison", "Your season"], "c": ["Une saison compte <b>{duels} duels</b> ; un duel neutralisé (voir plus bas) ne compte pas.<br>Tu commences en <b>Division {entree}</b> avec <b>{capital}</b> de capital. Chaque saison repart de <b>{capital}</b>, 0 point et un <b>stock de bonus neuf</b>.<br>La saison est <b>personnelle</b> : elle avance à ton rythme, duel après duel. Tu n'attends personne.", "A season is <b>{duels} duels</b>; a neutralised duel (see below) doesn't count.<br>You start in <b>Division {entree}</b> with <b>{capital}</b> of capital. Every season starts again from <b>{capital}</b>, 0 points and a <b>fresh boost stock</b>.<br>The season is <b>personal</b>: it moves at your own pace, duel after duel. You wait for nobody."]}, {"id": "duel", "ic": "🎯", "t": ["Jouer un duel", "Playing a duel"], "c": ["<ol style=\"margin:4px 0;padding-left:18px\">\n<li><b>Choisis une rencontre.</b> Tu n'as qu'<b>un duel en cours à la fois dans chaque mode</b> : tant que le résultat de ton duel n'a pas été <b>découvert</b>, tu ne peux pas en lancer un autre dans ce mode.</li>\n<li><b>Fais ton prono</b> : 1 (domicile), N (nul, au football seulement) ou 2 (extérieur).</li>\n<li><b>Choisis ta mise</b> : au moins <b>{mise_min}</b> ; au plus <b>{plafond} %</b> de ton capital, <b>{invest} %</b> avec 📈 Investisseur, et jusqu'à <b>{sf_plafond} %</b> en Super Finale. Ta perte possible ne dépasse jamais ton capital : avec 🔥, qui double une perte, la mise est donc limitée à la moitié de ton capital.</li>\n<li><b>Ajoute un bonus</b> si tu le souhaites, puis <b>valide</b>.</li></ol>\nEn <b>Rush Réel</b>, jusqu'au coup d'envoi, tu peux librement modifier ton prono, ta mise ou ton bonus, changer de rencontre ou annuler sans pénalité (mise et bonus rendus). Les paris ferment <b>au coup d'envoi</b> ; ensuite, plus aucune annulation.", "<ol style=\"margin:4px 0;padding-left:18px\">\n<li><b>Pick a match.</b> You only have <b>one duel in progress at a time in each mode</b>: until your duel's result has been <b>checked</b>, you can't start another one in that mode.</li>\n<li><b>Make your prediction</b>: 1 (home), D (draw, football only) or 2 (away).</li>\n<li><b>Choose your stake</b>: at least <b>{mise_min}</b>; at most <b>{plafond}%</b> of your capital, <b>{invest}%</b> with 📈 Investor, and up to <b>{sf_plafond}%</b> in the Super Final. Your possible loss never exceeds your capital: with 🔥, which doubles a loss, your stake is therefore capped at half your capital.</li>\n<li><b>Add a boost</b> if you like, then <b>confirm</b>.</li></ol>\nIn <b>Real Rush</b>, until kick-off, you can freely change your prediction, stake or boost, switch matches, or cancel at no cost (stake and boost returned). Bets close <b>at kick-off</b>; after that, nothing can be cancelled."]}, {"id": "adversaire", "ic": "🤝", "t": ["Ton adversaire", "Your opponent"], "c": ["<b>Rush Réel</b> : ton adversaire est attribué <b>au coup d'envoi</b>, puis figé. Le serveur cherche d'abord un joueur de <b>ta division</b> engagé sur la même rencontre, puis de la division la plus proche, en priorité celle du dessous ; si personne n'est disponible, tu affrontes le 🤖 <b>Joueur IA</b>. C'est un vrai duel, compté normalement : aucune victoire n'est jamais donnée faute d'adversaire, et tu gardes toujours les objectifs de <b>ta</b> division.<br>Avant le match, tu sais seulement si un joueur humain est disponible ou si le Joueur IA est possible — jamais le nombre de joueurs.<br>Les duels sont <b>réciproques</b> : vous jouez l'un contre l'autre. Si le nombre de joueurs est impair, un seul joueur est comparé à un autre, <b>sans effet</b> pour ce dernier (ni capital ni points). Tu n'as qu'<b>un</b> résultat par rencontre.<br><b>Rush Fictif</b> : ton adversaire est toujours le 🤖 Joueur IA.<br><b>Le 🤖 Joueur IA</b> pronostique, mise et peut jouer un bonus, comme un joueur. Ses choix sont faits par le serveur <b>sans voir ton pari</b>. Il dispose des <b>{complets} bonus Rush</b> et en joue <b>au plus un par duel</b>, chacun une seule fois dans ta saison ; son bonus reste <b>secret jusqu'au résultat</b>. En Rush Réel, l'IA de secours est <b>gratuite</b>.", "<b>Real Rush</b>: your opponent is assigned <b>at kick-off</b>, then fixed. The server first looks for a player from <b>your division</b> on the same match, then from the closest division, the one below first; if nobody is available, you face the 🤖 <b>AI player</b>. It's a real duel, counted normally: no win is ever handed out for lack of an opponent, and you always keep <b>your</b> division's targets.<br>Before the match, you only know whether a human player is available or the AI player is possible — never the number of players.<br>Duels are <b>mutual</b>: you play against each other. If there is an odd number of players, a single player is compared with another one, <b>with no effect</b> on the latter (neither capital nor points). You get <b>one</b> result per match.<br><b>Fictional Rush</b>: your opponent is always the 🤖 AI player.<br><b>The 🤖 AI player</b> predicts, stakes and may play a boost, just like a player. Its choices are made by the server <b>without seeing your bet</b>. It has the <b>{complets} Rush boosts</b> and plays <b>at most one per duel</b>, each once in your season; its boost stays <b>secret until the result</b>. In Real Rush, the stand-in AI is <b>free</b>."]}, {"id": "net", "ic": "💶", "t": ["Résultat du duel : tout se joue « au net »", "Duel result: it's all about the “net”"], "c": ["Ton <b>net</b> est ce que ton pari te rapporte ou te coûte — jamais le retour « mise × cote ». Pari gagné : <b>mise × (cote − 1)</b> ; par exemple {ex_mise} à {ex_cote} rapportent <b>{ex_gain}</b>. Pari perdu : <b>−mise</b>.<br>Les bonus des <b>deux</b> joueurs modifient ensuite ces résultats, dans un ordre fixe (voir « Les bonus »).<br><b>Qui gagne ?</b> Le meilleur net, comparé au centime. À égalité parfaite, c'est un <b>nul</b>.<br>Ton <b>capital</b> évolue de ton net, plus un éventuel crédit 🩸. Il ne descend jamais sous {zero}. En Rush Réel, une mise reste réservée jusqu'au résultat.", "Your <b>net</b> is what your bet earns or costs you — never the \"stake × odds\" return. Bet won: <b>stake × (odds − 1)</b>; for example {ex_mise} at {ex_cote} earns <b>{ex_gain}</b>. Bet lost: <b>−stake</b>.<br>Both players' boosts then modify these results, in a fixed order (see \"Boosts\").<br><b>Who wins?</b> The better net, compared to the cent. A perfect tie is a <b>draw</b>.<br>Your <b>capital</b> moves by your net, plus any 🩸 credit. It never goes below {zero}. In Real Rush, a stake stays reserved until the result."]}, {"id": "points", "ic": "🏆", "t": ["Points de championnat", "League points"], "c": ["{TABLE_POINTS}Le net qui compte est ton <b>net final</b> du duel, après les bonus des deux joueurs (le crédit 🩸 n'y entre pas). Quelques cas : tu gagnes de l'argent, et plus que ton adversaire → <b>{pts_max}</b> points ; vous gagnez tous les deux de l'argent, mais lui davantage → <b>{pts_net}</b> points ; vous gagnez exactement la même somme → <b>{pts_net}</b> points chacun ; tu perds {ex_net_moi} et ton adversaire {ex_net_adv} → <b>0 point</b>, même si tu perds moins que lui : sans net positif, aucun point. Un net nul ne rapporte rien. <b>Seule exception</b>, depuis le 30 octobre 2026 : avec 🪂 joué, un net négatif mais <b>meilleur</b> que celui de ton adversaire rapporte <b>+{pts_v}</b> (×{sf_mult} en Super Finale).<br><b>Date d'effet</b> : ce barème s'applique à tout duel <b>résolu depuis le {bareme_depuis}</b>. Les duels résolus avant gardent leurs points (barème précédent : +{av_net} si ton net est positif, +{av_v} si ton net est meilleur que celui de ton adversaire, même négatif).", "{TABLE_POINTS}The net that counts is your <b>final net</b> for the duel, after both players' boosts (the 🩸 credit is not included). A few cases: you make money, and more than your opponent → <b>{pts_max}</b> points; you both make money, but they make more → <b>{pts_net}</b> points; you both make exactly the same amount → <b>{pts_net}</b> points each; you lose {ex_net_moi} and your opponent {ex_net_adv} → <b>0 points</b>, even though you lose less: without a positive net, no points. A zero net earns nothing. <b>Only exception</b>, since 30 October 2026: with 🪂 played, a negative net that <b>beats</b> your opponent's earns <b>+{pts_v}</b> (×{sf_mult} in the Super Final).<br><b>Effective date</b>: this scoring applies to every duel <b>settled since {bareme_depuis}</b>. Duels settled earlier keep their points (previous scoring: +{av_net} if your net is positive, +{av_v} if your net beats your opponent's, even if negative)."]}, {"id": "recap", "ic": "💸", "t": ["Recapitalisation", "Recapitalisation"], "c": ["Si ton capital passe <b>sous {recap_seuil}</b> après un duel, il est remonté à <b>{recap_cible}</b> et tu perds <b>{recap_pen} point</b>.<br>Il n'y a <b>jamais</b> de recapitalisation après la Super Finale, ni après un duel qui termine ta saison.<br>Cas particulier : quand la recapitalisation (−{recap_pen} point) ne pourrait plus rien changer à l'issue de ta saison, la saison s'arrête là, sans recapitalisation.", "If your capital drops <b>below {recap_seuil}</b> after a duel, it is topped back up to <b>{recap_cible}</b> and you lose <b>{recap_pen} point</b>.<br>There is <b>never</b> a recapitalisation after the Super Final, nor after a duel that ends your season.<br>Special case: when the recapitalisation (−{recap_pen} point) could no longer change your season's outcome, the season stops there, without a recapitalisation."]}, {"id": "divisions", "ic": "📊", "t": ["Divisions, montées, maintiens, relégations", "Divisions, promotion, survival, relegation"], "c": ["{TABLE_DIVISIONS}<b>Divisions {entree} à {div_sous_elite}</b> — <b>montée immédiate</b> : dès que tu atteins le seuil de montée, ta saison s'arrête et tu montes. La saison s'arrête aussi dès que l'issue est <b>certaine</b> : relégation certaine (le maintien n'est plus atteignable) ou, en Division {entree}, montée devenue impossible. Sinon, elle va jusqu'au {duels}ᵉ duel : sous le seuil de maintien, tu descends d'une division ; sinon, tu restes.<br><b>Titre « Champion de Division »</b> (Divisions {entree} à {div_sous_elite}) : tu le gagnes si tu montes <b>avant le {duels}ᵉ duel</b>. Une montée obtenue au {duels}ᵉ duel, la Super Finale, fait monter <b>sans</b> ce titre. Le titre est permanent.<br><b>Élite</b> — pas de montée. La saison dure {duels} duels, sauf si la relégation devient certaine : elle s'arrête alors aussitôt. Le titre <b>Champion Élite</b> est acquis dès <b>{elite_titre} points</b> ; il est conservé, la saison continue, et il se cumule d'une saison à l'autre. Sous <b>{elite_maintien} points</b> au terme de la saison, tu redescends en Division {div_sous_elite}.<br>Quand la saison est terminée, tu vois ton <b>bilan</b>, la saison est archivée dans ton historique, et la <b>nouvelle saison s'ouvre aussitôt</b> dans ta nouvelle division.<br><b>Seuils en vigueur depuis le {bareme_depuis}</b> : une saison en cours continue avec ces seuils (elle peut s'arrêter au duel suivant si la relégation devient certaine) ; une saison terminée garde son issue.", "{TABLE_DIVISIONS}<b>Divisions {entree} to {div_sous_elite}</b> — <b>instant promotion</b>: as soon as you reach the promotion mark, your season stops and you go up. The season also stops as soon as the outcome is <b>certain</b>: relegation certain (survival can no longer be reached) or, in Division {entree}, promotion no longer possible. Otherwise it runs to the {duels}th duel: below the survival mark, you drop one division; otherwise, you stay.<br><b>\"Division Champion\" title</b> (Divisions {entree} to {div_sous_elite}): you earn it if you go up <b>before the {duels}th duel</b>. A promotion won on the {duels}th duel, the Super Final, goes up <b>without</b> the title. The title is permanent.<br><b>Elite</b> — no promotion. The season lasts {duels} duels, unless relegation becomes certain: it then stops at once. The <b>Elite Champion</b> title is won at <b>{elite_titre} points</b>; it is kept, the season goes on, and it adds up from one season to the next. Below <b>{elite_maintien} points</b> at the end of the season, you drop to Division {div_sous_elite}.<br>When the season is over, you see your <b>season review</b>, the season is archived in your history, and the <b>new season opens straight away</b> in your new division.<br><b>Marks in force since {bareme_depuis}</b>: a season in progress carries on with these marks (it can stop at the next duel if relegation becomes certain); a finished season keeps its outcome."]}, {"id": "superfinale", "ic": "🏁", "t": ["La Super Finale", "The Super Final"], "c": ["Le <b>{duels}ᵉ duel joué</b> de ta saison est la <b>Super Finale</b> :<ul style=\"margin:4px 0;padding-left:18px\"><li><b>points ×{sf_mult}</b> : +{sf_net} si ton net final est positif, +{sf_v} de plus si tu remportes le duel avec ce gain, soit {sf_max} au plus ; sans net positif, aucun point (sauf 🪂, voir « Points de championnat ») ;</li><li><b>mise jusqu'à {sf_plafond} %</b> de ton capital ; 📈, 🩸 et 🛡 y sont <b>sans impact</b> (sélectionnables et consommés, sans aucun effet) ;</li><li><b>aucune recapitalisation</b> après.</li></ul>Si ta saison s'arrête avant le {duels}ᵉ duel, il n'y a pas de Super Finale.", "The <b>{duels}th duel played</b> in your season is the <b>Super Final</b>:<ul style=\"margin:4px 0;padding-left:18px\"><li><b>points ×{sf_mult}</b>: +{sf_net} if your final net is positive, +{sf_v} more if you win the duel with that profit, so {sf_max} at most; without a positive net, no points (except 🪂, see “League points”);</li><li><b>stake up to {sf_plafond}%</b> of your capital; 📈, 🩸 and 🛡 have <b>no impact</b> there (selectable and used up, with no effect);</li><li><b>no recapitalisation</b> afterwards.</li></ul>If your season ends before the {duels}th duel, there is no Super Final."]}, {"id": "bonus", "ic": "🃏", "t": ["Les bonus", "Boosts"], "c": ["<b>Stock de chaque saison</b> : {gratuits} bonus gratuits, ou les {complets} bonus Rush avec l'option <b>Bonus complets</b> ou <b>Tactizo Premium</b>. <b>Un bonus au plus par duel</b>, et chaque bonus une seule fois par saison. Le stock est renouvelé à chaque nouvelle saison, selon tes options à ce moment-là.{TABLE_BONUS}<b>Ordre d'application</b> dans un duel, pour chacun des deux joueurs :{ORDRE_BONUS}", "<b>Stock each season</b>: {gratuits} free boosts, or all {complets} Rush boosts with the <b>Full boosts</b> option or <b>Tactizo Premium</b>. <b>At most one boost per duel</b>, and each boost once per season. The stock is renewed every new season, according to your options at that time.{TABLE_BONUS}<b>Order of application</b> in a duel, for each of the two players:{ORDRE_BONUS}"]}, {"id": "live", "ic": "👀", "t": ["Pendant le match et découverte du résultat", "During the match and checking your result"], "c": ["<b>Duel Live</b> (option du classique) : pendant le match, tu vois le prono, la mise et la cote de ton adversaire. Sans l'option, tu ne vois rien de son pari avant le résultat. Avant le début réel du match, rien n'est visible, et son <b>bonus reste secret</b> jusqu'au résultat.<br><b>Résultat à découvrir</b> : le résultat t'attend jusqu'à ce que tu viennes le voir. En Rush Réel, une notification te prévient (de {notif_debut} à {notif_fin}, heure de Paris). Tant que tu ne l'as pas découvert, rien ne te le dévoile ailleurs, y compris dans le palmarès.<br>Une fois officiellement résolu, un duel est <b>définitif</b> : une correction ultérieure du score par le fournisseur ne change rien.", "<b>Live Duel</b> (classic option): during the match, you see your opponent's prediction, stake and odds. Without the option, you see nothing of their bet before the result. Before the actual start of the match, nothing is visible, and their <b>boost stays secret</b> until the result.<br><b>Result to check</b>: the result waits until you come and see it. In Real Rush, a notification lets you know (from {notif_debut} to {notif_fin}, Paris time). Until you've checked it, nothing reveals it elsewhere, hall of fame included.<br>Once officially settled, a duel is <b>final</b>: a later score correction by the data provider changes nothing."]}, {"id": "neutralise", "ic": "⏸️", "t": ["Duel neutralisé", "Neutralised duel"], "c": ["En Rush Réel, ton duel est <b>neutralisé</b> si le match est reporté, ou s'il n'y a pas de résultat fiable <b>{neutralisation} h</b> après le coup d'envoi programmé. Ta mise et ton bonus te sont alors rendus, tu marques 0 point, et le duel <b>ne compte pas</b> dans tes {duels}.<br>Un simple changement d'horaire n'est pas une preuve de report.", "In Real Rush, your duel is <b>neutralised</b> if the match is postponed, or if there is no reliable result <b>{neutralisation} h</b> after the scheduled kick-off. Your stake and boost are then returned, you score 0 points, and the duel <b>doesn't count</b> towards your {duels}.<br>A mere change of kick-off time is not proof of a postponement."]}, {"id": "palmares", "ic": "🏅", "t": ["Palmarès Élite", "Elite hall of fame"], "c": ["Il existe un palmarès pour Rush Réel et un autre pour Rush Fictif : ils sont <b>séparés</b>.<br><b>Chaque mois</b> : <b>Champion du mois</b> = le meilleur total de points d'une saison Élite <b>maintenue</b> ; <b>Stratège du mois</b> = le meilleur <b>capital final</b> d'une saison Élite maintenue (une descente n'y figure pas). Top {top_mois} dans chaque classement, une seule performance par joueur et par classement. Départage : pour les points, capital final puis antériorité ; pour le capital, points puis antériorité.<br>Le mois est <b>clôturé {cloture_h} h après sa fin</b> (heure de Paris) : les titres sont alors définitifs. Le mois en cours n'est jamais affiché.<br><b>Records de tous les temps</b> : Top {top_tous}, dont le Top {affiche_tous} affiché par défaut.<br>Seul le <b>capital final</b> d'une saison Élite terminée est public — jamais ton capital en cours.", "There is one hall of fame for Real Rush and another for Fictional Rush: they are <b>separate</b>.<br><b>Each month</b>: <b>Champion of the month</b> = the best points total of an Elite season with <b>survival</b>; <b>Strategist of the month</b> = the best <b>final capital</b> of such a season (a relegation is not listed). Top {top_mois} in each ranking, one performance per player and per ranking. Tie-breaks: for points, final capital then whoever did it first; for capital, points then whoever did it first.<br>The month <b>closes {cloture_h} h after it ends</b> (Paris time): the titles are then final. The current month is never shown.<br><b>All-time records</b>: Top {top_tous}, with the Top {affiche_tous} shown by default.<br>Only the <b>final capital</b> of a finished Elite season is public — never your current capital."]}, {"id": "maestro", "ic": "🎩", "t": ["Le Maestro", "The Maestro"], "c": ["Le Maestro commente ta saison. Son attitude dépend de la part des points qu'il te faut encore, parmi ceux encore possibles (Super Finale comprise) :<ul style=\"margin:4px 0;padding-left:18px\"><li><b>Confiant</b> sous {m_vig} % ;</li><li><b>Vigilant</b> de {m_vig} à {m_det} % ;</li><li><b>Déterminé</b> de {m_det} à {m_ten} % ;</li><li><b>Tendu</b> au-delà ;</li><li><b>Tout ou rien</b> quand seul un parcours parfait suffit.</li></ul>Il est <b>Confiant avant ton premier duel</b> et le reste tant que tes duels ne dégradent pas ta situation. À l'approche de la fin de saison, il se rapproche des chiffres exacts : dans les {reprise} derniers duels, son attitude est exactement celle de la grille. Quand ton objectif n'est plus atteignable, il juge de la même façon ce qu'il te faut pour te maintenir — il n'est alors jamais Confiant.", "The Maestro comments on your season. His mood depends on the share of points you still need, out of those still possible (Super Final included):<ul style=\"margin:4px 0;padding-left:18px\"><li><b>Confident</b> below {m_vig}%;</li><li><b>Watchful</b> from {m_vig} to {m_det}%;</li><li><b>Determined</b> from {m_det} to {m_ten}%;</li><li><b>Tense</b> above that;</li><li><b>All or nothing</b> when only a perfect run will do.</li></ul>He is <b>Confident before your first duel</b> and stays so as long as your duels don't worsen your situation. As the season draws to a close, he moves towards the exact numbers: over the last {reprise} duels, his mood is exactly the one given by the scale. When your target can no longer be reached, he judges what you need to stay up in the same way — he is then never Confident."]}, {"id": "acces", "ic": "🔓", "t": ["Accès", "Access"], "c": ["<b>Rush Réel</b> : gratuit, <b>{quota_jour} duel par jour</b> et <b>{quota_semaine} par semaine</b> au plus (jour et semaine du calendrier, heure de Paris ; remise à zéro le lundi à 0 h). Un duel compte dès que tu l'engages ; un duel neutralisé (match annulé ou reporté, par exemple) ou annulé avant le coup d'envoi t'est rendu, et changer de rencontre ne compte pas. Les duels non joués ne se reportent pas. La <b>Super Finale</b> compte comme un duel. Duels illimités avec l'option <b>⚡ Rush illimité</b> ou <b>Tactizo Premium</b>. Le Joueur IA de secours est gratuit et n'utilise pas les parties IA du classique.<br><b>Rush Fictif</b> : <b>gratuit et illimité</b>, toujours contre le 🤖 Joueur IA.<br><i>Pendant la phase de test, Rush n'est ouvert qu'aux comptes invités, sur le web.</i>", "<b>Real Rush</b>: free, up to <b>{quota_jour} duel per day</b> and <b>{quota_semaine} per week</b> (calendar day and week, Paris time; resets on Monday at midnight). A duel counts as soon as you enter it; a neutralised duel (match cancelled or postponed, for instance) or one cancelled before kick-off is given back, and switching matches doesn't count. Unplayed duels don't carry over. The <b>Super Final</b> counts like any duel. Unlimited duels with the <b>⚡ Unlimited Rush</b> option or <b>Tactizo Premium</b>. The stand-in AI player is free and doesn't use the classic AI games.<br><b>Fictional Rush</b>: <b>free and unlimited</b>, always against the 🤖 AI player.<br><i>During the test phase, Rush is only open to invited accounts, on the web.</i>"]}];
+const RG_BONUS = {"assurance": ["Si ton pari est perdu, tu ne perds que <b>{assurance_pct} %</b> de ta mise. <b>Sans impact en Super Finale</b> : il reste sélectionnable et il est consommé, mais ta perte n'y est plus réduite.", "If your bet loses, you only lose <b>{assurance_pct}%</b> of your stake. <b>No impact in the Super Final</b>: it can still be selected and is used up, but your loss is no longer reduced there."], "double": ["Si ton pari gagne, gain <b>×{double_gain}</b>.", "If your bet wins, gain <b>×{double_gain}</b>."], "tout": ["Gain <b>×{tout_gain}</b>, perte <b>×{tout_perte}</b>.", "Gain <b>×{tout_gain}</b>, loss <b>×{tout_perte}</b>."], "parachute": ["Si ton résultat final est négatif, <b>{parachute} %</b> de ta perte est amorti. S'il reste <b>meilleur</b> que celui de ton adversaire, tu prends quand même <b>+{pts_v}</b> point (×{sf_mult} en Super Finale).", "If your final result is negative, <b>{parachute}%</b> of your loss is cushioned. If it still <b>beats</b> your opponent's, you still get <b>+{pts_v}</b> point (×{sf_mult} in the Super Final)."], "miroir": ["Ton résultat et celui de ton adversaire sont <b>échangés</b> (gain ou perte), et ton capital suit le résultat échangé. Deux ❄️ s'annulent.", "Your result and your opponent's are <b>swapped</b> (gain or loss), and your capital follows the swapped result. Two ❄️ cancel out."], "chance": ["Tu couvres <b>deux issues</b> pour une seule mise, au football seulement : tu gagnes à la cote de l'issue qui sort.", "You cover <b>two outcomes</b> for a single stake, football only: you win at the odds of the outcome that comes in."], "invest": ["Plafond de mise porté à <b>{invest} %</b> pour ce duel. Il ne change pas le résultat. <b>Sans impact en Super Finale</b> : il reste sélectionnable et il est consommé, mais sans aucun effet.", "Stake cap raised to <b>{invest}%</b> for this duel. It doesn't change the result. <b>No impact in the Super Final</b>: it can still be selected and is used up, but has no effect."], "sangsue": ["Si ton adversaire finit le duel <b>bénéficiaire</b>, <b>{sangsue} %</b> de son bénéfice sont crédités sur ton capital. Rien ne lui est prélevé, et ce crédit ne compte ni dans la comparaison ni dans les points. <b>Sans impact en Super Finale</b> : il reste sélectionnable et il est consommé, mais aucun crédit n'est versé.", "If your opponent ends the duel <b>in profit</b>, <b>{sangsue}%</b> of their profit is credited to your capital. Nothing is taken from them, and this credit counts neither in the comparison nor in the points. <b>No impact in the Super Final</b>: it can still be selected and is used up, but no credit is paid."], "face": ["Si ton adversaire gagne son pari, son gain est <b>divisé par {face_div}</b> dans ce duel.", "If your opponent wins their bet, their gain is <b>divided by {face_div}</b> in this duel."], "cadeau": ["Le prono de ton adversaire est <b>inversé</b> (1 ↔ 2 ; un nul n'est pas touché).", "Your opponent's prediction is <b>flipped</b> (1 ↔ 2; a draw is untouched)."]};
 const RG_ORDRE = [["🎁 de l'adversaire : ton prono est inversé.", "The opponent's 🎁: your prediction is flipped."], ["Résultat de ton pari, avec ton 🧈 s'il est joué.", "Your bet's result, with your 🧈 if played."], ["Ton 🐗, 🔥 ou 🛡.", "Your 🐗, 🔥 or 🛡."], ["🤛 de l'adversaire.", "The opponent's 🤛."], ["❄️, si un seul des deux joueurs l'a joué : échange des résultats.", "❄️, if only one of the two players played it: results swapped."], ["Ton 🪂.", "Your 🪂."], ["Arrondi au centime : c'est ton <b>net du duel</b>. Il est comparé au net de l'adversaire et décide du +{pts_net}.", "Rounded to the cent: this is your <b>duel net</b>. It is compared with the opponent's net and decides the +{pts_net}."], ["Ton 🩸 : crédit ajouté <b>après</b>, à ton capital seulement.", "Your 🩸: credit added <b>afterwards</b>, to your capital only."]];
-const RG_LIB = {"col_reel": ["⚡ Rush Réel", "⚡ Real Rush"], "col_fictif": ["🎲 Rush Fictif", "🎲 Fictional Rush"], "mode_rencontres": ["Rencontres", "Matches"], "mode_cotes": ["Cotes", "Odds"], "mode_resultat": ["Résultat", "Result"], "mode_adv": ["Adversaire", "Opponent"], "reel_rencontres": ["Vrais matchs ({sports_reel}), dans les prochaines {horizon} h", "Real matches ({sports_reel}), within the next {horizon} h"], "fictif_rencontres": ["Rencontres fictives générées pour toi ({affiches} affiches : {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)", "Fictional matches generated for you ({affiches} fixtures: {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)"], "reel_cotes": ["Cotes réelles, <b>figées à la publication</b> : elles ne changent plus ensuite", "Real odds, <b>frozen when published</b>: they never change afterwards"], "fictif_cotes": ["Cotes du générateur de Tactizo", "Odds from Tactizo's generator"], "reel_resultat": ["Résultat officiel du match, lu au plus tôt {resultat_min} min après le coup d'envoi", "Official match result, read at the earliest {resultat_min} min after kick-off"], "fictif_resultat": ["Tiré <b>aussitôt</b> par le serveur, avec les probabilités données par les cotes. Personne, ni toi ni l'IA, ne peut le connaître avant ta validation", "Drawn <b>instantly</b> by the server, with the probabilities given by the odds. Nobody, you or the AI, can know it before you confirm"], "reel_adv": ["Un autre joueur si possible, sinon le 🤖 Joueur IA", "Another player when possible, otherwise the 🤖 AI player"], "fictif_adv": ["Toujours le 🤖 Joueur IA", "Always the 🤖 AI player"], "sports_avec_tennis": ["football, basket et tennis", "football, basketball and tennis"], "sports_sans_tennis": ["football et basket ; le tennis n'est pas proposé pour le moment", "football and basketball; tennis is not offered for now"], "pts_condition": ["Dans ton duel", "In your duel"], "pts_points": ["Points", "Points"], "pts_c_net": ["Ton net final est <b>strictement positif</b>", "Your final net is <b>strictly positive</b>"], "pts_c_meilleur": ["Tu <b>remportes</b> ton duel (net strictement meilleur que celui de ton adversaire) <b>avec</b> un net positif", "You <b>win</b> your duel (net strictly better than your opponent's) <b>with</b> a positive net"], "pts_c_max": ["Les deux à la fois", "Both at once"], "pts_c_zero": ["Net nul ou négatif, même si tu perds moins que ton adversaire", "Zero or negative net, even if you lose less than your opponent"], "div_division": ["Division", "Division"], "div_montee": ["Montée dès", "Promotion at"], "div_maintien": ["Maintien", "Survival"], "div_note": ["Remarque", "Note"], "div_elite": ["★ Élite", "★ Elite"], "div_n": ["Division {n}", "Division {n}"], "div_titre": ["Titre <b>Champion Élite</b> dès {elite_titre}", "<b>Elite Champion</b> title at {elite_titre}"], "div_entree": ["Départ ; pas de descente", "Start; no relegation"], "bon_bonus": ["Bonus", "Boost"], "bon_stock": ["Stock", "Stock"], "bon_effet": ["Effet dans ton duel", "Effect in your duel"], "bon_gratuit": ["gratuit", "free"], "bon_complet": ["complet", "full"], "titre_page": ["⚡ Règles de Rush", "⚡ Rush rules"], "intro": ["Les règles de Tactizo Rush, telles qu'elles s'appliquent aujourd'hui. Touche une rubrique pour l'ouvrir.", "Tactizo Rush rules, as they apply today. Tap a section to open it."], "onglets": ["Règles du jeu", "Game rules"], "ong_ligues": ["🏆 Ligues", "🏆 Leagues"], "ong_rush": ["⚡ Rush", "⚡ Rush"]};
+const RG_LIB = {"col_reel": ["⚡ Rush Réel", "⚡ Real Rush"], "col_fictif": ["🎲 Rush Fictif", "🎲 Fictional Rush"], "mode_rencontres": ["Rencontres", "Matches"], "mode_cotes": ["Cotes", "Odds"], "mode_resultat": ["Résultat", "Result"], "mode_adv": ["Adversaire", "Opponent"], "reel_rencontres": ["Vrais matchs ({sports_reel}), dans les prochaines {horizon} h", "Real matches ({sports_reel}), within the next {horizon} h"], "fictif_rencontres": ["Rencontres fictives générées pour toi ({affiches} affiches : {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)", "Fictional matches generated for you ({affiches} fixtures: {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)"], "reel_cotes": ["Cotes réelles, <b>figées à la publication</b> : elles ne changent plus ensuite", "Real odds, <b>frozen when published</b>: they never change afterwards"], "fictif_cotes": ["Cotes du générateur de Tactizo", "Odds from Tactizo's generator"], "reel_resultat": ["Résultat officiel du match, lu au plus tôt {resultat_min} min après le coup d'envoi", "Official match result, read at the earliest {resultat_min} min after kick-off"], "fictif_resultat": ["Tiré <b>aussitôt</b> par le serveur, avec les probabilités données par les cotes. Personne, ni toi ni l'IA, ne peut le connaître avant ta validation", "Drawn <b>instantly</b> by the server, with the probabilities given by the odds. Nobody, you or the AI, can know it before you confirm"], "reel_adv": ["Un autre joueur si possible, sinon le 🤖 Joueur IA", "Another player when possible, otherwise the 🤖 AI player"], "fictif_adv": ["Toujours le 🤖 Joueur IA", "Always the 🤖 AI player"], "sports_avec_tennis": ["football, basket et tennis", "football, basketball and tennis"], "sports_sans_tennis": ["football et basket ; le tennis n'est pas proposé pour le moment", "football and basketball; tennis is not offered for now"], "pts_condition": ["Dans ton duel", "In your duel"], "pts_points": ["Points", "Points"], "pts_c_net": ["Ton net final est <b>strictement positif</b>", "Your final net is <b>strictly positive</b>"], "pts_c_meilleur": ["Tu <b>remportes</b> ton duel (net strictement meilleur que celui de ton adversaire) <b>avec</b> un net positif", "You <b>win</b> your duel (net strictly better than your opponent's) <b>with</b> a positive net"], "pts_c_max": ["Les deux à la fois", "Both at once"], "pts_c_zero": ["Net nul ou négatif, même si tu perds moins que ton adversaire", "Zero or negative net, even if you lose less than your opponent"], "pts_c_para": ["🪂 joué : net négatif mais meilleur que celui de ton adversaire", "🪂 played: negative net but better than your opponent's"], "div_division": ["Division", "Division"], "div_montee": ["Montée dès", "Promotion at"], "div_maintien": ["Maintien", "Survival"], "div_note": ["Remarque", "Note"], "div_elite": ["★ Élite", "★ Elite"], "div_n": ["Division {n}", "Division {n}"], "div_titre": ["Titre <b>Champion Élite</b> dès {elite_titre}", "<b>Elite Champion</b> title at {elite_titre}"], "div_entree": ["Départ ; pas de descente", "Start; no relegation"], "bon_bonus": ["Bonus", "Boost"], "bon_stock": ["Stock", "Stock"], "bon_effet": ["Effet dans ton duel", "Effect in your duel"], "bon_gratuit": ["gratuit", "free"], "bon_complet": ["complet", "full"], "titre_page": ["⚡ Règles de Rush", "⚡ Rush rules"], "intro": ["Les règles de Tactizo Rush, telles qu'elles s'appliquent aujourd'hui. Touche une rubrique pour l'ouvrir.", "Tactizo Rush rules, as they apply today. Tap a section to open it."], "onglets": ["Règles du jeu", "Game rules"], "ong_ligues": ["🏆 Ligues", "🏆 Leagues"], "ong_rush": ["⚡ Rush", "⚡ Rush"]};
 const RG = { onglet:"ligues" };
 function rgActif(){ try{ return rushOngletActif()===true && !estNatif(); }catch(e){ return false; } }
 function rgL(p){ return (lang==="en" ? p[1] : p[0]) || ""; }
@@ -13641,7 +13729,7 @@ function rgTables(V){
     [L("mode_rencontres"), L("reel_rencontres"), L("fictif_rencontres")], [L("mode_cotes"), L("reel_cotes"), L("fictif_cotes")],
     [L("mode_resultat"), L("reel_resultat"), L("fictif_resultat")], [L("mode_adv"), L("reel_adv"), L("fictif_adv")]]);
   T.TABLE_POINTS=rgTable([L("pts_condition"), L("pts_points")], [[L("pts_c_net"), "<b>+"+V.pts_net+"</b>"], [L("pts_c_meilleur"), "<b>+"+V.pts_v+"</b>"],
-    [L("pts_c_max"), "<b>"+V.pts_max+"</b>"], [L("pts_c_zero"), "<b>"+0+"</b>"]]);
+    [L("pts_c_max"), "<b>"+V.pts_max+"</b>"], [L("pts_c_zero"), "<b>"+0+"</b>"], [L("pts_c_para"), "<b>+"+V.pts_v+"</b>"]]);   // ⟦PARACHUTE-POINT⟧ 30/10
   T.TABLE_DIVISIONS=rgTable([L("div_division"), L("div_montee"), L("div_maintien"), L("div_note")], R.divisions.map(d=>[
     "<b>"+(d.elite ? L("div_elite") : rgRemplir(rgL(RG_LIB.div_n), {n:d.d}))+"</b>", d.montee==null ? "—" : String(d.montee),
     d.maintien==null ? "—" : String(d.maintien), d.elite ? L("div_titre") : (d.entree ? L("div_entree") : "")]));
@@ -13904,7 +13992,9 @@ function viewHome(){
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">💰 ${t("Aller à la préparation")}</button></div>`
     : x.kind==="trevebid"
     ? `<div class="alert-card warn">${qgCountdownHTML(x.deadline)}<div class="ttl">⚠️ ${t("À toi de jouer")}</div>
-      <div class="body"><b>${esc(x.lg.name)}</b> — ${t("c'est la trêve : les bonus sont remis en vente, à toi de miser.")}</div>
+      <div class="body"><b>${esc(x.lg.name)}</b> — ${treveRegleReliquat(x.lg)
+        ? t("c'est la trêve : mise sur les bonus, ou valide sans miser pour récupérer tes {a} €.",{a:SHOP_CAP})
+        : t("c'est la trêve : les bonus sont remis en vente, à toi de miser.")}</div>
       ${tempsRestantHTML(x.deadline)}
       <button class="cta" onclick="openLeague('${x.lg.id}','${x.pid}')">🔄 ${t("Faire mes enchères de la trêve")}</button></div>`
     : x.kind==="trevedeclencher"
@@ -14924,7 +15014,29 @@ function prepSuperlatives(s, treve, anec){
     ], fou.pid+'F')); }
   // Joueur(s) n'ayant misé sur AUCUN bonus (demandé par Hervé). Formulation neutre (ni « il » ni « elle »).
   const zero=ps.filter(p=>st[p.pid].bids===0);
-  if(zero.length){ const noms=zero.map(p=>nm(p.pid));
+  /* ⚠️ v8.540 — RÈGLE DU RELIQUAT : quand le serveur a écrit son journal (`treve_st.reliquat`, trêve close
+     sous la nouvelle règle), ne pas miser n'est plus « perdre ses 40 € » — c'est ne pas VALIDER qui les fait
+     perdre. Deux groupes distincts : ceux qui ont validé sans miser (crédités, présents au journal) et ceux
+     qui n'ont pas validé (absents du journal). Sans journal : textes d'avant, inchangés. */
+  const relJ = treve ? treveReliquatJournal() : null;
+  if(relJ && zero.length){
+    const noms=arr=>{ const n=arr.map(p=>nm(p.pid)); return (n.length===1)?n[0]:(n.slice(0,-1).join(', ')+t(" et ")+n[n.length-1]); };
+    const ok=zero.filter(p=>relJ[p.pid]!=null), ko=zero.filter(p=>relJ[p.pid]==null);
+    if(ok.length){ const N=noms(ok);
+      items.push(pickV((ok.length===1)?[
+        t("🙈 <b>L'abstentionniste :</b> {N} n'a misé sur aucun bonus — pari sur le talent pur !",{N}),
+        t("🧘 <b>Le zen :</b> {N} a snobé les enchères de la trêve. Zéro bonus, {a} € mis de côté.",{N,a:SHOP_CAP}),
+        t("🎭 <b>Le puriste :</b> pas un euro de bonus pour {N} — rien que du flair.",{N})
+      ]:[
+        t("🙈 <b>Les abstentionnistes :</b> {N} n'ont misé sur aucun bonus — {a} € reversés au capital de chacun.",{N,a:SHOP_CAP}),
+        t("🧘 <b>Les zen :</b> {N} ont snobé les enchères. Pari sur le talent pur !",{N})
+      ],'Z'+ok.length)); }
+    if(ko.length){ const N=noms(ko);
+      items.push((ko.length===1)
+        ? t("💨 <b>L'étourdi :</b> {N} n'a pas validé — ni bonus, ni les {a} €.",{N,a:SHOP_CAP})
+        : t("💨 <b>Les étourdis :</b> {N} n'ont pas validé — ni bonus, ni {a} €.",{N,a:SHOP_CAP})); }
+  }
+  else if(zero.length){ const noms=zero.map(p=>nm(p.pid));
     const N=(noms.length===1)?noms[0]:(noms.slice(0,-1).join(', ')+t(" et ")+noms[noms.length-1]);
     /* ⚠️ v8.272 (bug vécu par Hervé) — À LA TRÊVE, L'ARGENT NON DÉPENSÉ EST PERDU, PAS « INTACT ».
        Les 40 € de la trêve ne sortent pas de la cagnotte (cf. viewTreve) : ne pas les dépenser ne
@@ -15024,7 +15136,10 @@ function auctionRoundHTML(auction, pName, treve){
        capital de pari. Même piège que les superlatifs ci-dessous, qui réutilisaient tous « 100 € »
        et « intacts » sans regarder d'où l'appel venait. */
     : `<div class="box mini muted">${treve
-        ? t("Personne n'a misé sur les bonus de la trêve — les {a} € de chacun sont perdus.",{a:SHOP_CAP})
+        // v8.540 — journal du reliquat présent (trêve close sous la nouvelle règle) : l'argent n'est plus perdu.
+        ? (treveReliquatJournal()
+            ? t("Personne n'a misé sur les bonus de la trêve — chaque joueur qui a validé récupère ses {a} € dans son capital.",{a:SHOP_CAP})
+            : t("Personne n'a misé sur les bonus de la trêve — les {a} € de chacun sont perdus.",{a:SHOP_CAP}))
         : t("Personne n'a misé sur les bonus — tout le monde démarre à 100 €.")}</div>`;
 }
 /* ⚠️ v8.272 (demandé par Hervé, écran de fin de trêve) — IL MANQUAIT UN RÉCAP DES BONUS OBTENUS,
@@ -15037,11 +15152,27 @@ function auctionRoundHTML(auction, pName, treve){
 function treveCapTableHTML(auction, players){
   const won={}, spent={}; players.forEach(p=>{ won[p.pid]=[]; spent[p.pid]=0; });
   (auction||[]).forEach(a=>{ if(won[a.winner]==null) return; won[a.winner].push(a.card); spent[a.winner]+=(+a.amount||0); });
+  /* ⚠️ v8.540 — colonne « Au capital » SEULEMENT si le serveur a écrit son journal du reliquat (trêve close sous
+     la nouvelle règle). Montrée pour TOUS : le montant (40 € − Dépensé, si validé) se déduit déjà de deux
+     données publiques — la colonne Dépensé juste à côté et la liste « Qui a validé la trêve ? ». Sans journal :
+     tableau d'avant, au caractère près. */
+  const relJ=treveReliquatJournal();
+  const relCell=p=>{ const v=treveReliquatDe(p.pid); return v==null
+      ? `<td class="muted">${t("— non validé")}</td>`
+      : `<td class="green"><b>${euroSigned(v)}</b></td>`; };
   return `<div class="listsec">${t("💰 Bonus obtenus à la trêve")}</div>
-   <div class="table-wrap"><table class="cap-table"><tr><th>${t("Joueur")}</th><th>${t("Dépensé")}</th><th>${t("Bonus")}</th></tr>
+   <div class="table-wrap"><table class="cap-table"><tr><th>${t("Joueur")}</th><th>${t("Dépensé")}</th><th>${t("Bonus")}</th>${relJ?`<th>${t("Au capital")}</th>`:''}</tr>
      ${players.map(p=>`<tr><td><span class="pname">${avaName(p)}${p.pid===S.myId?' <span class="tag">'+t("(toi)")+'</span>':''}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}</span></td>
         <td class="muted">${euro(spent[p.pid]||0)}</td>
-        <td><span class="hand">${(won[p.pid]||[]).length?(won[p.pid]||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(''):'<span class="none">–</span>'}</span></td></tr>`).join("")}</table></div>`;
+        <td><span class="hand">${(won[p.pid]||[]).length?(won[p.pid]||[]).map(id=>`<span class="clik" onclick="showCardInfo('${id}')" title="${esc(t(CARDS[id].n))}">${CARDS[id].e}</span>`).join(''):'<span class="none">–</span>'}</span></td>${relJ?relCell(p):''}</tr>`).join("")}</table></div>`;
+}
+// v8.540 — ma ligne « Rendu au capital » (récapitulatif de trêve, Coulisses). '' sans journal du reliquat.
+function treveReliquatMoiHTML(){
+  if(!treveReliquatJournal()) return '';
+  const v=treveReliquatDe(S.myId);
+  return `<div class="box mini" id="treveRendu" style="border-color:var(--green)">${v==null
+    ? t("Tu n'as pas validé tes enchères : rien n'est ajouté à ton capital.")
+    : t("💰 Rendu au capital : <b>{a}</b>",{a:euroSigned(v)})}</div>`;
 }
 function prepSummaryBody(){
   const s=L.prep_summary||{}; const both=(s.enjeu==="both");
@@ -15187,7 +15318,7 @@ function viewTreveSummary(){
       <div class="mini muted">${t("Voici qui a remporté quoi à la mi-saison — jette un œil avant de reprendre.")}</div></div>
     <div class="listsec">${t("🃏 Enchères de la trêve — bonus attribués")}</div>
     ${auctionRoundHTML(st.auction, pName, true)}
-    ${treveCapTableHTML(st.auction, s.players||[])}
+    ${treveCapTableHTML(st.auction, s.players||[])}${treveReliquatMoiHTML()}
     ${prepSuperlatives({auction:st.auction, players:s.players||[]}, true)}
     <button class="btn" onclick="ackTreveResult()">${t("La saison reprend →")}</button>`;
 }
@@ -15285,10 +15416,15 @@ function coulBilanRowHTML(p, st){
   const spentHTML = p.spent ? `<div class="cap-spent">${t("Dépensé")} ${euro(p.spent)}</div>` : '';
   return `<div class="cap-row-b clik" onclick="showPlayerCards('${p.pid}')"><div class="cap-av">${avatarHTML(p.emoji)}</div><div class="cap-name">${pname(p)}${p.is_ai?' <span class="tag">'+t("IA")+'</span>':''}${spentHTML}</div><div class="cap-amount">${euro(p.capital)} ${badges}</div></div>`;
 }
+// v8.540 — note « capital de départ » des Coulisses : avec le marqueur du reliquat, la trêve TOUCHE le capital
+// (reliquat ajouté) — l'ancienne phrase « non affecté par la trêve » mentirait. Sans marqueur : inchangée.
+function coulNoteCapital(){ return treveRegleReliquat()
+  ? t("Capital de départ : 100 € par joueur, moins les enchères gagnées au départ. Le reliquat de la trêve s'ajoute ensuite.")
+  : t("Capital de départ : 100 € par joueur — capital réel, non affecté par la trêve"); }
 function showCoulRoster(){
   const s=(L&&L.prep_summary)||{}; const st=s.treve_st||null; const ps=s.players||[];
   infoModal('🧑‍🤝‍🧑', t("Tous les joueurs"),
-    `<div class="ldB-note" style="text-align:left">${t("Capital de départ : 100 € par joueur — capital réel, non affecté par la trêve")}</div>
+    `<div class="ldB-note" style="text-align:left">${coulNoteCapital()}</div>
      <div style="text-align:left">${ps.map(p=>coulBilanRowHTML(p,st)).join('')}</div>`);
 }
 function viewCoulisses(){
@@ -15368,13 +15504,13 @@ function viewCoulisses(){
       <div style="height:8px"></div>
       ${rows||`<div class="mini muted">${t("Sans acquéreur")}</div>`}
       ${(st.auction||[]).length>2?`<div class="coul-more clik" onclick="showCoulAuctions('treve')">${t("Voir les {a} enchères de mi-saison",{a:CARD_IDS.length})} <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>`:''}
-      ${perdusHTML}`; })();
+      ${perdusHTML}${treveReliquatMoiHTML()}`; })();
   const encheresSection = `<div class="ldB-section"><div class="ldB-title">${t("🔨 2. Les enchères")}</div>${startAuctionBlock}${treveAuctionBlock}</div>`;
 
   // ── 3. Le bilan des enchères ────────────────────────────────────────────────────────────────
   const ps=s.players||[];
   const bilanSection = ps.length ? `<div class="ldB-section"><div class="ldB-title">${t("3. Le bilan des enchères")}</div>
-    <div class="ldB-note">${t("Capital de départ : 100 € par joueur — capital réel, non affecté par la trêve")} — ${t("Comparatif indicatif — pas un classement officiel.")}</div>
+    <div class="ldB-note">${coulNoteCapital()} — ${t("Comparatif indicatif — pas un classement officiel.")}</div>
     ${ps.slice(0,4).map(p=>coulBilanRowHTML(p,st)).join('')}
     ${ps.length>4?`<div class="coul-more clik" onclick="showCoulRoster()">${t("Voir tous les joueurs")} <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2.4"><path d="M9 6l6 6-6 6"/></svg></div>`:''}</div>` : '';
 
@@ -15435,7 +15571,9 @@ function viewLobby(){
     <h2>${t("🃏 Enchères de bonus")}</h2>
     <div class="box row"><div><b>${hasTreve()?t("🔄 Au départ et à mi-parcours"):t("🎯 Au départ seulement")}</b>
       <div class="mini muted">${hasTreve()
-        ? t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>{a} €</b> — hors cagnotte — pour tout racheter.",{a:SHOP_CAP})
+        ? (treveReliquatTexte()   // v8.540 : salon → drapeau serveur (la trêve n'a pas encore eu lieu)
+            ? t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>{a} €</b> pour tout racheter ; ce qu'il n'en dépense pas rejoint son capital (s'il valide).",{a:SHOP_CAP})
+            : t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>{a} €</b> — hors cagnotte — pour tout racheter.",{a:SHOP_CAP}))
         : t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison.")}</div></div></div>
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
@@ -15743,6 +15881,9 @@ function aiPrep(maxCartes, mode, optCount, optCountR, treve){ const nDays=maxCar
   // reliquat non engagé ne PROTÈGE rien — il est simplement gaspillé. Une IA "prudente" à la trêve
   // n'a donc aucune raison d'exister ; elle doit engager la TOTALITÉ du budget, répartie de façon
   // variée (pas un remplissage uniforme) sur autant de bonus que `maxCards`/le catalogue le permet.
+  // ⚠️ v8.540 — RÈGLE DU RELIQUAT (12/10/2026) : le non-dépensé revient désormais au capital (si validé). L'app
+  // n'appelle PLUS cette branche (ouvrirTreve → logique du départ) ; conservée telle quelle tant que la copie de
+  // l'Edge `resolve` l'utilise (test de parité). À retirer des deux côtés ensemble.
   if(treve){
     const nb=Math.max(1, Math.min(maxCards, ids.length, 3+Math.floor(Math.random()*4))); // 3-6, borné par les cartes/bonus dispo
     const poids=[]; for(let k=0;k<nb;k++) poids.push(0.5+Math.random());
@@ -16141,6 +16282,11 @@ function viewTreve(){
   const tot=Object.values(bidL).reduce((a,b)=>a+(+b||0),0); const cnt=Object.values(bidL).filter(v=>+v>0).length;
   const over=tot>SHOP_CAP, tooMany=cnt>maxCards;
   const humans=players.filter(p=>!p.is_ai); const prets=humans.filter(p=>(st.done||{})[p.id]).length;
+  /* ⚠️ v8.540 — RÈGLE DU RELIQUAT (cf. treveRegleReliquat) : textes de cet écran conditionnés au MARQUEUR posé
+     par le serveur à l'ouverture ; sans lui, textes d'avant au caractère près. Le bouton reste ACTIF à 0 enchère
+     (seuls `over`/`tooMany` le coupent) : valider sans miser est précisément ce qui fait rendre les 40 € au
+     capital. Libellé partagé avec setBid() (treveBtnLabel), avertissement sous le bouton tant que non validé. */
+  const rel=treveRegleReliquat();
   // ⚠️ v8.531 (09/10/2026, Hervé) — LE BOUTON « 🔒 Clôturer la trêve maintenant (organisateur) » A ÉTÉ
   // RETIRÉ de cet écran (ajouté en v8.366, masqué en Solo depuis le 11/09). La trêve se clôt
   // désormais toute seule, y compris en ligue RÉELLE : dès que tous les humains ont validé, ou à
@@ -16160,18 +16306,32 @@ function viewTreve(){
     <div class="box" style="border-color:var(--gold);background:rgba(224,182,79,.10)">
       <h2 style="margin-top:0">🔄 ${t("Enchères de mi-saison")}</h2>
       <div class="mini" style="line-height:1.6">${t("La saison s'arrête le temps d'un transfert. <b>Tous les bonus non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> pour racheter parmi <b>tous</b> les bonus.",{a:SHOP_CAP})}</div>
-      <div class="mini muted" style="margin-top:6px;line-height:1.6">${t("Ces {a} € ne sortent pas de ta cagnotte, et <b>ce que tu ne dépenses pas est perdu</b>. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.",{a:SHOP_CAP,b:maxCards})}</div>
+      <div class="mini muted" style="margin-top:6px;line-height:1.6">${rel
+        ? t("Ces {a} € ne sortent pas de ta cagnotte. <b>Valide tes enchères, même sans miser</b> : ce que tu ne dépenses pas est <b>ajouté à ton capital</b> à la reprise. Sans validation, tu ne récupères rien. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.",{a:SHOP_CAP,b:maxCards})
+        : t("Ces {a} € ne sortent pas de ta cagnotte, et <b>ce que tu ne dépenses pas est perdu</b>. Tu peux emporter <b>{b}</b> bonus au maximum — le nombre de journées qu'il reste.",{a:SHOP_CAP,b:maxCards})}</div>
       ${perdus.length?`<div class="mini" style="margin-top:8px;color:var(--red)">${t("Perdus à la trêve :")} ${perdus.map(id=>CARDS[id]?(CARDS[id].e+' '+esc(t(CARDS[id].n))):'').filter(Boolean).join(' · ')}</div>`:''}
       <div class="mini muted" style="margin-top:8px">⏳ ${t("Reprise dans {a} au plus tard — ou dès que tout le monde a validé.",{a:fmtLeft(st.deadline)})} · <span class="clik" onclick="showTrevePretsInfo()"><b>${prets}/${humans.length}</b> ${t("prêts")} <span style="opacity:.6">ⓘ</span></span></div>
     </div>
     ${encBudgetHTML(tot,over,cnt,tooMany,maxCards, t("Enchères de trêve :"), `
-      <div class="a2-enc-budget-note">${t("Ces {a} € ne sortent pas de ta cagnotte : ce que tu ne dépenses pas est perdu.",{a:SHOP_CAP})}</div>`)}
+      <div class="a2-enc-budget-note">${rel
+        ? t("Valide tes enchères, même sans miser : ce que tu ne dépenses pas est ajouté à ton capital.")
+        : t("Ces {a} € ne sortent pas de ta cagnotte : ce que tu ne dépenses pas est perdu.",{a:SHOP_CAP})}</div>`)}
     <div class="a2-enc-list">${ids.map(id=>encRowHTML(id,bidL[id])).join('')}</div>
     <div class="a2-enc-summary" id="encSummary">${encSummaryTxt(cnt,tot)}</div>
-    <button class="btn" id="essaibidbtn" ${(over||tooMany)?'disabled':''} onclick="saveTreve()">${over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →")))}</button>
-    ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`:''}
+    <button class="btn" id="essaibidbtn" ${(over||tooMany)?'disabled':''} onclick="saveTreve()">${treveBtnLabel(over,tooMany,maxCards,dejaFait,cnt)}</button>
+    ${dejaFait?`<div class="mini muted" style="text-align:center;margin-top:8px">${t("✅ Validé — tu peux encore modifier tant que la trêve dure.")}</div>`
+      :(rel?`<div class="mini" id="treveSansValid" style="text-align:center;margin-top:8px;color:var(--gold)">${t("⚠️ Sans validation avant l'échéance, tu perds les {a} €.",{a:SHOP_CAP})}</div>`:'')}
   </div>`;
 }
+// Libellé du bouton de la trêve — UNE seule source pour viewTreve() et setBid() (sinon le texte saute à la
+// première saisie). v8.540 : avec le marqueur du reliquat, 0 enchère et pas encore validé → « Valider sans
+// enchère (+40 €) », pour que personne ne laisse filer ses 40 € en croyant n'avoir rien à valider.
+function treveBtnLabel(over,tooMany,maxCards,dejaFait,cnt){
+  if(over) return t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP});
+  if(tooMany) return t("Choisis au maximum {a} bonus.",{a:maxCards});
+  if(dejaFait) return t("Modifier mes enchères ✓");
+  if(!cnt && treveRegleReliquat()) return t("Valider sans enchère (+{a} €) →",{a:SHOP_CAP});
+  return t("Valider mes enchères →"); }
 async function saveTreve(){ if(busy)return;
   // ⚠️ Correctif audit V2 (2026-09-06) — sécurité, en plus du bouton désactivé (même principe que
   // savePrep(), ligne ~10558) : `setBid()` corrige désormais l'état du bouton en direct, mais rien
@@ -16263,6 +16423,11 @@ function prepParamsHTML(){ let o={}; try{o=JSON.parse(L.gage)||{};}catch(e){}
 // aucune ligue n'existe encore, `L` est soit `null` soit une AUTRE ligue déjà ouverte — `paramInfo()`
 // afficherait un contenu faux ou périmé si on l'appelait ici. Aucune règle inventée : copie exacte
 // des mêmes phrases, seule la source (brouillon vs ligue créée) change.
+// Fiche « Enchères au départ et à la trêve » (création : `lg`=null → drapeau serveur ; ligue : sa trêve).
+// v8.540 : texte du reliquat seulement si treveReliquatTexte() ; sinon l'ancien, au caractère près.
+function treveInfoCorps(lg){ return treveReliquatTexte(lg)
+  ? t("À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Seules les enchères gagnantes sont payées : <b>le reste rejoint ton capital</b>, à condition de valider tes enchères : valider sans miser rapporte les 40 €, ne pas valider ne rapporte rien.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés.")
+  : t("À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Ce que tu ne dépenses pas est perdu.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés."); }
 function createOptInfo(kind){
   const g=newLg||{}; let emoji="ℹ️", title="", body="", premKey=null;
   if(kind==='data'){ const real=(g.data==='real'); emoji="🎲"; title=real?t("⚽ Matchs réels"):t("🎮 Matchs simulés");
@@ -16271,7 +16436,7 @@ function createOptInfo(kind){
   else if(kind==='treve'){ emoji="🃏";
     title = g.treve?t("Enchères au départ et à la trêve"):t("Enchères au départ seulement"); if(g.treve) premKey='treve';
     body = g.treve
-      ? t("À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Ce que tu ne dépenses pas est perdu.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés.")
+      ? treveInfoCorps(null)
       : t("Une seule vente aux enchères, avant la première journée. Les bonus que tu remportes te suivent toute la saison, et tu les joues quand tu veux — au maximum un par journée."); }
   else if(kind==='solo'){ emoji="🤖"; const one=(g.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
   // ⚠️ QA (2026-09-07, point 1) — "mention Premium lorsque nécessaire" : le badge ✨/🔒 est déjà
@@ -16292,7 +16457,7 @@ function paramInfo(kind){
   else if(kind==='treve'){ emoji="🃏";
     title = hasTreve()?t("Enchères au départ et à la trêve"):t("Enchères au départ seulement");
     body = hasTreve()
-      ? t("À la <b>moitié</b> des journées, la saison s'arrête un instant : les bonus que tu n'as pas joués sont <b>perdus</b>, et chacun reçoit <b>40 €</b> — qui ne sortent pas de ta cagnotte — pour racheter parmi <b>tous</b> les bonus. Ce que tu ne dépenses pas est perdu.<br><br>C'est pour ça qu'au départ chacun est limité à la <b>moitié</b> des journées en bonus : ils sont faits pour être joués, pas gardés.")
+      ? treveInfoCorps()
       : t("Une seule vente aux enchères, avant la première journée. Les bonus que tu remportes te suivent toute la saison, et tu les joues quand tu veux — au maximum un par journée."); }
   infoModal(emoji, title, `<div class="mini muted" style="text-align:left;line-height:1.55">${body}</div>`);
 }
@@ -16363,7 +16528,7 @@ function lobbyParamsEditHTML(){
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row clik" onclick="setDataMode('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
     <h2>${t("🃏 Enchères de bonus")}</h2>
-    ${[[false,t("🎯 Au départ seulement"),t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison.")],[true,t("🔄 Au départ et à mi-parcours"),t("À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € — hors cagnotte — pour tout racheter.",{a:SHOP_CAP})]].map(([v,nm,de])=>{const cur=(hasTreve()===v); return `<div class="box row clik" onclick="setTreve(${v})" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b>${v?' '+premBadge('treve'):''}<div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
+    ${[[false,t("🎯 Au départ seulement"),t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison.")],[true,t("🔄 Au départ et à mi-parcours"),treveReliquatTexte()?t("À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € pour tout racheter ; le non-dépensé rejoint son capital s'il valide.",{a:SHOP_CAP}):t("À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € — hors cagnotte — pour tout racheter.",{a:SHOP_CAP})]].map(([v,nm,de])=>{const cur=(hasTreve()===v); return `<div class="box row clik" onclick="setTreve(${v})" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b>${v?' '+premBadge('treve'):''}<div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
     <h2>${t("🎭 Enjeu de la ligue")}</h2>
     ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row clik" onclick="setEnjeu('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
     <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense choisie par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>
@@ -16731,7 +16896,7 @@ function setBid(id,val){ const v=Math.max(0,+val||0); if(v>0) bidL[id]=v; else d
     // le même texte que le rendu complet de viewTreve().
     const stT=treveState()||{}; const dejaFait=!!(stT.done||{})[S.myId];
     const btn2=$("essaibidbtn"); if(btn2){ btn2.disabled=over||tooMany;
-      btn2.textContent=over?t("Dépasse {a} € — réduis tes mises",{a:SHOP_CAP}):(tooMany?t("Choisis au maximum {a} bonus.",{a:maxCards}):(dejaFait?t("Modifier mes enchères ✓"):t("Valider mes enchères →"))); }
+      btn2.textContent=treveBtnLabel(over,tooMany,maxCards,dejaFait,cnt); }
     return;
   }
   const miss=votesManquants(); const noVote=miss.length>0; // vote(s) obligatoire(s) — 2 en mode "both"
@@ -17494,7 +17659,7 @@ function viewBet(d,dayLbl,opp,iAmHome){
         </div></div>`;}).join("")}
     <div class="box"><div class="row"><div class="boxttl" style="margin-bottom:0">${t("🃏 Bonus (1 max/jour)")}</div>${myCard?`<span class="chip b" onclick="selCard('${myCard.id}')" style="cursor:pointer">${t("✕ retirer")}</span>`:`<span class="mini muted">${t("optionnel")}</span>`}</div>
       ${hand.length? `<div class="cards">${hand.map((id,k)=>`<div class="cardchip ${myCard&&myCard.id===id?'on':''}" title="${esc(t(CARDS[id].d))}" onclick="selCard('${id}')"><span class="em">${CARDS[id].e}</span>${esc(t(CARDS[id].n))}</div>`).join("")}</div>
-        ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire ce bonus.")+'</b>':(needTarget?' <b class="blue">'+(twoCard?t("→ touche les {e} de tes 2 matchs.",{e:CARDS[myCard.id].e}):t("→ touche le {e} du pari ciblé.",{e:CARDS[myCard.id].e}))+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
+        ${myCard?`<div class="mini muted" style="margin-top:8px">${esc(t(CARDS[myCard.id].d))}${(myCard.id==="parachute"&&typeof parachuteJour==="function"&&parachuteJour()&&baremeCommunJour())?' '+t("Net négatif mais meilleur que celui de ton adversaire : <b>+1 pt</b> quand même."):''}${(myCard.id==="chance"&&!fx.some(f=>f.draw))?' <b class="red">'+t("→ aucun match éligible aujourd'hui (il faut un match avec match nul) : retire ce bonus.")+'</b>':(needTarget?' <b class="blue">'+(twoCard?t("→ touche les {e} de tes 2 matchs.",{e:CARDS[myCard.id].e}):t("→ touche le {e} du pari ciblé.",{e:CARDS[myCard.id].e}))+'</b>':(needSel2?' <b class="blue">'+t("→ choisis le 2ᵉ résultat sur le match ciblé.")+'</b>':''))}</div>`:''}`
         :`<div class="mini muted" style="margin-top:6px">${t("Plus de bonus en main.")}</div>`}</div>
     ${/* ⚠️ v7.69 — LE TOTAL EST RÉPÉTÉ ICI, AU POINT DE DÉCISION (constat d'Hervé : il ne l'a pas
          trouvé sur son propre écran). Celui du haut sert pendant la saisie ; mais quand on appuie
@@ -18295,7 +18460,14 @@ async function ouvrirTreve(lg, jour, ps){
       for(const p of joueurs){
         const main=Array.isArray(p.hand)?p.hand.slice():[];
         if(main.length) st.perdus[p.id]=main;                    // archivé AVANT d'effacer
-        if(p.is_ai){ const ap=aiPrep(reste, mode, 0, 0, true); st.bids[p.id]=ap.bids; st.bidTs[p.id]=Date.now(); st.done[p.id]=true; }
+        /* ⚠️ v8.540 (règle du reliquat, 12/10/2026) — l'IA mise avec la logique du DÉPART (`treve` absent) : le
+           non-dépensé n'est plus gaspillé, il revient au capital (l'IA valide toujours), donc engager les 40 € en
+           entier n'a plus de raison d'être. optCount = 0 : aucun vote de gage à la trêve. La branche `treve` d'aiPrep
+           reste en place (copie identique côté Edge, test de parité), simplement plus appelée par l'app.
+           ⚠️ CHEMIN MORT côté app (`vieuxChemin` = RPC ouvrir_treve absente, jamais vrai en production) : le
+           chemin VIVANT est l'Edge `resolve` (ouvrirTreve TS, `aiPrep(reste, mode, 0, 0, …)`), qui doit suivre la
+           même logique — l'app ne doit pas diverger du serveur. */
+        if(p.is_ai){ const ap=aiPrep(reste, mode, 0, 0); st.bids[p.id]=ap.bids; st.bidTs[p.id]=Date.now(); st.done[p.id]=true; }
         await q(db.from("players").update({hand:[]}).eq("id",p.id));
       }
       sum.treve_st=st;
@@ -18358,6 +18530,8 @@ async function resolveTreve(){ if(resolvingTreve||resolving) return; resolvingTr
       }
       // ⚠️ `hand` SEULEMENT : ni `capital`, ni `shop_done`. La dotation ne se reporte pas et ne se
       // rembourse pas — ce qui n'a pas été converti en bonus est perdu, c'est toute la règle.
+      // ⚠️ v8.540 : ANCIENNE règle. Le reliquat (règle du 12/10) est crédité par le SERVEUR (resolve_treve) et
+      // seulement sous marqueur ; ce chemin mort n'écrit JAMAIS le capital (droit UPDATE retiré de toute façon).
       for(const p of ps) await q(db.from("players").update({hand:won[p.id]}).eq("id",p.id));
       st.auction=auction; st.spent=paid; st.closed_at=new Date().toISOString(); sum.treve_st=st;
       await q(db.from("leagues").update({prep_summary:sum,status:"running"}).eq("id",L.id));
@@ -18432,11 +18606,11 @@ function baremeCommunJour(lg,d){ const x=(lg!==undefined&&lg!==null)?lg:(typeof 
 function baremeTextes(v){
   if(v==="2+1") return {
     regle:t("Points = <b>+2</b> si ton net est <b>strictement positif</b>, et <b>+1</b> de plus si tu <b>gagnes ton duel</b> (net strictement supérieur à celui de ton adversaire) avec ce net positif.<br>Soit : <b>3</b> (net positif, duel gagné) · <b>2</b> (net positif, duel perdu ou nets égaux) · <b>0</b> (net nul ou négatif, même en gagnant le duel). ⚠️ Un net de <b>0 €</b> (par exemple si tous les matchs du jour sont annulés) ne donne <b>aucun</b> point."),
-    conf:t("<b>Duel gagné</b> (net strictement supérieur à celui de ton adversaire) <b>avec un net positif</b> : <b>+1 point</b>. Net nul ou négatif : aucun point, même en gagnant le duel."),
+    conf:t("<b>Duel gagné</b> (net strictement supérieur à celui de ton adversaire) <b>avec un net positif</b> : <b>+1 point</b>. Net nul ou négatif : aucun point, même en gagnant le duel.")+(typeof baremeParachuteTxt==="function"?baremeParachuteTxt():""),
     dernier:t("net positif + duel gagné compris"), tuto:t("+1 pt si tu gagnes ton duel avec un net positif"), confPts:1 };
   if(v==="2+2") return {
     regle:t("Points = <b>+2</b> si ton net est <b>strictement positif</b>, et <b>+2</b> de plus si tu <b>gagnes ton duel</b> avec ce net positif (<b>+1</b> chacun si vos nets positifs sont égaux).<br>Soit : <b>4</b> (net positif, duel gagné) · <b>3</b> (nets positifs égaux) · <b>2</b> (net positif, duel perdu) · <b>0</b> (net nul ou négatif, même en gagnant le duel). ⚠️ Un net de <b>0 €</b> (par exemple si tous les matchs du jour sont annulés) ne donne <b>aucun</b> point."),
-    conf:t("<b>Duel gagné avec un net positif</b> : <b>+2 points</b> ; <b>nets positifs égaux</b> : <b>+1 point</b> chacun. Net nul ou négatif : aucun point, même en gagnant le duel."),
+    conf:t("<b>Duel gagné avec un net positif</b> : <b>+2 points</b> ; <b>nets positifs égaux</b> : <b>+1 point</b> chacun. Net nul ou négatif : aucun point, même en gagnant le duel.")+(typeof baremeParachuteTxt==="function"?baremeParachuteTxt():""),
     dernier:t("net positif + duel gagné compris"), tuto:t("+2 pts si tu gagnes ton duel avec un net positif (+1 en cas d'égalité)"), confPts:2 };
   return {
     regle:t("Points = <b>+2</b> si ton net est <b>strictement positif</b>, <b>+1</b> si ton net est <b>strictement supérieur</b> à celui de ton adversaire (même si les deux sont négatifs).<br>Soit : <b>3</b> (net positif et meilleur que l'adversaire) · <b>2</b> (net positif mais moins bon) · <b>1</b> (net négatif ou nul mais meilleur) · <b>0</b>. À <b>nets égaux</b>, aucun des deux ne prend le +1. ⚠️ Un net de <b>0 €</b> (par exemple si tous les matchs du jour sont annulés) ne donne <b>pas</b> les +2."),
@@ -18449,7 +18623,33 @@ function baremeCommunShown(){ return baremeCommunJour(); }
 // Copie verbatim dans supabase/functions/resolve/index.ts.
 function duelPtsCommun(h,a,v){ const R=x=>Math.round((+x||0)*100)/100; const nh=R(h.net), na=R(a.net), c=nh-na;
   const conf=(n,s)=> v==="2+2" ? (n>0?(s>0?2:(s===0?1:0)):0) : v==="2+1" ? ((n>0&&s>0)?1:0) : (s>0?1:0);
-  return {h:(nh>0?2:0)+conf(nh,c), a:(na>0?2:0)+conf(na,-c), win:c>0?'h':(c<0?'a':null)}; }
+  // 🪂 (30/10/2026) : X.parachute === true (posé par l'appelant : règle figée pour la journée ET 🪂 joué), net NÉGATIF mais
+  // STRICTEMENT supérieur → +1, le point de duel gagné, si la variante n'en donne aucun (2+1 / 2+2 ; 'cible' le donne déjà).
+  const pa=(X,n,s)=>(X&&X.parachute===true&&n<0&&s>0&&conf(n,s)===0)?1:0;
+  return {h:(nh>0?2:0)+conf(nh,c)+pa(h,nh,c), a:(na>0?2:0)+conf(na,-c)+pa(a,na,-c), win:c>0?'h':(c<0?'a':null)}; }
+/* ⟦PARACHUTE-POINT⟧ 🪂 PARACHUTE (30/10/2026, décision d'Hervé ; tools/patch-parachute-point.py) — copie conforme de
+   supabase/functions/resolve/index.ts (parachutePose / parachuteJoue) + prévision client (parachuteJour, même règle que
+   trg_parachute_journee). Le joueur qui a JOUÉ 🪂, net de la journée NÉGATIF (après les 30 % rendus) mais STRICTEMENT supérieur à
+   celui de son adversaire, prend +1 (le point de duel gagné) — barème commun 2+1 / 2+2 (duelPtsCommun, X.parachute). ⚠️ LE SERVEUR
+   FAIT FOI : journée résolue = colonnes figées par la base ; journée pas encore réclamée = interrupteur lu au démarrage. */
+var PARACHUTE_POINT_ACTIF=false;   // `var` (hissée) : app_config.parachute_point, false en cas d'échec de lecture
+function parachutePose(lg,d){ if(!lg||lg.parachute_des_jour==null) return false;
+  const j=(+d||0), des=(+lg.parachute_des_jour||0), fin=(lg.parachute_fin_jour==null)?null:(+lg.parachute_fin_jour||0);
+  return j>=des && (fin==null || j<fin); }
+// Bonus tel qu'écrit sur le pari résolu : 🪂 joué = id « parachute » et pas volé (stolenBy) ; un 🧬 qui l'a copié porte l'id.
+function parachuteJoue(c){ return !!(c&&c.id==="parachute"&&!c.stolenBy); }
+function parachuteJour(lg,d){ const x=(lg!==undefined&&lg!==null)?lg:(typeof L!=="undefined"?L:null);
+  const A=PARACHUTE_POINT_ACTIF===true;
+  if(!x) return A;
+  const cd=(x.current_day|0), j=(d==null)?cd:(+d||0);
+  const fige=x.status==="done" || j<cd || (x.status==="resolving" && j===cd);
+  if(fige) return parachutePose(x,j);
+  if(!A) return false;
+  if(x.parachute_des_jour==null) return true;                        // jamais marquée : la prochaine journée réclamée le sera
+  const fin=(x.parachute_fin_jour==null)?null:(+x.parachute_fin_jour||0);
+  return fin==null || fin>=j; }                                      // période en cours, ou réouverture contiguë seulement
+// Exception 🪂 dans les règles des barèmes 2+1 / 2+2 (seulement si elle vaut pour la journée en cours de la ligue ouverte)
+function baremeParachuteTxt(){ return parachuteJour() ? " "+t("🪂 <b>Exception</b> : avec le Parachute joué, un net négatif mais meilleur que celui de ton adversaire rapporte quand même <b>+1 point</b>.") : ""; }
 // duelPtsF (plus haut), forfait adverse : le vainqueur ne marque que si son net > 0 : 2 + confrontation (1, ou 2 en 2+2) ; sinon 0.
 // ⭐ du jour : ancien barème = UN seul joueur (dayStar, départage inchangé) ; barème commun (v8.551) = TOUS
 // les joueurs au meilleur net (au centime), même négatif — aucun départage par le gain ni par l'ordre d'inscription.
@@ -18574,7 +18774,7 @@ async function resolveDay(){
     // On CONSERVE le bonus tel que le joueur l'a joué (on ne le reconstruit surtout pas champ par
     // champ : `target2` du Coup Double avait été oublié → 2ᵉ match perdu à la résolution). On retire
     // juste les champs calculés d'une résolution précédente, puis on les recalcule.
-    for(const pid in dayNet){ let c=PD[pid].card; const u2={net:dayNet[pid]};
+    const paraJoue={}; for(const pid in dayNet){ let c=PD[pid].card; const u2={net:dayNet[pid]};
       /* ⚠️ v8.313 (bug vécu par Hervé : perte 🧬 Clone-de-🔥 affichée SIMPLE au lieu de ×2) —
          `runEngine` copie déjà la carte adverse SUR SA PROPRE copie de PD (Phase 0, plus haut) pour
          calculer le net — c'est pourquoi le capital, lui, était correct. Mais CETTE boucle relit
@@ -18592,6 +18792,7 @@ async function resolveDay(){
         if(stolen[pid]) u2.card.stole=stolen[pid];
         if(cloned[pid]) u2.card.cloned=cloned[pid];
         if(volePar[pid]) u2.card.stolenBy=volePar[pid]; }
+      paraJoue[pid]=(typeof parachuteJoue==="function")&&parachuteJoue(u2.card);   // 🪂 (30/10) : bonus réellement joué (copié par 🧬, pas volé par 🥷)
       await q(db.from("bets").update(u2).eq("league_id",L.id).eq("day",D).eq("player_id",pid)); }
     // persiste l'inversion sur le pari de la victime (choix initial → final visibles dans le détail)
     for(const pid in cadeauFlips){ const fl=cadeauFlips[pid]; const picks=PD[fl.victim].picks.map(x=>({...x})); picks[fl.match]={...picks[fl.match],sel:fl.to,orig:fl.from,flipBy:pid};
@@ -18607,6 +18808,7 @@ async function resolveDay(){
     // Il n'a rien pronostiqué ce jour-là → il ne peut pas rafler l'étoile devant des joueurs en négatif.
     // v8.551 — barème commun : FIGÉ par la base sur la ligne réclamée (`fresh`, déclencheur trg_bareme_commun_journee).
     const bcJ=baremeCommunPose(fresh,D);
+    const paraJ=(typeof parachutePose==="function")&&parachutePose(fresh,D);   // 🪂 (30/10) : figé par la base sur la ligne réclamée, comme le barème
     const starIds=dayStars(ps.filter(p=>!forgot.has(p.id)).map(p=>{ const gm=gainMise(PD[p.id]?PD[p.id].picks:[], PD[p.id]?PD[p.id].fx:[]); return {id:p.id, net:dayNet[p.id]||0, gain:dayGains[p.id]||0, mise:gm.mise, order:p.join_order||0}; }).filter(r=>r.mise>0), isScoring2(), bcJ);
     if(starMech(N)) starIds.forEach(id=>{ if(upd[id]) upd[id].points+=1; });   // pas d'étoile à 2 joueurs (cf. starMech)
     // (v4.13 — malus « −1 pt si tous les paris faux » SUPPRIMÉ.) C'était une TROISIÈME peine pour le
@@ -18618,8 +18820,8 @@ async function resolveDay(){
     // Points : vainqueur 3 (net>0) ou 1 (net≤0) ; perdant 1 (net>0) ou 0 (net≤0) ; nul 1/1.
     // Les séries 🔥/❄️ ne servent que d'indicateur de dynamique (aucun avantage).
     for(const d of dz){ const hp=PD[d.home_id], ap=PD[d.away_id]; if(!hp||!ap) continue;
-      const H=Object.assign({net:dayNet[d.home_id]||0}, gainMise(hp.picks,hp.fx), {gain:dayGains[d.home_id]||0});
-      const A=Object.assign({net:dayNet[d.away_id]||0}, gainMise(ap.picks,ap.fx), {gain:dayGains[d.away_id]||0});
+      const H=Object.assign({net:dayNet[d.home_id]||0}, gainMise(hp.picks,hp.fx), {gain:dayGains[d.home_id]||0, parachute:paraJ&&!!paraJoue[d.home_id]});
+      const A=Object.assign({net:dayNet[d.away_id]||0}, gainMise(ap.picks,ap.fx), {gain:dayGains[d.away_id]||0, parachute:paraJ&&!!paraJoue[d.away_id]});
       const r=duelPtsF(H,A,forgot.has(d.home_id),forgot.has(d.away_id),isScoring2(),bcJ);
       const lastMult=(D===((fresh.num_days||0)-1))?2:1;   // dernière journée : points de duel ×2 (cf. lastDayMult)
       upd[d.home_id].points+=r.h*lastMult; upd[d.away_id].points+=r.a*lastMult;
@@ -18813,9 +19015,10 @@ function recapBody(D){
   const dpts={}; players.forEach(p=>dpts[p.id]=0);
   const lastMult=lastDayMult(D);   // dernière journée : points de duel ×2 (cohérent avec resolveDay/computeStandHist)
   const bcJ=baremeCommunJour(L,D);   // v8.551 — barème de CETTE journée (figé par la base à sa réclamation)
+  const paraJ=(typeof parachuteJour==="function")&&parachuteJour(L,D);   // 🪂 (30/10) : règle de CETTE journée (figée par la base à sa réclamation)
   duels.forEach(d=>{ const hb=bets.find(b=>b.player_id===d.home_id), ab=bets.find(b=>b.player_id===d.away_id);
-    const H=Object.assign({net:netMap[d.home_id]||0}, gainMiseReel(hb, d.fixtures, ab));
-    const A=Object.assign({net:netMap[d.away_id]||0}, gainMiseReel(ab, d.fixtures, hb));
+    const H=Object.assign({net:netMap[d.home_id]||0, parachute:paraJ&&parachuteJoue(hb&&hb.card)}, gainMiseReel(hb, d.fixtures, ab));
+    const A=Object.assign({net:netMap[d.away_id]||0, parachute:paraJ&&parachuteJoue(ab&&ab.card)}, gainMiseReel(ab, d.fixtures, hb));
     const r=duelPtsF(H,A,forgot(d.home_id),forgot(d.away_id),isScoring2(),bcJ); dpts[d.home_id]+=r.h*lastMult; dpts[d.away_id]+=r.a*lastMult; });
     // (v4.13 — le malus « −1 pt si tous les paris faux » qui s'appliquait ici est supprimé, cf. resolveDay.)
   const starOn=starMech(players.length);   // ⭐ désactivée à 2 joueurs (points + affichage)
@@ -18837,8 +19040,8 @@ function recapBody(D){
   const oppNet=oppId!=null?(netMap[oppId]||0):0;
   let fpOutcome=null, fpDuelPts=0;
   if(myD){ const hb=bets.find(b=>b.player_id===myD.home_id), ab=bets.find(b=>b.player_id===myD.away_id);
-    const H=Object.assign({net:netMap[myD.home_id]||0}, gainMiseReel(hb, myD.fixtures, ab));
-    const A=Object.assign({net:netMap[myD.away_id]||0}, gainMiseReel(ab, myD.fixtures, hb));
+    const H=Object.assign({net:netMap[myD.home_id]||0, parachute:paraJ&&parachuteJoue(hb&&hb.card)}, gainMiseReel(hb, myD.fixtures, ab));
+    const A=Object.assign({net:netMap[myD.away_id]||0, parachute:paraJ&&parachuteJoue(ab&&ab.card)}, gainMiseReel(ab, myD.fixtures, hb));
     const r=duelPtsF(H,A,forgot(myD.home_id),forgot(myD.away_id),isScoring2(),bcJ); const iAmHome=myD.home_id===fp; fpDuelPts=(iAmHome?r.h:r.a)*lastMult;   // ×2 dernière journée (cohérent avec le tableau)
     fpOutcome = (r.win==null)?'tie':(((r.win==='h')===iAmHome)?'win':'loss'); }
   const won=fpOutcome==='win', tie=fpOutcome==='tie';
@@ -20219,7 +20422,15 @@ function computeStandHist(){
   if(!chartBets || !standDuels) return [];
   const N = (L.status==="done" ? (L.num_days||0) : (L.current_day||0)); // journées résolues
   if(N<1) return [];
-  const cacheKey = (L?L.id:null)+'|'+L.status+'|'+N+'|'+(L.bareme_des_jour==null?'':L.bareme_des_jour)+'/'+(L.bareme_fin_jour==null?'':L.bareme_fin_jour)+'|'+chartBets.length+'|'+standDuels.length+'|'+((standTrades||[]).length)+'|'+players.length;
+  /* ⚠️ v8.540 — RELIQUAT DE LA TRÊVE (cf. treveRegleReliquat) : le crédit écrit par le serveur à la clôture
+     (`treve_st.reliquat[pid]`) entre dans le capital au DÉBUT de la journée `treve_st.day` (1re journée après
+     la trêve), comme un rachat (`troc`) : AVANT les gains de ce jour, jamais dans son `net`. Les journées
+     d'avant la trêve restent donc exactes, et un joueur recapitalisé juste avant (40 €) repart de 40 + crédit.
+     Sans marqueur ni journal : relJ=null, relDay=−1 → rejeu d'avant, au centime près. Le montant appliqué est
+     noté `treveRel` dans l'instantané de ce jour-là (absent sinon) pour que showCapInfo l'ôte du résultat. */
+  const relJ=treveReliquatJournal(L), relDay=treveReliquatJour(L);
+  const relSig=relJ?(relDay+':'+Object.keys(relJ).map(k=>k+'='+relJ[k]).join(',')):'';
+  const cacheKey = (L?L.id:null)+'|'+L.status+'|'+N+'|'+(L.bareme_des_jour==null?'':L.bareme_des_jour)+'/'+(L.bareme_fin_jour==null?'':L.bareme_fin_jour)+'|'+chartBets.length+'|'+standDuels.length+'|'+((standTrades||[]).length)+'|'+players.length+(relSig?'|'+relSig:'');
   if(_standHistCache && _standHistCache.key===cacheKey && _standHistCache.chartBets===chartBets && _standHistCache.standDuels===standDuels && _standHistCache.players===players && _standHistCache.standTrades===standTrades){
     return _standHistCache.result;
   }
@@ -20246,6 +20457,8 @@ function computeStandHist(){
     // AVANT les gains du jour : l'échange a lieu entre deux journées, donc il fait partie du
     // capital avec lequel on aborde celle-ci.
     if(troc[d]) Object.keys(troc[d]).forEach(pid=>{ if(st[pid]) st[pid].capital=Math.max(0,Math.round((st[pid].capital+troc[d][pid])*100)/100); });
+    const relDuJour={};
+    if(relJ && d===relDay) players.forEach(p=>{ const v=treveReliquatDe(p.id,L); if(v>0 && st[p.id]){ st[p.id].capital=Math.round((st[p.id].capital+v)*100)/100; relDuJour[p.id]=v; } });
     const dz=duelByDay[d]||[];
     const inDay=pid=>dz.some(du=>du.home_id===pid||du.away_id===pid);
     // oubli : humain présent ce jour-là sans pari valide (picks vides ou absents)
@@ -20263,9 +20476,10 @@ function computeStandHist(){
     // points de duel + séries 🔥/❄️ + victoires
     const lastMult=(d===((L.num_days||0)-1))?2:1;   // dernière journée : points de duel ×2 (miroir EXACT de resolveDay)
     const bcJ=baremeCommunJour(L,d);   // v8.551 — barème de CETTE journée (figé par la base), jamais celui d'aujourd'hui
+    const paraJ=(typeof parachuteJour==="function")&&parachuteJour(L,d);    // 🪂 (30/10) : règle de CETTE journée (figée par la base)
     dz.forEach(du=>{ const hb=betAt[d+'|'+du.home_id], ab=betAt[d+'|'+du.away_id];
-      const H=Object.assign({net:(hb&&hb.net)||0}, gainMiseReel(hb, du.fixtures, ab));
-      const A=Object.assign({net:(ab&&ab.net)||0}, gainMiseReel(ab, du.fixtures, hb));
+      const H=Object.assign({net:(hb&&hb.net)||0, parachute:paraJ&&parachuteJoue(hb&&hb.card)}, gainMiseReel(hb, du.fixtures, ab));
+      const A=Object.assign({net:(ab&&ab.net)||0, parachute:paraJ&&parachuteJoue(ab&&ab.card)}, gainMiseReel(ab, du.fixtures, hb));
       const r=duelPtsF(H,A,forgot.has(du.home_id),forgot.has(du.away_id),isScoring2(),bcJ);
       const rh=r.h*lastMult, ra=r.a*lastMult;
       if(st[du.home_id]) st[du.home_id].points+=rh; if(st[du.away_id]) st[du.away_id].points+=ra;
@@ -20315,8 +20529,10 @@ function computeStandHist(){
     // arrive (d+2). Le détail des points est un compte de POINTS : y dater une pénalité à la
     // journée suivante rendait la colonne impossible à rapprocher du cumul affiché juste à côté.
     if(broke.length){ broke.forEach(p=>{ if(st[p.id]){ st[p.id].capital=RECAP_TARGET; st[p.id].points-=1; st[p.id].penRecap++; st[p.id].recapJours.push(d+1); } }); }
-    snaps.push(players.map(p=>({ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
-      points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star, penOubli:st[p.id].penOubli, penRecap:st[p.id].penRecap, penJours:st[p.id].penJours.slice(), recapJours:st[p.id].recapJours.slice() })));
+    snaps.push(players.map(p=>{ const o={ id:p.id,name:p.name,emoji:p.emoji,is_ai:p.is_ai,join_order:p.join_order,
+      points:st[p.id].points, capital:st[p.id].capital, duel_wins:st[p.id].duel_wins, best_day:st[p.id].best_day, best_odd:st[p.id].best_odd, streak_w:st[p.id].streak_w, streak_l:st[p.id].streak_l, star:st[p.id].star, penOubli:st[p.id].penOubli, penRecap:st[p.id].penRecap, penJours:st[p.id].penJours.slice(), recapJours:st[p.id].recapJours.slice() };
+      if(relDuJour[p.id]) o.treveRel=relDuJour[p.id];   // v8.540 : seulement le jour du crédit (forme inchangée sinon)
+      return o; }));
   }
   _standHistCache={key:cacheKey, chartBets, standDuels, players, standTrades, result:snaps};
   return snaps;
@@ -21807,8 +22023,12 @@ function showCapInfo(pid,idx){
   const depart=px?px.capital:100;
   const tr=[];
   for(let d=0; d<=last; d++){ const c=at(d,pid); if(!c) continue;
-    const av=(d>0)?at(d-1,pid):null; const capAv=av?av.capital:depart;
+    const av=(d>0)?at(d-1,pid):null; let capAv=av?av.capital:depart;
     const rec=((c.penRecap||0)-((av&&av.penRecap)||0))>0;
+    // ⚠️ v8.540 — reliquat de la trêve crédité au début de cette journée (cf. computeStandHist) : une ligne
+    // « 🔄 Trêve » à part, et le résultat de la journée se lit APRÈS le crédit (jamais gonflé par lui).
+    if(c.treveRel){ capAv=Math.round((capAv+c.treveRel)*100)/100;
+      tr.push(`<tr><td>${t("🔄 Trêve")}</td><td class="num"><b class="green">${euroSigned(c.treveRel)}</b></td><td class="num"><b>${euro(capAv)}</b></td></tr>`); }
     // ⚠️ Si la journée s'est terminée par un renflouement, la variation brute (capAv → capital)
     // mélange le résultat des paris et la remise à niveau. On reconstitue donc le résultat réel.
     const net=rec ? null : Math.round((c.capital-capAv)*100)/100;
@@ -21822,7 +22042,7 @@ function showCapInfo(pid,idx){
          <th style="text-align:left">${t("Jour")}</th><th style="text-align:right">${t("Résultat")}</th><th style="text-align:right">${t("Capital")}</th></tr>
          ${tr.join("")}</table></div>
        ${((p.penRecap||0)>0)?`<div style="margin-top:8px">💸 ${t("Les journées marquées d'un 💸 se sont terminées sous <b>{a}</b> : le capital a été remonté à <b>{b}</b>, contre <b>−1 point</b> à chaque fois. Le résultat de ces journées-là n'est donc pas lisible ici — il l'est sur l'écran Résultats.",{a:euro(RECAP_THRESHOLD),b:euro(RECAP_TARGET)})}</div>`:''}
-       <div style="margin-top:8px">${t("Le capital sert à miser : le plafond d'une journée en est un pourcentage.")}</div></div>`);
+       ${snaps.slice(0,last+1).some(s=>{ const x=s.find(y=>y.id===pid); return x&&x.treveRel; })?`<div style="margin-top:8px">${t("🔄 Le reliquat de la trêve (enchères validées) est ajouté au capital avant la reprise : il ne compte pas dans le résultat de la journée suivante.")}</div>`:''}<div style="margin-top:8px">${t("Le capital sert à miser : le plafond d'une journée en est un pourcentage.")}</div></div>`);
 }
 function showPenInfo(pid,idx,shownPts){
   const snaps=computeStandHist(); if(!snaps.length) return;
@@ -22157,9 +22377,15 @@ function capChart(uptoDay){
 
      `etapes` remplace la boucle : chaque journée est précédée de son 🤝 s'il y a eu échange, et
      un 🤝 final porte les rachats postérieurs à la dernière journée. */
+  /* ⚠️ v8.540 — RELIQUAT DE LA TRÊVE : une étape « 🔄 » à part, entre la journée pivot et la suivante (même
+     principe que 🤝 : un saut de capital qui n'est le résultat d'aucune journée doit se lire à part). Rangé à
+     `treve_st.day` ; s'il est postérieur à la dernière journée résolue (trêve close, journée suivante pas encore
+     jouée), il apparaît en dernière étape — sinon la courbe finirait sous le capital réel. Sans journal : rien. */
+  const relDayC=treveReliquatJour(L);
   const etapes=[];
-  for(let d=0;d<N;d++){ if(trocC[d]) etapes.push({t:"troc",d:d}); etapes.push({t:"jour",d:d}); }
+  for(let d=0;d<N;d++){ if(trocC[d]) etapes.push({t:"troc",d:d}); if(d===relDayC) etapes.push({t:"treve",d:d}); etapes.push({t:"jour",d:d}); }
   if(N===fullN && trocC[N]) etapes.push({t:"troc",d:N});   // conclus depuis la dernière résolution — seulement si on regarde bien la journée courante, pas une journée passée consultée en arrière
+  if(N===fullN && relDayC===N) etapes.push({t:"treve",d:N});
   /* ⚠️ v8.523 (Hervé, 07/10) — LA COURBE SUIT LE CAPITAL RÉEL APRÈS CHAQUE JOURNÉE. Elle refaisait son propre
      calcul (net + rachats + ancien oubli) et n'appliquait JAMAIS la recapitalisation (remontée à 40 €) : après
      un 💸, tous les points suivants étaient faux (cas réel : Fabien, P9RWG J2, −26,17 € sur la courbe). Elle lit
@@ -22171,6 +22397,7 @@ function capChart(uptoDay){
   const series=players.map(p=>{ let v=capAfter[p.id]; const pts=[100,v];
     etapes.forEach(e=>{
       if(e.t==="troc"){ if(trocC[e.d]&&trocC[e.d][p.id]) v=Math.max(0,Math.round((v+trocC[e.d][p.id])*100)/100); }
+      else if(e.t==="treve"){ const r=treveReliquatDe(p.id,L); if(r>0) v=Math.round((v+r)*100)/100; }
       else { const sn=snaps[e.d]&&snaps[e.d].find(x=>x.id===p.id);
              if(sn) v=sn.capital;
              else { v=Math.max(0,v+(netByDay[p.id][e.d]||0));
@@ -22180,11 +22407,12 @@ function capChart(uptoDay){
     return {p,pts}; });
   const allv=series.flatMap(s=>s.pts); let mn=Math.min(...allv), mx=Math.max(...allv); if(!isFinite(mn)){mn=0;mx=100;}
   const pad=Math.max(5,(mx-mn)*0.12); const lo=Math.max(0,Math.floor((mn-pad)/10)*10), hi=Math.max(lo+10,Math.ceil((mx+pad)/10)*10);
-  const labels=["100€",t("Bonus")].concat(etapes.map(e=> e.t==="troc" ? "🤝" : "J"+(e.d+1)));
-  const troc=etapes.some(e=>e.t==="troc");
+  const labels=["100€",t("Bonus")].concat(etapes.map(e=> e.t==="troc" ? "🤝" : (e.t==="treve" ? "🔄" : "J"+(e.d+1))));
+  const troc=etapes.some(e=>e.t==="troc"), treveE=etapes.some(e=>e.t==="treve");
   return lineChart(series, labels,
     t("📈 Évolution du capital (départ → bonus → chaque journée)")
-    + (troc?` <span style="opacity:.8">· 🤝 ${t("rachat de bonus")}</span>`:''), lo, hi);
+    + (troc?` <span style="opacity:.8">· 🤝 ${t("rachat de bonus")}</span>`:'')
+    + (treveE?` <span style="opacity:.8">· 🔄 ${t("reliquat de la trêve")}</span>`:''), lo, hi);
 }
 // Évolution des POINTS (le classement) — les points font le championnat, le capital n'est qu'un moyen.
 // S'appuie sur les snapshots par journée de computeStandHist (mêmes règles que le classement : duel, ⭐, malus, oubli).
@@ -22535,7 +22763,7 @@ function showLeagueInfo(lid){
          ⚠️ `hasTreve(lg)` ET NON `hasTreve()` : cette fenêtre s'ouvre depuis la liste des ligues,
          où `L` désigne une autre ligue — ou aucune. La fonction prend une ligue en argument
          précisément pour ce cas. */''}
-    ${row(t("🃏 Enchères"), hasTreve(lg)?t("Départ + trêve de mi-saison"):t("Au départ seulement"), hasTreve(lg)?t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>40 €</b> — hors cagnotte — pour tout racheter. Au départ, chacun est limité à la <b>moitié</b> des journées en bonus."):t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison."))}
+    ${row(t("🃏 Enchères"), hasTreve(lg)?t("Départ + trêve de mi-saison"):t("Au départ seulement"), hasTreve(lg)?(treveReliquatTexte(lg)?t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>40 €</b> pour tout racheter ; le non-dépensé rejoint son capital s'il valide. Au départ, chacun est limité à la <b>moitié</b> des journées en bonus."):t("À la moitié des journées, les bonus non joués sont <b>perdus</b> et chacun reçoit <b>40 €</b> — hors cagnotte — pour tout racheter. Au départ, chacun est limité à la <b>moitié</b> des journées en bonus.")):t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison."))}
     ${(m.org&&lg.status!=="done")?`<div style="height:6px"></div><button class="btn ghost sm" style="border-color:var(--red);color:var(--red);width:100%" onclick="closeLeagueFromHome('${lg.id}')">${t("🛑 Abandonner la ligue")}</button><div class="mini muted" style="margin-top:6px">${t("Archive la ligue dans « Ligues terminées ». Action irréversible.")}</div>`:''}`;
   infoModal("⚙️", t("Caractéristiques de la ligue"), body);
 }
@@ -24543,10 +24771,13 @@ function viewAdmin(){
             const nomJour=d=>new Date(d+"T12:00:00").toLocaleDateString('fr-FR',{weekday:'short',day:'numeric'});
             // v8.518 (Hervé, 05/10) — chaque jour est CLIQUABLE : détail des appels (showOddsJour).
             const lignes=jours.map(x=>`<div class="row mini clik" style="margin:2px 0" onclick="showOddsJour('${x.d}')" title="Voir le détail des appels"><span class="muted">${nomJour(x.d)} ›</span><b>${x.n}</b></div>`).join("");
-            const verdict = proj>500 ? `<b class="red">${proj} crédits projetés</b> sur le mois — au-dessus des 500 du plan gratuit`
-                                     : `<b class="green">${proj} crédits projetés</b> sur le mois — dans les 500 du plan gratuit`;
+            // 30/10/2026 (Hervé) : forfait 20 000 crédits/mois (The Odds API) — garde-fou serveur à paliers, cf. tools/patch-admin-odds-20000.py
+            const verdict = proj>20000 ? `<b class="red">${proj} crédits projetés</b> sur le mois — au-dessus du forfait de 20 000`
+                                     : `<b class="green">${proj} crédits projetés</b> sur le mois — dans le forfait de 20 000`;
             return `<div class="box"><div class="mini muted" style="margin-bottom:4px">📊 Consommation mesurée <span class="mini">(${jours.length} jour(s))</span></div>${lignes}
               <div class="mini" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">Moyenne <b>${moy.toFixed(1)}</b>/jour · ${verdict}</div></div>`; })()
+        + `<div class="box mini muted" id="oddsPaliers">🛡️ Garde-fou du forfait (20 000/mois) : score en direct coupé sous <b>6 000</b> restants, nouvelles cotes sous <b>3 000</b>, résultats toujours lus jusqu'à la réserve de <b>1 000</b>.</div>`
+        + (nb<=4000?`<div class="box mini" id="oddsAlerte80" style="border-color:var(--gold);background:rgba(231,196,90,.10)"><b class="gold">⚠️ 80 % du forfait consommés</b> — ${nb} crédits restants ce mois-ci.</div>`:"")
         + (nb<50?`<div class="box mini" style="border-color:var(--red);background:rgba(229,105,95,.10)"><b class="red">⚠️ Quota bientôt épuisé</b><div class="mini muted" style="margin-top:3px">Sans crédits, les vrais résultats ne remontent plus : les journées en données réelles restent bloquées et les joueurs ne voient que des horloges. Les ligues en matchs simulés ne sont pas concernées.</div></div>`:''); })()}`;
   const cJeu=`${st("🃏 Bonus jouées au total", a.cardsPlayed)}
     <div class="box"><div class="mini muted" style="margin-bottom:6px">🃏 Bonus les plus joués <span class="mini">(par des humains)</span></div>
@@ -24770,11 +25001,13 @@ let rootAffiche=null;   // dernier HTML réellement posé dans #root (cf. la not
 function maintenanceHTML(){
   return '<div style="max-width:420px;margin:60px auto;padding:28px 22px;text-align:center;color:#f4ecd8;'
     +'background:#161221;border-radius:16px;border:1px solid rgba(255,255,255,.08)">'
-    +'<div class="a2-title" style="margin:0 0 16px;color:#f4ecd8">TACTIZO</div>'
-    +'<h2 style="margin:0 0 14px;font-size:20px;color:#f4ecd8">'+esc(t("Tactizo évolue"))+'</h2>'
-    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">'+esc(t("Une nouvelle version est en cours de préparation."))+'</p>'
-    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">'+esc(t("Le jeu est temporairement indisponible pendant la mise à jour."))+'</p>'
-    +'<p style="margin:0 0 22px;line-height:1.5;font-weight:600;color:#f4ecd8">'+esc(t("Reviens très bientôt !"))+'</p>'
+    // ⟦MAINTENANCE-MAESTRO⟧ 30/10 (Hervé) : le Maestro à la tablette + texte neutre (convient aussi à une urgence)
+    +'<div class="a2-title" style="margin:0 0 10px;color:#f4ecd8">TACTIZO</div>'
+    +'<img src="img/qg-tactizo-maestro-tablette.png" alt="" style="width:170px;height:auto;display:block;margin:0 auto 6px">'
+    +'<h2 style="margin:0 0 12px;font-size:20px;color:#f4ecd8">'+esc(t("Pause technique"))+'</h2>'
+    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">'+esc(t("Le Maestro règle un détail en coulisses."))+'</p>'
+    +'<p style="margin:0 0 10px;line-height:1.5;color:#f4ecd8">'+esc(t("Le jeu revient très vite."))+'</p>'
+    +'<p style="margin:0 0 20px;line-height:1.5;font-weight:600;color:#f4ecd8">'+esc(t("À tout de suite !"))+'</p>'
     +'<a href="javascript:void(0)" onclick="logout()" style="font-size:12px;color:#f4ecd8;opacity:.55;text-decoration:underline">'+esc(t("Se déconnecter"))+'</a>'
     +'</div>';
 }
@@ -24808,6 +25041,7 @@ function render(){
   if(AUTH && ((MAINTENANCE_MODE && !MAINTENANCE_ALLOWED_IDS.includes(AUTH.id)) || (REAL_MAINTENANCE && AUTH.id!==ADMIN_ID))){
     $("topBar").classList.add("hide");
     $("root").innerHTML = maintenanceHTML();
+    try{ const rh=$("rushHote"); if(rh) rh.classList.add("hide"); document.documentElement.classList.remove("rt-onglet"); }catch(e){}   // ⟦MAINTENANCE-MAESTRO⟧
     const bn=$("bottomnav"); if(bn){ bn.innerHTML=""; bn.classList.add("hide"); }
     const fo=$("foot"); if(fo) fo.innerHTML="Tactizo · "+APP_VERSION;
     return;
@@ -27110,7 +27344,7 @@ function trStep4Html(){ const R=trR(), m=TR5_MATCH, A=TR5_ADV, P=R.points, c=(ty
   <div class="t2-bareme" id="trS4bar">
     <div class="t2-bareme-row plus"><span>${t("+{a} points si ton pronostic est gagnant et que ton net est positif",{a:P.net_positif})}</span></div><!-- ⟦TUTO-RUSH-POINTS-FORMULATION⟧ -->
     <div class="t2-bareme-row plus"><span>${P.gain_requis?t("+{a} point supplémentaire si tu remportes ton duel avec un net positif",{a:P.victoire}):t("+{a} pt si ton net est meilleur que celui de ton adversaire",{a:P.victoire})}</span></div>
-    ${P.gain_requis?`<div class="t2-bareme-row plus"><span>${t("0 point si ton net est nul ou négatif")}</span></div>`:""}
+    ${P.gain_requis?`<div class="t2-bareme-row plus"><span>${t("0 point si ton net est nul ou négatif (sauf 🪂 : +1 si tu perds moins que ton adversaire)")}</span></div>`:""}
   </div>
   <div class="t2-pts-wrap" id="trS4pts"></div>
   </div>`; }
@@ -27219,7 +27453,7 @@ function p4ComprendreRush(){
     + p4Sec(t("📈 Divisions et montées"), `${t("Une saison compte {a} duels au plus. Tu démarres en Division {b}. Dès que tu atteins le seuil de montée, ta saison s'arrête et tu montes : c'est la <b>montée immédiate</b>. Sous le seuil de maintien à la fin de la saison, tu descends.",{a:R.duels,b:e?e.d:""})}${T.TABLE_DIVISIONS||""}`)
     + p4Sec(t("🔥 La Super Finale"), `${P.gain_requis
         ? t("Le {a}ᵉ duel de ta saison : points ×{b} (+{c} si ton net final est positif, +{d} de plus si tu gagnes le duel avec ce gain, soit {e} au plus).",{a:R.duels,b:m,c:P.net_positif*m,d:P.victoire*m,e:(P.net_positif+P.victoire)*m})
-        : t("Le {a}ᵉ duel de ta saison : points ×{b} (+{c} si ton net final est positif, +{d} si ton net est meilleur que celui de ton adversaire, soit {e} au plus).",{a:R.duels,b:m,c:P.net_positif*m,d:P.victoire*m,e:(P.net_positif+P.victoire)*m})}<br>${t("Mise jusqu'à {a} % de ton capital, et aucune recapitalisation après.",{a:SF.plafond_pct})} ${t("📈 Investisseur et 🩸 Sangsue y sont « Sans impact ».")}`)
+        : t("Le {a}ᵉ duel de ta saison : points ×{b} (+{c} si ton net final est positif, +{d} si ton net est meilleur que celui de ton adversaire, soit {e} au plus).",{a:R.duels,b:m,c:P.net_positif*m,d:P.victoire*m,e:(P.net_positif+P.victoire)*m})}<br>${t("Mise jusqu'à {a} % de ton capital, et aucune recapitalisation après.",{a:SF.plafond_pct})} ${t("📈 Investisseur, 🩸 Sangsue et 🛡 Assurance y sont « Sans impact ».")}`)
     + p4Sec(t("🃏 Les bonus"), t("Chaque saison : {a} bonus gratuits, ou les {b} bonus Rush avec l'option Bonus complets. Un bonus au plus par duel, et chacun une seule fois par saison.",{a:R.bonus.gratuits.length,b:R.bonus.complets.length}))
     + `<div class="box" data-p4="rush-acces"><button class="btn" onclick="openTuto2('rush')">🎓 ${t("Voir le tutoriel Rush")}</button>
        <div style="height:8px"></div><button class="btn ghost" onclick="openRulesFull('rush')">📚 ${t("Toutes les règles de Rush")}</button></div>`;
@@ -27299,6 +27533,28 @@ function rqlCarteBoutique(){
       <svg class="a2-shop-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`;
 }
 /* ⟦RUSH-QUOTA-REEL⟧ fin */
+/* ⟦PAIEMENT-WEB⟧ Rush illimité — 30/10/2026 (tools/patch-paiement-web.py) : vendu sur le SITE (4,99 €) quand app_config.paiement_web
+   est actif : prix + « Souscrire » dans sa fiche, prix dans la carte Boutique. Interrupteur coupé : comportement d'avant (« Bientôt »). */
+const pwSellableOrigine = sellable;
+sellable = function(key){ return key==="rushillimite" ? (!estNatif() && PAIEMENT_WEB_ACTIF===true) : pwSellableOrigine.apply(this, arguments); };
+const pwFicheOrigine = showPremiumInfo;
+showPremiumInfo = function(key){
+  const r = pwFicheOrigine.apply(this, arguments);
+  try{ if(key==="rushillimite" && !estNatif() && PAIEMENT_WEB_ACTIF===true){ const E=rqlFicheEtat(), el=document.getElementById("rqlFicheEtat");
+    if(el && !E.prem && !E.owned){
+      el.innerHTML=t(PREM_LOCKED_PAYANT);
+      const v=document.getElementById("rqlVoirPremium");
+      if(v) v.insertAdjacentHTML("beforebegin", `<div class="mini" style="text-align:center;margin:8px 0 2px" id="pwPrix"><b>${euro(RQL_PRIX_PROPOSE)}</b> ${t("— valable 365 jours")}</div><button class="cta-gold" id="pwSouscrire" onclick="subscribeOpt('rushillimite')">🔓 ${t("Souscrire à cette option")}</button>`);
+    } } }catch(e){}
+  return r;
+};
+const pwCarteOrigine = rqlCarteBoutique;
+rqlCarteBoutique = function(){
+  const h = pwCarteOrigine.apply(this, arguments);
+  try{ if(!estNatif() && PAIEMENT_WEB_ACTIF===true && h) return h.replace(t("Bientôt disponible · incluse dans Tactizo Premium"), euro(RQL_PRIX_PROPOSE)); }catch(e){}
+  return h;
+};
+/* ⟦PAIEMENT-WEB⟧ Rush illimité fin */
 /* ⟦RUSH-ABONNEMENTS⟧ début — 30/10/2026 (Hervé : suivi libre, badge de division visible pour tous ; tools/patch-rush-abonnements.py).
    Badge « D5 » / « Élite » sur l'avatar des joueurs Rush dans les Ligues (classement, résultats du duel) ; toucher le badge ouvre
    la fiche Rush du joueur avec « ⭐ Suivre ». Données : rush_social (security definer) — jamais un pari, seulement division,
@@ -27335,7 +27591,7 @@ function rbForme(f){
 // 30/10 (Hervé) : derniers duels réglés, le plus récent EN HAUT, avec l'adversaire ; « référence » = sans effet pour lui.
 function rbDuels(D){
   return `<div class="mini muted" style="margin:12px 0 4px;text-align:left">${t("Derniers duels")}</div>` + D.map(d=>
-    `<div class="row" style="gap:8px;align-items:flex-start;justify-content:flex-start;margin:4px 0;text-align:left">${rbForme([d.issue])}<span style="flex:1;min-width:0;line-height:1.3">${d.adversaire ? `<b>${esc(t("contre {a}",{a:d.adversaire}))}</b>${d.reference ? ` <span class="mini muted">(${t("référence, sans effet pour lui")})</span>` : ""}<br>` : ""}<span class="mini muted">${esc(d.match||"")}</span></span></div>`).join("");
+    `<div class="row" style="gap:8px;align-items:flex-start;justify-content:flex-start;margin:4px 0;text-align:left">${rbForme([d.issue])}<span style="flex:1;min-width:0;line-height:1.3">${d.adversaire ? `<b>${esc(t("contre {a}",{a:d.adversaire}))}</b>${d.reference ? ` <span class="mini muted">(${t("référence, sans effet pour l’adversaire")})</span>` : ""}<br>` : ""}<span class="mini muted">${esc(d.match||"")}</span></span></div>`).join("");
 }
 const RBF = { uid:null, enCours:false };
 async function rbFiche(uid){
@@ -28103,7 +28359,7 @@ function viewRulesFull(){
 
    ${sec(t("🃏 Les bonus"), `${t("Au démarrage, chacun <b>mise en aveugle</b> sur les bonus qu'il veut. Chaque bonus revient au <b>plus offrant</b> — en cas d'égalité, au <b>premier</b> à avoir misé ce montant. Les <b>non-gagnants ne paient rien</b>. ⚠️ Un bonus sur lequel <b>personne</b> ne mise reste <b>hors jeu</b> jusqu'à la fin de la saison — ou jusqu'à la <b>trêve de mi-saison</b> s'il y en a une, où il repasse aux enchères (voir ci-dessous).")}<br>
      ${t("Total des mises ≤ <b>{a} €</b>, et pas plus de bonus que de journées. <b>Ce que tu remportes est retiré de tes 100 € de départ</b> — ce que tu ne dépenses pas te reste comme capital.",{a:SHOP_CAP})}<br>
-     ${t("Avec l'option premium <b>🔄 Trêve de mi-saison</b>, la vente aux enchères se joue en <b>deux temps</b> : au départ, chacun ne peut remporter que la <b>moitié</b> des journées en bonus (pas tout d'un coup) ; à la mi-saison, tous les bonus <b>non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> (hors cagnotte) pour tout racheter parmi <b>tous</b> les bonus, y compris ceux qu'aucun joueur n'avait achetés au départ.",{a:SHOP_CAP})}<br>
+     ${t("Avec l'option premium <b>🔄 Trêve de mi-saison</b>, la vente aux enchères se joue en <b>deux temps</b> : au départ, chacun ne peut remporter que la <b>moitié</b> des journées en bonus (pas tout d'un coup) ; à la mi-saison, tous les bonus <b>non joués sont perdus</b> — les tiens comme ceux des autres — et chacun reçoit <b>{a} €</b> (hors cagnotte) pour tout racheter parmi <b>tous</b> les bonus, y compris ceux qu'aucun joueur n'avait achetés au départ.",{a:SHOP_CAP})}${treveReliquatTexte(null)?' '+t("Seules les enchères gagnantes sont payées : le reste des {a} € est <b>ajouté à ton capital</b>, à condition d'avoir validé tes enchères. Valider sans miser rapporte donc les {a} € ; sans validation, rien n'est rendu.",{a:SHOP_CAP}):''}<br>
      ${t("<b>Un bonus = un seul propriétaire</b> dans la ligue, et <b>un seul bonus joué par journée</b>. Un bonus joué est consommé.")}<br>
      ${t("Les bonus <b>🎯 à cible</b> demandent de désigner un match au moment de parier. <b>💪 x/5</b> indique la force <i>indicative</i> d'un bonus, c'est-à-dire ce qu'il peut te <b>rapporter</b>. À côté, une seconde pastille dit ce qu'il peut te <b>coûter</b> : <b>🟢 Sans risque</b> (au pire il ne sert à rien, il ne peut jamais se retourner contre toi) ou <b>⚔️ Double tranchant</b> (il peut rapporter gros… comme avantager ton adversaire, ou amplifier tes pertes). Les seconds ne sont pas à éviter — ce sont les bonus des joueurs qui assument leurs pronos.")}<br>
      ${t("⚠️ Le <b>👑 match favori</b> et un bonus doivent être sur des <b>matchs différents</b> — sauf 🏷️ Deux pour le prix d'un, 🎁 Chérie c'est cadeau et 🤛 Dans ta face.")}
@@ -28370,13 +28626,28 @@ db.auth.onAuthStateChange((event,session)=>{
     // ⚠️ Lot A (2026-09-13) — vrai mode maintenance, lu une fois au démarrage (comme le reste de
     // cette section). Repli MUET sur `false` en cas d'échec (réseau, table absente...) : une
     // panne de LECTURE de ce flag ne doit jamais, par accident, bloquer tout le monde.
+    try{ const rows=await q(db.from("app_config").select("actif").eq("k","paiement_web")); PAIEMENT_WEB_ACTIF=!!(rows&&rows[0]&&rows[0].actif); }catch(e){}   // ⟦PAIEMENT-WEB⟧
     try{ const rows=await q(db.from("app_config").select("actif").eq("k","maintenance")); REAL_MAINTENANCE=!!(rows&&rows[0]&&rows[0].actif); }catch(e){}
+    // ⟦MAINTENANCE-MAESTRO⟧ 30/10 (Hervé) : relu toutes les 60 s (page visible) — allumé : bascule des joueurs connectés ;
+    // éteint alors que le joueur est bloqué : rechargement, le jeu revient seul. Échec de lecture : rien ne change.
+    if(!window.__survMaintenance) window.__survMaintenance=setInterval(async ()=>{
+      if(document.hidden || !AUTH || AUTH.id===ADMIN_ID) return;
+      let actif; try{ const rows=await q(db.from("app_config").select("actif").eq("k","maintenance")); actif=!!(rows&&rows[0]&&rows[0].actif); }catch(e){ return; }
+      if(actif===REAL_MAINTENANCE) return;
+      if(!actif){ location.reload(); return; }
+      REAL_MAINTENANCE=true; try{ closeCardInfo(); }catch(e){} render();
+    }, 60000);
     // Recheck Odds : même lecture, même endroit, même repli MUET — mais vers `false` (cf. la
     // déclaration de RECHECK_ODDS_ACTIF). Une clé absente laisse donc le mécanisme fermé.
     try{ const rows=await q(db.from("app_config").select("actif").eq("k","recheck_odds")); RECHECK_ODDS_ACTIF=!!(rows&&rows[0]&&rows[0].actif); }catch(e){ RECHECK_ODDS_ACTIF=false; }
+    // v8.540 — textes GÉNÉRAUX de la trêve (reliquat rendu au capital) : même lecture, repli MUET sur `false`
+    // (clé absente = ancien texte). Les écrans propres à une trêve suivent, eux, son marqueur (cf. treveReliquatTexte).
+    try{ const rows=await q(db.from("app_config").select("actif").eq("k","treve_reliquat")); TREVE_RELIQUAT_ANNONCE=!!(rows&&rows[0]&&rows[0].actif); }catch(e){ TREVE_RELIQUAT_ANNONCE=false; }
     // v8.551 — barème commun des Ligues : même lecture, repli MUET sur `false` (clé absente = ancien barème affiché).
     // N'influence QUE les textes et la prévision de la journée pas encore réclamée ; les points viennent du serveur.
     try{ const rows=await q(db.from("app_config").select("actif,note").eq("k","bareme_commun")); const r0=rows&&rows[0]; BAREME_COMMUN_VARIANTE=(r0&&r0.actif&&["cible","2+1","2+2"].indexOf(r0.note)>=0)?r0.note:null; }catch(e){ BAREME_COMMUN_VARIANTE=null; }
+    // 🪂 (30/10) : même lecture, repli MUET sur false — textes et prévision de la journée pas encore réclamée seulement.
+    try{ const rows=await q(db.from("app_config").select("actif").eq("k","parachute_point")); PARACHUTE_POINT_ACTIF=!!(rows&&rows[0]&&rows[0].actif===true); }catch(e){ PARACHUTE_POINT_ACTIF=false; }
     // ⚠️ Lot A (2026-09-13) — version minimale native : NATIF UNIQUEMENT (le web a déjà son propre
     // mécanisme, checkForUpdate() plus bas). Repli MUET (aucun blocage) en cas d'échec de lecture.
     await verifierVersionMin(true);   // v8.538 : même lecture, factorisée (aussi relue après connexion et au retour au premier plan)
