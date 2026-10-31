@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.4";
+const APP_VERSION = "v8.557.5";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -8373,6 +8373,7 @@ const EN={
   "1 match en cours":"1 match in progress",
   "{a} matchs en cours":"{a} matches in progress",
   "résultats vers {a}":"results around {a}",
+  "résultats demain vers {a}":"results tomorrow around {a}", "résultats le {a} vers {b}":"results on {a} around {b}",   // ⟦ATTENTE-JOURNEE⟧
   "prochain match {a}":"next match {a}",
   "Tout est à jour":"All up to date",
   "Aucune ligue en cours":"No league in progress",
@@ -13018,6 +13019,7 @@ async function loadHomeTodo(){
       q(db.from("duels").select("league_id,day,home_id,away_id,fixtures,sel_ends_at").in("league_id",lids)),   // v8.538 : échéance PROPRE au duel (rythme unique) pour la carte « Choisis tes matchs »
       q(db.from("bets").select("league_id,day,player_id").in("league_id",lids))
     ]);
+    try{ window.__nvDls = dls || []; }catch(e){}   // ⟦ATTENTE-JOURNEE⟧ fin de la journée de ligue (tous les duels) pour nvAttente
     act.forEach(m=>{
       const d=m.lg.current_day||0;
       const duel=(dls||[]).find(x=>x.league_id===m.lg.id && x.day===d && (x.home_id===m.pid||x.away_id===m.pid));
@@ -27802,6 +27804,20 @@ function nvQuand(ts){ const d=new Date(ts), now=new Date(), loc=lang==="en"?'en-
   if(new Date(now.getTime()+86400000).toDateString()===d.toDateString()) return t("demain {a}",{a:hm});
   return d.toLocaleDateString(loc,{day:'2-digit',month:'2-digit'})+" "+hm; }
 function nvHM(ts){ return new Date(ts).toLocaleTimeString(lang==="en"?'en-GB':'fr-FR',{hour:'2-digit',minute:'2-digit'}); }
+/* ⟦ATTENTE-JOURNEE⟧ 31/10 (Hervé) : la journée se règle quand TOUS ses duels ont fini. Fin estimée du dernier match non terminé
+   de la journée (tous duels, déjà chargés par loadHomeTodo), arrondie aux 5 min ; 0 = plus rien à attendre (ou rien de connu). */
+function nvFinJournee(lg){
+  let fin=0;
+  try{ const day=lg.current_day|0;
+    (window.__nvDls||[]).filter(d=>d && d.league_id===lg.id && d.day===day && Array.isArray(d.fixtures)).forEach(d=>d.fixtures.forEach(f=>{
+      if(!f || f.canceled || matchEtat(f)==="fini") return;
+      const k=fixtureKickoff(f,lg); if(k) fin=Math.max(fin, k+nvDureeMin(f)*60000); })); }catch(e){ return 0; }
+  return fin ? Math.ceil(fin/300000)*300000 : 0;
+}
+function nvResultatsVers(ts){ const d=new Date(ts), now=new Date();
+  if(d.toDateString()===now.toDateString()) return t("résultats vers {a}",{a:nvHM(ts)});
+  if(new Date(now.getTime()+86400000).toDateString()===d.toDateString()) return t("résultats demain vers {a}",{a:nvHM(ts)});
+  return t("résultats le {a} vers {b}",{a:d.toLocaleDateString(lang==="en"?'en-GB':'fr-FR',{day:'2-digit',month:'2-digit'}), b:nvHM(ts)}); }
 // Une ligne d'attente pour une ligue sans action : { ts (tri), txt } ; jamais d'heure inventée.
 function nvAttente(m){
   const lg=m.lg, now=Date.now();
@@ -27823,11 +27839,12 @@ function nvAttente(m){
   if(!fx.length || !kos.length) return { ts:9e15, txt:t("en attente") };
   if(lg.data_mode!=="real"){ const k=Math.min(...kos); return { ts:k, txt:t("1ᵉʳ match {a}",{a:nvQuand(k)}) }; }
   const etats=fx.map(f=>matchEtat(f)), enCours=etats.filter(e=>e==="encours").length;
-  if(etats.every(e=>e==="fini")) return { ts:now, txt:t("résultats imminents") };
+  if(etats.every(e=>e==="fini")){ const fj=nvFinJournee(lg);   // ⟦ATTENTE-JOURNEE⟧ un autre duel joue encore
+    return fj>now ? { ts:fj, txt:nvResultatsVers(fj) } : { ts:now, txt:t("résultats imminents") }; }
   if(enCours){
     let fin=0; fx.forEach(f=>{ const k=fixtureKickoff(f,lg); if(k) fin=Math.max(fin, k+nvDureeMin(f)*60000); });
-    fin=Math.ceil(fin/300000)*300000;
-    return { ts:fin, txt:(enCours===1?t("1 match en cours"):t("{a} matchs en cours",{a:enCours}))+" · "+t("résultats vers {a}",{a:nvHM(fin)}) };
+    fin=Math.max(Math.ceil(fin/300000)*300000, nvFinJournee(lg));   // ⟦ATTENTE-JOURNEE⟧
+    return { ts:fin, txt:(enCours===1?t("1 match en cours"):t("{a} matchs en cours",{a:enCours}))+" · "+nvResultatsVers(fin) };
   }
   const avant=fx.filter(f=>matchEtat(f)==="avant").map(f=>fixtureKickoff(f,lg)).filter(x=>x), k=avant.length ? Math.min(...avant) : Math.min(...kos);
   const commencee=etats.some(e=>e!=="avant") || !!(t0 && now>=t0);   // 24/10 : pronos figés dès le 1er match du duel
