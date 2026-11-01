@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.9";
+const APP_VERSION = "v8.557.10";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -6634,6 +6634,7 @@ const EN={
   "🎭 Enjeu de la ligue":"🎭 League stakes", "🎭 Enjeu":"🎭 Stakes",
   "🎭 Gage — au dernier":"🎭 Forfeit — for last place", "Le dernier du classement final réalise un gage choisi par le vainqueur.":"The last-placed player performs a forfeit chosen by the winner.",
   "🏆 Récompense — au premier":"🏆 Reward — for first place", "Le champion reçoit une récompense choisie par le dernier (aucun gage).":"The champion gets a reward chosen by the last-placed player (no forfeit).",
+  "Le dernier offre au champion une récompense qu'il choisit (aucun gage).":"The last-placed player gives the champion a reward of their choice (no forfeit).",   // ⟦ENJEU-SANS-BOTH⟧
   "⚔️ Les deux — gage ET récompense":"⚔️ Both — forfeit AND reward",
   "Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.":"Forfeit for the last-placed player AND reward for the champion. Everyone proposes both at the preparation step.",
   "✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit.":"✏️ Each player will suggest <b>their forfeit</b> and <b>their reward</b> at the preparation step — <b>two proposals</b>. 🏆 The <b>winner's</b> forfeit goes to the last-placed player, 🥄 the <b>last-placed player's</b> reward goes to the champion: whoever chooses is never the one who receives.",
@@ -14569,8 +14570,8 @@ function viewCreate(){
     eyebrow=t("Étape 3 sur 3"); title=t("Pimente ta ligue"); sub=t("L'enjeu qui donne envie de gagner (ou de ne pas perdre).");
     body = !solo ? `<div class="a2-sec-title">${t("Enjeu")}</div>
         ${opt(g.enjeu==='gage',false,"setNew('enjeu','gage')",'<img src="img/enjeu-gage.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Gage"),t("Le dernier du classement final réalise un gage choisi par le vainqueur."))}
-        ${opt(g.enjeu==='reward',false,"setNew('enjeu','reward')",'<img src="img/enjeu-recompense.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Récompense"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."))}
-        ${opt(g.enjeu==='both',false,"setNew('enjeu','both')",'⚔️',t("Gage + Récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."))}`
+        ${opt(g.enjeu==='reward',false,"setNew('enjeu','reward')",'<img src="img/enjeu-recompense.png" alt="" style="width:22px;height:22px;object-fit:contain">',t("Récompense"),t("Le dernier offre au champion une récompense qu'il choisit (aucun gage)."))}
+        ${''/* ⟦ENJEU-SANS-BOTH⟧ 01/11 (Hervé) : « Gage + Récompense » retiré — double peine pour le dernier */}`
       : `<div class="a2-note"><span>${t("🎭 En solo, il n'y a <b>ni gage ni récompense</b> — il faut au moins deux humains pour ça.")}</span></div>`;
     body+=`<div class="a2-sec-title">${t("🃏 Enchères de bonus")}${secInfo('treve')}</div>
       ${opt(!g.treve,false,"setNew('treve',false)",'🎯',t("Au départ seulement"),t("Une seule vente, avant la première journée."))}
@@ -14700,7 +14701,7 @@ async function createLeague(){
     if(newLg.treve && hasOpt('treve')) st.treve = true;
     if(solo) st.soloAR = (st.treve ? 2 : (newLg.soloAR===1?1:2));
     else {
-      st.enjeu = newLg.enjeu||'gage';
+      st.enjeu = (newLg.enjeu==='both' ? 'gage' : newLg.enjeu)||'gage';   // ⟦ENJEU-SANS-BOTH⟧ plus de « both » à la création
       // Vote du gage ouvert dès le LOBBY (amis) → on tire les options tout de suite + maps de votes vides.
       const both=(st.enjeu==="both");
       st.options = drawItems(both?"gage":st.enjeu, mode);
@@ -15188,7 +15189,7 @@ function prepSummaryBody(){
   // résumé "⚔️ Les deux — gage ET récompense" façon maquette — pas un nouveau texte, juste sa
   // relecture ici en plus de l'écran de création.
   const ENJEU_INFO={gage:[t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],
-    reward:[t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage).")],
+    reward:[t("🏆 Récompense — au premier"),t("Le dernier offre au champion une récompense qu'il choisit (aucun gage).")],
     both:[t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]}[s.enjeu];
   return `${isSolo()?'':`<div class="listsec">${t("🎭 L'enjeu du tournoi")}</div>
    ${ENJEU_INFO?`<div class="enjeu-box"><div><div class="name">${ENJEU_INFO[0]}</div><div class="desc">${ENJEU_INFO[1]}</div></div></div>`:''}
@@ -15582,7 +15583,7 @@ function viewLobby(){
     <h2>${t("🎲 Données")}</h2>
     ${[['sim',t("🎮 Simulé"),t("Matchs et cotes fictifs, résultats tirés selon leurs probabilités (un peu d'aléa). Aucun vrai match à attendre — pensé pour jouer entre amis, et enchaîner toute une partie sur une même soirée.")],['real',t("📡 Données réelles"),t("Vrais matchs, vraies cotes, vrais résultats : pour prouver qui est le meilleur pronostiqueur sur du concret. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués.")]].map(([k,nm,de])=>{const cur=((L.data_mode||'sim')===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setDataMode('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     ${solo?soloFormatHTML(org):`<h2>${t("🎭 Enjeu de la ligue")}</h2>
-    ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
+    ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le dernier offre au champion une récompense qu'il choisit (aucun gage).")]/* ⟦ENJEU-SANS-BOTH⟧ */].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row ${org?'clik':''}" ${org?`onclick="setEnjeu('${k}')"`:''} style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):(org?t("choisir"):'')}</span></div>`;}).join("")}
     <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense choisie par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>`}
     <div style="height:8px"></div>
     ${org?`<button class="btn" onclick="closeRegistration()" ${canLaunch?'':'disabled'}>${canLaunch?((solo?t("Lancer la partie solo"):t("Clôturer les inscriptions"))+(addAI?' (+🤖)':'')+' →'):t("Il faut au moins 1 joueur")}</button>
@@ -16456,7 +16457,7 @@ function paramInfo(kind){
   let emoji="ℹ️", title="", body="";
   if(kind==='mode'){ const m=MODES[getMode()]; emoji="🎛️"; title=t(m.n); body=modeDesc(getMode(),isSolo()); }
   else if(kind==='data'){ const real=(L.data_mode==='real'); emoji="🎲"; title=real?t("⚽ Matchs réels"):t("🎮 Matchs simulés"); body=real?t("Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : particulièrement adapté pour découvrir Tactizo, jouer immédiatement en solo, ou faire une partie entre amis sans attendre de vrais résultats sportifs."); }
-  else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")); }
+  else if(kind==='enjeu'){ emoji="🎭"; title=isBoth()?t("Les deux — gage ET récompense"):(isReward()?t("Récompense — au premier"):t("Gage — au dernier")); body=isBoth()?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(isReward()?t("Le dernier offre au champion une récompense qu'il choisit (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")); }
   else if(kind==='solo'){ emoji="🤖"; const one=(o.soloAR===1); title=one?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"); body=one?t("Partie éclair : tu affrontes l'IA une fois à domicile, une fois à l'extérieur."):t("Un peu plus long : le temps de sortir tes bonus et de te refaire si tu démarres mal."); }
   else if(kind==='treve'){ emoji="🃏";
     title = hasTreve()?t("Enchères au départ et à la trêve"):t("Enchères au départ seulement");
@@ -16534,7 +16535,7 @@ function lobbyParamsEditHTML(){
     <h2>${t("🃏 Enchères de bonus")}</h2>
     ${[[false,t("🎯 Au départ seulement"),t("Une seule vente aux enchères, avant la première journée. Tes bonus te suivent toute la saison.")],[true,t("🔄 Au départ et à mi-parcours"),treveReliquatTexte()?t("À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € pour tout racheter ; le non-dépensé rejoint son capital s'il valide.",{a:SHOP_CAP}):t("À la moitié des journées, les bonus non joués sont perdus et chacun reçoit {a} € — hors cagnotte — pour tout racheter.",{a:SHOP_CAP})]].map(([v,nm,de])=>{const cur=(hasTreve()===v); return `<div class="box row clik" onclick="setTreve(${v})" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b>${v?' '+premBadge('treve'):''}<div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
     <h2>${t("🎭 Enjeu de la ligue")}</h2>
-    ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le champion reçoit une récompense choisie par le dernier (aucun gage).")],['both',t("⚔️ Les deux — gage ET récompense"),t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation.")]].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row clik" onclick="setEnjeu('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
+    ${[['gage',t("🎭 Gage — au dernier"),t("Le dernier du classement final réalise un gage choisi par le vainqueur.")],['reward',t("🏆 Récompense — au premier"),t("Le dernier offre au champion une récompense qu'il choisit (aucun gage).")]/* ⟦ENJEU-SANS-BOTH⟧ */].map(([k,nm,de])=>{const cur=(getEnjeu()===k); return `<div class="box row clik" onclick="setEnjeu('${k}')" style="${cur?'border-color:var(--green)':''}"><div><b>${nm}</b><div class="mini muted">${de}</div></div><span class="chip ${cur?'g':''}" style="flex:0 0 auto">${cur?t("✓ choisi"):t("choisir")}</span></div>`;}).join("")}
     <div class="box mini muted">${isBoth()?t("✏️ Chaque joueur proposera <b>son gage</b> et <b>sa récompense</b> à la préparation — <b>deux propositions</b>. 🏆 Le gage du <b>vainqueur</b> va au dernier, 🥄 la récompense du <b>dernier</b> va au champion : celui qui choisit n'est jamais celui qui reçoit."):(isReward()?t("✏️ Chaque joueur pourra proposer <b>sa propre récompense</b> à l'étape de préparation. 🥄 C'est la récompense choisie par le <b>dernier</b> qui sera remise au champion."):t("✏️ Chaque joueur pourra proposer <b>son propre gage</b> à l'étape de préparation. 🏆 C'est le gage du <b>vainqueur</b> qui sera infligé au dernier."))}</div>
     <div class="mini muted" style="margin-top:6px">${t("Ces réglages restent modifiables tant que les inscriptions sont ouvertes. Ils sont figés dès que tu clôtures.")}</div>`;
 }
@@ -22762,7 +22763,7 @@ function showLeagueInfo(lid){
     ${solo
       ? row(t("🤖 Format"), soloAR===1?t("1 aller-retour — 2 journées"):t("2 allers-retours — 4 journées"), t("Partie en solo contre l'IA : pas de gage ni de récompense, il faut au moins deux humains pour ça."))
       : row(t("🎭 Enjeu"), both?t("Gage + récompense"):(rew?t("🏆 Récompense (au premier)"):t("🎭 Gage (au dernier)")),
-      both?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(rew?t("Le champion reçoit une récompense choisie par le dernier (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")))}
+      both?t("Gage au dernier ET récompense au champion. Chacun propose les deux à la préparation."):(rew?t("Le dernier offre au champion une récompense qu'il choisit (aucun gage)."):t("Le dernier du classement final réalise un gage choisi par le vainqueur.")))}
     ${row(t("🎲 Données"), real?t("⚽ Réels"):t("🎮 Simulé"), real?t("Vrais matchs, vraies cotes, vrais résultats : pronostique sur du concret et prouve qui pronostique le mieux. ⚠️ Une journée ne se résout qu'une fois les matchs réellement joués."):t("Matchs et résultats simulés à des cotes réalistes, sans attendre aucun vrai match : particulièrement adapté pour découvrir Tactizo, jouer immédiatement en solo, ou faire une partie entre amis sans attendre de vrais résultats sportifs."))}
     ${/* ⚠️ v8.85 (demandé par Hervé) — LES ENCHÈRES FIGURENT DANS LES CARACTÉRISTIQUES. C'est un
          réglage figé au même titre que le mode ou l'enjeu, et il change la façon de jouer toute
