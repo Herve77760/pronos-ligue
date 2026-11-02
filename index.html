@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.11";
+const APP_VERSION = "v8.557.12";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -8395,6 +8395,11 @@ const EN={
   "Duel {a}/{b}":"Duel {a}/{b}",
   "≈ {m} min":"≈ {m} min",
   "Accueil Rush":"Rush home",
+  "Mes suivis":"Following", "Suis tes amis":"Follow your friends", "{a} sur {b}":"{a} of {b}", "{a} suivis":"{a} followed",   // ⟦ACCUEIL-SUIVIS⟧
+  "{a} monte en {b}":"{a} moves up to {b}", "{a} descend en {b}":"{a} drops to {b}", "{a} champion Élite":"{a} Elite champion",
+  "{a} peut monter en {b}":"{a} can move up to {b}", "{a} peut être champion Élite":"{a} can be Elite champion",
+  "{a} joue son maintien":"{a} plays to stay up", "Rien de neuf depuis hier":"Nothing new since yesterday",
+  "🔒 Découvre ton résultat d'abord":"🔒 Reveal your result first",
   "Découvre ton résultat":"Discover your result",
   "Choisis ta rencontre":"Pick your match",
   "duel du jour · {a}/{b}":"today's duel · {a}/{b}",
@@ -28015,6 +28020,71 @@ function nvRushDirect(o){
   const m = fini ? t("Terminé") : (sp==="basket" && e!=null ? t("≈ {m} min",{m:e}) : String(minuteJeuEstimee(e, sp, false)).replace(/\s*\([^)]*\)\s*$/, ""));
   return (+sc.hs)+"-"+(+sc.as)+" "+m;
 }
+/* ⟦ACCUEIL-SUIVIS⟧ 02/11 (Hervé) — bloc « 👥 Mes suivis » de l'Accueil : ma place parmi mes suivis + 2 faits marquants (duel décisif,
+   montée / descente / titre des 48 h), Rush Réel. Serveur : rush_social_fil (lecture seule, anti-spoiler comme Mes suivis). Toucher le
+   bloc ouvre Mes suivis dans le paquet Rush. RPC absente ou refusée : pas de bloc. */
+NV.suivis = { lu:0, enCours:false, d:null };
+async function nvSuivisCharger(force){
+  if(!nvRushOk() || NV.suivis.enCours) return;
+  if(!force && NV.suivis.lu && Date.now()-NV.suivis.lu < 60000) return;
+  NV.suivis.enCours=true; let d=null;
+  try{ const r=await db.rpc("rush_social_fil"); d=(r && !r.error && r.data && typeof r.data==="object" && r.data.ok===true) ? r.data : null; }catch(e){ d=null; }
+  const avant=JSON.stringify(NV.suivis.d);
+  NV.suivis.enCours=false; NV.suivis.lu=Date.now(); NV.suivis.d=d;
+  if(S.view==="accueil" && JSON.stringify(d)!==avant) render();
+}
+if(typeof rsvAppeler==="function"){   // suivre / ne plus suivre / découvrir un résultat… dans Rush : bloc relu au retour à l'Accueil
+  const nvSuivisRsv = rsvAppeler;
+  rsvAppeler = function(fn, args){
+    const p = nvSuivisRsv.apply(this, arguments);
+    if(fn==="rush_social" || NV_RUSH_GESTES.includes(fn)) Promise.resolve(p).then(()=>{ NV.suivis.lu=0; }).catch(()=>{});
+    return p;
+  };
+}
+function nvOuvrirSuivis(){
+  if(!nvRushOk()) return;
+  const o={ ecran:"amis" }, deja=!!document.getElementById("rushTestCadre") && !RT.chargement;
+  RT.ouvrirApres=o; openRush();
+  if(deja && S.view==="rush") requestAnimationFrame(()=>rushEnvoyerOuvrir(o));
+}
+function nvSvDiv(d){ d=+d; return d===1 ? t("Élite") : "D"+d; }
+function nvSvRang(n){ n=+n; if(lang==="en"){ const s=(n%100>=11 && n%100<=13) ? "th" : ({1:"st",2:"nd",3:"rd"}[n%10]||"th"); return n+s; } return n===1 ? "1er" : n+"ᵉ"; }
+function nvSvFait(f){
+  if(!f || typeof f!=="object") return "";
+  const p=esc(String(f.pseudo||"?")), v=f.vers!=null ? nvSvDiv(f.vers) : "", enc=f.en_cours===true ? " · "+t("en cours") : "";
+  switch(f.type){
+    case "montee": return "⬆️ "+t("{a} monte en {b}",{a:p,b:v});
+    case "descente": return "⬇️ "+t("{a} descend en {b}",{a:p,b:v});
+    case "titre": return "🏆 "+t("{a} champion Élite",{a:p});
+    case "peut_monter": return "⚡ "+t("{a} peut monter en {b}",{a:p,b:v})+enc;
+    case "peut_titre": return "⚡ "+t("{a} peut être champion Élite",{a:p})+enc;
+    case "maintien": return "🛟 "+t("{a} joue son maintien",{a:p})+enc;
+    default: return "";
+  }
+}
+function nvBlocSuivis(){
+  const d=NV.suivis.d; if(!d) return "";
+  const ouvrir=`role="button" tabindex="0" onclick="nvOuvrirSuivis()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nvOuvrirSuivis();}"`;
+  if(!(+d.suivis>0)){
+    const r=nvRushMode("reel"), f=nvRushMode("fictif");
+    if(!NV.rush.lu || !r || !f || (!r.commence && !f.commence)) return "";   // carte d'invitation Rush à l'écran : une seule invitation
+    return `<section class="nv-bloc nv-sv" id="nvBlocSuivis" data-sv="inviter" ${ouvrir}><div class="nv-tete" style="margin:0"><span class="nv-titre">👥 ${t("Suis tes amis")}</span>${NV_CHEV}</div></section>`;
+  }
+  const tete=`<div class="nv-tete"><span class="nv-titre">👥 ${t("Mes suivis")}</span>${NV_CHEV}</div>`;
+  if(d.verrou===true) return `<section class="nv-bloc nv-sv" id="nvBlocSuivis" data-sv="verrou" ${ouvrir}>${tete}<div class="nv-sv-l">${t("🔒 Découvre ton résultat d'abord")}</div></section>`;
+  const pl=d.place||{}, med={1:"🥇",2:"🥈",3:"🥉"}[+pl.rang]||"";
+  const place = pl.division!=null
+    ? `${med?med+" ":""}${t("{a} sur {b}",{a:nvSvRang(pl.rang),b:+pl.total})} · ${nvSvDiv(pl.division)} · ${nvPts(+pl.points||0)}`
+    : t("{a} suivis",{a:+d.suivis});
+  const faits=(Array.isArray(d.faits) ? d.faits : []).map(nvSvFait).filter(Boolean).slice(0,2);
+  const corps = faits.length ? faits.map(x=>`<div class="nv-sv-l nv-sv-f">${x}</div>`).join("") : `<div class="nv-sv-l nv-sv-calme">${t("Rien de neuf depuis hier")}</div>`;
+  return `<section class="nv-bloc nv-sv" id="nvBlocSuivis" data-sv="fil" data-faits="${faits.length}" ${ouvrir}>${tete}<div class="nv-sv-l nv-sv-place">${place}</div>${corps}</section>`;
+}
+(function(){ try{ if(document.getElementById("nvSvStyle")) return; const st=document.createElement("style"); st.id="nvSvStyle"; st.textContent=
+  ".nv-sv{cursor:pointer;border-color:rgba(96,165,250,.45);background:linear-gradient(180deg,rgba(96,165,250,.08),var(--a2-panel) 60%)}"
+  +".nv-sv .nv-chev{stroke:#93c5fd}.nv-sv-l{padding:7px 0;border-top:1px solid var(--a2-border);font-size:13.5px;overflow-wrap:anywhere}"
+  +".nv-sv-place{font-weight:700}.nv-sv-calme{color:var(--a2-muted);font-size:13px}";
+  document.head.appendChild(st); }catch(e){} })();
 function nvBlocRush(){
   const r=nvRushMode("reel"), f=nvRushMode("fictif"), lu=!!NV.rush.lu;
   if(lu && r && f && !r.commence && !f.commence) return nvInvitRush();
@@ -28046,7 +28116,7 @@ function nvPhrase(lignes){
   return t("Tes ligues entre amis. Ou Rush, en solo.");
 }
 function nvVueAccueil(){
-  if(nvRushOk()) nvRushCharger(false);
+  if(nvRushOk()){ nvRushCharger(false); nvSuivisCharger(false); }   // ⟦ACCUEIL-SUIVIS⟧
   const lignes=nvLignesLigues();
   const nouveau = homeTodoLoaded && !(myLeagues||[]).length;
   const r=nvRushOk() ? nvRushMode("reel") : null, f=nvRushOk() ? nvRushMode("fictif") : null;
@@ -28054,7 +28124,7 @@ function nvVueAccueil(){
   const salut = (nouveau && !((r&&r.commence)||(f&&f.commence))) ? t("Bienvenue {a}",{a:pseudo}) : t("Salut {a}",{a:pseudo});
   const hero=`<div class="nv-hero" id="nvHero"><img src="img/accueil-hero-v1.webp" width="1200" height="600" alt="" decoding="async">
       <div class="nv-voile"><div class="nv-salut">${salut}</div><div class="nv-phrase" id="nvPhrase">${nvPhrase(lignes)}</div></div></div>`;
-  return `<div class="a2-wrap a2-wrap-tight nv-acc" id="nvAccueil">${hero}${nouveau?nvInvitLigues():nvBlocLigues(lignes)}${nvRushOk()?nvBlocRush():""}</div>`;
+  return `<div class="a2-wrap a2-wrap-tight nv-acc" id="nvAccueil">${hero}${nouveau?nvInvitLigues():nvBlocLigues(lignes)}${nvRushOk()?nvBlocSuivis():""}${nvRushOk()?nvBlocRush():""}</div>`;
 }
 // Contrat avec le paquet Rush : ouvrir DIRECTEMENT le QG d'un mode (decouvrir : lancer tout de suite la découverte du résultat).
 function nvOuvrirMode(mode, decouvrir, duel){
@@ -28072,6 +28142,9 @@ rushEnvoyerOuvrir = function(ecran){
   if(ecran.ecran==="bilan"){   // 25/10 : bilan d'une saison Rush depuis Palmarès › Moi (liste blanche)
     if((ecran.mode!=="reel" && ecran.mode!=="fictif") || !SPR_UUID.test(String(ecran.saison||""))) return;
     try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"bilan", mode:ecran.mode, saison:String(ecran.saison), retour:ecran.retour==="palmares"?"palmares":null }, "*"); }catch(e){}
+    return; }
+  if(ecran.ecran==="amis"){   // ⟦ACCUEIL-SUIVIS⟧ 02/11 : page « Mes suivis » (un paquet d'avant l'ignore : Accueil Rush)
+    try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"amis" }, "*"); }catch(e){}
     return; }
   if(ecran.ecran!=="mode" || (ecran.mode!=="reel" && ecran.mode!=="fictif")) return;   // liste blanche
   try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", v:1, ecran:"mode", mode:ecran.mode, decouvrir:ecran.decouvrir===true, ...(ecran.duel ? { duel:ecran.duel } : {}) }, "*"); }catch(e){}   // origine opaque : "*"
