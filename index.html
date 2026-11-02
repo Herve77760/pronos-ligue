@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.13";
+const APP_VERSION = "v8.557.14";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5688,6 +5688,7 @@ const EN={
   // du bas) ; le panneau QG affiche "Ranking"/"Management" via un override ciblé (qgLabel()), pas ici.
   "Stratégie":"Strategy",
   "Pas assez de données récentes pour ce voyant.":"Not enough recent data for this indicator.",
+  "Pas de ligue en cours : tes voyants reviennent dès ta prochaine ligue.":"No league in progress: your indicators come back with your next league.",   // ⟦QG-PAUSE⟧
   "Aucune journée récente exploitable pour mesurer ta forme.":"No recent day available to measure your form.",
   "Victoire sur ta dernière journée jouée.":"Win on your last played day.",
   "Défaite sur ta dernière journée jouée.":"Loss on your last played day.",
@@ -12432,10 +12433,23 @@ function qgRelevantLeagues(){
     .sort((a,b)=>(b.lg.finished_at||"").localeCompare(a.lg.finished_at||"")).slice(0,QG_RECENT_DONE_MAX);
   return {active, doneRecent, doneRecentCapped, pooled:[...active,...doneRecent]};
 }
+/* ⟦QG-PAUSE⟧ 02/11 (Hervé) — plus de Ligues depuis 3 jours (dernière journée consultée) : voyants gris ensemble, Maestro neutre. */
+const QG_PAUSE_MS=3*24*3600*1000;
+function qgEnPause(active, doneRecent){
+  if((active||[]).length || !(doneRecent||[]).length) return false;   // une ligue active ; ou rien de récent (déjà gris)
+  return doneRecent.every(m=>{
+    const fa=m.lg.finished_at ? Date.parse(m.lg.finished_at) : NaN;
+    const vieille=!isNaN(fa) && Date.now()-fa>QG_PAUSE_MS;
+    const vue=!!m.pid && getSeen(m.lg.id, m.pid)>=(m.lg.num_days|0);   // résultat final consulté (même source que les voyants figés)
+    return vieille && vue;
+  });
+}
+function qgPauseStatus(){ const r={}; QG_IND_KEYS.forEach(k=>r[k]={score:null,color:"gray",pause:true,msg:t("Pas de ligue en cours : tes voyants reviennent dès ta prochaine ligue.")}); return r; }
 async function loadQGStatus(){
   try{
     const {active,doneRecent,doneRecentCapped,pooled}=qgRelevantLeagues();
     if(!pooled.length){ qgStatus=qgEmptyStatus(); qgStatusLoaded=true; render(); return; }
+    if(qgEnPause(active, doneRecent)){ qgStatus=qgPauseStatus(); qgStatusLoaded=true; render(); return; }   // ⟦QG-PAUSE⟧
     const ids=[...new Set(pooled.map(m=>m.lg.id))];
     const [plys,bts,dls]=await Promise.all([
       q(db.from("players").select("id,league_id,points,capital,is_ai,join_order").in("league_id",ids)),
