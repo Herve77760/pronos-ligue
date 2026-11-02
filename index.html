@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.15";
+const APP_VERSION = "v8.557.16";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -8420,6 +8420,12 @@ const EN={
   "Tes matchs Rush sont en cours.":"Your Rush matches are live.",
   "Ton duel Rush t'attend.":"Your Rush duel is waiting.",
   "Tes ligues entre amis. Ou Rush, en solo.":"Your leagues with friends. Or Rush, solo.",
+  "{a} : devant l'IA, {b} d'avance":"{a}: ahead of the AI by {b}", "{a} : à {b} de l'IA":"{a}: {b} behind the AI",   // ⟦ACCUEIL-PHRASE-MOI⟧
+  "{a} : à égalité avec l'IA":"{a}: level with the AI", "{a} : {b} ex æquo":"{a}: joint {b}", "{a} : {b}, {c} d'avance":"{a}: {b}, {c} ahead",
+  "{a} : {b}":"{a}: {b}", "{a} : {b}, à {c} du 1er":"{a}: {b}, {c} off 1st", "{a} : {b}, à égalité de points avec le 1er":"{a}: {b}, level on points with 1st",
+  "Titre Élite assuré !":"Elite title secured!", "Montée en {a} assurée !":"Promotion to {a} secured!",
+  "Encore {a} pour le titre Élite":"{a} to go for the Elite title", "Encore {a} pour monter en {b}":"{a} to go to move up to {b}",
+  "Maintien assuré en {a}.":"Safe in {a}.", "Encore {a} pour te maintenir en {b}":"{a} to go to stay in {b}", "Maintien à assurer en {a}":"Still to stay up in {a}",
   "Bienvenue {a}":"Welcome {a}",
   "Salut {a}":"Hi {a}",
   "Accueil":"Home",
@@ -28164,6 +28170,56 @@ function nvBlocRush(){
   const teteR = (!ligne && lu) ? tete.replace(`${t("Rush")}</span>`, `${t("Rush")} <span class="nv-ajour" id="nvRushAJour">✅ ${t("À jour")}</span></span>`) : tete;   // 23/10 : rien à faire en Réel
   return `<section class="nv-bloc rush" id="nvBlocRush">${teteR}${ligne}${modes}</section>`;
 }
+/* ⟦ACCUEIL-PHRASE-MOI⟧ 02/11 (Hervé) — rien n'attend : la phrase de l'image parle de TOI (place en ligue, sinon objectif Rush Réel). */
+NV.rangs={ lu:0, enCours:false, d:null, cle:"" };
+// Ligues en cours dont TOUTES les journées résolues sont consultées : un classement lu avant consultation trahirait le résultat.
+function nvLiguesClassables(){
+  return (myLeagues||[]).filter(m=>m.lg && m.pid && m.lg.status!=="done" && (m.lg.current_day|0)>=1 && (m.lg.current_day|0)<=getSeen(m.lg.id,m.pid));
+}
+async function nvRangsCharger(force){
+  const L=nvLiguesClassables(), cle=L.map(m=>m.lg.id+":"+(m.lg.current_day|0)).sort().join(",");
+  if(!L.length){ NV.rangs.d=null; NV.rangs.cle=""; return; }
+  if(NV.rangs.enCours) return;
+  if(!force && cle===NV.rangs.cle && Date.now()-NV.rangs.lu < 60000) return;
+  NV.rangs.enCours=true; let d=null;
+  try{ d=await q(db.from("players").select("id,league_id,points,capital,is_ai,join_order").in("league_id",L.map(m=>m.lg.id))); }catch(e){ d=null; }
+  const avant=JSON.stringify(NV.rangs.d);
+  NV.rangs.enCours=false; NV.rangs.lu=Date.now(); NV.rangs.d=Array.isArray(d) ? d : null; NV.rangs.cle=cle;
+  if(S.view==="accueil" && JSON.stringify(NV.rangs.d)!==avant) render();
+}
+function nvPhraseLigue(){
+  const P=NV.rangs.d; if(!Array.isArray(P)) return "";
+  const L=nvLiguesClassables().map(m=>({ m, ts:nvAttente(m).ts })).sort((a,b)=>a.ts-b.ts);
+  for(const { m } of L){
+    const nom=esc(m.lg.name||t("Ligue")), jo=P.filter(p=>p.league_id===m.lg.id), moi=jo.find(p=>p.id===m.pid); if(!moi) continue;
+    const pts=+moi.points||0;
+    if(jo.filter(p=>!p.is_ai).length===1){   // seul contre l'IA
+      const ia=jo.find(p=>p.is_ai); if(!ia) continue; const e=pts-(+ia.points||0);
+      return e>0 ? t("{a} : devant l'IA, {b} d'avance",{a:nom,b:nvPts(e)}) : (e<0 ? t("{a} : à {b} de l'IA",{a:nom,b:nvPts(-e)}) : t("{a} : à égalité avec l'IA",{a:nom}));
+    }
+    const ord=classe(jo, m.lg), rk=competitionRanks(ord), i=ord.findIndex(p=>p.id===m.pid); if(i<0) continue;
+    const r=rk[i];
+    if(r===1){
+      if(ord.some((p,j)=>j!==i && rk[j]===1)) return t("{a} : {b} ex æquo",{a:nom,b:nvSvRang(1)});
+      const e=pts-(+((ord.find((p,j)=>j!==i))||{}).points||0);
+      return e>0 ? t("{a} : {b}, {c} d'avance",{a:nom,b:nvSvRang(1),c:nvPts(e)}) : t("{a} : {b}",{a:nom,b:nvSvRang(1)});
+    }
+    const e=(+ord[0].points||0)-pts;
+    return e>0 ? t("{a} : {b}, à {c} du 1er",{a:nom,b:nvSvRang(r),c:nvPts(e)}) : t("{a} : {b}, à égalité de points avec le 1er",{a:nom,b:nvSvRang(r)});
+  }
+  return "";
+}
+function nvPhraseRush(){
+  const E=nvRushOk() && NV.rush.etat ? NV.rush.etat.reel : null, s=E && E.statut, dv=E && E.division;
+  if(!s || !dv || dv.id==null || s.terminee) return "";
+  const o=s.objectif||{}, m=s.maintien||{}, el=!!dv.elite, ici=nvSvDiv(+dv.id), haut=el ? "" : nvSvDiv(+dv.id-1);
+  if(o.etat==="garanti") return el ? t("Titre Élite assuré !") : t("Montée en {a} assurée !",{a:haut});
+  if(m.etat==="impossible") return "";
+  if(o.etat==="accessible" && +o.manque>0) return el ? t("Encore {a} pour le titre Élite",{a:nvPts(+o.manque)}) : t("Encore {a} pour monter en {b}",{a:nvPts(+o.manque),b:haut});
+  if(m.sans_descente || m.etat==="garanti") return t("Maintien assuré en {a}.",{a:ici});
+  if(!m.menace_recap && +m.manque>0) return t("Encore {a} pour te maintenir en {b}",{a:nvPts(+m.manque),b:ici});
+  return t("Maintien à assurer en {a}",{a:ici});
+}
 function nvPhrase(lignes){
   const nL=lignes.length;
   const r=nvRushOk() ? nvRushMode("reel") : null;
@@ -28174,11 +28230,12 @@ function nvPhrase(lignes){
   if(pL && pR) return t("{a}, et {b}.",{a:pL,b:pR});
   if(pL) return pL+".";
   if(pR) return pr==="decouvrir" ? t("Un résultat Rush est tombé.") : (pr==="live" ? (plus ? t("Tes matchs Rush sont en cours.") : t("Ton match Rush est en cours.")) : t("Ton duel Rush t'attend."));
-  const fs=nvSuivisPhrase(); if(fs) return fs;   // ⟦ACCUEIL-RUSH-UNIFIE⟧ rien n'attend : un fait de mes suivis
+  const pm=nvPhraseLigue() || nvPhraseRush(); if(pm) return pm;   // ⟦ACCUEIL-PHRASE-MOI⟧ rien n'attend : toi (les faits des suivis restent dans leur cadre)
   return t("Tes ligues entre amis. Ou Rush, en solo.");
 }
 function nvVueAccueil(){
   if(nvRushOk()){ nvRushCharger(false); nvSuivisCharger(false); }   // ⟦ACCUEIL-SUIVIS⟧
+  nvRangsCharger(false);   // ⟦ACCUEIL-PHRASE-MOI⟧
   const lignes=nvLignesLigues();
   const nouveau = homeTodoLoaded && !(myLeagues||[]).length;
   const r=nvRushOk() ? nvRushMode("reel") : null, f=nvRushOk() ? nvRushMode("fictif") : null;
