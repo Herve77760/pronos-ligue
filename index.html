@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.12";
+const APP_VERSION = "v8.557.13";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -8395,6 +8395,10 @@ const EN={
   "Duel {a}/{b}":"Duel {a}/{b}",
   "≈ {m} min":"≈ {m} min",
   "Accueil Rush":"Rush home",
+  "S'entraîner en Fictif":"Practice in Fictional", "{a} vient de monter en {b} !":"{a} just moved up to {b}!",   // ⟦ACCUEIL-RUSH-UNIFIE⟧
+  "{a} vient de descendre en {b}.":"{a} just dropped to {b}.", "{a} est champion Élite !":"{a} is Elite champion!",
+  "{a} peut monter en {b} !":"{a} can move up to {b}!", "{a} peut être champion Élite !":"{a} can be Elite champion!",
+  "{a} joue son maintien.":"{a} plays to stay up.",
   "Mes suivis":"Following", "Suis tes amis":"Follow your friends", "{a} sur {b}":"{a} of {b}", "{a} suivis":"{a} followed",   // ⟦ACCUEIL-SUIVIS⟧
   "{a} monte en {b}":"{a} moves up to {b}", "{a} descend en {b}":"{a} drops to {b}", "{a} champion Élite":"{a} Elite champion",
   "{a} peut monter en {b}":"{a} can move up to {b}", "{a} peut être champion Élite":"{a} can be Elite champion",
@@ -28020,6 +28024,46 @@ function nvRushDirect(o){
   const m = fini ? t("Terminé") : (sp==="basket" && e!=null ? t("≈ {m} min",{m:e}) : String(minuteJeuEstimee(e, sp, false)).replace(/\s*\([^)]*\)\s*$/, ""));
   return (+sc.hs)+"-"+(+sc.as)+" "+m;
 }
+/* ⟦ACCUEIL-RUSH-UNIFIE⟧ 02/11 (Hervé) — Accueil « vitrine » : mes suivis DANS le bloc Rush, bloc Rush d'abord quand c'est lui
+   qui attend, phrase de l'image tirée de mes suivis quand rien n'attend. */
+function nvRushSuivis(){
+  const d=NV.suivis.d; if(!d || d.verrou===true) return "";   // verrou : le bouton « 🎁 Découvre ton résultat » suffit
+  const ouvrir=`role="button" tabindex="0" onclick="nvOuvrirSuivis()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();nvOuvrirSuivis();}"`;
+  if(!(+d.suivis>0)) return `<div class="nv-rsv" id="nvBlocSuivis" data-sv="inviter" ${ouvrir}><div class="nv-rsv-t"><span class="nv-rsv-n">👥 ${t("Suis tes amis")}</span>${NV_CHEV}</div></div>`;
+  const pl=d.place||{}, med={1:"🥇",2:"🥈",3:"🥉"}[+pl.rang]||"";
+  const place = pl.rang!=null ? `${med?med+" ":""}${t("{a} sur {b}",{a:nvSvRang(pl.rang),b:+pl.total})}` : t("{a} suivis",{a:+d.suivis});
+  const faits=(Array.isArray(d.faits) ? d.faits : []).map(nvSvFait).filter(Boolean).slice(0,2);
+  return `<div class="nv-rsv" id="nvBlocSuivis" data-sv="fil" data-faits="${faits.length}" ${ouvrir}><div class="nv-rsv-t"><span class="nv-rsv-n">👥 ${t("Mes suivis")}</span><span class="nv-rsv-p">${place}</span>${NV_CHEV}</div>${faits.map(x=>`<div class="nv-rsv-f">${x}</div>`).join("")}</div>`;
+}
+function nvSuivisPhrase(){
+  const d=nvRushOk() ? NV.suivis.d : null; if(!d || d.verrou===true || !Array.isArray(d.faits) || !d.faits[0]) return "";
+  const f=d.faits[0], p=esc(String(f.pseudo||"?")), v=f.vers!=null ? nvSvDiv(f.vers) : "";
+  switch(f.type){
+    case "montee": return t("{a} vient de monter en {b} !",{a:p,b:v});
+    case "descente": return t("{a} vient de descendre en {b}.",{a:p,b:v});
+    case "titre": return t("{a} est champion Élite !",{a:p});
+    case "peut_monter": return t("{a} peut monter en {b} !",{a:p,b:v});
+    case "peut_titre": return t("{a} peut être champion Élite !",{a:p});
+    case "maintien": return t("{a} joue son maintien.",{a:p});
+    default: return "";
+  }
+}
+function nvRushAvant(lignes){   // bloc Rush AVANT les Ligues ?
+  if(!nvRushOk() || !homeTodoLoaded || lignes.length) return false;   // une action en Ligues : les Ligues d'abord
+  const r=nvRushMode("reel"), f=nvRushMode("fictif");
+  if(!((r&&r.commence)||(f&&f.commence))) return false;                 // carte d'invitation Rush : après les Ligues
+  if(!(myLeagues||[]).some(m=>m.lg && m.lg.status!=="done")) return true;   // aucune ligue en cours
+  return !!(r && (r.aDecouvrir || r.live || (r.commence && r.peutChoisir)));
+}
+(function(){ try{ if(document.getElementById("nvRuStyle")) return; const st=document.createElement("style"); st.id="nvRuStyle"; st.textContent=
+  ".nv-mode.nv-mode-l{display:flex;align-items:baseline;justify-content:space-between;gap:10px;width:100%;margin-top:10px}"
+  +".nv-mode.nv-mode-l b,.nv-mode.nv-mode-l span{display:inline;margin:0}.nv-mode.nv-mode-l span{text-align:right}"
+  +".nv-rsv{margin-top:10px;padding:9px 10px;border-radius:12px;border:1px solid rgba(96,165,250,.45);background:rgba(96,165,250,.08);cursor:pointer}"
+  +".nv-rsv-t{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700}.nv-rsv-n{flex:1;min-width:0}.nv-rsv .nv-chev{stroke:#93c5fd}"
+  +".nv-rsv-f{font-size:13px;margin-top:7px;padding-top:7px;border-top:1px solid var(--a2-border);overflow-wrap:anywhere}"
+  +".nv-fic-l{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;margin-top:10px;padding:8px 10px;border-radius:12px;border:1px dashed rgba(156,127,224,.55);background:transparent;color:var(--a2-purple-light);font:inherit;font-size:13px;text-align:left;cursor:pointer}"
+  +".nv-fic-l .nv-t{flex:1;min-width:0}.nv-fic-l .nv-fq{font-size:12px;opacity:.85;white-space:nowrap}.nv-fic-l .nv-chev{stroke:currentColor}";
+  document.head.appendChild(st); }catch(e){} })();
 /* ⟦ACCUEIL-SUIVIS⟧ 02/11 (Hervé) — bloc « 👥 Mes suivis » de l'Accueil : ma place parmi mes suivis + 2 faits marquants (duel décisif,
    montée / descente / titre des 48 h), Rush Réel. Serveur : rush_social_fil (lecture seule, anti-spoiler comme Mes suivis). Toucher le
    bloc ouvre Mes suivis dans le paquet Rush. RPC absente ou refusée : pas de bloc. */
@@ -28097,9 +28141,12 @@ function nvBlocRush(){
   }
   else if(r && r.commence && r.peutChoisir) ligne=`<button type="button" class="nv-act vi" id="nvRushAction" data-nv-rush="choisir" onclick="nvOuvrirMode('reel',false)"><span class="nv-pt"></span><span class="nv-t">${t("Choisis ta rencontre")}</span><span class="nv-q">${r.quota?t("duel du jour · {a}/{b}",{a:r.quota.n,b:r.quota.N}):""}</span></button>`;
   const [r1,r2]=nvSituation(r), [f1,f2]=nvSituation(f);
-  const modes=`<div class="nv-modes">
-      <button type="button" class="nv-mode reel" id="nvModeReel" onclick="nvOuvrirMode('reel',${r&&r.aDecouvrir?"true":"false"})"><b>${t("Rush Réel")}</b>${r1?`<span>${r1}</span>`:""}${r2?`<span>${r2}</span>`:""}</button>
-      <button type="button" class="nv-mode fic" id="nvModeFictif" onclick="nvOuvrirMode('fictif',${f&&f.aDecouvrir?"true":"false"})"><b>${t("Rush Fictif")}</b>${f1?`<span>${f1}</span>`:""}${f2?`<span>${f2}</span>`:""}</button></div>`;
+  // ⟦ACCUEIL-RUSH-UNIFIE⟧ 02/11 (Hervé) : un seul bloc Rush — action, Rush Réel, mes suivis, puis le Fictif (entraînement) en petite ligne
+  const sR = (r && r.commence && ligne) ? r1 : [r1,r2].filter(Boolean).join(" · ");
+  const sF = !f ? "" : (!f.commence ? f2 : ((f.aDecouvrir || f.live || f.engage) ? f2 : f1));
+  const modes=`<button type="button" class="nv-mode reel nv-mode-l" id="nvModeReel" onclick="nvOuvrirMode('reel',${r&&r.aDecouvrir?"true":"false"})"><b>${t("Rush Réel")}</b>${sR?`<span>${sR}</span>`:""}</button>`
+    + nvRushSuivis()
+    + `<button type="button" class="nv-fic-l" id="nvModeFictif" onclick="nvOuvrirMode('fictif',${f&&f.aDecouvrir?"true":"false"})"><span class="nv-t">🎯 ${t("S'entraîner en Fictif")}</span>${sF?`<span class="nv-fq">${sF}</span>`:""}${NV_CHEV}</button>`;
   const teteR = (!ligne && lu) ? tete.replace(`${t("Rush")}</span>`, `${t("Rush")} <span class="nv-ajour" id="nvRushAJour">✅ ${t("À jour")}</span></span>`) : tete;   // 23/10 : rien à faire en Réel
   return `<section class="nv-bloc rush" id="nvBlocRush">${teteR}${ligne}${modes}</section>`;
 }
@@ -28113,6 +28160,7 @@ function nvPhrase(lignes){
   if(pL && pR) return t("{a}, et {b}.",{a:pL,b:pR});
   if(pL) return pL+".";
   if(pR) return pr==="decouvrir" ? t("Un résultat Rush est tombé.") : (pr==="live" ? (plus ? t("Tes matchs Rush sont en cours.") : t("Ton match Rush est en cours.")) : t("Ton duel Rush t'attend."));
+  const fs=nvSuivisPhrase(); if(fs) return fs;   // ⟦ACCUEIL-RUSH-UNIFIE⟧ rien n'attend : un fait de mes suivis
   return t("Tes ligues entre amis. Ou Rush, en solo.");
 }
 function nvVueAccueil(){
@@ -28124,7 +28172,7 @@ function nvVueAccueil(){
   const salut = (nouveau && !((r&&r.commence)||(f&&f.commence))) ? t("Bienvenue {a}",{a:pseudo}) : t("Salut {a}",{a:pseudo});
   const hero=`<div class="nv-hero" id="nvHero"><img src="img/accueil-hero-v1.webp" width="1200" height="600" alt="" decoding="async">
       <div class="nv-voile"><div class="nv-salut">${salut}</div><div class="nv-phrase" id="nvPhrase">${nvPhrase(lignes)}</div></div></div>`;
-  return `<div class="a2-wrap a2-wrap-tight nv-acc" id="nvAccueil">${hero}${nouveau?nvInvitLigues():nvBlocLigues(lignes)}${nvRushOk()?nvBlocSuivis():""}${nvRushOk()?nvBlocRush():""}</div>`;
+  return `<div class="a2-wrap a2-wrap-tight nv-acc" id="nvAccueil">${hero}${nvRushAvant(lignes) ? nvBlocRush()+(nouveau?nvInvitLigues():nvBlocLigues(lignes)) : (nouveau?nvInvitLigues():nvBlocLigues(lignes))+(nvRushOk()?nvBlocRush():"")}</div>`;   // ⟦ACCUEIL-RUSH-UNIFIE⟧
 }
 // Contrat avec le paquet Rush : ouvrir DIRECTEMENT le QG d'un mode (decouvrir : lancer tout de suite la découverte du résultat).
 function nvOuvrirMode(mode, decouvrir, duel){
