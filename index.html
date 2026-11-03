@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.17";
+const APP_VERSION = "v8.557.18";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -13591,6 +13591,24 @@ async function rushProfilInit(){
   }catch(e){ avatar=null; }
   return { pseudo:pseudo.slice(0,40), avatar };
 }
+/* ⟦RUSH-PAQUET-PUBLIC⟧ 03/11 (Hervé, trafic Supabase) — le paquet Rush vient de tactizo.com (gratuit) ; Supabase ne donne que son
+   empreinte attendue. Fichier utilisé SEULEMENT si son SHA-256 est identique ; sinon, l'Edge « paquet » comme avant. */
+const RUSH_PAQUET_PUBLIC = "https://tactizo.com/rush/p/";
+async function rushPaquetCharger(jeton){
+  try{
+    const e = await rushTestAppelEdge({ action:"empreinte", jeton }, false);
+    const sha = e && typeof e.sha==="string" ? e.sha.toLowerCase() : "";
+    if(/^[0-9a-f]{64}$/.test(sha) && window.crypto && crypto.subtle){
+      const r = await fetch(RUSH_PAQUET_PUBLIC+sha+".html", { credentials:"omit", referrerPolicy:"no-referrer" });
+      if(r.ok){
+        const o = await r.arrayBuffer();
+        const h = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", o)), b=>b.toString(16).padStart(2,"0")).join("");
+        if(h===sha) return new TextDecoder("utf-8").decode(o);
+      }
+    }
+  }catch(x){}
+  return rushTestAppelEdge({ action:"paquet", jeton }, true);   // repli : le chemin d'avant (même jeton)
+}
 async function rushChargerCadre(){
   const hote=rushHote();
   const sigCadre=(lang==="en"?"en":"fr")+"|"+((AUTH&&AUTH.avatar)||"")+"|"+((AUTH&&AUTH.name)||"");
@@ -13610,7 +13628,7 @@ async function rushChargerCadre(){
         else motif = error ? "code" : (r && r.code);   // fonction serveur absente → repli : code d'accès, une fois par session
       }
       if(jeton){
-        html = await rushTestAppelEdge({ action:"paquet", jeton }, true);
+        html = await rushPaquetCharger(jeton);   // ⟦RUSH-PAQUET-PUBLIC⟧ tactizo.com d'abord, l'Edge en repli
         try{ db.rpc("rushtest_fermer").then(()=>{},()=>{}); }catch(e){}   // jeton inutile une fois le paquet reçu
       } else html=null;
     }catch(e){ html=null; }
