@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.20";
+const APP_VERSION = "v8.557.21";
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -5824,6 +5824,8 @@ const EN={
   "📖 Lire les règles":"📖 Read the rules",
   "Confidentialité":"Privacy", "Conditions d'utilisation":"Terms of use",
   "Informations légales":"Legal information",
+  "Boutique et Points":"Shop and Points", "Aide":"Help", "1 option active":"1 active option",   // ⟦PROFIL-ALLEGE⟧
+  "CGU, CGV, confidentialité, mentions":"Terms, sales terms, privacy, legal notice",
   "Mentions légales":"Legal notice",
   "Politique de confidentialité":"Privacy policy",
   "Assistance et médiation":"Support and mediation",
@@ -25812,10 +25814,11 @@ function viewProfil(){
       <div class="a2-lang"><button class="${lang==='fr'?'on':''}" onclick="setLang2('fr')">FR</button><button class="${lang==='en'?'on':''}" onclick="setLang2('en')">EN</button></div>
     </div>
 
-    <div class="a2-sec-title">${t("Identité")}</div>
-    <div class="a2-card">
+    <!-- ⟦PROFIL-ALLEGE⟧ 09/11 (Hervé) : Moi · Boutique et Points · Aide · Compte — voir tools/patch-profil-allege.py -->
+    <div class="a2-sec-title">${t("Moi")}</div>
+    <div class="a2-card" id="profilMoi">
       <div class="a2-id-head">${avatarHTML(AUTH.avatar,64)}
-        <div><div class="a2-id-name">${esc(AUTH.name)}</div><div class="a2-id-email">${esc(AUTH.email||"")}</div></div>
+        <div><div class="a2-id-name">${esc(AUTH.name)}</div></div>
       </div>
       <div class="a2-menu-row">
         <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="M21 15l-5-5L5 21"/></svg></span>
@@ -25829,47 +25832,38 @@ function viewProfil(){
       </div>
     </div>
 
-    <div class="a2-card">${tmlLevelHTML()}</div>${typeof spv2ProfilLienHTML==="function"?spv2ProfilLienHTML():""}${typeof rushReglesLienHTML==="function"?rushReglesLienHTML():""}
-
-    <div class="a2-sec-title">${t("Mes préférences")}</div>
-    <div class="a2-card">
-      ${capNatif()?notifRowHTML():''}
-      <div class="a2-menu-row" style="cursor:pointer" onclick="toggleLang()">
-        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 010 18 14 14 0 010-18z"/></svg></span>
-        <span class="a2-menu-text"><span class="a2-menu-label">${t("Langue")}</span></span>
-        <span class="a2-menu-sub">${lang==='en'?'English':'Français'}</span>
+    <div class="a2-sec-title">${t("Boutique et Points")}</div>
+    <div class="a2-card" id="nvProfilBoutique">
+      <div class="a2-menu-row" style="cursor:pointer" onclick="openShop()">
+        <span class="a2-menu-ic">🛒</span>
+        <span class="a2-menu-text"><span class="a2-menu-label">${t("Boutique")}</span><span class="a2-menu-sub" id="profilPremiumEtat">${fullPrem
+          ? "✓ Premium · "+(packFin()?t("Actif jusqu'au {a}",{a:new Date(packFin()).toLocaleDateString(lang==='en'?'en-GB':'fr-FR')}):t("Actif sur ton compte"))
+          : myActiveOpts.length===1 ? t("1 option active") : myActiveOpts.length ? t("{a} options actives",{a:myActiveOpts.length}) : t("Premium et options")}</span></span>
+        <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
       </div>
-    </div>
-
-    <div class="a2-sec-title">${t("Tactizo")}</div>
-    <div class="a2-card">
-      <!-- ⚠️ v8.448 (2026-09-14) — le solde affiché (pointsBalanceLabel()) lit désormais pour de
-           vrai points_balance() côté serveur (cf. MIGRATION-points-tactizo-parrainage.sql) : ce
-           n'est plus un "0 point" en dur. Il reste néanmoins réellement à 0 pour tout le monde ce
-           soir, PART B (triggers de verrouillage/activation du parrainage) n'étant pas encore
-           attachée — cf. l'en-tête de la migration pour la raison (vraie ligue réelle en cours,
-           attache différée à une session supervisée par Hervé).
-           Volontairement PAS de nombre de filleuls affiché ici (demandé explicitement). -->
       <div class="a2-menu-row" style="cursor:pointer" onclick="showPointsTactizoInfo()">
         <span class="a2-menu-ic">🪙</span>
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Points Tactizo")}</span><span class="a2-menu-sub">${pointsBalanceLabel()}</span></span>
+        <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
       </div>
-      <div class="mini muted" style="padding:0 4px 4px">${t("Gagne des Points Tactizo en faisant découvrir Tactizo à de nouveaux joueurs actifs.")}</div>
     </div>
+
+    <div class="a2-sec-title">${t("Aide")}</div>
     <div class="a2-card">
-      <div class="a2-prem-row">
-        <span class="a2-prem-ic"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M3 8.5l4 2.8L12 4l5 7.3 4-2.8-2 9.5H5L3 8.5z"/></svg></span>
-        <div><div style="font-weight:800;font-size:13.5px">TACTIZO PREMIUM</div>
-          <div class="a2-menu-sub">${fullPrem
-            ? "✓ "+(packFin()?t("Actif jusqu'au {a}",{a:new Date(packFin()).toLocaleDateString(lang==='en'?'en-GB':'fr-FR')}):t("Actif sur ton compte"))
-            : (myActiveOpts.length ? t("{a} options actives",{a:myActiveOpts.length}) : t("Aucune option active"))}</div></div>
+      <div class="a2-menu-row" style="cursor:pointer" onclick="openComprendre()">
+        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><path d="M4 4.5A2.5 2.5 0 016.5 2H20v17H6.5A2.5 2.5 0 004 21.5v-17z"/><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/></svg></span>
+        <span class="a2-menu-text"><span class="a2-menu-label">${t("Comprendre Tactizo")}</span><span class="a2-menu-sub">${t("Tutoriels, règles essentielles et règles complètes")}</span></span>
+        <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
       </div>
-      ${(!fullPrem && myActiveOpts.length) ? `<div style="margin-top:10px">${myActiveOpts.map(k=>{
-          const fin=optFin(k), nom=k==='stats'?t("Stats avancées"):t((PITCHES[k]||{}).t||k);
-          return `<div class="a2-menu-row" style="padding:6px 0"><span class="a2-menu-text"><span class="a2-menu-label" style="font-size:12.5px">${esc(nom)}</span></span>
-            <span class="mini muted">${fin?t("jusqu'au {a}",{a:new Date(fin).toLocaleDateString(lang==='en'?'en-GB':'fr-FR')}):t("active")}</span></div>`;
-        }).join('')}</div>` : ''}
-      <button class="a2-cta-ghost" style="margin-top:14px" onclick="openShop()">${t("Voir mes options →")}</button>
+      <a class="a2-menu-row" style="cursor:pointer;text-decoration:none;color:inherit" href="mailto:contact@tactizo.com?subject=${encodeURIComponent('Tactizo '+APP_VERSION+' — '+(AUTH.name||''))}">
+        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
+        <span class="a2-menu-text"><span class="a2-menu-label">${t("Nous contacter")}</span><span class="a2-menu-sub">contact@tactizo.com</span></span>
+      </a>
+      <div class="a2-menu-row" id="profilInfosLegales" role="button" tabindex="0" style="cursor:pointer" onclick="profilInfosLegales()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();profilInfosLegales();}">
+        <span class="a2-menu-ic" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/></svg></span>
+        <span class="a2-menu-text"><span class="a2-menu-label">${t("Informations légales")}</span><span class="a2-menu-sub">${t("CGU, CGV, confidentialité, mentions")}</span></span>
+        <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+      </div>
     </div>
 
     <div class="a2-sec-title">${t("Compte")}</div>
@@ -25885,10 +25879,6 @@ function viewProfil(){
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Mot de passe")}</span></span>
         <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
       </div>`:`
-      <!-- ⚠️ Lot A (2026-09-13, audit Profil) — compte Google/Apple : ni changement d'e-mail ni
-           mot de passe n'ont de sens ici (les deux exigent aujourd'hui de re-saisir "le mot de
-           passe actuel", que ces comptes n'ont pas — ça produisait "Ce n'est pas ton mot de passe
-           actuel", un message FAUX). Lignes d'INFORMATION seules, aucune action proposée. -->
       <div class="a2-menu-row">
         <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Adresse e-mail")}</span><span class="a2-menu-sub">${esc(AUTH.email||"")}</span></span>
@@ -25897,26 +25887,7 @@ function viewProfil(){
         <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg></span>
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Connexion")}</span><span class="a2-menu-sub">${AUTH.provider==='google'?t("Gérée par ton compte Google"):AUTH.provider==='apple'?t("Gérée par ton compte Apple"):t("Compte externe")}</span></span>
       </div>`}
-      <div class="a2-menu-row" style="cursor:pointer" onclick="openComprendre()">
-        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><path d="M4 4.5A2.5 2.5 0 016.5 2H20v17H6.5A2.5 2.5 0 004 21.5v-17z"/><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/></svg></span>
-        <span class="a2-menu-text"><span class="a2-menu-label">${t("Comprendre Tactizo")}</span><span class="a2-menu-sub">${t("L'essentiel en 2 minutes, et les règles complètes")}</span></span>
-        <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
-      </div>
-      <div class="a2-menu-row" style="cursor:pointer" onclick="openTuto2()">
-        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M10 8.5l6 3.5-6 3.5z"/></svg></span>
-        <span class="a2-menu-text"><span class="a2-menu-label">${t("Revoir la présentation")}</span>${(typeof p4Rush==="function"&&p4Rush())?'<span class="a2-menu-sub">'+t("Ligues ou Rush, au choix")+'</span>':''}</span>
-        <svg class="a2-menu-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
-      </div>
-      <!-- ⚠️ Lot A (2026-09-13, demandé par Hervé) — l'ancien système Bug/Idée a été retiré (Lot
-           Nuit), pas de nouveau système de tickets : un canal existait déjà (contact@tactizo.com,
-           déjà publié dans confidentialite.html) mais n'était découvrable NULLE PART dans l'app
-           elle-même — un joueur qui veut signaler un problème n'avait aucun moyen évident d'y penser.
-           lien mailto avec sujet PRÉ-REMPLI (version + pseudo) : le contexte le plus utile à un
-           support est justement ce qu'un joueur oublie de préciser spontanément. -->
-      <a class="a2-menu-row" style="cursor:pointer;text-decoration:none;color:inherit" href="mailto:contact@tactizo.com?subject=${encodeURIComponent('Tactizo '+APP_VERSION+' — '+(AUTH.name||''))}">
-        <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg></span>
-        <span class="a2-menu-text"><span class="a2-menu-label">${t("Nous contacter")}</span><span class="a2-menu-sub">contact@tactizo.com</span></span>
-      </a>
+      ${capNatif()?notifRowHTML():''}
       ${admin?`<div class="a2-menu-row" style="cursor:pointer" onclick="openAdmin()">
         <span class="a2-menu-ic"><svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="9" cy="6" r="2"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="15" cy="12" r="2"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="7" cy="18" r="2"/></svg></span>
         <span class="a2-menu-text"><span class="a2-menu-label">${t("Espace admin")}</span></span>
@@ -25931,28 +25902,25 @@ function viewProfil(){
         <div class="a2-danger-note">${t("Action définitive.")}</div>
       </div>`}
     </div>
-
-    ${/* ⚠️ v8.541 (demandé par Hervé, 13/10) — RUBRIQUE « INFORMATIONS LÉGALES » : les 5 documents publiés le
-         07/10 (tools/build-pages-juridiques.py), mêmes URL qu'avant (relatives sur le web, tactizo.com en natif :
-         c'est ouvrirLien() qui choisit, cf. sa note iOS — jamais de target="_blank"). Vrais liens <a href> :
-         focalisables, annoncés « lien », une ligne entière à toucher au doigt (≥ 44 px). Le CONTENU des pages n'est
-         pas touché. ⚠️ En ligne ici (pas d'aide séparée) : des tests extraient viewProfil() seule. Libellés en
-         appels t() LITTÉRAUX : check-i18n ne voit que ceux-là. */''}
-    <div class="a2-sec-title" id="profilInfosLegales">${t("Informations légales")}</div>
-    <nav class="a2-card" aria-labelledby="profilInfosLegales">${[
-      ["mentions-legales.html", t("Mentions légales"), '<path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'],
-      ["cgu.html", t("Conditions d'utilisation"), '<path d="M4 4.5A2.5 2.5 0 016.5 2H20v17H6.5A2.5 2.5 0 004 21.5v-17z"/><path d="M8 7h8M8 11h6"/>'],
-      ["cgv.html", t("Conditions Générales de Vente"), '<path d="M6 2l1.5 3h9L18 2"/><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M9 11h6M9 15h4"/>'],
-      ["confidentialite.html", t("Politique de confidentialité"), '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/>'],
-      ["assistance.html", t("Assistance et médiation"), '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5M12 17h.01"/>'],
-    ].map(([url, lib, ic])=>`
-      <a class="a2-menu-row" href="${url}" onclick="ouvrirLien('${url}',event)" style="cursor:pointer;text-decoration:none;color:inherit">
+  </div>`;
+}
+/* ⟦PROFIL-ALLEGE⟧ 09/11 — les 5 documents juridiques (tools/build-pages-juridiques.py), mêmes URL, dans une fenêtre : vrais liens
+   <a href> passés par ouvrirLien() (cf. sa note iOS — jamais de target="_blank"), une ligne entière au doigt (≥ 44 px).
+   Libellés en appels t() LITTÉRAUX : check-i18n ne voit que ceux-là. */
+function profilInfosLegales(){
+  const docs=[
+    ["mentions-legales.html", t("Mentions légales"), '<path d="M14 3H6a2 2 0 00-2 2v14a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>'],
+    ["cgu.html", t("Conditions d'utilisation"), '<path d="M4 4.5A2.5 2.5 0 016.5 2H20v17H6.5A2.5 2.5 0 004 21.5v-17z"/><path d="M8 7h8M8 11h6"/>'],
+    ["cgv.html", t("Conditions Générales de Vente"), '<path d="M6 2l1.5 3h9L18 2"/><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M9 11h6M9 15h4"/>'],
+    ["confidentialite.html", t("Politique de confidentialité"), '<path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/>'],
+    ["assistance.html", t("Assistance et médiation"), '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 114 2c-1 .7-1.5 1.2-1.5 2.5M12 17h.01"/>'],
+  ];
+  infoModal("📄", t("Informations légales"), `<nav id="profilInfosLegalesListe" aria-label="${esc(t("Informations légales"))}" style="text-align:left;margin-top:10px">${docs.map(([url, lib, ic])=>`
+      <a class="a2-menu-row" href="${url}" onclick="ouvrirLien('${url}',event)" style="cursor:pointer;text-decoration:none;color:inherit;min-height:44px">
         <span class="a2-menu-ic" aria-hidden="true"><svg viewBox="0 0 24 24">${ic}</svg></span>
         <span class="a2-menu-text"><span class="a2-menu-label">${esc(lib)}</span></span>
         <svg class="a2-menu-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
-      </a>`).join("")}
-    </nav>
-  </div>`;
+      </a>`).join("")}</nav>`);
 }
 function openSettings(){ navOpen("settings"); }
 function closeSettings(){ navBack(); }
