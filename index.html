@@ -3096,7 +3096,15 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.21";
+const APP_VERSION = "v8.557.22";
+/* 29/10/2026 (Hervé) — MISES À JOUR À CHAUD (natif, build 11+) : signaler TOUT DE SUITE au module @capgo/capacitor-updater
+   que ce paquet a démarré. Sans cet appel dans les 15 s (appReadyTimeout), le module considère le paquet comme cassé et
+   revient au précédent (ou à celui de la build). Volontairement ici, en tête du script : une erreur de syntaxe n'importe où
+   empêche ce script entier de tourner, donc l'appel n'a lieu que si le paquet est sain. Sans le module (web, build ≤ 10) :
+   rien. La recherche de mise à jour elle-même est plus bas (verifierMajAppli). */
+try{ const U=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.CapacitorUpdater;
+  if(U&&U.notifyAppReady&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){ U.notifyAppReady().catch(()=>{});
+    setTimeout(()=>{ try{ verifierMajAppli(true); }catch(e){} }, 8000); } }catch(e){}   // recherche au démarrage, connecté ou non (au retour au premier plan : brancherPingActivite)
 // ⚠️ Lot Nuit (demandé par Hervé, 2026-09-12) — interrupteur UNIQUE du "· prototype de test ·" du
 // pied de page (cf. son usage plus bas) : `true` tant que Tactizo reste en phase de test, `false`
 // au go-live pour passer proprement à "Tactizo · vX" sans toucher à rien d'autre.
@@ -6838,6 +6846,8 @@ const EN={
   "Cet échange n'est pas autorisé. Actualise la page pour voir où il en est.":"This trade isn't allowed. Refresh the page to see where it stands.",
   "Les inscriptions de cette ligue sont fermées.":"Sign-ups for this league are closed.",
   "Cette ligue est complète.":"This league is full.",
+  "Le calendrier de cette ligue ne peut plus être modifié. Actualise la page.":"This league's schedule can no longer be changed. Refresh the page.",
+  "Seul l'organisateur peut clôturer les inscriptions.":"Only the organiser can close sign-ups.",
   "Tu ne peux pas rejoindre cette ligue.":"You can't join this league.",
   "Tu as un code promo ?":"Got a promo code?", "Prix affiché par le Store":"Price shown by the store",
   "Entre un code.":"Enter a code.", "Ce code n'existe pas.":"This code doesn't exist.",
@@ -7225,12 +7235,14 @@ const EN={
   "Rien n'est visible pour l'instant — ni les résultats, ni les pronos des autres. Tout dépend du <b>coup d'envoi de ton premier match</b>, {a} : avant lui, ton pari peut encore changer, et voir le pari de quelqu'un qui peut encore le modifier serait un avantage, pas une information.":"Nothing is visible yet — neither the results nor anyone else's picks. It all hinges on the <b>kick-off of your first match</b>, {a}: until then your bet can still change, and seeing a bet that can still be changed would be an advantage, not information.",
   "✅ Cette option est <b>active sur ton compte</b>. Profites-en !":"✅ This option is <b>active on your account</b>. Enjoy!",
   "🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.":"🔒 This option isn't <b>active on your account yet</b>. Subscribe to use it — <b>during the test phase there's no payment</b>: activation is instant.",
+  "🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>paiement unique, valable 365 jours</b>, sans renouvellement automatique.":"🔒 This option isn't <b>active on your account yet</b>. Subscribe to use it — <b>one-time payment, valid for 365 days</b>, no automatic renewal.",
+  "Cette option est déjà active sur ton compte.":"This option is already active on your account.",
   "Souscrire à cette option":"Subscribe to this option",
   "Avant de payer":"Before you pay",
   "Achat de « {a} » — {b}":"Purchasing “{a}” — {b}",
   "J'accepte les":"I accept the",
   "Conditions Générales de Vente":"Terms of Sale",
-  "Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'en demandant cette activation immédiate, je perds mon droit de rétractation.":"I request that performance of this digital option begin immediately, before the end of the 14-day withdrawal period, and I acknowledge that by requesting this immediate activation, I lose my right of withdrawal.",
+  "Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'une fois pleinement exécutée à ma demande, je perdrai mon droit de rétractation.":"I request that this digital option be activated immediately, before the end of the 14-day withdrawal period, and I acknowledge that once fully performed at my request, I will lose my right of withdrawal.",
   "Continuer vers le paiement":"Continue to payment",
   "— valable 365 jours":"— valid for 365 days",
   "Souscrire à « {a} » ?\n\nPhase de test : aucun paiement — l'option s'active immédiatement sur ton compte.":"Subscribe to “{a}”?\n\nTest phase: no payment — the option activates instantly on your account.",
@@ -8146,7 +8158,7 @@ const EN={
   "{a} pts ({b}/10 duels)":"{a} pts ({b}/10 duels)", "Découvre d'abord ton résultat Rush pour voir sa forme.":"Reveal your Rush result first to see their form.",
   "{a} victoires de suite":"{a} wins in a row", "{a} abonné(s)":"{a} follower(s)", "te suit":"follows you", "Suivi · ne plus suivre":"Following · unfollow",
   "Derniers duels":"Latest duels", "contre {a}":"vs {a}", "référence, sans effet pour l’adversaire":"reference only, no effect for them",
-  "Inclus dans Premium":"Included in Premium", "Premium":"Premium",
+  "Inclus dans Premium":"Included in Premium", "Incluse dans Tactizo Premium":"Included in Tactizo Premium", "Premium":"Premium",
   "3 parties Solo offertes":"3 free Solo games", "1 partie Solo offerte restante":"1 free Solo game left",
   "{a} parties Solo offertes restantes":"{a} free Solo games left",
   "Tes 3 parties Solo découverte ont été utilisées.":"You've used your 3 free Solo games.",
@@ -8403,6 +8415,7 @@ const EN={
   "{a} vient de descendre en {b}.":"{a} just dropped to {b}.", "{a} est champion Élite !":"{a} is Elite champion!",
   "{a} peut monter en {b} !":"{a} can move up to {b}!", "{a} peut être champion Élite !":"{a} can be Elite champion!",
   "{a} joue son maintien.":"{a} plays to stay up.",
+  "{a} joue à Rush, ajouté à tes suivis":"{a} plays Rush, added to your follows", "{n} joueurs de tes ligues ajoutés à tes suivis":"{n} players from your leagues added to your follows",   // ⟦ACCUEIL-SUIVIS-ANNONCE⟧
   "Mes suivis":"Following", "Suis tes amis":"Follow your friends", "{a} sur {b}":"{a} of {b}", "{a} suivis":"{a} followed",   // ⟦ACCUEIL-SUIVIS⟧
   "{a} monte en {b}":"{a} moves up to {b}", "{a} descend en {b}":"{a} drops to {b}", "{a} champion Élite":"{a} Elite champion",
   "{a} peut monter en {b}":"{a} can move up to {b}", "{a} peut être champion Élite":"{a} can be Elite champion",
@@ -9079,17 +9092,17 @@ const PITCHES={
     "Le confort maximal, zéro prise de tête.",
     "Paiement unique, valable 365 jours : aucun renouvellement automatique."], hookRush:"Toutes les options, Ligues et Rush. Toute l'année.", rush:["⚡ Valable aussi dans Rush : 10 bonus, duels Rush Réel illimités (⚡ Rush illimité), Duel Live et statistiques Rush."]}   // ⟦RUSH-QUOTA-REEL⟧
 };
-// ⟦PAIEMENT-WEB⟧ 30/10 : fiche d'une option quand le SITE paie (app_config.paiement_web).
-const PREM_LOCKED_PAYANT="🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>paiement unique, valable 365 jours</b>, sans renouvellement automatique.";
 const PREM_OWNED="✅ Cette option est <b>active sur ton compte</b>. Profites-en !";
 const PREM_LOCKED="🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>pendant la phase de test, il n'y a aucun paiement</b> : l'activation est immédiate.";
+// v8.519 — compte hors liste des testeurs gratuits : pas de promesse de gratuité.
+const PREM_LOCKED_PAYANT="🔒 Cette option n'est <b>pas encore active sur ton compte</b>. Souscris-y pour en profiter — <b>paiement unique, valable 365 jours</b>, sans renouvellement automatique.";
 // ─── Options premium ACTIVÉES sur le compte connecté ───────────────────────────────────────────
 // `AUTH.options` = tableau de clés (parmi SHOP_ORDER), réglé par l'ADMIN (admin_set_options) OU par le
 // joueur lui-même via « Souscrire » (subscribeOpt → user_metadata). Lu depuis user_metadata à la connexion.
 // RÈGLE (défaut) : absent OU liste ne contenant pas la clé = option NON active. Le compte admin a tout
 // (bypass ci-dessous). Simule le futur modèle payant : le joueur souscrit, l'option s'active — la seule
 // étape absente est le paiement (désactivé en phase de test).
-function optsSet(){ return (AUTH && Array.isArray(AUTH.options)) ? AUTH.options : null; }
+// v8.519 : optsSet() (lecture des options dans user_metadata) supprimée — jamais une source de droits.
 /* ─── VALIDITÉ D'UNE OPTION : UN AN À PARTIR DE L'ACHAT (v7.45, règle d'Hervé) ───────────────
    « Les options payantes seront valables un an à partir de l'achat. Après, l'option ne s'applique
    plus. Le joueur doit à nouveau la payer pour l'activer. »
@@ -9244,6 +9257,43 @@ async function verifierVersionMin(force){
     if(!!avant!==!!MIN_VERSION_GATE) render();
   }catch(e){}
 }
+/* 29/10/2026 (Hervé) — MISES À JOUR À CHAUD DU JEU (natif, build 11+ ; module @capgo/capacitor-updater en mode manuel,
+   sans le service Capgo : statsUrl/updateUrl vides dans mobile/capacitor.config.json). Au démarrage puis au retour au premier
+   plan (au plus une fois par 30 min), lit https://tactizo.com/maj/manifeste.json ; si une version PLUS RÉCENTE que ce paquet
+   y est annoncée, la télécharge en arrière-plan et la programme pour la prochaine mise en arrière-plan / relance (`next`) :
+   jamais d'interruption en pleine partie. DIFFÉRENTIEL : le manifeste liste chaque fichier (chiffré à part) avec son empreinte
+   signée ; le module reprend tel quel tout fichier identique déjà présent (build ou mise à jour précédente) et ne télécharge
+   que les autres (en pratique index.html compressé, ~0,5 Mo). Garde-fous :
+   • SIGNATURE : la clé publique est dans la build ; le module refuse tout fichier non chiffré par la clé de session protégée
+     par la clé privée (restée sur le Mac d'Hervé) et vérifie l'empreinte signée de chacun → manifeste ou fichiers falsifiés
+     ne passent pas ;
+   • jamais de retour en arrière (version ≤ APP_VERSION ignorée), build native minimale (`build_min`) respectée,
+     interrupteur `actif`, plateformes visées, adresse du zip limitée à tactizo.com/maj/ ;
+   • une version qui a déjà échoué (rollback automatique, statut « error ») n'est jamais retentée ;
+   • tout échec est MUET : le jeu continue sur le paquet en place. Fabrication : tools/construire-maj-appli.mjs. */
+const MAJ_MANIFESTE_URL="https://tactizo.com/maj/manifeste.json", MAJ_ZIP_PREFIXE="https://tactizo.com/maj/";
+function majCmp(a,b){ const A=String(a||"").replace(/^v/,"").split(".").map(n=>parseInt(n,10)||0), B=String(b||"").replace(/^v/,"").split(".").map(n=>parseInt(n,10)||0);
+  for(let i=0;i<Math.max(A.length,B.length);i++){ const d=(A[i]||0)-(B[i]||0); if(d) return d>0?1:-1; } return 0; }
+let _majLu=0, _majEnCours=false;
+async function verifierMajAppli(force){
+  if(!estNatif()) return;
+  const U=window.Capacitor.Plugins&&window.Capacitor.Plugins.CapacitorUpdater; if(!U||!U.download||!U.next||!U.list) return;
+  const maintenant=Date.now(); if(_majEnCours || (!force && maintenant-_majLu<30*60000)) return; _majLu=maintenant; _majEnCours=true;
+  try{
+    const r=await fetch(MAJ_MANIFESTE_URL+"?t="+maintenant,{cache:"no-store"}); if(!r.ok) return;
+    const m=await r.json(), pf=(window.Capacitor.getPlatform&&window.Capacitor.getPlatform())||"";
+    if(!m || m.actif!==true || !m.version || !m.session_key || !Array.isArray(m.fichiers) || !m.fichiers.length) return;
+    if(m.fichiers.some(f=>!f || !f.file_name || !f.file_hash || String(f.download_url||"").indexOf(MAJ_ZIP_PREFIXE)!==0)) return;
+    if(Array.isArray(m.plateformes) && m.plateformes.indexOf(pf)<0) return;
+    if(majCmp(m.version, APP_VERSION)<=0) return;                                    // jamais de retour en arrière
+    if(m.build_min!=null){ const i=await infoAppli(); if(!(i.build!=null && (parseInt(i.build,10)||0)>=(+m.build_min||0))) return; }
+    const L=((await U.list())||{}).bundles||[];
+    if(L.some(b=>b.version===m.version && b.status==="error")) return;               // a déjà échoué : on ne retente pas
+    let b=L.find(x=>x.version===m.version && (x.status==="success"||x.status==="pending"))||null;
+    if(!b) b=await U.download({ url:MAJ_MANIFESTE_URL, version:m.version, sessionKey:m.session_key, manifest:m.fichiers });   // différentiel : seuls les fichiers modifiés sont téléchargés
+    if(b && b.id) await U.next({ id:b.id });                                         // appliquée à la prochaine mise en arrière-plan
+  }catch(e){} finally{ _majEnCours=false; }
+}
 /* Les deux seuls déclencheurs. `visibilitychange` couvre le web (onglet ramené au premier plan)
    ET le natif (Capacitor relaie l'état de l'app au WebView) ; `appStateChange` est ajouté en plus
    sur natif, parce que certaines reprises Android ne produisent pas d'évènement de visibilité. */
@@ -9252,7 +9302,7 @@ function brancherPingActivite(){
   if(estNatif() && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App){
     // v8.515 (C7, audit pré-build) — la reprise native relance AUSSI le sondage : certaines reprises
     // Android ne produisent pas de `visibilitychange`, et le rattrapage du sondage n'écoutait que lui.
-    try{ window.Capacitor.Plugins.App.addListener("appStateChange", st=>{ if(st && st.isActive){ pingActivite(); verifierVersionMin(); if(poll) tourDeSondage(); } }); }catch(e){}   // v8.538 : + version minimale
+    try{ window.Capacitor.Plugins.App.addListener("appStateChange", st=>{ if(st && st.isActive){ pingActivite(); verifierVersionMin(); verifierMajAppli(); if(poll) tourDeSondage(); if(typeof effacerPastillePush==="function") effacerPastillePush(); } }); }catch(e){}   // v8.538 : + version minimale ; 26/10 : pastille
   }
 }
 // ⚠️ Lit IOS_POINTS_SPEND_KILLSWITCH (cf. sa définition) : `false` tant qu'il n'est pas activé, donc
@@ -9325,11 +9375,24 @@ const RESOLVE_FN=SB_URL+"/functions/v1/resolve";   // v8.472 : mode "resolve-sim
    ⚠️ `myOpts === null` = pas encore chargé ou en échec ; `[]` = chargé, aucun droit. Ne pas
    confondre les deux, sinon on affiche « aucune option » avant même d'avoir demandé. */
 let myOpts=null;
+/* ⚠️ v8.519 (05/10/2026, décision d'Hervé) — LE REPLI SUR `user_metadata` EST SUPPRIMÉ. Le joueur peut
+   modifier lui-même son user_metadata : s'en servir quand la lecture des droits échoue permettait de
+   s'inscrire des options puis de bloquer la requête pour les obtenir gratuitement. Désormais un échec
+   de lecture = AUCUNE option (myOpts reste `null`, cf. optEntry()) ; la seule source de vérité est la
+   table serveur `entitlements`. Au pire, un joueur payant voit ses options verrouillées le temps d'un
+   réseau capricieux — jamais l'inverse. */
+let myGratuite=null;   // v8.519 : true = compte testeur gratuit, false = paiement réel, null = inconnu (le serveur tranche)
 async function loadOpts(){
-  if(!AUTH || !AUTH.id){ myOpts=[]; return; }
+  if(!AUTH || !AUTH.id){ myOpts=[]; myGratuite=null; return; }
   try{ const r=await q(db.from("entitlements").select("opt,expires_at").eq("user_id",AUTH.id));
        myOpts=Array.isArray(r)?r:[]; }
-  catch(e){ myOpts=null; }                 // échec → repli sur le user_metadata
+  catch(e){ myOpts=null; }                 // échec → aucune option (plus de repli permissif)
+  // Gratuité de phase de test (liste fermée `testeurs_gratuits`, v8.519). Ne sert qu'à l'AFFICHAGE et à
+  // éviter un essai gratuit voué au refus : la règle d'accès serveur reste seule juge. Fonction absente
+  // (base pas encore migrée) ou erreur → null = comportement d'avant (essai gratuit, le serveur décide).
+  try{ const g=await db.rpc("tml_ma_gratuite_test"); myGratuite=(g&&!g.error&&typeof g.data==="boolean")?g.data:null; }
+  catch(e){ myGratuite=null; }
+  if(estNatif()) myGratuite=null;   // v8.556 : garde-fou natif — jamais de fiche « paiement réel » (Stripe) dans les apps des Stores
 }
 // ⚠️ LOT 6 (2026-09-10) — 3 parties Solo gratuites À VIE, lues ici pour la première fois côté
 // client : la table + son déclencheur existent depuis le Lot 1 (MIGRATION-lot1-fondations-
@@ -9395,11 +9458,7 @@ function optEntry(k){
     const e=myOpts.find(x=>x && x.opt===k);
     return e ? {k, exp:e.expires_at||null} : null;
   }
-  const o=optsSet(); if(!o) return null;                       // repli de transition (cf. ci-dessus)
-  for(let i=0;i<o.length;i++){ const s=String(o[i]);
-    if(s===k) return {k, exp:null};                       // héritage : sans échéance
-    if(s.indexOf(k+"@")===0) return {k, exp:s.slice(k.length+1)}; }
-  return null; }
+  return null; }                                              // v8.519 : plus aucun repli (user_metadata modifiable par le joueur)
 function optFin(k){ if(AUTH && AUTH.id===ADMIN_ID) return 0;   // admin : accès illimité, jamais d'échéance affichée (même garde que hasOpt)
   const e=optEntry(k); if(!e||!e.exp) return 0;
   const t=new Date(e.exp).getTime(); return isNaN(t)?0:t; }
@@ -9436,7 +9495,7 @@ function ownsOpt(key){ return key==='pack' ? SHOP_ORDER.every(k=>hasOpt(k)) : ha
 // séparé — utilisé par showPremiumInfo() (masque prix+bouton) et subscribeOpt() (refuse la requête).
 function sellable(key){ return key==='pack' || SHOP_ORDER.indexOf(key)>=0; }
 function showPremiumInfo(key){
-  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:((!estNatif() && PAIEMENT_WEB_ACTIF===true)?PREM_LOCKED_PAYANT:PREM_LOCKED);   // ⟦PAIEMENT-WEB⟧
+  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:(myGratuite===false?PREM_LOCKED_PAYANT:PREM_LOCKED);
   /* ⚠️ v7.45 — L'ÉCHÉANCE DOIT ÊTRE ÉCRITE. Une option valable un an qui s'éteint sans prévenir se
      vit comme une panne, pas comme une fin d'abonnement : le joueur perd une fonction qu'il a payée
      et ne comprend pas pourquoi. On affiche donc la date tant qu'elle est là, et un message explicite
@@ -9523,7 +9582,7 @@ function consentementAchat(key){
          <span class="mini"><span id="consCgvMark">☐</span> ${t("J'accepte les")} <a href="cgv.html" onclick="ouvrirLien('cgv.html',event)">${t("Conditions Générales de Vente")}</a></span>
        </div>
        <div class="box clik" id="consRetract" onclick="consentToggleRetract()" style="text-align:left;margin:0 0 14px;border-color:var(--border)">
-         <span class="mini"><span id="consRetractMark">☐</span> ${t("Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'en demandant cette activation immédiate, je perds mon droit de rétractation.")}</span>
+         <span class="mini"><span id="consRetractMark">☐</span> ${t("Je demande que l'exécution de cette option numérique commence immédiatement, avant la fin du délai de rétractation de 14 jours, et je reconnais qu'une fois pleinement exécutée à ma demande, je perdrai mon droit de rétractation.")}</span>
        </div>
        <button class="btn" id="consOk" style="opacity:.5" onclick="consentModalEnd(true)" disabled>${t("Continuer vers le paiement")}</button>`,
       true);
@@ -9543,8 +9602,9 @@ async function subscribeOpt(key){
   if(busy) return; busy=true;
   try{
   if(!await confirmTxt("🛒",t("Souscrire à cette option"),t("Souscrire à « {a} » ?",{a:t(p.t)}),t("Souscrire"))) return;
-  // ⟦PAIEMENT-WEB⟧ 30/10 : sur le SITE payant, jamais de souscription gratuite — le paiement Stripe directement.
-  if(!estNatif() && await paiementWebActif()){ await paiementStripe(key); return; }
+  // v8.519 — compte hors liste des testeurs gratuits, sur le web : directement le paiement réel.
+  // (Sur mobile natif, on garde le chemin d'origine : essai gratuit refusé → achat App Store / Play.)
+  if(myGratuite===false && !estNatif()){ await payerStripe(key); return; }
   /* ⚠️ La leçon de la v7.45 reste valable sous la nouvelle forme : on efface l'ancienne ligne de
      cette option avant d'en écrire une neuve. Sinon, réactiver une option périmée laisserait la
      périmée à côté de la nouvelle et le droit ne prendrait pas effet. C'est ce que fait le
@@ -9575,31 +9635,30 @@ async function subscribeOpt(key){
       catch(e2){ if(!(e2&&e2.userCancelled)) showErr(t("Souscription : ")+(e2.message||e2)); }
       return;
     }
-    await paiementStripe(key);
+    await payerStripe(key);
   }
   } finally { busy=false; }
 }
-// ⟦PAIEMENT-WEB⟧ 30/10 : paiement Stripe (consentement CGV + renoncement, puis session Checkout) — extrait de subscribeOpt pour le site payant.
-let PAIEMENT_WEB_ACTIF=null;   // null = pas encore lu
-async function paiementWebActif(){
-  if(PAIEMENT_WEB_ACTIF===null){ try{ const rows=await q(db.from("app_config").select("actif").eq("k","paiement_web")); PAIEMENT_WEB_ACTIF=!!(rows&&rows[0]&&rows[0].actif); }catch(e){ return true; } }
-  return PAIEMENT_WEB_ACTIF===true;
-}
-async function paiementStripe(key){
-  try{ {
-    if(!await consentementAchat(key)) return;   // annulé : pas de CGV/renoncement, pas de Stripe
-    try{
-      const { data:{ session } } = await db.auth.getSession();
-      const jeton = (session && session.access_token) || "";
-      const r = await fetch(CHECKOUT_FN, { method:"POST",
-        headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jeton, "Content-Type":"application/json" },
-        body: JSON.stringify({opt:key, cgvAcceptees:true, renonceRetractation:true}) });
-      const j = await r.json();
-      if(!r.ok || !j.url) throw new Error(j.error||"session de paiement refusée");
-      window.location.href = j.url;   // redirection vers Stripe — la suite se joue côté Stripe puis `stripe-webhook`
-    }catch(e2){ showErr(t("Souscription : ")+e2.message); }
-  }
-  } finally { busy=false; }
+// v8.519 — paiement réel web (Stripe Checkout), extrait de subscribeOpt() pour être appelé directement
+// quand le compte n'est PAS dans la liste des testeurs gratuits (myGratuite===false) : inutile alors
+// de tenter une souscription gratuite que la base refusera. Consentement CGV + renoncement d'abord.
+async function payerStripe(key){
+  /* ⚠️ v8.538 (10/10/2026, validé par Hervé) — 3ᵉ GARDE, AU PLUS PRÈS : jamais de paiement Stripe dans l'app native
+     (règle 3.1.1 App Store / Google Play). Les deux appelants filtrent déjà `estNatif()` (subscribeOpt → achatNatif /
+     RevenueCat) ; cette garde rend la fonction elle-même inopérante en natif, quel que soit un futur appelant. */
+  if(estNatif()) return;
+  if(!await consentementAchat(key)) return;   // annulé : pas de CGV/renoncement, pas de Stripe
+  try{
+    const { data:{ session } } = await db.auth.getSession();
+    const jeton = (session && session.access_token) || "";
+    const r = await fetch(CHECKOUT_FN, { method:"POST",
+      headers:{ "apikey":SB_KEY, "Authorization":"Bearer "+jeton, "Content-Type":"application/json" },
+      body: JSON.stringify({opt:key, cgvAcceptees:true, renonceRetractation:true}) });
+    const j = await r.json();
+    if(r.status===409){ await loadOpts(); render(); infoWin(t("Cette option est déjà active sur ton compte."),"✅"); return; }
+    if(!r.ok || !j.url) throw new Error(j.error||"session de paiement refusée");
+    window.location.href = j.url;   // redirection vers Stripe — la suite se joue côté Stripe puis `stripe-webhook`
+  }catch(e2){ showErr(t("Souscription : ")+e2.message); }
 }
 // v8.452 (2026-09-14, demandé par Hervé) — paiement en Points Tactizo, alternative 100% distincte
 // du paiement réel (jamais de mélange, cf. spend_points() côté serveur : un achat est tout en
@@ -9667,7 +9726,6 @@ const SHOP_ORDER=["ia","bonuscomplets","treve","rachat","duel_live","stats"];   
 const PRICES={
   ia:2.99, bonuscomplets:4.99, treve:2.99, rachat:1.99, duel_live:3.99, stats:2.99,
   pack:14.99,
-  rushillimite:4.99,   // ⟦PAIEMENT-WEB⟧ 30/10 : ⚡ Rush illimité (CGV art. 2, Stripe Live)
   // Retirées du catalogue commercial (Lot 3) — gardées pour l'affichage rétro-compatible de
   // PITCHES.direct/live/gageperso/voiradv (cf. commentaire au-dessus de SHOP_ORDER). Prix historiques,
   // jamais réaffichés dans la Boutique (plus dans SHOP_ORDER) ni dans checkout/index.ts.
@@ -10301,7 +10359,12 @@ const REFUS_SERVEUR={
   inscription_fermee:"Les inscriptions de cette ligue sont fermées.",
   ligue_complete:"Cette ligue est complète.",
   inscription_refusee:"Tu ne peux pas rejoindre cette ligue.",
+  // v8.539 — deux codes du Lot 0A restés en français brut dans la v8.538 (PLAN-LOT0A-SUITE §5, §9.9) :
+  calendrier_refuse:"Le calendrier de cette ligue ne peut plus être modifié. Actualise la page.",   // trigger `calendrier` (hint)
+  pas_organisateur:"Seul l'organisateur peut clôturer les inscriptions.",                         // close_registration (res.code)
 };
+// Code renvoyé DANS la réponse d'une RPC (pas une erreur) : phrase lisible si connue, sinon le code tel quel.
+function refusLisible(code){ return REFUS_SERVEUR[code] ? t(REFUS_SERVEUR[code]) : code; }
 async function q(p){
   if(LECTURE_SEULE && p && p.method && p.method!=="GET") throw new Error("lecture_seule");
   // v8.515 — le `code` et le `hint` de l'erreur serveur voyagent avec elle (avant : seul le message,
@@ -10933,6 +10996,63 @@ function retourAuxStats(){
   if(!myStatsData) loadMyStats().then(render);
 }
 let loadedDay=null;          // journée chargée dans duels/bets (évite d'afficher une journée passée sur Pronos, D5)
+/* ⚠️ v8.539 (10/10/2026, Lot 0A étape 6 « Lot 0B », décidé par Hervé) — LA JOURNÉE EN COURS SE LIT PAR LE
+   SERVEUR. Jusqu'ici l'app téléchargeait TOUS les paris de la journée (`bets select *`) et se contentait de
+   ne pas AFFICHER ceux des autres avant la clôture : n'importe quel client pouvait les lire. La RPC
+   `get_league_state` rend la ligue, les joueurs, les duels et les paris du jour DÉJÀ filtrés par le serveur,
+   selon les règles ACTUELLES de l'app (aucune règle de jeu ne change) :
+     • mon pari : complet ; pari de l'IA : complet ;
+     • pari d'un humain adverse : avant la clôture, le FAIT seulement ({player_id, duel_id, day, submitted,
+       valide, masque:true}) ; après la clôture, pronos + mises + capitaine si j'ai ⚡ Duel Live, son bonus
+       restant caché (card:null, SANS aucun indicateur — v8.540 : `bonus_cache` retiré, il trahissait
+       qu'un bonus existait) ; après la résolution : complet ;
+     • gage de préparation / enchères de trêve des autres : « a voté / a misé » (`true`).
+   ⚠️ COMPATIBILITÉ : tant que la base n'est pas migrée, la RPC répond « fonction introuvable » (PGRST202) :
+   on retombe sur les lectures directes d'AVANT, à l'identique, et on ne la retente pas avant 10 min (pas une
+   requête en échec toutes les 4 s). Détection LOCALE à ces lectures : `tradeServeurAbsent()` reste
+   volontairement neutralisée (v8.538 : plus aucun repli d'ÉCRITURE).
+   ⚠️ `{get:true}` : RPC en lecture (fonctions STABLE) envoyées en GET — la consultation admin
+   (`LECTURE_SEULE`, verrou de `q()` sur tout ce qui n'est pas GET) doit continuer de s'afficher.
+   ⚠️ FORME D'UN PARI MASQUÉ : la ligne RESTE dans `bets` — tous les « a validé » de l'app reposent sur
+   `bets.find(b=>b.player_id===…)` (compteurs x/y, listes de duels, QG), inchangés. `normaliserPari` lui
+   donne `picks/captain/card/net` à null : un écran qui lit les pronos d'autrui tombe sur le cadenas
+   (`b.masque`), jamais sur une erreur. `b.valide` dit si le pari compte (submitted + pronos non vides). */
+let etatLigueAbsentJusqua=0, soumissionsAbsentJusqua=0;
+function rpcAbsente(e){ return !!e && (e.code==="PGRST202" || /Could not find the function/i.test(e.message||"")); }
+function normaliserPari(b){ return (b && b.masque) ? Object.assign({picks:null, captain:null, card:null, net:null}, b) : b; }
+// Pari qui « compte » (validé, pronos non vides) — masqué ou non. Même définition que le serveur.
+function pariValide(b){ return !!b && (b.masque ? b.valide===true : (b.submitted!==false && Array.isArray(b.picks) && b.picks.length>0)); }
+async function lireEtatLigue(lid, jour){
+  if(!lid || Date.now()<etatLigueAbsentJusqua) return null;
+  let r;
+  try{ r=await q(db.rpc("get_league_state", (jour==null)?{p_league:lid}:{p_league:lid, p_day:jour}, {get:true})); }
+  catch(e){ if(rpcAbsente(e)){ etatLigueAbsentJusqua=Date.now()+600000; return null; } throw e; }
+  if(!r || typeof r!=="object") return null;
+  if(r.code==="ligue_introuvable") return {introuvable:true};
+  if(r.code!=="ok" || !r.league) return null;            // pas_membre… : lectures directes d'avant
+  return { league:r.league, players:Array.isArray(r.players)?r.players:[], duels:Array.isArray(r.duels)?r.duels:[],
+           bets:(Array.isArray(r.bets)?r.bets:[]).map(normaliserPari), submitted:Array.isArray(r.submitted)?r.submitted:[], day:r.day };
+}
+// Paris d'UNE journée : par la RPC (filtrés), sinon lecture directe d'avant.
+async function lireParisJournee(lid, jour){
+  const e=await lireEtatLigue(lid, jour);
+  if(e && !e.introuvable && e.day===jour) return e.bets;
+  return await q(db.from("bets").select("*").eq("league_id",lid).eq("day",jour));
+}
+// (ligue, journée, joueur) des paris de la journée EN COURS de toutes mes ligues — le fait seulement.
+// null = RPC absente : à l'appelant de faire sa lecture directe d'avant.
+async function lireSoumissions(){
+  if(Date.now()<soumissionsAbsentJusqua) return null;
+  try{ const r=await q(db.rpc("get_my_submissions", {}, {get:true})); return Array.isArray(r)?r:[]; }
+  catch(e){ if(!rpcAbsente(e)) throw e; soumissionsAbsentJusqua=Date.now()+600000; return null; }
+}
+// Joueurs ayant un pari sur `jour` (journée EN COURS) dans la ligue `lid` — le fait seulement.
+async function joueursAyantValide(lid, jour){
+  const s=await lireSoumissions();
+  if(s) return new Set(s.filter(x=>x.league_id===lid && x.day===jour).map(x=>x.player_id));
+  const bz=await q(db.from("bets").select("player_id").eq("league_id",lid).eq("day",jour));
+  return new Set((bz||[]).map(b=>b.player_id));
+}
 /* ⚠️ v8.99 (bug vécu par Hervé sur la ligue UWQ7W : un pari jour 3 marqué « non validé à temps »
    alors que le testeur venait de démarrer la ligue et n'avait pas eu 24h) — AUCUNE GARDE DE
    RÉ-ENTRANCE SUR `refresh()`, ET `startPoll()` LE RAPPELLE TOUTES LES 4 SECONDES. `refresh()`
@@ -10961,7 +11081,13 @@ async function refresh(){
   const stale=()=> S.leagueId!==lid;
   refreshing=true;
   try{
-    L = await q(db.from("leagues").select("*").eq("id",lid).maybeSingle());  // maybeSingle : renvoie null (pas une erreur) si la ligue a été supprimée
+    /* v8.539 (Lot 0A étape 6) — UN appel : ligue, joueurs, duels et paris du jour filtrés par le serveur
+       (`lireEtatLigue`). `null` = RPC absente ou pas membre → lectures directes d'avant, à l'identique. */
+    let etat=null;
+    const lireLigue=async()=>{ etat=await lireEtatLigue(lid, null);
+      return etat ? (etat.introuvable ? null : etat.league)
+                  : await q(db.from("leagues").select("*").eq("id",lid).maybeSingle()); };  // maybeSingle : renvoie null (pas une erreur) si la ligue a été supprimée
+    L = await lireLigue();
     if(stale()) return;                       // l'utilisateur a quitté la ligue pendant le chargement
     if(!L){ // ligue introuvable (supprimée) : on nettoie et on retourne à l'accueil au lieu de planter
       if(S.leagueId===lid){ if(poll)clearInterval(poll); S.leagueId=null; S.myId=null; S.view=(typeof rushOngletActif==="function"&&rushOngletActif())?"home":"leagues"; loadMyLeagues(); }
@@ -10976,7 +11102,7 @@ async function refresh(){
     if(L.frozen_for_user_id && L.frozen_for_user_id===AUTH.id && !L.day_started_at){
       try{
         const r=await q(db.rpc("activate_reviewer_league",{p_league:L.id}));
-        if(r && r.activated){ L=await q(db.from("leagues").select("*").eq("id",lid).maybeSingle()); if(stale()) return; if(!L) return; }
+        if(r && r.activated){ L=await lireLigue(); if(stale()) return; if(!L) return; }
       }catch(e){}
     }
     /* ⚠️ v8.316 (bug vécu par Hervé) — MODIFIER UN PRONO SANS REVALIDER NE TOUCHE JAMAIS LA BASE
@@ -10992,7 +11118,7 @@ async function refresh(){
       S.editingBet=false; bet={picks:null,captain:-1}; myCard=null; S.editingDay=null;
       infoWin(t("⚠️ La journée s'est résolue pendant que tu modifiais tes pronos — ta modification n'a pas été prise en compte, c'est ton dernier prono validé qui compte."),"⚠️");
     }
-    players = await q(db.from("players").select("*").eq("league_id",lid).order("join_order"));
+    players = (etat && !etat.introuvable) ? etat.players : await q(db.from("players").select("*").eq("league_id",lid).order("join_order"));
     if(stale()) return;
     try{ trades = await q(db.from("trades").select("*").eq("league_id",lid).eq("status","pending")); }catch(e){ trades=[]; } // rachats en attente (badge 🤝 + écran)
     if(stale()) return;
@@ -11122,8 +11248,12 @@ async function refresh(){
     S.recap = false;
     const dispDay = Math.min(L.current_day, Math.max(0,(L.num_days||1)-1));
     S.dispDay = dispDay;
-    duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay));
-    bets  = await q(db.from("bets").select("*").eq("league_id",lid).eq("day",dispDay));
+    if(etat && !etat.introuvable && etat.day===dispDay){ duels=etat.duels; bets=etat.bets; }   // v8.539 : déjà lus (filtrés)
+    else {
+      duels = await q(db.from("duels").select("*").eq("league_id",lid).eq("day",dispDay));
+      // RPC absente / pas membre (`etat` nul) : la lecture directe d'avant ; sinon (autre journée) : la RPC, filtrée.
+      bets  = etat ? await lireParisJournee(lid, dispDay) : await q(db.from("bets").select("*").eq("league_id",lid).eq("day",dispDay));
+    }
     /* ⚠️ v8.332 (bug vécu par Hervé, régulièrement : « Connexion : null is not an object
        (evaluating 'L.current_day') » sur l'accueil) — DEUX `await` D'AFFILÉE SANS GARDE. Comme
        documenté en tête de fonction, l'utilisateur peut quitter la ligue (bandeau « Mes ligues »,
@@ -11155,7 +11285,7 @@ async function refresh(){
       // tous les matchs choisis → on démarre le compte à rebours des paris (max 24h / 12h fast), une seule fois
       if(!L.bet_started_at && duels.length && duels.every(d=>d.fixtures)){
         try{ const r=await q(db.from("leagues").update({bet_started_at:new Date().toISOString()}).eq("id",L.id).is("bet_started_at",null).select("bet_started_at")); if(r&&r.length){ L.bet_started_at=r[0].bet_started_at; } }catch(e){} }
-      if(await ensureAiBets()){ bets = await q(db.from("bets").select("*").eq("league_id",lid).eq("day",dispDay)); }
+      if(await ensureAiBets()){ bets = await lireParisJournee(lid, dispDay); }   // v8.539 : relue filtrée (RPC), repli direct
       if(shouldAutoResolve()){ if(L.engine==="server"){ resolveSimDayServer(L.id); } else { resolveDay(); } return; }
       await resolveRealIfReady(); // données réelles : résout quand les vrais matchs sont terminés
     }
@@ -11379,8 +11509,11 @@ async function ensureAiBets(){ let made=false;
   for(const d of duels){ if(!d.fixtures) continue;
     for(const pid of [d.home_id,d.away_id]){ const p=pById(pid); if(!p||!p.is_ai) continue;
       if(bets.find(b=>b.player_id===pid)) continue;
-      const ai=aiPlay(p.capital!=null?p.capital:100, d.fixtures, p.hand||[], S.dispDay, L.num_days);
-      try{ const r=await q(db.from("bets").insert({league_id:L.id,day:S.dispDay,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,card:ai.card,submitted:true}).select()); if(r&&r.length) made=true; }catch(e){} } }
+      const ai=aiPlay(p.capital!=null?p.capital:100, d.fixtures, p.hand||[], S.dispDay, L.num_days, jourTreve(L));
+      // v8.539 (Lot 0A étape 6) — PLUS DE `.select()` (RETURNING) : une fois la lecture resserrée, relire en retour
+      // le pari du jour de l'IA est refusé (il ne se lit plus que par get_league_state) et ferait échouer l'insertion
+      // entière. Sans erreur → on relit la journée (filtrée) ; une insertion ignorée par le serveur ne coûte qu'une relecture.
+      try{ await q(db.from("bets").insert({league_id:L.id,day:S.dispDay,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,card:ai.card,submitted:true})); made=true; }catch(e){} } }
   return made; }
 function shouldAutoResolve(){
   const dz=duels; if(!dz.length || dz.some(d=>!d.fixtures)) return false; // sélection pas finie
@@ -11404,7 +11537,8 @@ function allHumansSubmitted(){
   const ids=new Set(); dz.forEach(d=>{ ids.add(d.home_id); ids.add(d.away_id); });
   const humans=(players||[]).filter(p=>!p.is_ai && ids.has(p.id));
   if(!humans.length) return false;
-  return humans.every(p=>{ const b=(bets||[]).find(x=>x.player_id===p.id); return !!(b && b.submitted!==false && Array.isArray(b.picks) && b.picks.length); });
+  // v8.539 : `pariValide` — un pari adverse masqué (avant la clôture) porte `valide` au lieu de ses pronos.
+  return humans.every(p=>pariValide((bets||[]).find(x=>x.player_id===p.id)));
 }
 function me(){ return players.find(p=>p.id===S.myId); }
 function myDuel(){ return duels.find(d=>d.home_id===S.myId||d.away_id===S.myId); }
@@ -11576,6 +11710,10 @@ function capNatif(){ return !!(window.Capacitor && window.Capacitor.Plugins && w
    prioritaires du joueur, quel que soit l'écran où l'app se trouvait avant. */
 let pushSetupDone=false;
 function pushPlugin(){ return window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.PushNotifications; }
+// 26/10 (Hervé) — pastille « 1 » de l'icône (posée par chaque push, aps.badge = 1) : effacée à l'ouverture / au retour dans l'app,
+// avec les notifications affichées. iOS : le plugin remet aussi le compteur à 0, mais refuse avant l'enregistrement push de la
+// session (d'où l'appel aussi dans « registration ») — refus absorbé.
+function effacerPastillePush(){ if(!capNatif()) return; const P=pushPlugin(); if(!P || !P.removeAllDeliveredNotifications) return; try{ P.removeAllDeliveredNotifications().catch(()=>{}); }catch(e){} }
 // Fuseau horaire + langue : AUCUN des deux n'existait côté serveur avant ce lot (la langue ne
 // vivait que dans localStorage/pl_lang, cf. audit) — indispensable pour que le CRON (notif-
 // dispatch) sache respecter la plage silencieuse 23h-8h et écrire dans la bonne langue une
@@ -11603,11 +11741,31 @@ async function setupAndroidNotificationChannel(){
   const P=pushPlugin(); if(!P || !P.createChannel) return;
   try{ await P.createChannel({ id:"tactizo_notifications", name:"Tactizo", importance:3, vibration:true }); }catch(e){}
 }
+/* ⚠️ v8.529 (07/10/2026, décision d'Hervé) — PAS DE BANDEAU INTERNE POUR « ENCHÈRES OUVERTES ».
+   Règle : app au premier plan → pas de bandeau `prep_open` (le QG affiche déjà « enchères à
+   faire ») ; app en arrière-plan ou fermée → la notification système reste affichée.
+   ⚠️ POURQUOI ICI, ET SEULEMENT ICI : `pushNotificationReceived` n'est déclenché par iOS et
+   Android QUE lorsque l'app est au premier plan. En arrière-plan ou app fermée, c'est le système
+   qui affiche la notification, sans jamais passer par ce code. Filtrer à cet endroit respecte
+   donc la règle PAR CONSTRUCTION, sans deviner l'état de l'app (aucune heuristique « actif
+   récemment » côté serveur, qui pourrait faire perdre la notification à un joueur absent).
+   Reconnaissance : le type `kind` envoyé par notif-dispatch (v8.529) ; à défaut (serveur pas
+   encore à jour), le titre EXACT du push, FR ou EN — copié de notif-dispatch `MSG.prep_open`,
+   contrôlé par tools/test-push-sans-bandeau-prep-open.py. Égalité stricte, jamais « contient » :
+   « 🔄 Enchères de trêve ouvertes » (treve_open) et « ⏰ Plus que 2h pour les enchères »
+   (prep_h2) gardent leur bandeau. Les « Actions à faire » du QG ne sont PAS concernées. */
+const PUSH_PREP_OPEN_TITRES=["🃏 Enchères ouvertes","🃏 Auction open"];
+function pushSansBandeau(n){
+  const d=(n&&n.data)||{};
+  if(d.kind) return d.kind==="prep_open";
+  return PUSH_PREP_OPEN_TITRES.indexOf(String((n&&n.title)||""))>=0;
+}
 async function setupPushNotifications(){
   if(pushSetupDone || !capNatif()) return; const P=pushPlugin(); if(!P) return; pushSetupDone=true;
   try{
     setupAndroidNotificationChannel();
     P.addListener("registration", async (token)=>{
+      effacerPastillePush();   // 26/10 : 1re occasion où iOS accepte l'effacement
       try{
         const platform=(window.Capacitor.getPlatform&&window.Capacitor.getPlatform())||"";
         if(!AUTH || !token || !token.value || (platform!=="ios" && platform!=="android")) return;
@@ -11630,8 +11788,13 @@ async function setupPushNotifications(){
     // rien vu alors qu'APNs/FCM avaient répondu 200. La bannière reste jusqu'à ce que le joueur
     // la ferme ou l'ouvre. Même composant sur les deux plateformes, aucun doublon possible avec
     // la bannière système (qui, au premier plan, n'est affichée NI par iOS NI par Android).
-    P.addListener("pushNotificationReceived", (n)=>{ try{ pushBannerShow(n&&n.title, n&&n.body); }catch(e){} });
-    P.addListener("pushNotificationActionPerformed", ()=>{ goAccueil(); render(); });   // v8.516 : le QG ferme la ligue ouverte (cf. quitterLigue)
+    // 30/10/2026 (retour n°1 d'Hervé sur la build 10) : PLUS AUCUN bandeau app ouverte — l'Accueil v2 affiche déjà ce qu'il y a
+    // à faire. La notification système (app en arrière-plan ou fermée) est inchangée : cet écouteur n'est appelé qu'au premier plan.
+    // On efface seulement la pastille que le push vient de poser (aps.badge = 1). pushBannerShow/pushSansBandeau restent définis (inutilisés).
+    P.addListener("pushNotificationReceived", (n)=>{ try{ effacerPastillePush(); }catch(e){} });
+    // v8.516 : le QG ferme la ligue ouverte (cf. quitterLigue). ⟦RUSH-NATIF⟧ v8.556 : notification Rush « résultat prêt » → lien posé AVANT
+    // goAccueil() ; loadMyLeagues() → rushTestRafraichir() → rushServeurLienAttente() ouvre Rush sur le duel (même chemin que le web).
+    P.addListener("pushNotificationActionPerformed", (a)=>{ try{ if(typeof rushNotifNatif==="function") rushNotifNatif(a); }catch(e){} goAccueil(); render(); });
   }catch(e){}
 }
 // N'enregistre le jeton qu'APRÈS un "granted" explicite — jamais en arrière-plan sans consentement.
@@ -13053,7 +13216,9 @@ async function loadHomeTodo(){
     const [bts,dls,btsTous]=await Promise.all([
       q(db.from("bets").select("league_id,day,player_id,picks").in("player_id",pids)),
       q(db.from("duels").select("league_id,day,home_id,away_id,fixtures,sel_ends_at").in("league_id",lids)),   // v8.538 : échéance PROPRE au duel (rythme unique) pour la carte « Choisis tes matchs »
-      q(db.from("bets").select("league_id,day,player_id").in("league_id",lids))
+      // v8.539 (Lot 0A étape 6) — « a-t-il validé ? » demandé au SERVEUR (get_my_submissions : le fait seulement,
+      // journée en cours de toutes mes ligues) ; RPC absente → la lecture directe d'avant (clés seules).
+      lireSoumissions().then(s=> s || q(db.from("bets").select("league_id,day,player_id").in("league_id",lids)))
     ]);
     try{ window.__nvDls = dls || []; }catch(e){}   // ⟦ATTENTE-JOURNEE⟧ fin de la journée de ligue (tous les duels) pour nvAttente
     act.forEach(m=>{
@@ -13420,7 +13585,13 @@ const RT = { droit:false, carte:null, verifieLe:0, enCours:false, busy:false, je
 // 21/10 (P1 « Rush 100 % serveur », GO d'Hervé) : PLUS DE LISTE NOMINATIVE — tout compte web authentifié (jamais en natif : pas de Rush
 // dans les apps des stores) peut saisir le mot de passe Rush ; la BASE décide de tout (rushtest_statut, rushtest_ouvrir, rushtest_verifier,
 // rush_acces). Un compte sans accès fait AU PLUS une RPC légère (rushtest_statut) toutes les 30 s, au chargement des ligues.
-function rushTestEligible(){ return !!(AUTH && AUTH.id && !estNatif()); }
+/* ⟦RUSH-NATIF⟧ v8.556 (23/10/2026, GO d'Hervé : build 10 AVEC Rush pour les testeurs) — RUSH DANS LES APPS NATIVES. UNE seule
+   porte remplace les 4 anciennes gardes « jamais en natif » (rushTestEligible, rgActif, sprActif, p4Rush). CODÉE EN DUR à vrai : en
+   natif, Rush est visible pour tout compte connecté, comme sur le web depuis l'accès libre du 22/10 — PAS d'interrupteur serveur caché
+   (Apple 2.3.1 : une fonction activable à distance après la revue). La BASE décide toujours de l'accès (rushtest_statut, rush_acces).
+   Revenir à « Rush jamais en natif » = renvoyer false ici, puis une nouvelle build. Retrait exact : tools/patch-rush-natif.py --retirer. */
+function rushNatifAutorise(){ return true; }
+function rushTestEligible(){ return !!(AUTH && AUTH.id && (!estNatif() || rushNatifAutorise())); }
 async function rushTestAppelEdge(corps, enTexte){
   const { data:{ session } } = await db.auth.getSession();
   const jwt = (session && session.access_token) || "";
@@ -13703,6 +13874,14 @@ function rushEnvoyerOuvrir(ecran){
   RT.ouvrirApres=null;
   try{ if(RT.fenetre) RT.fenetre.postMessage({ canal:RUSH_TEST_CANAL, type:"ouvrir", ecran }, "*"); }catch(e){}   // origine opaque : "*" ; le prototype ne lit que window.parent
 }
+/* ⟦RUSH-NATIF⟧ v8.556 — BOUTON RETOUR D'ANDROID dans l'onglet Rush : dans un mode (Mon QG / Mon duel / Carrière — l'iframe l'annonce
+   par son message « onglets » v2 : RT.rushInterne), le retour ramène à l'Accueil Rush (message « ouvrir » / « accueil », déjà en liste
+   blanche du paquet ; le paquet v8.556 y ferme aussi sa fenêtre de partage). À l'Accueil Rush : faux → brancherRetourAndroid() poursuit
+   (→ QG), comme pour les autres onglets. L'état de l'iframe est conservé (hôte masqué, jamais détruit). */
+function rushRetourNatif(){
+  if(S.view!=="rush" || !RT.fenetre || RT.rushInterne!==true || !document.getElementById("rushTestCadre")) return false;
+  rushEnvoyerOuvrir("accueil"); return true;
+}
 function rushOuvrirRegles(){
   if(!rushOngletActif()) return;
   const deja = !!document.getElementById("rushTestCadre");
@@ -13743,7 +13922,7 @@ const RG_BONUS = {"assurance": ["Si ton pari est perdu, tu ne perds que <b>{assu
 const RG_ORDRE = [["🎁 de l'adversaire : ton prono est inversé.", "The opponent's 🎁: your prediction is flipped."], ["Résultat de ton pari, avec ton 🧈 s'il est joué.", "Your bet's result, with your 🧈 if played."], ["Ton 🐗, 🔥 ou 🛡.", "Your 🐗, 🔥 or 🛡."], ["🤛 de l'adversaire.", "The opponent's 🤛."], ["❄️, si un seul des deux joueurs l'a joué : échange des résultats.", "❄️, if only one of the two players played it: results swapped."], ["Ton 🪂.", "Your 🪂."], ["Arrondi au centime : c'est ton <b>net du duel</b>. Il est comparé au net de l'adversaire et décide du +{pts_net}.", "Rounded to the cent: this is your <b>duel net</b>. It is compared with the opponent's net and decides the +{pts_net}."], ["Ton 🩸 : crédit ajouté <b>après</b>, à ton capital seulement.", "Your 🩸: credit added <b>afterwards</b>, to your capital only."]];
 const RG_LIB = {"col_reel": ["⚡ Rush Réel", "⚡ Real Rush"], "col_fictif": ["🎲 Rush Fictif", "🎲 Fictional Rush"], "mode_rencontres": ["Rencontres", "Matches"], "mode_cotes": ["Cotes", "Odds"], "mode_resultat": ["Résultat", "Result"], "mode_adv": ["Adversaire", "Opponent"], "reel_rencontres": ["Vrais matchs ({sports_reel}), dans les prochaines {horizon} h", "Real matches ({sports_reel}), within the next {horizon} h"], "fictif_rencontres": ["Rencontres fictives générées pour toi ({affiches} affiches : {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)", "Fictional matches generated for you ({affiches} fixtures: {foot} ⚽, {basket} 🏀, {tennis_f} 🎾)"], "reel_cotes": ["Cotes réelles, <b>figées à la publication</b> : elles ne changent plus ensuite", "Real odds, <b>frozen when published</b>: they never change afterwards"], "fictif_cotes": ["Cotes du générateur de Tactizo", "Odds from Tactizo's generator"], "reel_resultat": ["Résultat officiel du match, lu au plus tôt {resultat_min} min après le coup d'envoi", "Official match result, read at the earliest {resultat_min} min after kick-off"], "fictif_resultat": ["Tiré <b>aussitôt</b> par le serveur, avec les probabilités données par les cotes. Personne, ni toi ni l'IA, ne peut le connaître avant ta validation", "Drawn <b>instantly</b> by the server, with the probabilities given by the odds. Nobody, you or the AI, can know it before you confirm"], "reel_adv": ["Un autre joueur si possible, sinon le 🤖 Joueur IA", "Another player when possible, otherwise the 🤖 AI player"], "fictif_adv": ["Toujours le 🤖 Joueur IA", "Always the 🤖 AI player"], "sports_avec_tennis": ["football, basket et tennis", "football, basketball and tennis"], "sports_sans_tennis": ["football et basket ; le tennis n'est pas proposé pour le moment", "football and basketball; tennis is not offered for now"], "pts_condition": ["Dans ton duel", "In your duel"], "pts_points": ["Points", "Points"], "pts_c_net": ["Ton net final est <b>strictement positif</b>", "Your final net is <b>strictly positive</b>"], "pts_c_meilleur": ["Tu <b>remportes</b> ton duel (net strictement meilleur que celui de ton adversaire) <b>avec</b> un net positif", "You <b>win</b> your duel (net strictly better than your opponent's) <b>with</b> a positive net"], "pts_c_max": ["Les deux à la fois", "Both at once"], "pts_c_zero": ["Net nul ou négatif, même si tu perds moins que ton adversaire", "Zero or negative net, even if you lose less than your opponent"], "pts_c_para": ["🪂 joué : net négatif mais meilleur que celui de ton adversaire", "🪂 played: negative net but better than your opponent's"], "div_division": ["Division", "Division"], "div_montee": ["Montée dès", "Promotion at"], "div_maintien": ["Maintien", "Survival"], "div_note": ["Remarque", "Note"], "div_elite": ["★ Élite", "★ Elite"], "div_n": ["Division {n}", "Division {n}"], "div_titre": ["Titre <b>Champion Élite</b> dès {elite_titre}", "<b>Elite Champion</b> title at {elite_titre}"], "div_entree": ["Départ ; pas de descente", "Start; no relegation"], "bon_bonus": ["Bonus", "Boost"], "bon_stock": ["Stock", "Stock"], "bon_effet": ["Effet dans ton duel", "Effect in your duel"], "bon_gratuit": ["gratuit", "free"], "bon_complet": ["complet", "full"], "titre_page": ["⚡ Règles de Rush", "⚡ Rush rules"], "intro": ["Les règles de Tactizo Rush, telles qu'elles s'appliquent aujourd'hui. Touche une rubrique pour l'ouvrir.", "Tactizo Rush rules, as they apply today. Tap a section to open it."], "onglets": ["Règles du jeu", "Game rules"], "ong_ligues": ["🏆 Ligues", "🏆 Leagues"], "ong_rush": ["⚡ Rush", "⚡ Rush"]};
 const RG = { onglet:"ligues" };
-function rgActif(){ try{ return rushOngletActif()===true && !estNatif(); }catch(e){ return false; } }
+function rgActif(){ try{ return rushOngletActif()===true && (!estNatif() || rushNatifAutorise()); }catch(e){ return false; } }   // ⟦RUSH-NATIF⟧
 function rgL(p){ return (lang==="en" ? p[1] : p[0]) || ""; }
 function rgRemplir(s, V){ return String(s).replace(/\{([A-Za-z0-9_]+)\}/g, (m,k)=>Object.prototype.hasOwnProperty.call(V,k) ? V[k] : m); }
 function rgValeurs(){
@@ -13843,6 +14022,66 @@ window.addEventListener("message", e=>{
   if(d.type==="retour" && d.vers==="palmares" && typeof retourPalmares!=="undefined" && retourPalmares==="rush"){ retourPalmares=null; palmView="moi"; openPalmares(); }   // 25/10 : bilan Rush → Palmarès
 });
 /* ⟦N2A-REGLES⟧ fin */
+/* ⟦RUSH-NATIF⟧ partage — v8.556 (23/10/2026) : APPS NATIVES SEULEMENT (estNatif()) :
+   1. au « capacites » de l'iframe, l'app ajoute { canal, type:"capacites_natif", v:1, partage:"app" } : le partage « Ma saison » de
+      Rush passe alors par l'app (dans l'iframe isolée, ni navigator.share({ files }), ni a.download, ni le presse-papier ne sont fiables) ;
+   2. demande « partage » : feuille de partage du système avec l'IMAGE SEULE (navigator.share de la WebView principale, comme « Partager
+      ma saison » des Ligues) ; sans partage de fichier (Android WebView) ou pour « Copier le texte » → copie du texte + message de
+      l'iframe. AUCUN plugin ajouté (@capacitor/share et @capacitor/filesystem absents de mobile/package.json).
+   Garde-fous du pont : rgActif(), NOTRE iframe, origine « null », canal, v:1 ; image = Blob PNG ≤ 8 Mo, nom de la liste fermée, texte
+   ≤ 4 000 caractères ; une demande à la fois ; réponse à la SEULE iframe qui a demandé. Sur le web : ce code ne fait RIEN. */
+const RPN = { enCours:false };
+const RPN_NOM = /^(ma-saison-rush-(reel|fictif)|mes-suivis-rush)\.png$/;   // ⟦RUSH-ABONNEMENTS⟧ 30/10 : + classement entre amis
+async function rpnCopier(txt){
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(txt); return true; } }catch(e){}
+  try{ const ta=document.createElement("textarea"); ta.value=txt; ta.setAttribute("readonly",""); ta.style.cssText="position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length); const ok=document.execCommand("copy"); ta.remove(); return !!ok; }catch(e){ return false; }
+}
+/* ⟦PARTAGE-NATIF-ANDROID⟧ 06/11/2026 (Hervé, retour d'un testeur Android : « Partager » sa saison ne faisait rien) — la WebView
+   Android n'a pas navigator.share({ files }) : feuille de partage du SYSTÈME par les plugins @capacitor/share + @capacitor/filesystem
+   (build 12+). Image PNG écrite dans le cache de l'app (cache-path de file_paths.xml), puis Share.share({ files:[uri] }), sans texte
+   (image seule, comme ailleurs). Builds sans ces plugins (mise à jour à chaud des builds ≤ 11) et web : "indisponible", rien ne change. */
+function partageNatifDispo(){
+  try{ const C=window.Capacitor; return !!(estNatif() && C && typeof C.isPluginAvailable==="function" && C.isPluginAvailable("Share")
+    && C.isPluginAvailable("Filesystem") && C.Plugins && C.Plugins.Share && C.Plugins.Filesystem); }catch(e){ return false; }
+}
+async function partagerImageNatif(blob, nom){
+  if(!blob || !partageNatifDispo()) return "indisponible";
+  try{
+    const b64=await new Promise((ok,ko)=>{ const r=new FileReader(); r.onload=()=>ok(String(r.result||"").split(",")[1]||""); r.onerror=()=>ko(r.error); r.readAsDataURL(blob); });
+    if(!b64) return "erreur";
+    const P=window.Capacitor.Plugins, w=await P.Filesystem.writeFile({ path:nom, data:b64, directory:"CACHE" });
+    if(!w || !w.uri) return "erreur";
+    try{ await P.Share.share({ files:[w.uri] }); return "fichier"; }
+    catch(e){ return /cancel/i.test(String((e && e.message) || e)) ? "annule" : "erreur"; }
+  }catch(e){ return "erreur"; }
+}
+async function rpnPartager(action, image, nom, texte){
+  if(action==="image" && image && typeof File!=="undefined" && navigator.share && navigator.canShare){
+    try{ const f=new File([image], nom, { type:"image/png" });
+      if(navigator.canShare({ files:[f] })){ try{ await navigator.share({ files:[f] }); return "fichier"; }catch(e){ if(e && e.name==="AbortError") return "annule"; } } }catch(e){}
+  }
+  if(action==="image" && image){ const r=await partagerImageNatif(image, nom); if(r==="fichier" || r==="annule") return r; }   // ⟦PARTAGE-NATIF-ANDROID⟧
+  return (await rpnCopier(texte)) ? "copie" : "echec";
+}
+window.addEventListener("message", e=>{
+  try{
+    if(!estNatif() || !rgActif()) return;
+    if(!RT.fenetre || e.source!==RT.fenetre || e.origin!=="null") return;
+    const d=e.data, src=e.source;
+    if(!d || typeof d!=="object" || Array.isArray(d) || d.canal!==RUSH_TEST_CANAL || d.v!==1) return;
+    if(d.type==="capacites"){ try{ src.postMessage({ canal:RUSH_TEST_CANAL, type:"capacites_natif", v:1, partage:"app" }, "*"); }catch(x){} return; }   // origine opaque : "*"
+    if(d.type!=="partage" || RPN.enCours) return;
+    if(typeof d.id!=="string" || !/^[A-Za-z0-9_-]{1,40}$/.test(d.id) || (d.action!=="image" && d.action!=="texte")) return;
+    if(typeof d.nom!=="string" || !RPN_NOM.test(d.nom) || typeof d.texte!=="string" || !d.texte || d.texte.length>4000) return;
+    const img=(d.action==="image" && typeof Blob!=="undefined" && d.image instanceof Blob && d.image.type==="image/png" && d.image.size>0 && d.image.size<=8e6) ? d.image : null;
+    const id=d.id; RPN.enCours=true;
+    rpnPartager(d.action, img, d.nom, d.texte).then(r=>{ RPN.enCours=false;
+      if(src===RT.fenetre){ try{ src.postMessage({ canal:RUSH_TEST_CANAL, type:"partage_resultat", v:1, id, r }, "*"); }catch(x){} } },
+      ()=>{ RPN.enCours=false; });
+  }catch(x){ RPN.enCours=false; }
+});
+/* ⟦RUSH-NATIF⟧ partage fin */
 /* ── Lot E (14/10/2026) — PONT DU MOTEUR SERVEUR RUSH V6 (rush/CLIENT-RUSH-V6.md) ─────────────────────────────────────────
    L'iframe Rush (sandbox SANS allow-same-origin, CSP connect-src 'none') n'a ni réseau ni session. Elle DEMANDE ici, par
    postMessage (canal « tactizo-rush-serveur »), l'une des 10 RPC joueur du moteur Rush V6 ou l'Edge rush-fictif ; l'app
@@ -13959,7 +14198,7 @@ window.addEventListener("message", e=>{
   if(q.get("rush")==="reel" && RSV_UUID.test(du)) RSV.lien={ mode:"reel", duel:du }; }catch(e){} })();
 function rushServeurLienAttente(){
   if(!RSV.lien || !rsvActif()) return;
-  if(S.view!=="rush"){ openRush(); return; }                            // l'iframe le recevra avec « pont » (bonjour)
+  if(S.view!=="rush"){ openRush(); if(S.view!=="rush" || !document.getElementById("rushTestCadre") || RT.chargement) return; }   // iframe neuve : « pont » (bonjour) ; ⟦RUSH-NATIF⟧ iframe déjà là (app native au 2nd plan) → message ci-dessous
   if(RT.fenetre && document.getElementById("rushTestCadre") && !RT.chargement){
     const o=RSV.lien; RSV.lien=null; rsvNettoyerUrl();
     try{ RT.fenetre.postMessage({ canal:RUSH_SERVEUR_CANAL, type:"ouvrir_duel", mode:o.mode, duel:o.duel }, "*"); }catch(e){}
@@ -13969,6 +14208,15 @@ function rushServeurLienAttente(){
 function rushServeurNotification(data){
   if(!rsvActif() || !data || data.kind!=="rush_resultat" || data.mode!=="reel" || !rsvUuid(data.engagement)) return false;
   RSV.lien={ mode:"reel", duel:data.engagement }; rushServeurLienAttente(); return true;
+}
+// ⟦RUSH-NATIF⟧ v8.556 — même donnée, reçue par l'app NATIVE à l'appui sur la notification (pushNotificationActionPerformed :
+// notification.data = { kind, mode, engagement, lien }, rush/serveur/rush-notif/notif.ts). Ne pose QUE le lien (validé) : l'ouverture
+// suit le droit Rush (loadMyLeagues → rushTestRafraichir → rushServeurLienAttente).
+function rushNotifNatif(a){
+  const d=(a && a.notification && a.notification.data) || null;
+  const eng=d ? String(d.engagement||"").toLowerCase() : "";
+  if(!d || d.kind!=="rush_resultat" || d.mode!=="reel" || !rsvUuid(eng)) return false;
+  RSV.lien={ mode:"reel", duel:eng }; return true;
 }
 const rushServeurRafraichirOrigine = rushTestRafraichir;
 rushTestRafraichir = async function(){ const r=await rushServeurRafraichirOrigine.apply(this, arguments); try{ rushServeurLienAttente(); }catch(e){} return r; };
@@ -14702,17 +14950,18 @@ async function startLeagueCore(lg){
   let vieuxChemin=false;
   try{
     const res=await q(db.rpc("close_registration",{p_league:lg.id}));
-    if(res.code!=="ok") throw new Error(res.code);
+    if(res.code!=="ok") throw new Error(refusLisible(res.code));
   }catch(e){
     if(!tradeServeurAbsent(e)) throw e;
     vieuxChemin=true;
   }
-  let ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
+  // v8.539 (Lot 0A, phase 6b) : colonnes explicites — seuls id / is_ai / join_order servent ici (jamais `hand`).
+  let ps=await q(db.from("players").select("id,is_ai,join_order").eq("league_id",lg.id).order("join_order"));
   const soloNow=(ps.filter(p=>!p.is_ai).length===1);
   if(vieuxChemin && ps.length%2===1){
     // ---- ANCIEN CHEMIN (fonction serveur pas encore déployée) ----
     await q(db.from("players").insert({league_id:lg.id,name:"Joueur IA",emoji:"avimg:"+AVATAR_IA_IDX,is_ai:true,join_order:ps.length}));
-    ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
+    ps=await q(db.from("players").select("id,is_ai,join_order").eq("league_id",lg.id).order("join_order"));
   }
   const n=ps.length; let sched=makeSchedule(n);
   if(soloNow && soloAR===2) sched=sched.concat(sched);
@@ -14790,7 +15039,7 @@ async function createLeague(){
     // MEME avimg:0 a tout le monde, jamais aleatoire). randomAvatar() ne reste ici que pour les
     // comptes deja existants avant ce lot, dont AUTH.avatar est encore vide (jamais retouche par
     // migration) -- eux aussi recoivent alors un avatar officiel, jamais l'ancien systeme d'emojis.
-    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||randomAvatar(),is_organizer:true,join_order:0,user_id:AUTH.id}).select().single());
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||randomAvatar(),is_organizer:true,join_order:0,user_id:AUTH.id}).select("id").single());   // v8.539 : seul l'id sert
     newLg=null;
     // v8.432 (bug vécu par Hervé, test réel iPhone 12/09) — `maybeShowPushPrompt` appelé ici même,
     // avant `openLeague`/`leagueCreatedModal`, se faisait recouvrir et fermer par cette dernière
@@ -14831,10 +15080,11 @@ function maybeConsumePendingJoinCode(){
 async function joinLeague(code){
   if(busy||!AUTH)return; busy=true; joinSetErr("");
   try{
-    const found=await q(db.from("leagues").select("*").eq("code",code));
+    // v8.539 (Lot 0A, phase 6b) : colonnes explicites — la suite n'utilise que celles-ci (la ligue est relue à l'ouverture).
+    const found=await q(db.from("leagues").select("id,name,status,num_participants").eq("code",code));
     const lg=Array.isArray(found)?found[0]:found;
     if(!lg){ joinSetErr(t("Code de ligue introuvable — vérifie le code saisi.")); busy=false; return; }
-    const ps=await q(db.from("players").select("*").eq("league_id",lg.id).order("join_order"));
+    const ps=await q(db.from("players").select("id,user_id,is_ai").eq("league_id",lg.id).order("join_order"));
     const mine=ps.find(p=>p.user_id===AUTH.id);
     // ⚠️ Port V2 (2026-09-06) — "déjà membre" reste une RÉOUVERTURE, pas un échec (aucune nouvelle
     // règle : openLeague() direct, inchangé) — seul un toast() accompagne désormais la navigation,
@@ -14850,7 +15100,7 @@ async function joinLeague(code){
     // TOUJOURS assigne des la creation du compte (doChoosePseudo), plus jamais de repli vers
     // l'ANCIEN systeme d'emojis (EMOJIS[ord]) ni vers 🎮. randomAvatar() ne reste que pour les
     // comptes deja existants avant ce lot (AUTH.avatar encore vide, jamais retouche par migration).
-    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||randomAvatar(),join_order:ord,user_id:AUTH.id}).select().single());
+    const pl=await q(db.from("players").insert({league_id:lg.id,name:AUTH.name,emoji:AUTH.avatar||randomAvatar(),join_order:ord,user_id:AUTH.id}).select("id").single());   // v8.539 : seul l'id sert
     toast(t("Tu as rejoint {a} 🎉",{a:lg.name||t("la ligue")}));
     openLeague(lg.id, pl.id, true);
     maybeShowPushPrompt("firstleague");   // v8.432 — pas de fenêtre modale concurrente ici (toast() n'appelle pas closeCardInfo()), donc appel direct
@@ -15794,7 +16044,7 @@ async function relaunchLeague(){
     // d'un autre) ; randomAvatar() remplace EMOJIS[i]||"🎮" comme dernier repli si jamais absent
     // (defensif : chaque ligne `players` recoit deja un emoji a sa creation, meme historique).
     const rows=humans.map((p,i)=>({league_id:lg.id,name:p.name,emoji:p.emoji||randomAvatar(),is_organizer:p.user_id===AUTH.id,join_order:i,user_id:p.user_id}));
-    const inserted=await q(db.from("players").insert(rows).select());
+    const inserted=await q(db.from("players").insert(rows).select("id,user_id"));   // v8.539 : seuls id / user_id servent
     const mine=inserted.find(p=>p.user_id===AUTH.id)||inserted[0];
     // ⚠️ Solo IA : pas de lobby d'inscription ni de code à partager (personne d'autre ne peut/ne doit
     // rejoindre) — on enchaîne directement sur startLeagueCore(), le même chemin « SOLO DIRECT » que
@@ -15875,17 +16125,18 @@ async function doCloseRegistration(){
     let vieuxChemin=false;
     try{
       const res=await q(db.rpc("close_registration",{p_league:L.id}));
-      if(res.code!=="ok"){ busy=false; showErr(t("Clôture : ")+res.code); await refresh(); return; }
+      if(res.code!=="ok"){ busy=false; showErr(t("Clôture : ")+refusLisible(res.code)); await refresh(); return; }
     }catch(e){
       if(!tradeServeurAbsent(e)) throw e;
       vieuxChemin=true;
     }
-    let ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
+    // v8.539 (Lot 0A, phase 6b) : colonnes explicites — seuls id / is_ai / join_order servent ici (jamais `hand`).
+    let ps=await q(db.from("players").select("id,is_ai,join_order").eq("league_id",L.id).order("join_order"));
     if(vieuxChemin && ps.length%2===1){
       // ---- ANCIEN CHEMIN (fonction serveur pas encore déployée) : l'IA n'a pas encore été ajoutée
       // par la RPC (qui n'a pas pu s'exécuter) — on reproduit l'ajout exactement comme avant. ----
       await q(db.from("players").insert({league_id:L.id,name:"Joueur IA",emoji:"avimg:"+AVATAR_IA_IDX,is_ai:true,join_order:ps.length}));
-      ps=await q(db.from("players").select("*").eq("league_id",L.id).order("join_order"));
+      ps=await q(db.from("players").select("id,is_ai,join_order").eq("league_id",L.id).order("join_order"));
     }
     const n=ps.length; let sched=makeSchedule(n); const rows=[];
     /* À DEUX (solo contre l'IA, ou deux humains) : `makeSchedule(2)` ne donne qu'un aller-retour,
@@ -15936,7 +16187,7 @@ async function maybeAutoStartFull(){
   if(!L || L.status!=="lobby" || busy) return;
   const nH=(players||[]).filter(p=>!p.is_ai).length;
   if(nH < MAX_PLAYERS) return;   // pas encore plein
-  let claim=null; try{ claim=await q(db.from("leagues").update({status:"starting"}).eq("id",L.id).eq("status","lobby").select("*")); }catch(e){ return; }
+  let claim=null; try{ claim=await q(db.from("leagues").update({status:"starting"}).eq("id",L.id).eq("status","lobby").select("id")); }catch(e){ return; }   // v8.539 : seul le nombre de lignes sert
   if(!claim||!claim.length) return;   // un autre client a déjà lancé
   L.status="starting";
   await doCloseRegistration();   // crée le calendrier, passe en prépa
@@ -16426,7 +16677,13 @@ async function saveTreve(){ if(busy)return;
   { const b=$("essaibidbtn"); if(b){ b.classList.add("off"); b.setAttribute("aria-disabled","true"); } }
   const lidT=L.id;   // capturé AVANT tout await, même garde que `lid` dans refresh()/submitBet()
   try{
-    const sum = Object.assign({}, L.prep_summary||{});
+    /* ⚠️ v8.539 (Lot 0A étape 6) — `L.prep_summary` PEUT ÊTRE MASQUÉ (get_league_state : enchères de trêve des
+       autres réduites à `true`). On repart donc de la valeur EN BASE, jamais de la copie affichée — sinon on
+       réécrirait `true` à la place des mises des autres. Lecture impossible (colonne fermée un jour, phase 6b) :
+       copie affichée, et c'est alors `trg_garde_treve` (v8.531) qui ne retient que MES enchères. */
+    let base=L.prep_summary;
+    try{ const fr=await q(db.from("leagues").select("prep_summary").eq("id",lidT).maybeSingle()); if(fr && fr.prep_summary) base=fr.prep_summary; }catch(e){}
+    const sum = Object.assign({}, base||{});
     const st=sum.treve_st; if(!st){ busy=false; offBidBtn(); return; }
     st.bids=st.bids||{}; st.bidTs=st.bidTs||{}; st.done=st.done||{};
     // ⚠️ L'HORODATAGE NE SE RÉÉCRIT PAS À CHAQUE MODIFICATION : il départage les égalités. Le
@@ -18189,7 +18446,10 @@ function afterCloseDuelHTML(){
         : (ok===false ? 'border:2px solid var(--red);background:color-mix(in srgb,var(--red) 14%,transparent);border-radius:8px' : base);
       const opTxt = advSansPari
         ? (seeOpp?`<span class="mini red"><b>🚫 ${t("n'a pas parié")}</b></span>`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`)
-        : (ob?(seeOpp?`${esc(labelSel(f,ob.sel))} · ${euro(ob.stake)}${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—');
+        // v8.539 : pari adverse rendu MASQUÉ par le serveur (pas d'option, ou clôture pas encore atteinte à
+        // l'horloge du serveur) → le même cadenas, jamais un tiret qui ferait croire à un match sans prono.
+        : (oppBet.masque ? `<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`
+        : (ob?(seeOpp?`${esc(labelSel(f,ob.sel))} · ${euro(ob.stake)}${cd(ob.sel)}${(oppBet.captain===i)?' 👑':''}`:`<span style="color:var(--muted);letter-spacing:2px">🔒 •••</span>`):'—'));
       return `<div class="two-col-card">
         <div class="match-lbl">${esc(tnm(f,f.home))} – ${esc(tnm(f,f.away))}${liveTag(f, mb?mb.sel:null, mb?sel2Proprio(mine,i):null)}</div>
         ${(()=>{ const lg=liveLigne(f, mb?mb.sel:null, mb?sel2Proprio(mine,i):null); return lg?`<div class="match-lbl" data-ligne-score style="text-transform:none;letter-spacing:0;font-weight:600;padding-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${lg}</div>`:''; })()}
@@ -18329,7 +18589,12 @@ function resultsTabOnclick(){ return "openResults("+resultsDefaultDay()+")"; }
 // Resultats. Repere lors de l'analyse complete du 2026-07-28.
 
 /* ============ RESOLUTION (cards engine) ============ */
-function aiPlay(cap,fx,hand,day,numDays){
+function aiPlay(cap,fx,hand,day,numDays,treveDay){
+  // ⚠️ v8.540 (11/10/2026, diagnostic DIAGNOSTIC-IA-BONUS-TREVE-2026-10-11.md validé par Hervé) — LE RYTHME DES BONUS
+  // SUIT LA PROCHAINE EXPIRATION RÉELLE DE LA MAIN. Avant, l'horizon était la fin de saison alors que la main de la
+  // 1re moitié expire à la trêve : ~50 % des bonus de 1re moitié étaient perdus (KD36W : 🐗 jamais joué).
+  // `treveDay` = jourTreve(ligue) (−1 sans trêve), seul paramètre ajouté. Pronos, mises, Capitaine, cibles et plafond
+  // worstLoss INCHANGÉS (mêmes tirages, dans le même ordre). MÊME CODE que l'Edge resolve (verif-parite-ia.py).
   // ⚠️ v8.179 (signalé par Hervé : l'IA n'a misé que 63 € sur 138 € disponibles à la dernière
   // journée) — LE BUDGET DE L'IA IGNORAIT LE PLAFOND DE LA DERNIÈRE JOURNÉE. `stakeCapOf()` fait
   // sauter le plafond à 100 % (STAKE_CAP_LASTDAY) pour un joueur humain à la dernière journée
@@ -18350,15 +18615,27 @@ function aiPlay(cap,fx,hand,day,numDays){
     let k=0, r=u*sw2; while(k<outs.length-1&&r>=w[k]){ r-=w[k]; k++; }
     return {sel:outs[k][0],stake:Math.max(1,Math.round(budget*ws[i]/sw*Math.min(1,2/outs[k][1])))}; });
   const captain=Math.floor(Math.random()*fx.length);
-  // Rythme des bonus : proba de jouer un bonus ce jour ≈ bonus en main / journées restantes.
+  // Rythme des bonus : proba de jouer un bonus ce jour ≈ bonus en main / journées restantes AVANT EXPIRATION.
   // Une proba fixe (0,4) vidait la main dès le début (signalé par Hervé) : un lot de bonus partait
-  // sur les premières journées. Ici l'usage s'étale — 3 bonus sur 14 journées ≈ une toutes les ~5.
-  // À la DERNIÈRE journée, 🥷 Voleur / 🧬 Clone sont inutiles (aucune journée suivante pour jouer la prise) :
-  // l'IA ne les joue pas — sinon elle « vole » un bonus qu'elle ne pourra jamais utiliser (signalé par Hervé).
-  const playable=isLast? (hand||[]).filter(id=>id!=="voleur"&&id!=="clone") : (hand||[]);
-  const nCards=playable.length;
-  const remain=Math.max(1,((numDays||1)-(day||0)));   // journée en cours incluse (day est 0-indexé)
-  const pPlay=nCards>0?Math.min(0.9,nCards/remain):0;  // plafond 0,9 : garde un grain d'aléa
+  // sur les premières journées. Ici l'usage s'étale — 3 bonus sur 7 journées ≈ une toutes les ~2.
+  // À la DERNIÈRE journée avant expiration, 🥷 Voleur / 🧬 Clone sont inutiles (aucune journée suivante pour jouer la
+  // prise) : l'IA ne les joue pas — sinon elle « vole » un bonus qu'elle ne pourra jamais utiliser (signalé par Hervé).
+  // v8.540 : horizon = journées restantes (celle-ci comprise) jusqu'à l'EXPIRATION DE LA MAIN — la trêve si la ligue
+  // en a une et qu'on est avant elle, sinon la fin de saison. 🥷/🧬 jamais sur la dernière journée avant expiration
+  // (à jouer au plus tard l'avant-dernière) ; 🧈 seulement s'il existe un match avec nul (sinon un AUTRE bonus jouable).
+  const jt=Number(treveDay)||0;
+  const finMain=(jt>0&&jt===Math.floor(jt)&&(day||0)<jt)? jt : (numDays||1);
+  const H=Math.max(1,finMain-(day||0));
+  const main=hand||[];
+  const prise=(id)=>id==="voleur"||id==="clone";
+  const nPrise=main.filter(prise).length;
+  const nCards=H<=1? main.length-nPrise : main.length;
+  const avecNul=fx.some((f)=>f.draw);
+  const playable=main.filter((id)=>!(H<=1&&prise(id))&&!(id==="chance"&&!avecNul));
+  const urgencePrise=H>1&&nPrise>0&&nPrise>=H-1&&playable.some(prise);
+  // Garder un bonus quand il en reste autant que de journées revient à le perdre → on joue (1 par journée max) ;
+  // sinon plafond 0,9 : garde un grain d'aléa.
+  const pPlay=!playable.length?0:(nCards>=H||urgencePrise)?1:Math.min(0.9,nCards/H);
   /* ⚠️ v7.97 — L'IA SUIT MAINTENANT LA RÈGLE DU CAPITAINE (relevé par Hervé sur 2N4MP, J1 :
      l'IA avait posé 🔥 Ça passe ou ça casse sur le match de son propre Capitaine, ce que l'écran
      REFUSE à un joueur humain). Elle tirait sa cible au hasard parmi les 5 matchs, sans jamais
@@ -18373,7 +18650,7 @@ function aiPlay(cap,fx,hand,day,numDays){
   const cibleLibre=(id)=>{ const C=CARDS[id]||{};
     const idx=fx.map((_,i)=>i).filter(i=> (C.two||C.oppT) ? true : i!==captain );
     return idx.length? pick(idx) : Math.floor(Math.random()*fx.length); };
-  let card=null; if(nCards&&Math.random()<pPlay){ const id=pick(playable); card={id,target:CARDS[id].t?cibleLibre(id):null};
+  let card=null; if(playable.length&&Math.random()<pPlay){ const id=pick(urgencePrise?playable.filter(prise):playable); card={id,target:CARDS[id].t?cibleLibre(id):null};
     // ⚠️ 🧈 Le beurre et l'argent du beurre est AUSSI un bonus à cible sans exception : sa cible
     // doit éviter le Capitaine au même titre que 🔥. Elle se choisit en plus parmi les seuls
     // matchs à 3 issues — d'où le double filtre, avec repli sur les matchs nuls possibles si le
@@ -18779,7 +19056,7 @@ async function resolveDay(){
         if(!valid){
           if(pmap[pid] && pmap[pid].is_ai){
             // IA : joue toujours automatiquement (elle ne peut pas « oublier »)
-            const ai=aiPlay(capStart[pid],fx,pmap[pid].hand||[],D,fresh.num_days); bt={player_id:pid,picks:ai.picks,captain:ai.captain,card:ai.card};
+            const ai=aiPlay(capStart[pid],fx,pmap[pid].hand||[],D,fresh.num_days,jourTreve(fresh)); bt={player_id:pid,picks:ai.picks,captain:ai.captain,card:ai.card};
             aiInserts.push({league_id:L.id,day:D,player_id:pid,duel_id:d.id,picks:ai.picks,captain:ai.captain,card:ai.card,submitted:true});
           } else {
             // Humain sans pari validé à temps : AUCUN pari pris en compte (pas de reprise adverse) → pénalités −2 pts / −25 % capital appliquées plus bas
@@ -20001,7 +20278,13 @@ async function openResults(d){ S.view="results"; S.resDay=d; recapOpen=-1; recap
      « chargement » posé par le garde-fou de `viewResults()`) apparaît dès le clic, au lieu de
      laisser l'ancien écran (ou l'ancienne journée) affiché pendant 1-2 s comme avant. */
   render();
-  try{ duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); loadedDay=d;
+  /* v8.539 (Lot 0A étape 6) — la journée EN COURS (pas encore résolue) passe par get_league_state : les paris des
+     autres y sont filtrés par le serveur. Journées passées / ligue terminée : lecture directe, inchangée. */
+  try{ const enCours = !!(L && L.status!=="done" && d>=(L.current_day|0));
+    const e = enCours ? await lireEtatLigue(S.leagueId, d) : null;
+    if(e && !e.introuvable && e.day===d){ duels=e.duels; bets=e.bets; }
+    else { duels=await q(db.from("duels").select("*").eq("league_id",S.leagueId).eq("day",d)); bets=await q(db.from("bets").select("*").eq("league_id",S.leagueId).eq("day",d)); }
+    loadedDay=d;
     /* ⚠️ v7.65 — C'EST ICI qu'on note « résultats vus », et NULLE PART AILLEURS.
        Condition : la journée doit être RÉSOLUE. Sur l'écran d'attente (paris clôturés, scores pas
        encore tombés) il n'y a rien à voir — c'est exactement le piège rencontré par Hervé à 1 h du
@@ -20332,7 +20615,9 @@ function waitingResultsBody(d){
                    seulement une destination. Reprendre le `noteBox` doré de l'onglet Pronos aurait
                    coûté cinq lignes pour répéter une explication que la page donne déjà.
                    `event.stopPropagation()` : la cellule vit dans des blocs cliquables ailleurs. */
-                const visible=(moi||voirAdv);
+                // v8.539 : un pari rendu MASQUÉ par le serveur reste sous cadenas, même avec l'option
+                // (clôture pas encore atteinte à l'horloge du serveur) — jamais « n'a pas parié » ni « — ».
+                const visible=(moi||voirAdv) && !(b && b.masque);
                 const contenu=visible
                   ? ligne(b,b?b.captain:-1,f,i,moi)
                   : `<span class="mini clik" style="color:var(--muted);letter-spacing:2px" title="${t("Fonction premium")}" onclick="event.stopPropagation();showPremiumInfo('duel_live')">🔒 •••</span>`;
@@ -21969,7 +22254,7 @@ async function buildSeasonCard(){
   seasonBlobUrl=URL.createObjectURL(seasonBlob);
   wrap.innerHTML=`<img src="${seasonBlobUrl}" alt="" style="width:100%;border-radius:12px;display:block">`;
   const f=new File([seasonBlob],"ma-saison.png",{type:"image/png"});
-  const canFile=!!(navigator.canShare&&navigator.canShare({files:[f]}));
+  const canFile=!!(navigator.canShare&&navigator.canShare({files:[f]})) || partageNatifDispo();   // ⟦PARTAGE-NATIF-ANDROID⟧
   // ⟦PARTAGE-LIGUES-IMAGE-SEULE⟧ (16/10, Hervé) : « Partager » = l'IMAGE SEULE ; « Copier le texte » = action séparée, toujours là
   btns.innerHTML=`<div class="row" style="gap:8px">
      ${canFile?`<button class="btn" style="flex:1" onclick="doShareSeason()">${t("Partager")}</button>`:''}
@@ -21983,6 +22268,7 @@ async function buildSeasonCard(){
 async function doShareSeason(){
   if(seasonBlob && navigator.share && navigator.canShare){ const f=new File([seasonBlob],"ma-saison.png",{type:"image/png"});
     if(navigator.canShare({files:[f]})){ try{ await navigator.share({files:[f]}); }catch(e){} return; } }
+  if(seasonBlob && partageNatifDispo()){ const r=await partagerImageNatif(seasonBlob, "ma-saison.png"); if(r==="fichier" || r==="annule") return; }   // ⟦PARTAGE-NATIF-ANDROID⟧
   toast(t("Partage de l'image indisponible sur cet appareil : enregistre-la ou copie le texte."));
 }
 function saveSeasonCard(){ if(!seasonBlobUrl) return;
@@ -23865,7 +24151,7 @@ function spv2PalmaresRush(){ if(!statsV2Actif()) return; SPV2.jeu="rush"; palmVi
 const SPR = { vue:null, gen:0, m:{ reel:{}, fictif:{} }, mois:{ reel:{}, fictif:{} }, sel:{ reel:null, fictif:null },
   rec:{ reel:"mois", fictif:"mois" }, top10:{ reel:false, fictif:false }, ouverte:null };
 const SPR_MOIS = /^\d{4}-(0[1-9]|1[0-2])$/;
-function sprActif(){ try{ return statsV2Actif()===true && !estNatif(); }catch(e){ return false; } }
+function sprActif(){ try{ return statsV2Actif()===true && (!estNatif() || rushNatifAutorise()); }catch(e){ return false; } }   // ⟦RUSH-NATIF⟧
 function sprL(fr, en){ return lang==="en" ? en : fr; }
 function sprGen(){ if(S.view!==SPR.vue){ SPR.vue=S.view; SPR.gen++; } return SPR.gen; }   // nouvelle visite de Stats / Palmarès = relecture
 async function sprRpc(fn, args){
@@ -25005,7 +25291,7 @@ function viewAdmin(){
         <div style="min-width:0"><b class="mini">${label}</b><div class="mini muted">${r.actif?('Bloque en dessous de '+esc(r.note||'?')):'Désactivé — aucun blocage'}</div></div>
         <span class="chip" style="flex:0 0 auto;background:${r.actif?'rgba(229,105,95,.15)':'rgba(122,201,138,.15)'};color:${r.actif?'var(--red)':'var(--green)'};border:1px solid ${r.actif?'rgba(229,105,95,.4)':'rgba(122,201,138,.4)'}">${r.actif?'Actif':'Inactif'}</span></div>
         <div class="row" style="gap:6px;margin-top:8px">${toggleBtn(r)}<button class="btn ghost sm" style="flex:0 0 auto" onclick="adminSetConfigVersion('${k}')">✏️ Version…</button></div></div>`; };
-    return `${flagRow('phase_test','🧪 Phase de test','Actif = un joueur peut s\'accorder lui-même une option premium gratuitement. Inactif = seul l\'Admin attribue les options (souscription/paiement réel prennent le relais).')}
+    return `${flagRow('phase_test','🧪 Phase de test','Actif = seuls les comptes de la liste « Testeurs gratuits » (back-office, Système) peuvent s\'accorder une option gratuitement ; tous les autres paient. Inactif (go-live) = plus personne n\'est gratuit.')}
       ${flagRow('maintenance','🔧 Mode maintenance','Actif = seul le compte Admin peut utiliser l\'app, tous les autres voient l\'écran de maintenance. Distinct de la fermeture bêta actuelle (celle-ci reste pilotée par le code).')}
       ${versionRow('min_version_ios','📱 Version minimale iOS')}
       ${versionRow('min_version_android','🤖 Version minimale Android')}
@@ -26025,8 +26311,10 @@ function notifyTrades(){ const nm=p=>((p&&p.name)||'?');
     if(o.reply) body += " 💬 "+o.reply;
     notify(t("Rachat 🤝"), body); }); }
 // Lecture FRAÎCHE : l'acheteur a-t-il un pari verrouillé pour la journée passée en argument ?
+// v8.539 (Lot 0A étape 6) — le FAIT seulement, par le serveur (get_my_submissions, journée en cours) ; repli :
+// la lecture directe d'avant. `day` est toujours la journée en cours (rachatSansIssue).
 async function hasBetForDay(pid, day){
-  try{ const r=await q(db.from("bets").select("id").eq("league_id",L.id).eq("day",day).eq("player_id",pid).limit(1)); return !!(r&&r.length); }catch(e){ return false; } }
+  try{ return (await joueursAyantValide(L.id, day)).has(pid); }catch(e){ return false; } }
 // `jour` n'est renseigné qu'à l'ACCEPTATION : c'est le seul cas où du capital change de mains, et
 // c'est ce qui permet de replacer le transfert au bon point du classement historique et de la
 // courbe (cf. MIGRATION-trades-day.sql). Si la colonne n'existe pas encore en base, l'update
@@ -26090,8 +26378,7 @@ async function balayeOffresSansIssue(lid){
     // Lecture FRAÎCHE des paris du jour : `bets` peut porter une autre journée si le joueur
     // consulte un historique, et se tromper de journée ici annulerait des offres bien vivantes.
     const jour=L.current_day;
-    const bz=await q(db.from("bets").select("player_id").eq("league_id",lid).eq("day",jour));
-    const aParie=new Set((bz||[]).map(b=>b.player_id));
+    const aParie=await joueursAyantValide(lid, jour);   // v8.539 : le fait seulement (RPC), repli direct
     const mortes=concernees.filter(o=>aParie.has(o.from_player)||aParie.has(o.to_player));
     if(!mortes.length) return;
     for(const o of mortes) await markTrade(o.id,"cancelled",null,null,"derniere_journee");
@@ -27101,7 +27388,7 @@ const TR_N = 5;   // ⟦NAV-RUSH-3-ONGLETS⟧ 21/10 : tutoriel Rush en 5 écrans
 const P4_ONGLET = "rush" + "OngletActif", P4_OUVRIR = "open" + "Rush";
 function p4AllerRush(){ try{ const f=window[P4_OUVRIR]; if(typeof f==="function") f(); }catch(e){} }
 function p4RushOuvert(){ try{ const f=window[P4_ONGLET]; return typeof f==="function" && f()===true; }catch(e){ return false; } }
-function p4Rush(){ try{ return p4RushOuvert() && !estNatif() && typeof RUSH_REGLES!=="undefined"; }catch(e){ return false; } }
+function p4Rush(){ try{ return p4RushOuvert() && (!estNatif() || rushNatifAutorise()) && typeof RUSH_REGLES!=="undefined"; }catch(e){ return false; } }   // ⟦RUSH-NATIF⟧
 function p4Pts(n){ return n>=2 ? t("{a} pts",{a:n}) : t("{a} pt",{a:n}); }
 function p4PtsPlus(n){ return n>=2 ? t("+{a} pts",{a:n}) : t("+{a} pt",{a:n}); }
 function p4Cote(x){ return lang==="en" ? x.toFixed(2) : x.toFixed(2).replace(".",","); }
@@ -27595,28 +27882,29 @@ function rqlCarteBoutique(){
       <svg class="a2-shop-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button>`;
 }
 /* ⟦RUSH-QUOTA-REEL⟧ fin */
-/* ⟦PAIEMENT-WEB⟧ Rush illimité — 30/10/2026 (tools/patch-paiement-web.py) : vendu sur le SITE (4,99 €) quand app_config.paiement_web
-   est actif : prix + « Souscrire » dans sa fiche, prix dans la carte Boutique. Interrupteur coupé : comportement d'avant (« Bientôt »). */
-const pwSellableOrigine = sellable;
-sellable = function(key){ return key==="rushillimite" ? (!estNatif() && PAIEMENT_WEB_ACTIF===true) : pwSellableOrigine.apply(this, arguments); };
-const pwFicheOrigine = showPremiumInfo;
+/* ⟦RUSH-NATIF⟧ fiche — 30/10/2026 (Hervé, retour n°6 build 10 ; tools/patch-rush-illimite-natif.py) : dans les apps natives
+   (build 11+), « ⚡ Rush illimité » est VENDU comme les autres options : prix du Store (RevenueCat, paquet « rushillimite ») et bouton
+   « Souscrire » → subscribeOpt (gratuit en phase de test ; sinon achatNatif). Web : inchangé (« Bientôt disponible », pas de prix Stripe). */
+const rqnSellableOrigine = sellable;
+sellable = function(key){ return key==="rushillimite" ? estNatif() : rqnSellableOrigine.apply(this, arguments); };
+const rqnFicheOrigine = showPremiumInfo;
 showPremiumInfo = function(key){
-  const r = pwFicheOrigine.apply(this, arguments);
-  try{ if(key==="rushillimite" && !estNatif() && PAIEMENT_WEB_ACTIF===true){ const E=rqlFicheEtat(), el=document.getElementById("rqlFicheEtat");
+  const r = rqnFicheOrigine.apply(this, arguments);
+  try{ if(key==="rushillimite" && estNatif()){ const E=rqlFicheEtat(), el=document.getElementById("rqlFicheEtat");
     if(el && !E.prem && !E.owned){
-      el.innerHTML=t(PREM_LOCKED_PAYANT);
+      el.innerHTML=t(myGratuite===false?PREM_LOCKED_PAYANT:PREM_LOCKED);
       const v=document.getElementById("rqlVoirPremium");
-      if(v) v.insertAdjacentHTML("beforebegin", `<div class="mini" style="text-align:center;margin:8px 0 2px" id="pwPrix"><b>${euro(RQL_PRIX_PROPOSE)}</b> ${t("— valable 365 jours")}</div><button class="cta-gold" id="pwSouscrire" onclick="subscribeOpt('rushillimite')">🔓 ${t("Souscrire à cette option")}</button>`);
+      if(v) v.insertAdjacentHTML("beforebegin", `<div class="mini" style="text-align:center;margin:8px 0 2px" id="rqnPrix"><b>${prixOptionTxt("rushillimite")}</b> ${t("— valable 365 jours")}</div><button class="cta-gold" id="rqnSouscrire" onclick="subscribeOpt('rushillimite')">🔓 ${t("Souscrire à cette option")}</button>`);
     } } }catch(e){}
   return r;
 };
-const pwCarteOrigine = rqlCarteBoutique;
+const rqnCarteOrigine = rqlCarteBoutique;
 rqlCarteBoutique = function(){
-  const h = pwCarteOrigine.apply(this, arguments);
-  try{ if(!estNatif() && PAIEMENT_WEB_ACTIF===true && h) return h.replace(t("Bientôt disponible · incluse dans Tactizo Premium"), euro(RQL_PRIX_PROPOSE)); }catch(e){}
+  const h = rqnCarteOrigine.apply(this, arguments);
+  try{ if(estNatif() && h) return h.replace(t("Bientôt disponible · incluse dans Tactizo Premium"), prixOptionTxt("rushillimite")); }catch(e){}
   return h;
 };
-/* ⟦PAIEMENT-WEB⟧ Rush illimité fin */
+/* ⟦RUSH-NATIF⟧ fiche fin */
 /* ⟦RUSH-ABONNEMENTS⟧ début — 30/10/2026 (Hervé : suivi libre, badge de division visible pour tous ; tools/patch-rush-abonnements.py).
    Badge « D5 » / « Élite » sur l'avatar des joueurs Rush dans les Ligues (classement, résultats du duel) ; toucher le badge ouvre
    la fiche Rush du joueur avec « ⭐ Suivre ». Données : rush_social (security definer) — jamais un pari, seulement division,
@@ -28061,7 +28349,8 @@ function nvRushSuivis(){
   if(!(+d.suivis>0)) return `<div class="nv-rsv" id="nvBlocSuivis" data-sv="inviter" ${ouvrir}><div class="nv-rsv-t"><span class="nv-rsv-n">👥 ${t("Suis tes amis")}</span>${NV_CHEV}</div></div>`;
   const pl=d.place||{}, med={1:"🥇",2:"🥈",3:"🥉"}[+pl.rang]||"";
   const place = pl.rang!=null ? `${med?med+" ":""}${t("{a} sur {b}",{a:nvSvRang(pl.rang),b:+pl.total})}` : t("{a} suivis",{a:+d.suivis});
-  const faits=(Array.isArray(d.faits) ? d.faits : []).map(nvSvFait).filter(Boolean).slice(0,2);
+  const an=NV.suivis.annonce, ann = an ? (an.n===1 && an.pseudos[0] ? "👥 "+t("{a} joue à Rush, ajouté à tes suivis",{a:esc(String(an.pseudos[0]))}) : "👥 "+t("{n} joueurs de tes ligues ajoutés à tes suivis",{n:an.n})) : "";   // ⟦ACCUEIL-SUIVIS-ANNONCE⟧
+  const faits=(ann ? [ann] : []).concat((Array.isArray(d.faits) ? d.faits : []).map(nvSvFait).filter(Boolean)).slice(0,2);
   return `<div class="nv-rsv" id="nvBlocSuivis" data-sv="fil" data-faits="${faits.length}" ${ouvrir}><div class="nv-rsv-t"><span class="nv-rsv-n">👥 ${t("Mes suivis")}</span><span class="nv-rsv-p">${place}</span>${NV_CHEV}</div>${faits.map(x=>`<div class="nv-rsv-f">${x}</div>`).join("")}</div>`;
 }
 function nvSuivisPhrase(){
@@ -28096,7 +28385,7 @@ function nvRushAvant(lignes){   // bloc Rush AVANT les Ligues ?
 /* ⟦ACCUEIL-SUIVIS⟧ 02/11 (Hervé) — bloc « 👥 Mes suivis » de l'Accueil : ma place parmi mes suivis + 2 faits marquants (duel décisif,
    montée / descente / titre des 48 h), Rush Réel. Serveur : rush_social_fil (lecture seule, anti-spoiler comme Mes suivis). Toucher le
    bloc ouvre Mes suivis dans le paquet Rush. RPC absente ou refusée : pas de bloc. */
-NV.suivis = { lu:0, enCours:false, d:null };
+NV.suivis = { lu:0, enCours:false, d:null, annonce:null, annonceLu:false };   // ⟦ACCUEIL-SUIVIS-ANNONCE⟧ annonce : { n, pseudos }
 async function nvSuivisCharger(force){
   if(!nvRushOk() || NV.suivis.enCours) return;
   if(!force && NV.suivis.lu && Date.now()-NV.suivis.lu < 60000) return;
@@ -28104,6 +28393,13 @@ async function nvSuivisCharger(force){
   try{ const r=await db.rpc("rush_social_fil"); d=(r && !r.error && r.data && typeof r.data==="object" && r.data.ok===true) ? r.data : null; }catch(e){ d=null; }
   const avant=JSON.stringify(NV.suivis.d);
   NV.suivis.enCours=false; NV.suivis.lu=Date.now(); NV.suivis.d=d;
+  // ⟦ACCUEIL-SUIVIS-ANNONCE⟧ suivis ajoutés automatiquement : lus (et marqués annoncés) une fois par session, bloc visible seulement
+  if(d && d.verrou!==true && +d.suivis>0 && !NV.suivis.annonceLu){
+    NV.suivis.annonceLu=true;
+    try{ const a=await db.rpc("rush_suivis_annonce"); const x=(a && !a.error) ? a.data : null;
+      if(x && x.ok===true && +x.n>0) NV.suivis.annonce={ n:+x.n, pseudos:Array.isArray(x.pseudos) ? x.pseudos : [] }; }catch(e){}
+    if(NV.suivis.annonce && S.view==="accueil"){ render(); return; }
+  }
   if(S.view==="accueil" && JSON.stringify(d)!==avant) render();
 }
 if(typeof rsvAppeler==="function"){   // suivre / ne plus suivre / découvrir un résultat… dans Rush : bloc relu au retour à l'Accueil
@@ -28355,7 +28651,7 @@ function nvShopPrix(k, prem){
   if(k==="rushillimite"){
     const E=rqlFicheEtat();
     if(E.prem || E.owned) return `<span class="nv-px ok">✓</span>`;
-    return `<span class="nv-px">${estNatif() ? t("Inclus dans Premium") : euro(RQL_PRIX_PROPOSE)}</span>`;
+    return `<span class="nv-px">${estNatif() ? prixOptionTxt("rushillimite") : euro(RQL_PRIX_PROPOSE)}</span>`;
   }
   if(prem || ownsOpt(k)) return `<span class="nv-px ok">✓</span>`;
   return `<span class="nv-px">${prixOptionTxt(k)}</span>`;
@@ -28742,6 +29038,8 @@ function brancherRetourAndroid(){
        retour se comporte comme "Précédent" tant qu'on est sur une étape numérotée (1-6), et
        comme "Passer" sur l'intro/l'écran final, qui n'ont rien à remonter. */
     if(S.view==="tuto2"){ if(t2N>0) t2Precedent(); else passerTuto2(); return; }
+    // 3 bis. ⟦RUSH-NATIF⟧ v8.556 — onglet Rush : dans un mode Rush → Accueil Rush ; à l'Accueil Rush → suite (QG).
+    if(S.view==="rush" && typeof rushRetourNatif==="function" && rushRetourNatif()) return;
     /* 4. ÉCRANS SANS SORTIE PAR LE RETOUR. « Choisis ton pseudo » est une étape OBLIGATOIRE :
        la session existe déjà, mais `AUTH.name` est vide — `render()` y renvoie de toute façon, et
        la barre du bas y est masquée exprès (cf. `render()`). Un retour qui en sortirait ferait
@@ -28874,7 +29172,6 @@ db.auth.onAuthStateChange((event,session)=>{
     // ⚠️ Lot A (2026-09-13) — vrai mode maintenance, lu une fois au démarrage (comme le reste de
     // cette section). Repli MUET sur `false` en cas d'échec (réseau, table absente...) : une
     // panne de LECTURE de ce flag ne doit jamais, par accident, bloquer tout le monde.
-    try{ const rows=await q(db.from("app_config").select("actif").eq("k","paiement_web")); PAIEMENT_WEB_ACTIF=!!(rows&&rows[0]&&rows[0].actif); }catch(e){}   // ⟦PAIEMENT-WEB⟧
     try{ const rows=await q(db.from("app_config").select("actif").eq("k","maintenance")); REAL_MAINTENANCE=!!(rows&&rows[0]&&rows[0].actif); }catch(e){}
     // ⟦MAINTENANCE-MAESTRO⟧ 30/10 (Hervé) : relu toutes les 60 s (page visible) — allumé : bascule des joueurs connectés ;
     // éteint alors que le joueur est bloqué : rechargement, le jeu revient seul. Échec de lecture : rien ne change.
