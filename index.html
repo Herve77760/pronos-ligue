@@ -3096,7 +3096,7 @@
 // Version de l'app — SOURCE UNIQUE. Elle était écrite en dur dans le pied de page HTML *et* dans le
 // JS qui le réécrit : deux endroits à penser à chaque livraison, donc deux endroits à oublier.
 // Ne changer QUE cette ligne. (Le HTML statique n'a pas de version : le JS le remplit au démarrage.)
-const APP_VERSION = "v8.557.25";
+const APP_VERSION = "v8.557.26";
 /* 29/10/2026 (Hervé) — MISES À JOUR À CHAUD (natif, build 11+) : signaler TOUT DE SUITE au module @capgo/capacitor-updater
    que ce paquet a démarré. Sans cet appel dans les 15 s (appReadyTimeout), le module considère le paquet comme cassé et
    revient au précédent (ou à celui de la build). Volontairement ici, en tête du script : une erreur de syntaxe n'importe où
@@ -9495,7 +9495,7 @@ function ownsOpt(key){ return key==='pack' ? SHOP_ORDER.every(k=>hasOpt(k)) : ha
 // séparé — utilisé par showPremiumInfo() (masque prix+bouton) et subscribeOpt() (refuse la requête).
 function sellable(key){ return key==='pack' || SHOP_ORDER.indexOf(key)>=0; }
 function showPremiumInfo(key){
-  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:(myGratuite===false?PREM_LOCKED_PAYANT:PREM_LOCKED);
+  const p=PITCHES[key]; const owned=key&&ownsOpt(key); const foot=owned?PREM_OWNED:((myGratuite===false||estNatif())?PREM_LOCKED_PAYANT:PREM_LOCKED);
   /* ⚠️ v7.45 — L'ÉCHÉANCE DOIT ÊTRE ÉCRITE. Une option valable un an qui s'éteint sans prévenir se
      vit comme une panne, pas comme une fin d'abonnement : le joueur perd une fonction qu'il a payée
      et ne comprend pas pourquoi. On affiche donc la date tant qu'elle est là, et un message explicite
@@ -9605,6 +9605,13 @@ async function subscribeOpt(key){
   // v8.519 — compte hors liste des testeurs gratuits, sur le web : directement le paiement réel.
   // (Sur mobile natif, on garde le chemin d'origine : essai gratuit refusé → achat App Store / Play.)
   if(myGratuite===false && !estNatif()){ await payerStripe(key); return; }
+  // ⟦NATIF-PAYANT⟧ 22/11/2026 (Hervé, avant la soumission iOS) : dans les applis des Stores, JAMAIS d'activation gratuite —
+  // toujours l'achat intégré Apple / Google (règle 3.1.1). Le site garde son propre chemin ; l'admin accorde toujours à la main.
+  if(estNatif()){
+    try{ await achatNatif(key); }
+    catch(e2){ if(!(e2&&e2.userCancelled)) showErr(t("Souscription : ")+(e2.message||e2)); }
+    return;
+  }
   /* ⚠️ La leçon de la v7.45 reste valable sous la nouvelle forme : on efface l'ancienne ligne de
      cette option avant d'en écrire une neuve. Sinon, réactiver une option périmée laisserait la
      périmée à côté de la nouvelle et le droit ne prendrait pas effet. C'est ce que fait le
@@ -27900,7 +27907,7 @@ showPremiumInfo = function(key){
   const r = rqnFicheOrigine.apply(this, arguments);
   try{ if(key==="rushillimite" && estNatif()){ const E=rqlFicheEtat(), el=document.getElementById("rqlFicheEtat");
     if(el && !E.prem && !E.owned){
-      el.innerHTML=t(myGratuite===false?PREM_LOCKED_PAYANT:PREM_LOCKED);
+      el.innerHTML=t((myGratuite===false||estNatif())?PREM_LOCKED_PAYANT:PREM_LOCKED);
       const v=document.getElementById("rqlVoirPremium");
       if(v) v.insertAdjacentHTML("beforebegin", `<div class="mini" style="text-align:center;margin:8px 0 2px" id="rqnPrix"><b>${prixOptionTxt("rushillimite")}</b> ${t("— valable 365 jours")}</div><button class="cta-gold" id="rqnSouscrire" onclick="subscribeOpt('rushillimite')">🔓 ${t("Souscrire à cette option")}</button>`);
     } } }catch(e){}
