@@ -15,6 +15,8 @@
   p{font-size:13px;color:#a3adc4;line-height:1.5;margin:0 0 18px}
   a.btn{display:inline-block;background:#e0b64f;color:#241a04;font-weight:800;text-decoration:none;
     padding:11px 22px;border-radius:999px;font-size:13.5px}
+  a.btn2{display:inline-block;border:1px solid rgba(255,255,255,.25);color:#eef1f6;font-weight:700;text-decoration:none;
+    padding:10px 18px;border-radius:999px;font-size:13px}
 </style>
 </head>
 <body>
@@ -23,6 +25,13 @@
   <h1 id="t1">Ouverture de Tactizo…</h1>
   <p id="t2">Si rien ne se passe, touche le bouton ci-dessous.</p>
   <a class="btn" id="fallbackLink" href="https://tactizo.com">Continuer</a>
+  <div id="choix" style="display:none">
+    <a class="btn" id="bWeb" href="https://tactizo.com">Jouer sur le web</a>
+    <div style="margin-top:14px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <a class="btn2" id="bIos" href="#">App Store</a>
+      <a class="btn2" id="bAnd" href="#">Google Play</a>
+    </div>
+  </div>
 </div>
 <script>
 /* ════════════════════════════════════════════════════════════════════════════════════════
@@ -60,20 +69,22 @@
    fois les Stores et les fichiers de vérification en place, ce mécanisme pourra être remplacé par
    un vrai lien différé (deferred deep link) qui, lui, survit à l'installation.
 
-   CE QUI DOIT ÊTRE RENSEIGNÉ APRÈS CRÉATION DES FICHES STORE (cf. STORE_IOS / STORE_ANDROID
-   ci-dessous, aujourd'hui vides à dessein) : l'URL App Store et l'URL Google Play réelles. Tant
-   qu'elles sont vides, cette page renvoie vers tactizo.com — jamais une URL technique cassée. */
+   25/11/2026 (Hervé, option A « automatique ») : les VRAIES adresses des deux Stores sont en place
+   (App Store id6803920457 = Apple ID définitif de l'app ; Google Play com.tactizo.app). Dès que les
+   applis sont publiques, le QR renvoie vers les Stores SANS AUCUNE intervention. Avant cela, la page
+   du Store affiche « non disponible » (accepté par Hervé). iPad (iPadOS 13+ se présente comme un
+   Mac) traité comme un iPhone. Ordinateur : page de choix (web / App Store / Google Play). */
 
 // Mêmes valeurs que STORE_URL_IOS/STORE_URL_ANDROID dans app/index.html (source de vérité,
 // déjà utilisées par le mécanisme "version minimale native" du Lot A) — à garder synchronisées.
 var STORE_ANDROID = "https://play.google.com/store/apps/details?id=com.tactizo.app"; // identifiant définitif, déjà correct
-var STORE_IOS = "https://apps.apple.com/app/id0000000000"; // ⚠️ À RENSEIGNER : identifiant réel une fois l'app soumise (aucune fiche n'existe à ce jour)
+var STORE_IOS = "https://apps.apple.com/app/id6803920457"; // Apple ID définitif de l'app (App Store Connect)
 var WEB_FALLBACK = "https://tactizo.com";
 
 var qs = new URLSearchParams(location.search);
 var code = (qs.get("c") || "").toUpperCase().slice(0, 5);
 var ua = navigator.userAgent || "";
-var isIOS = /iPad|iPhone|iPod/.test(ua);
+var isIOS = /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1);
 var isAndroid = /Android/.test(ua);
 var isMobile = isIOS || isAndroid;
 var isFr = !/^en/i.test(navigator.language || "fr");
@@ -104,7 +115,17 @@ if(isMobile){
     window.location.href = storeUrl();
   }, 1200);
 } else {
-  window.location.href = webUrl();
+  document.querySelector(".spin").style.display = "none";
+  fallback.style.display = "none";
+  document.getElementById("t1").textContent = "Tactizo";
+  document.getElementById("t2").textContent = isFr
+    ? "Joue sur le web, ou télécharge l'app sur ton téléphone."
+    : "Play on the web, or get the app on your phone.";
+  var bWeb = document.getElementById("bWeb");
+  bWeb.href = webUrl(); bWeb.textContent = isFr ? "Jouer sur le web" : "Play on the web";
+  document.getElementById("bIos").href = STORE_IOS;
+  document.getElementById("bAnd").href = STORE_ANDROID;
+  document.getElementById("choix").style.display = "block";
 }
 </script>
 </body>
